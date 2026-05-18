@@ -2,7 +2,8 @@
 
 Date: 2026-05-18
 Branch: `main`
-Latest audited implementation commit: `eb40efd`
+Runtime/config evidence through: `8f437e2`
+Docs and external-blocker evidence: current `main` revision
 
 ## Objective Restated
 
