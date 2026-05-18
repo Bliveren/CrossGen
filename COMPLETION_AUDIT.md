@@ -2,7 +2,7 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: `d93f2c8`
+Runtime/config evidence through: `a4b15de`
 Docs and external-blocker evidence: current `main` revision
 
 ## Objective Restated
@@ -45,6 +45,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm build`: typecheck, Vitest, renderer build, main build passed on 2026-05-18 for the `39f4a3d` tree; Vitest reported 3 test files and 15 tests passed.
 - `pnpm build`: typecheck, Vitest, renderer build, main build passed on 2026-05-18 for the `8f437e2` tree; Vitest reported 3 test files and 15 tests passed.
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for the `d93f2c8` tree after merging the real streaming edit verifier; Vitest reported 3 test files and 15 tests passed.
+- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for the current `a4b15de` tree; Vitest reported 3 test files and 15 tests passed.
 - `pnpm package:dir`: unsigned macOS app directory regenerated successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
 - `open -n release/mac-arm64/Image2Tools.app`: packaged app launched on 2026-05-18 after `8a69b39`; process was observed, then the smoke-test process was terminated after AppleScript quit was not handled by the app.
 - `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg`, `.zip`, and blockmaps successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
@@ -68,6 +69,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `8f437e2` tree.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the mock verifier coverage tree; it now checks JSON generation, streaming generation, single-image multipart edit, multi-image mask edit/inpaint, and streaming edit against the local mock.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `d93f2c8` tree after merging the real streaming edit verifier.
+- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the current `a4b15de` tree.
 - `pnpm verify:real-api`: without an API key, exits before making real API calls.
 - `IMAGE2TOOLS_API_KEY=sk-test-no-call pnpm verify:real-api`: exits before making real API calls unless `IMAGE2TOOLS_REAL_API_ACCEPT_COST=1` is explicitly set.
 - `IMAGE2TOOLS_API_KEY=sk-mock-image2tools IMAGE2TOOLS_BASE_URL=http://127.0.0.1:8788/v1 IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 pnpm verify:real-api`: passed against the local mock API, covering the script's generation, single-edit, multi-edit, and inpaint request paths; temporary artifacts and mock process were cleaned up.
