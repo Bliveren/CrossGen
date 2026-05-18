@@ -71,7 +71,7 @@
 - [x] 本机未压缩 app 可启动
 - [x] macOS dmg/zip 可生成
 - [x] dmg 可挂载、复制 app 并启动
-- [ ] 卸载与重装流程正常
+- [x] macOS 临时目录卸载与重装 smoke test 正常
 - [x] 配置迁移到当前 state v1 正常
 - [x] 长时间生成不会轻易超时
 

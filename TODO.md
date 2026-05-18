@@ -92,6 +92,7 @@
 - [ ] 配置远程 `origin` 后补推送与 PR 流程
 - [ ] 用真实 API Key 做一次实际生成、编辑、局部重绘手工验收
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
+- [x] 完成 macOS 临时目录卸载与重装 smoke test
 - [ ] 补充签名、公证与正式分发元数据
 - [ ] 非 macOS 平台安装验证
 - [x] 已评估 `stash@{0}` 中未合并的 renderer 实验；当前 `main` 已覆盖其核心能力并包含更新的草稿恢复、mask 校验和打包配置
