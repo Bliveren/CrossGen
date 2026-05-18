@@ -117,7 +117,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Linux smoke-test dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2 libgbm1 libdrm2 libxkbcommon0
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2t64 libgbm1 libdrm2 libxkbcommon0
 
       - name: Package Linux app
         run: pnpm package
