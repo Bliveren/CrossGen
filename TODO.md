@@ -95,6 +95,8 @@
 
 GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 
+统一外部验收步骤见 [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md)。
+
 - [x] 配置远程 `origin` 并推送当前 `main`
 - [ ] 用真实 API Key 做一次实际生成、编辑、局部重绘手工验收（GitHub issue #1）
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
