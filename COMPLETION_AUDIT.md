@@ -2,9 +2,12 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: current `main` at `824d13b`
+Runtime/config evidence through: latest runtime-affecting `main` at `977d00b`
 Release evidence through: refreshed private macOS preview assets documented on merged `main` at `1d8e215`
-Audit and blocker-tracking evidence through: merged `main` at `824d13b`
+Audit and blocker-tracking evidence through: merged `main` at `0d3a6b7`
+Note: docs-only audit merges may advance `main` without changing runtime,
+release artifacts, or external blocker status; the evidence rows below call out
+that distinction explicitly.
 
 ## Objective Restated
 
@@ -249,6 +252,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - PR #61 merged docs-only current audit metadata cleanup into `main` as `824d13b620d933546cd48e6c2b31747df76654d2`; no runtime, verifier, package, or release artifact files changed.
 - On current `main` at `824d13b`, `git status --short --branch` showed a clean worktree synced with `origin/main`, `git worktree list` showed only `/Users/alive/projects/image2tools`, and `gh pr list --state open` returned no open PRs.
 - Latest `main` CI run `26041388038` for `824d13b620d933546cd48e6c2b31747df76654d2` still failed before workflow steps executed; Build and mock API verifier, macOS package, Windows package, and Linux package all reported empty `steps: []`, `gh run view --log` returned `log not found`, and check-run annotations repeated the GitHub account payment/spending-limit message tracked in issue #5.
+- PR #62 merged docs-only audit evidence refresh into `main` as `0d3a6b774170d840aa1f010c545c68106eb61982`; no runtime, verifier, package, or release artifact files changed.
+- Latest `main` CI run `26042356812` for `0d3a6b774170d840aa1f010c545c68106eb61982` still failed before workflow steps executed; all four jobs reported empty `steps: []`, matching the same GitHub account billing/spending-limit blocker tracked in issue #5.
 
 ## Remaining External Work
 
