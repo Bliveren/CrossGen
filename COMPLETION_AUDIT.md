@@ -4,7 +4,7 @@ Date: 2026-05-19
 Branch: `main`
 Runtime/config evidence through: latest runtime-affecting `main` at `5d93e44`
 Release evidence through: refreshed private macOS preview assets documented on merged `main` at `1d8e215`
-Audit and blocker-tracking evidence through: merged `main` at `5d93e44`
+Audit and blocker-tracking evidence through: merged `main` at `ec4289c`
 Note: docs-only audit merges may advance `main` without changing runtime,
 release artifacts, or external blocker status; the evidence rows below call out
 that distinction explicitly.
@@ -264,6 +264,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - On merged `main` at `5d93e44`, `pnpm vitest run src/shared/validation.test.ts` passed with 1 test file and 13 tests, `pnpm verify:mock-api` passed, `pnpm build` passed with 4 test files and 28 tests followed by renderer and main builds, and `git diff --check HEAD` passed.
 - PR #67 run `26045242531` and post-merge main run `26045333738` both failed before any workflow step executed; all four jobs had empty `steps: []`, no runner name, and check annotations repeated the GitHub account payment/spending-limit message tracked in issue #5 rather than a repository-code failure.
 - After PR #67, `git status --short --branch` showed clean synced `main`, `gh pr list --state open` returned `[]`, `git worktree list` showed only `/Users/alive/projects/image2tools`, and the local/remote `fix/cto-run-request-mask-source-validation` branch was removed.
+- PR #68 refreshed this completion audit so the evidence pointers match current merged `main` at `ec4289c`.
 
 ## Remaining External Work
 
