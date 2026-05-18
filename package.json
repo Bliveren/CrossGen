@@ -36,6 +36,7 @@
     "publish": null,
     "mac": {
       "category": "public.app-category.graphics-design",
+      "icon": "build/icon.icns",
       "identity": null,
       "target": [
         "dmg",
@@ -43,12 +44,14 @@
       ]
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]
     },
     "linux": {
       "category": "Graphics",
+      "icon": "build/icon.png",
       "target": [
         "AppImage"
       ]

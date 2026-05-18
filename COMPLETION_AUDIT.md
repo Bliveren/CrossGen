@@ -24,7 +24,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
 | Tests | `pnpm build` passed with 3 test files and 15 tests | Done |
-| Packaging | `electron-builder` config, `pnpm package:dir`, `pnpm package:mac`, local app launch smoke test | Done for unsigned macOS local artifacts |
+| Packaging | `electron-builder` config, project icons in `build/`, `pnpm package:dir`, `pnpm package:mac`, local app launch smoke test | Done for unsigned macOS local artifacts |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
@@ -48,6 +48,6 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 
 - Configure `origin`, push `main`, and run the requested remote PR flow.
 - Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting.
-- Add signing identity, notarization, application icon, and formal release metadata.
+- Add signing identity, notarization, and formal release metadata.
 - Validate installation/uninstall/reinstall on target platforms.
 - Decide whether to drop or inspect `stash@{0}`.

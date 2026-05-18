@@ -34,6 +34,8 @@ pnpm package:mac
 
 `pnpm build` 会依次执行类型检查、单元测试、renderer 构建和 main 构建。`pnpm package:dir` 生成未压缩应用目录，适合本地试跑；`pnpm package:mac` 生成 macOS dmg/zip。当前配置默认不签名，正式分发前需要补充开发者证书、公证和跨平台安装验证。
 
+打包图标位于 `build/icon.icns`、`build/icon.ico` 和 `build/icon.png`，源自 `public/favicon.svg`。
+
 ## 默认假设
 
 - 优先直接接 OpenAI API
