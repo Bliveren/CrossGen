@@ -2,9 +2,9 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: merged `main` at `88721c4`
+Runtime/config evidence through: merged `main` at `9d8feac`
 Release evidence through: merged `main` at `703139d`
-Audit and blocker-tracking evidence through: merged `main` at `88721c4`
+Audit and blocker-tracking evidence through: merged `main` at `9d8feac`
 
 ## Objective Restated
 
@@ -32,7 +32,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | External acceptance runbook | `EXTERNAL_ACCEPTANCE.md` consolidates the remaining real API, signing/notarization, Windows/Linux, and CI billing gates with commands and evidence requirements | Done |
 | CTO worktree cleanup | After PR #55, stale worktrees and local/remote feature branches were pruned; `git worktree list` showed only the main worktree before this audit-refresh branch was opened | Done |
-| Clean main worktree | `git status --short --branch` showed clean and synced `main` at `88721c4` before this audit-refresh branch was opened | Done |
+| Clean main worktree | `git status --short --branch` showed clean and synced `main` at `9d8feac` before this audit-refresh branch was opened | Done |
 | Abandoned renderer stash | `stash@{0}` inspected; touched only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; archived non-destructively to `origin/archive/abandoned-renderer-stash`; local stash dropped after verifying the archive commit matched | Resolved; tracked in GitHub issue #2 |
 | Remote/PR parity | private GitHub `origin` configured at `https://github.com/Bliveren/image2tools.git`; `main` pushed and tracks `origin/main`; `git ls-remote --heads origin main` matches local pushed history | Done for current `main`; future subtask branches can use PR flow |
 | Official OpenAI docs parity | Current OpenAI Image Generation guide and OpenAPI endpoint metadata confirm `gpt-image-2`, `/images/generations`, `/images/edits`, base64 output, streaming partial images, up to 16 input/reference images for GPT image edit requests, mask-first-image behavior for multi-image masks, mask requirements, size/format/quality/compression/background/moderation parameters, no transparent background for `gpt-image-2`, and omitted `input_fidelity` for `gpt-image-2`; docs also note GPT Image organization verification and extra partial-image token cost | Done |
@@ -218,6 +218,13 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `git diff --check`: passed for PR #55 and again on merged `main` at `88721c4`.
 - PR #55 run `26037712575` and post-merge main run `26037826481` both failed before any workflow step executed; all four jobs had empty `steps: []`, matching the GitHub Actions billing/spending-limit blocker tracked in issue #5 rather than a repository-code failure.
 - After PR #55, `git status --short --branch` showed clean synced `main`, `gh pr list --state open` returned `[]`, `git worktree list` showed only `/Users/alive/projects/image2tools`, and the local/remote `fix/cto-image-input-limit` branch was removed.
+- `9d8feac` includes PR #56, a docs-only merge that refreshed `TODO.md` and this completion audit after PR #55. It added the 16-image input/reference cap to `TODO.md` and updated audit evidence through PR #55.
+- On current `main` at `9d8feac`, `pnpm build` passed with 4 test files and 28 tests, followed by successful renderer and main builds.
+- On current `main` at `9d8feac`, `pnpm verify:mock-api` passed.
+- On current `main` at `9d8feac`, `git diff --check` passed.
+- On current `main` at `9d8feac`, `pnpm verify:real-api` exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set, matching issue #1.
+- On current `main` at `9d8feac`, `pnpm verify:signing-ready` failed for the expected external prerequisites: no valid code signing identity and unset `CSC_NAME`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`; no signing or notarization was attempted, matching issue #3.
+- PR #56 run `26038247847` and post-merge main run `26038331901` both failed before any workflow step executed; all four jobs had empty `steps: []`, matching the GitHub Actions billing/spending-limit blocker tracked in issue #5 rather than a repository-code failure.
 
 ## Remaining External Work
 
