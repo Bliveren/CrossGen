@@ -79,6 +79,7 @@
 - [x] 完成发布前检查
 - [x] 产出试用版安装包
 - [x] 增加 macOS dmg 自动安装烟测脚本
+- [x] 增加 Linux AppImage / Xvfb 自动安装烟测脚本
 - [x] 修复 macOS 打包运行时文件遗漏，并确认 dmg 安装后主窗口可出现
 
 ## CTO / 多分支治理
@@ -108,6 +109,7 @@ GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 - [x] 增加 macOS 签名/公证 readiness 检查脚本
 - [x] 增加显式 signed macOS 打包命令，默认 unsigned 试用包不受影响
 - [x] 在 Ubuntu ARM64 Docker 环境补充 Linux build、mock verifier、AppImage 打包、AppImage 解包与 Xvfb 启动烟测证据
+- [x] 增加 `pnpm verify:release:linux` 并接入 Linux CI package gate
 - [ ] 解除 GitHub Actions billing/spending limit 阻塞并取得绿色 CI（GitHub issue #5）
 - [ ] 补充签名、公证与正式分发元数据（GitHub issue #3）
 - [ ] 非 macOS 平台安装验证（GitHub issue #4；Windows 与原生 Linux 桌面 shell 行为仍待验证）

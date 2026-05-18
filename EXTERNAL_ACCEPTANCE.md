@@ -130,6 +130,9 @@ Current partial evidence:
 - Ubuntu/Debian Bookworm ARM64 Docker validation on the macOS host passed
   `pnpm build`, `pnpm verify:mock-api`, Linux AppImage packaging, AppImage
   extraction, and extracted-app launch under Xvfb.
+- `pnpm verify:release:linux` now automates the Linux package checks that can be
+  safely run in CI or a Linux shell: AppImage/unpacked executable inspection,
+  unpacked app Xvfb launch, AppImage extraction, and extracted app Xvfb launch.
 - Direct AppImage execution in Docker remains blocked by missing FUSE device
   support, so this is not a substitute for native Linux desktop validation.
 - Windows native validation has not been performed.
