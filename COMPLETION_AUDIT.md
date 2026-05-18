@@ -30,7 +30,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
-| Abandoned renderer stash | `stash@{0}` inspected; touches only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; tracked in GitHub issue #2 | Evaluated; delete only with user confirmation |
+| Abandoned renderer stash | `stash@{0}` inspected; touches only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; archived non-destructively to `origin/archive/abandoned-renderer-stash`; tracked in GitHub issue #2 | Archived; local stash delete/keep decision still needs user confirmation |
 | Remote/PR parity | private GitHub `origin` configured at `https://github.com/Bliveren/image2tools.git`; `main` pushed and tracks `origin/main`; `git ls-remote --heads origin main` matches local pushed history | Done for current `main`; future subtask branches can use PR flow |
 | Real API generation/edit/inpaint | `pnpm verify:real-api` provides a cost-confirmed real API acceptance path for generation, single-image edit, multi-image edit, and inpaint; no real API key was provided or used; tracked in GitHub issue #1 | External/manual pending |
 | Signed installable distribution | Unsigned macOS dmg/zip generated; `pnpm verify:signing-ready` checks code signing identity, notarization env vars, and signing config without exposing secrets; no certificate/notarization available; tracked in GitHub issue #3 | External/manual pending |
@@ -73,13 +73,14 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `gh issue list --repo Bliveren/image2tools --state open --limit 10`: external blockers are tracked as issues #1 through #5.
 - GitHub milestone `v0.1.0 external acceptance`: tracks the open external blocker issues at https://github.com/Bliveren/image2tools/milestone/1.
 - `git stash show --stat stash@{0}` and `git show stash@{0}:...`: stash inspected; it is an old alternate renderer experiment and is not part of `main`.
+- `git branch archive/abandoned-renderer-stash stash@{0}` and `git push origin archive/abandoned-renderer-stash`: non-destructive archive branch created at `78b2c683fc180c8e511d1802b37545fd48c8c887`; `stash@{0}` was intentionally left in place.
 
 ## Remaining External Work
 
 GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 
 - Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting: GitHub issue #1.
-- Confirm whether to delete, archive, or restore `stash@{0}`: GitHub issue #2.
+- Confirm whether to delete or keep local `stash@{0}` now that it is archived to `origin/archive/abandoned-renderer-stash`: GitHub issue #2.
 - Add signing identity, notarization, and formal release metadata: GitHub issue #3.
 - Validate non-macOS target platforms: GitHub issue #4.
 - Resolve GitHub Actions billing/spending limit so CI can execute: GitHub issue #5.
