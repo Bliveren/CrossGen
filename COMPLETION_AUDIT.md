@@ -2,7 +2,7 @@
 
 Date: 2026-05-18
 Branch: `main`
-Latest audited commit: `1bc9f1e`
+Latest audited commit: `f5ae70b`
 
 ## Objective Restated
 
@@ -24,7 +24,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
 | Tests | `pnpm build` passed with 3 test files and 15 tests | Done |
-| Packaging | `electron-builder` config, project icons in `build/`, `pnpm package:dir`, `pnpm package:mac`, local app launch smoke test | Done for unsigned macOS local artifacts |
+| Packaging | `electron-builder` config, project icons in `build/`, `pnpm package:dir`, `pnpm package:mac`, local app and dmg-copy launch smoke tests | Done for unsigned macOS local artifacts |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
@@ -38,7 +38,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm build`: typecheck, Vitest, renderer build, main build passed.
 - `pnpm package:dir`: unsigned macOS app directory generated.
 - `open -n release/mac-arm64/Image2Tools.app`: packaged app launched and process was observed.
-- Earlier packaging run generated `release/Image2Tools-0.1.0-mac-arm64.dmg` and `.zip`.
+- `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg` and `.zip`.
+- `hdiutil attach ...`, copy `Image2Tools.app` to `/tmp/Image2Tools-install-test`, `open -n ...`: dmg install-style smoke test launched successfully.
 - `git status --short --branch`: clean `main`.
 - `git worktree list`: only `/Users/alive/projects/image2tools`.
 - `git remote -v`: no remote configured.
@@ -49,5 +50,5 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - Configure `origin`, push `main`, and run the requested remote PR flow.
 - Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting.
 - Add signing identity, notarization, and formal release metadata.
-- Validate installation/uninstall/reinstall on target platforms.
+- Validate uninstall/reinstall and non-macOS target platforms.
 - Decide whether to drop or inspect `stash@{0}`.
