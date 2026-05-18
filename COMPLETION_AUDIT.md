@@ -75,7 +75,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:signing-ready`: reported no valid code signing identities, `build.mac.identity` set to `null`, and notarization env vars unset; no signing or notarization was attempted.
 - `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/ci.yml")'`: GitHub Actions workflow YAML parsed locally after adding Windows/Linux package jobs and manual dispatch.
 - `gh run view 26011616452 --repo Bliveren/image2tools`: CI was triggered but both jobs were blocked before starting because GitHub reported account payment/spending-limit restrictions.
-- `gh run view 26018338371 --json databaseId,status,conclusion,jobs,url`: latest `main` CI run on `d93f2c8` still failed before any workflow job steps executed; all jobs had empty `steps` arrays, and this evidence was added to GitHub issue #5.
+- `gh run list --repo Bliveren/image2tools --branch main --limit 5 --json databaseId,displayTitle,status,conclusion,event,headSha,url,createdAt,updatedAt`: latest `main` CI run is `26018882123` for `cdc73f6` and still concludes `failure`.
+- `gh run view 26018882123 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest `main` CI run still failed before any workflow job steps executed; build/mock, Windows package, macOS package, and Linux package jobs all had empty `steps` arrays, matching the external GitHub Actions billing/spending-limit blocker tracked in issue #5.
 - `curl` checks against the mock passed for `/models`, JSON `/images/generations`, SSE `/images/generations`, and multipart `/images/edits`.
 - `git status --short --branch`: clean `main`.
 - `git worktree list`: only `/Users/alive/projects/image2tools`.
