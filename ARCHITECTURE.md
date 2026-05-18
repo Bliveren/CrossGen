@@ -4,8 +4,8 @@
 
 - 桌面壳：Electron
 - 前端：React + TypeScript + Vite
-- 状态管理：Zustand 或 Redux Toolkit，二选一即可
-- 本地存储：SQLite 优先，其次 JSON/IndexedDB
+- 状态管理：React 本地状态 + 轻量 hooks，MVP 不引入全局状态库
+- 本地存储：JSON 文件优先，后续数据量增长再迁移 SQLite
 - 文件处理：Node.js 原生文件系统 + 预加载桥接
 
 ## 2. 总体结构
@@ -49,6 +49,10 @@ flowchart LR
 
 - 文生图：`/v1/images/generations`
 - 图像编辑：`/v1/images/edits`
+- 生成和编辑都支持非流式与流式请求
+- 流式事件：
+  - 生成：`image_generation.partial_image`、`image_generation.completed`
+  - 编辑：`image_edit.partial_image`、`image_edit.completed`
 
 原因：
 - 语义简单
@@ -71,6 +75,7 @@ flowchart LR
 | 质量控制 | size / quality | 高级参数 |
 | 导出 | output format / compression | 下载菜单 |
 | 快速反馈 | stream / partial images | 流式预览开关 |
+| 内容过滤 | moderation | 高级参数 |
 
 ## 6. 参数默认值建议
 
@@ -81,7 +86,23 @@ flowchart LR
 - background: `auto`
 - n: `1`
 - stream: `true`
+- partial_images: `2`
+- moderation: `auto`
 - timeout: `180000` 到 `300000` 毫秒
+
+### gpt-image-2 参数约束
+
+- `size`: `auto` 或 `WIDTHxHEIGHT`
+- 自定义尺寸宽高必须都是 16 的倍数
+- 最长边不超过 `3840px`
+- 长短边比例不超过 `3:1`
+- 总像素不少于 `655360`，不超过 `8294400`
+- `quality`: `auto` / `low` / `medium` / `high`
+- `output_format`: `png` / `jpeg` / `webp`
+- `output_compression`: 仅在 `jpeg` / `webp` 生效，范围 `0..100`
+- `background`: `auto` / `opaque`；不暴露 `transparent`
+- `partial_images`: `0..3`
+- `input_fidelity`: 不对 `gpt-image-2` 暴露，模型自动高保真处理输入图
 
 ## 7. 数据模型
 
@@ -95,6 +116,8 @@ flowchart LR
 - `defaultModel`
 - `defaultSize`
 - `defaultQuality`
+- `timeoutMs`
+- `updatedAt`
 
 ### GenerationJob
 
@@ -107,6 +130,7 @@ flowchart LR
 - `durationMs`
 - `error`
 - `createdAt`
+- `usage`
 
 ### ImageAsset
 
@@ -139,6 +163,9 @@ src/
       generator/
       editor/
       history/
+  shared/
+    types.ts
+    validation.ts
 ```
 
 ## 9. 错误处理策略
@@ -171,4 +198,3 @@ src/
 - 任务队列
 - 多 provider 切换
 - Responses API 会话式编辑
-
