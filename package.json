@@ -1,0 +1,39 @@
+{
+  "name": "image2tools",
+  "version": "0.1.0",
+  "description": "A simple GPT Image 2 desktop tool for generation, edits, inpainting, downloads, and local history.",
+  "author": "Bliveren <aliveren_89@foxmail.com>",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "dev:electron": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && pnpm build:main && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "pnpm typecheck && pnpm test && pnpm build:renderer && pnpm build:main",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "preview": "vite preview --host 127.0.0.1",
+    "start": "pnpm build:main && electron .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^39.2.6",
+    "lucide-react": "^0.554.0",
+    "vite": "^7.2.4",
+    "typescript": "^5.9.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "jsdom": "^27.2.0",
+    "vitest": "^4.0.13",
+    "wait-on": "^9.0.3"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node", "electron"],
+    "sourceMap": true,
+    "declaration": false
+  },
+  "include": ["src/main", "src/preload", "src/shared"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+}
