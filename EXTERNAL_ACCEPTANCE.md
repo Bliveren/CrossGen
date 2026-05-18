@@ -133,13 +133,14 @@ Current partial evidence:
 - `pnpm verify:release:windows` now automates the Windows package checks that
   can be safely run in CI or a Windows shell: NSIS installer/unpacked executable
   PE metadata inspection, unpacked app launch, main-window detection, and a
-  short process stability smoke interval.
+  short process stability smoke interval, plus silent install / installed app
+  launch / silent uninstall.
 - `pnpm verify:release:linux` now automates the Linux package checks that can be
   safely run in CI or a Linux shell: AppImage/unpacked executable inspection,
   unpacked app Xvfb launch, AppImage extraction, and extracted app Xvfb launch.
 - Direct AppImage execution in Docker remains blocked by missing FUSE device
   support, so this is not a substitute for native Linux desktop validation.
-- Windows native validation has not been performed.
+- Windows native manual validation has not been performed.
 
 Run on each native platform:
 
