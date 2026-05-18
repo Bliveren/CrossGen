@@ -84,6 +84,7 @@
 - [x] Windows verifier 覆盖 silent install / installed app launch / silent uninstall
 - [x] Linux ARM64 容器环境可 build、通过 mock verifier、生成 AppImage、解包并在 Xvfb 下启动
 - [x] Linux package gate 已接入 `pnpm verify:release:linux`
+- [x] Linux verifier 在 FUSE 可用时覆盖直接 AppImage 启动，并支持 `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1` 强制原生验收
 - [ ] Windows 原生安装与启动验证完成
 - [ ] Linux 原生桌面 AppImage 直接运行、下载、打开文件夹行为验证完成
 - [x] 真实 API 验收脚本默认受成本确认保护

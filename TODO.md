@@ -112,6 +112,7 @@ GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 - [x] 增加 `pnpm verify:release:windows` 并接入 Windows CI package gate
 - [x] 将 Windows release verifier 扩展到 silent install / launch / uninstall 烟测
 - [x] 增加 `pnpm verify:release:linux` 并接入 Linux CI package gate
+- [x] 将 Linux release verifier 扩展到可选直接 AppImage 启动，原生验收可通过环境变量强制要求 FUSE
 - [ ] 解除 GitHub Actions billing/spending limit 阻塞并取得绿色 CI（GitHub issue #5）
 - [ ] 补充签名、公证与正式分发元数据（GitHub issue #3）
 - [ ] 非 macOS 平台安装验证（GitHub issue #4；Windows 与原生 Linux 桌面 shell 行为仍待验证）

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile, spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -9,6 +9,7 @@ const execFileAsync = promisify(execFile);
 const releaseDir = path.resolve("release");
 const productName = "Image2Tools";
 const appImagePattern = /^Image2Tools-.*-linux-.*\.AppImage$/;
+const requireDirectAppImage = process.env.IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE === "1";
 const smokeTimeoutMs = Number(process.env.IMAGE2TOOLS_LINUX_SMOKE_TIMEOUT_MS ?? 12000);
 
 function assertLinux() {
@@ -67,6 +68,15 @@ async function assertElfExecutable(filePath) {
     throw new Error(`Expected ${filePath} to be a 64-bit ELF executable. file output:\n${stdout}`);
   }
   console.log(stdout.trim());
+}
+
+async function pathExists(filePath) {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function findPids(pattern) {
@@ -145,6 +155,38 @@ async function launchWithXvfb(executablePath, label) {
   console.log(`${label} stayed running for ${smokeTimeoutMs}ms under Xvfb.`);
 }
 
+async function canRunDirectAppImage() {
+  if (await pathExists("/dev/fuse")) {
+    return { ok: true, reason: "" };
+  }
+  try {
+    const { stdout } = await run("findmnt", ["-n", "-o", "FSTYPE", "/"]);
+    const rootFs = stdout.trim();
+    if (rootFs === "fuseblk") {
+      return { ok: true, reason: "" };
+    }
+  } catch {
+    // findmnt is a best-effort fallback for environments without /dev/fuse.
+  }
+  return {
+    ok: false,
+    reason: "Direct AppImage execution requires FUSE support, but /dev/fuse is not available."
+  };
+}
+
+async function verifyDirectAppImageLaunch(appImagePath) {
+  const directSupport = await canRunDirectAppImage();
+  if (!directSupport.ok) {
+    if (requireDirectAppImage) {
+      throw new Error(directSupport.reason);
+    }
+    console.log(`${directSupport.reason} Skipping direct AppImage launch; set IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 to make this mandatory.`);
+    return;
+  }
+  await run("chmod", ["+x", appImagePath]);
+  await launchWithXvfb(appImagePath, "Direct AppImage app");
+}
+
 async function verifyAppImageExtraction(appImagePath) {
   const tempRoot = await mkdtemp(path.join(tmpdir(), "Image2Tools-linux-appimage-"));
   try {
@@ -172,6 +214,7 @@ async function main() {
   await assertElfExecutable(appImagePath);
   await assertElfExecutable(unpackedExecutable);
   await launchWithXvfb(unpackedExecutable, "Unpacked Linux app");
+  await verifyDirectAppImageLaunch(appImagePath);
   await verifyAppImageExtraction(appImagePath);
   console.log("Linux release verification passed.");
 }
