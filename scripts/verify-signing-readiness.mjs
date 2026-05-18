@@ -16,7 +16,10 @@ function isSet(name) {
 async function readPackageBuildConfig() {
   const raw = await readFile("package.json", "utf8");
   const pkg = JSON.parse(raw);
-  return pkg.build?.mac ?? {};
+  return {
+    mac: pkg.build?.mac ?? {},
+    scripts: pkg.scripts ?? {}
+  };
 }
 
 async function findCodeSigningIdentities() {
@@ -38,11 +41,19 @@ async function main() {
   const identity = await findCodeSigningIdentities();
   checks.push(identity);
 
-  const macConfig = await readPackageBuildConfig();
-  if (macConfig.identity === null) {
+  const { mac: macConfig, scripts } = await readPackageBuildConfig();
+  const signedPackageScript = String(scripts["package:mac:signed"] ?? "");
+  const hasSignedPackageOverride =
+    signedPackageScript.includes("-c.mac.identity") && signedPackageScript.includes("-c.mac.notarize=true");
+  if (macConfig.identity === null && !hasSignedPackageOverride) {
     checks.push({
       ok: false,
-      message: "package.json currently sets build.mac.identity to null, which intentionally disables local macOS code signing."
+      message: "package.json sets build.mac.identity to null and does not provide a signed/notarized packaging override."
+    });
+  } else if (macConfig.identity === null) {
+    checks.push({
+      ok: true,
+      message: "package.json keeps unsigned builds as the default and provides package:mac:signed to override mac.identity and enable notarization."
     });
   }
 
