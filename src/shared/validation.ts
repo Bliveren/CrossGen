@@ -1,4 +1,10 @@
-import type { ImageBackground, ImageFormat, ImageParams, ImageQuality, ModerationMode } from "./types.js";
+import type {
+  ImageBackground,
+  ImageFormat,
+  ImageParams,
+  ImageQuality,
+  ModerationMode
+} from "./types.js";
 
 export const GPT_IMAGE_2_MODEL = "gpt-image-2";
 
@@ -105,7 +111,7 @@ export function validateGptImage2Size(size: unknown): ValidationResult {
   return { ok: true };
 }
 
-export function validateImageParams(params: ImageParams): ValidationResult {
+export function validateImageParams(params: unknown): ValidationResult {
   if (!isRecord(params)) {
     return { ok: false, message: "参数格式无效。" };
   }
@@ -184,12 +190,98 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
   return { ok: true };
 }
 
+export function validateInputAssetShape(asset: unknown): ValidationResult {
+  if (!isRecord(asset)) {
+    return { ok: false, message: "输入资源格式无效。" };
+  }
+  if (typeof asset.id !== "string") {
+    return { ok: false, message: "输入资源 ID 无效。" };
+  }
+  if (typeof asset.name !== "string") {
+    return { ok: false, message: "输入资源名称无效。" };
+  }
+  if (typeof asset.path !== "string") {
+    return { ok: false, message: "输入资源路径无效。" };
+  }
+  if (typeof asset.mimeType !== "string") {
+    return { ok: false, message: "输入资源 MIME 类型无效。" };
+  }
+  if (!isInteger(asset.sizeBytes) || asset.sizeBytes < 0) {
+    return { ok: false, message: "输入资源大小无效。" };
+  }
+  if (asset.dataUrl !== undefined && typeof asset.dataUrl !== "string") {
+    return { ok: false, message: "输入资源数据无效。" };
+  }
+  if (asset.width !== undefined && (!isInteger(asset.width) || asset.width < 1)) {
+    return { ok: false, message: "输入资源宽度无效。" };
+  }
+  if (asset.height !== undefined && (!isInteger(asset.height) || asset.height < 1)) {
+    return { ok: false, message: "输入资源高度无效。" };
+  }
+  return { ok: true };
+}
+
+export function validateRunJobRequest(request: unknown): ValidationResult {
+  if (!isRecord(request)) {
+    return { ok: false, message: "任务请求格式无效。" };
+  }
+  if (request.mode !== "generate" && request.mode !== "edit" && request.mode !== "inpaint") {
+    return { ok: false, message: "任务模式无效。" };
+  }
+  if (typeof request.prompt !== "string") {
+    return { ok: false, message: "Prompt 格式无效。" };
+  }
+  if (!Array.isArray(request.inputPaths) || request.inputPaths.some((item) => typeof item !== "string")) {
+    return { ok: false, message: "输入图片路径无效。" };
+  }
+  if (request.maskPath !== undefined && typeof request.maskPath !== "string") {
+    return { ok: false, message: "Mask 路径无效。" };
+  }
+  if (request.maskDataUrl !== undefined && typeof request.maskDataUrl !== "string") {
+    return { ok: false, message: "Mask 数据无效。" };
+  }
+  return validateImageParams(request.params);
+}
+
+export function validateWorkspaceDraftInput(input: unknown): ValidationResult {
+  if (!isRecord(input)) {
+    return { ok: false, message: "草稿格式无效。" };
+  }
+  if (input.mode !== "generate" && input.mode !== "edit" && input.mode !== "inpaint") {
+    return { ok: false, message: "草稿模式无效。" };
+  }
+  if (typeof input.prompt !== "string") {
+    return { ok: false, message: "草稿 Prompt 无效。" };
+  }
+  if (!Array.isArray(input.inputAssets)) {
+    return { ok: false, message: "草稿输入资源无效。" };
+  }
+  if (input.inputAssets.length > 10) {
+    return { ok: false, message: "草稿输入资源不能超过 10 张。" };
+  }
+  for (const asset of input.inputAssets) {
+    const assetValidation = validateInputAssetShape(asset);
+    if (!assetValidation.ok) return assetValidation;
+  }
+  if (input.maskAsset !== undefined && input.maskAsset !== null) {
+    const maskValidation = validateInputAssetShape(input.maskAsset);
+    if (!maskValidation.ok) return maskValidation;
+  }
+  if (input.maskDataUrl !== undefined && typeof input.maskDataUrl !== "string") {
+    return { ok: false, message: "草稿 Mask 数据无效。" };
+  }
+  if (!isInteger(input.brushSize) || input.brushSize < 1) {
+    return { ok: false, message: "画笔大小无效。" };
+  }
+  return validateImageParams(input.params);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isOneOf<T extends string>(value: string, options: readonly T[]): value is T {
-  return (options as readonly string[]).includes(value);
+function isOneOf<T extends string>(value: unknown, options: readonly T[]): value is T {
+  return typeof value === "string" && (options as readonly string[]).includes(value);
 }
 
 function isInteger(value: unknown): value is number {

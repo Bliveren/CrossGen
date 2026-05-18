@@ -32,7 +32,9 @@ import {
   getValidationError,
   normalizeBaseURL,
   validateApiKey,
-  validateProviderConfigInput
+  validateProviderConfigInput,
+  validateRunJobRequest,
+  validateWorkspaceDraftInput
 } from "../shared/validation.js";
 import { buildEndpoint, fetchWithTimeout, runOpenAIImageJob } from "./services/openaiImage.js";
 import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePaths } from "./services/assetOwnership.js";
@@ -480,12 +482,14 @@ async function handleClearApiKey(): Promise<ProviderConfig> {
 }
 
 async function handleSaveDraft(_event: IpcMainInvokeEvent, input: WorkspaceDraftInput): Promise<WorkspaceDraft> {
+  const validation = validateWorkspaceDraftInput(input);
+  if (!validation.ok) {
+    throw new Error(validation.message ?? "草稿参数无效。");
+  }
   const state = await readState();
   const draft: WorkspaceDraft = {
     ...input,
-    prompt: input.prompt,
     inputAssets: input.inputAssets.slice(0, 10),
-    maskDataUrl: input.maskDataUrl,
     updatedAt: new Date().toISOString()
   };
   await writeState({ ...state, draft });
@@ -561,6 +565,10 @@ async function handleSelectMask(): Promise<InputAsset | null> {
 }
 
 async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest): Promise<GenerationJob> {
+  const validation = validateRunJobRequest(request);
+  if (!validation.ok) {
+    throw new Error(validation.message ?? "任务请求无效。");
+  }
   const validationError = getValidationError(request.params, request.prompt);
   if (validationError) {
     throw new Error(validationError);

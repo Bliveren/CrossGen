@@ -182,6 +182,7 @@ src/
 - API Key 只存本地
 - 前端不打印 Key
 - 错误日志脱敏
+- Main process 对配置、任务、草稿、下载、打开目录、删除等 IPC payload 做运行时校验后再访问文件或状态
 - 下载文件由 main process 统一落盘
 - 可选支持系统钥匙串 / Keychain
 
