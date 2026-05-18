@@ -69,6 +69,10 @@ function fieldValue(request, name) {
   return request?.fields?.[name]?.[0];
 }
 
+function fieldValues(request, name) {
+  return request?.fields?.[name] ?? [];
+}
+
 function latestRequest(requests, pathname) {
   return requests.findLast?.((item) => item.pathname === pathname) ?? [...requests].reverse().find((item) => item.pathname === pathname);
 }
@@ -179,6 +183,14 @@ async function verifyMultipartInpaint() {
   assert(response.ok, `multipart inpaint failed with HTTP ${response.status}`);
   const payload = await response.json();
   assert(payload.data?.[0]?.b64_json?.startsWith(tinyPngPrefix), "multipart inpaint did not return a PNG b64_json");
+
+  const requests = await recentMockRequests();
+  const request = latestRequest(requests, "/v1/images/edits");
+  assert(fieldValue(request, "model") === "gpt-image-2", "multipart inpaint did not send model");
+  assert(fieldValue(request, "prompt") === "mock inpaint with multiple image references", "multipart inpaint did not send prompt");
+  assert(fieldValue(request, "stream") === "false", "multipart inpaint did not send stream=false");
+  assert(fieldValues(request, "image[]").length === 2, "multipart inpaint did not send two image[] fields");
+  assert(fieldValues(request, "mask").length === 1, "multipart inpaint did not send one mask field");
 }
 
 async function verifySseEdit() {
