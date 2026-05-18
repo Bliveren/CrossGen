@@ -130,6 +130,10 @@ Current partial evidence:
 - Ubuntu/Debian Bookworm ARM64 Docker validation on the macOS host passed
   `pnpm build`, `pnpm verify:mock-api`, Linux AppImage packaging, AppImage
   extraction, and extracted-app launch under Xvfb.
+- `pnpm verify:release:windows` now automates the Windows package checks that
+  can be safely run in CI or a Windows shell: NSIS installer/unpacked executable
+  PE metadata inspection, unpacked app launch, main-window detection, and a
+  short process stability smoke interval.
 - `pnpm verify:release:linux` now automates the Linux package checks that can be
   safely run in CI or a Linux shell: AppImage/unpacked executable inspection,
   unpacked app Xvfb launch, AppImage extraction, and extracted app Xvfb launch.
@@ -144,6 +148,8 @@ pnpm install --frozen-lockfile
 pnpm build
 pnpm verify:mock-api
 pnpm package
+pnpm verify:release:windows  # Windows only
+pnpm verify:release:linux    # Linux only
 ```
 
 Manual platform checks:

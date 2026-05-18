@@ -80,6 +80,7 @@
 - [x] macOS dmg 安装 smoke test 可通过 `pnpm verify:release:mac` 自动复跑
 - [x] macOS dmg smoke test 会确认主窗口实际出现
 - [x] GitHub Actions 已配置 build、mock API verifier、macOS / Windows / Linux package gates
+- [x] Windows package gate 已接入 `pnpm verify:release:windows`
 - [x] Linux ARM64 容器环境可 build、通过 mock verifier、生成 AppImage、解包并在 Xvfb 下启动
 - [x] Linux package gate 已接入 `pnpm verify:release:linux`
 - [ ] Windows 原生安装与启动验证完成

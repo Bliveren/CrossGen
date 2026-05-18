@@ -24,6 +24,7 @@
     "verify:mock-api": "node scripts/verify-mock-api.mjs",
     "verify:release:linux": "node scripts/verify-linux-release.mjs",
     "verify:release:mac": "node scripts/verify-mac-release.mjs",
+    "verify:release:windows": "node scripts/verify-windows-release.mjs",
     "verify:real-api": "node scripts/verify-real-api.mjs",
     "verify:signing-ready": "node scripts/verify-signing-readiness.mjs"
   },
