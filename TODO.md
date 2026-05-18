@@ -98,6 +98,7 @@
 - [x] 完成 macOS 临时目录卸载与重装 smoke test
 - [x] 增加 GitHub Actions CI（build、mock verifier、macOS package）
 - [x] 增加受成本保护的真实 API 验收脚本
+- [x] 增加 macOS 签名/公证 readiness 检查脚本
 - [ ] 解除 GitHub Actions billing/spending limit 阻塞并取得绿色 CI（GitHub issue #5）
 - [ ] 补充签名、公证与正式分发元数据（GitHub issue #3）
 - [ ] 非 macOS 平台安装验证（GitHub issue #4）

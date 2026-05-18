@@ -76,6 +76,7 @@
 - [x] macOS dmg 安装 smoke test 可通过 `pnpm verify:release:mac` 自动复跑
 - [x] GitHub Actions 已配置 build、mock API verifier、macOS package gate
 - [x] 真实 API 验收脚本默认受成本确认保护
+- [x] 签名/公证 readiness 脚本不会暴露 secret 且不会尝试签名
 - [x] 配置迁移到当前 state v1 正常
 - [x] 长时间生成不会轻易超时
 
