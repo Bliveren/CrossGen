@@ -75,6 +75,7 @@
 - [x] dmg 可挂载、复制 app 并启动
 - [x] macOS 临时目录卸载与重装 smoke test 正常
 - [x] macOS dmg 安装 smoke test 可通过 `pnpm verify:release:mac` 自动复跑
+- [x] macOS dmg smoke test 会确认主窗口实际出现
 - [x] GitHub Actions 已配置 build、mock API verifier、macOS / Windows / Linux package gates
 - [x] 真实 API 验收脚本默认受成本确认保护
 - [x] 签名/公证 readiness 脚本不会暴露 secret 且不会尝试签名

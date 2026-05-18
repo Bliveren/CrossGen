@@ -81,6 +81,31 @@ async function waitForLaunch(executablePath) {
   throw new Error(`Packaged app did not launch from ${executablePath}`);
 }
 
+async function countWindowsForPid(pid) {
+  const script = `tell application "System Events" to return count of windows of (first process whose unix id is ${pid})`;
+  const { stdout } = await run("osascript", ["-e", script]);
+  return Number(stdout.trim()) || 0;
+}
+
+async function waitForMainWindow(pids) {
+  const deadline = Date.now() + 10000;
+  let lastError;
+  while (Date.now() < deadline) {
+    for (const pid of pids) {
+      try {
+        if ((await countWindowsForPid(pid)) > 0) {
+          return pid;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  const detail = lastError instanceof Error ? ` Last accessibility error: ${lastError.message}` : "";
+  throw new Error(`Packaged app launched but did not show a main window.${detail}`);
+}
+
 async function stopApp(executablePath) {
   const pids = await findPids(executablePath);
   for (const pid of pids) {
@@ -100,7 +125,8 @@ async function runInstallCycle(mountPoint, tempRoot, cycle) {
   await cp(path.join(mountPoint, appName), appPath, { recursive: true });
   await run("open", ["-n", appPath]);
   const pids = await waitForLaunch(executablePath);
-  console.log(`Cycle ${cycle}: launched ${appPath} with pid ${pids.join(",")}.`);
+  const windowPid = await waitForMainWindow(pids);
+  console.log(`Cycle ${cycle}: launched ${appPath} with pid ${pids.join(",")} and showed a main window on pid ${windowPid}.`);
   await stopApp(executablePath);
   await rm(appPath, { recursive: true, force: true });
 }
