@@ -2,7 +2,7 @@
 
 Date: 2026-05-18
 Branch: `main`
-Latest audited implementation commit: `659b0c4`
+Latest audited implementation commit: `947450a`
 
 ## Objective Restated
 
@@ -26,6 +26,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, and SSE events; `pnpm verify:mock-api` probes all mock routes | Done |
 | Tests | `pnpm build` passed with 3 test files and 15 tests | Done |
 | Packaging | `electron-builder` config, project icons in `build/`, `pnpm package:dir`, `pnpm package:mac`, local app, dmg-copy launch, two-cycle reinstall smoke tests, and `pnpm verify:release:mac` automation | Done for unsigned macOS local artifacts |
+| Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS package gate on macOS for push/PR to `main` | Configured; remote run pending after push |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
@@ -37,7 +38,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 
 ## Verification Commands Run
 
-- `pnpm build`: typecheck, Vitest, renderer build, main build passed on 2026-05-18 for the `659b0c4` tree; Vitest reported 3 test files and 15 tests passed.
+- `pnpm build`: typecheck, Vitest, renderer build, main build passed on 2026-05-18 for the `947450a` tree; Vitest reported 3 test files and 15 tests passed.
 - `pnpm package:dir`: unsigned macOS app directory regenerated successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
 - `open -n release/mac-arm64/Image2Tools.app`: packaged app launched on 2026-05-18 after `8a69b39`; process was observed, then the smoke-test process was terminated after AppleScript quit was not handled by the app.
 - `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg`, `.zip`, and blockmaps successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
@@ -45,7 +46,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `hdiutil attach ...`, copy/run/remove/copy/run/remove in `/tmp/Image2Tools-current-reinstall-test.*`: current dmg two-cycle macOS uninstall/reinstall smoke test passed on 2026-05-18 after `7da178b`; test processes, mount point, and temp directory were cleaned up.
 - `pnpm verify:release:mac`: automated macOS dmg verification passed on 2026-05-18 for the `659b0c4` tree; it mounted the current dmg, copied the app to a temp directory, launched it twice, removed it twice, detached the dmg, and cleaned temp files.
 - `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `659b0c4` tree.
+- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `947450a` tree.
+- `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/ci.yml")'`: GitHub Actions workflow YAML parsed locally.
 - `curl` checks against the mock passed for `/models`, JSON `/images/generations`, SSE `/images/generations`, and multipart `/images/edits`.
 - `git status --short --branch`: clean `main`.
 - `git worktree list`: only `/Users/alive/projects/image2tools`.
