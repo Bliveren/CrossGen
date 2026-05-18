@@ -97,6 +97,7 @@
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
 - [x] 完成 macOS 临时目录卸载与重装 smoke test
 - [x] 增加 GitHub Actions CI（build、mock verifier、macOS package）
+- [ ] 解除 GitHub Actions billing/spending limit 阻塞并取得绿色 CI（GitHub issue #5）
 - [ ] 补充签名、公证与正式分发元数据（GitHub issue #3）
 - [ ] 非 macOS 平台安装验证（GitHub issue #4）
 - [x] 已评估 `stash@{0}` 中未合并的 renderer 实验；当前 `main` 已覆盖其核心能力并包含更新的草稿恢复、mask 校验和打包配置

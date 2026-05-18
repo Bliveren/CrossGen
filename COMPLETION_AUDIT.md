@@ -26,7 +26,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, and SSE events; `pnpm verify:mock-api` probes all mock routes | Done |
 | Tests | `pnpm build` passed with 3 test files and 15 tests | Done |
 | Packaging | `electron-builder` config, project icons in `build/`, `pnpm package:dir`, `pnpm package:mac`, local app, dmg-copy launch, two-cycle reinstall smoke tests, and `pnpm verify:release:mac` automation | Done for unsigned macOS local artifacts |
-| Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS package gate on macOS for push/PR to `main` | Configured; remote run pending after push |
+| Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS package gate on macOS for push/PR to `main`; run `26011616452` was blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
@@ -48,13 +48,14 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `947450a` tree.
 - `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/ci.yml")'`: GitHub Actions workflow YAML parsed locally.
+- `gh run view 26011616452 --repo Bliveren/image2tools`: CI was triggered but both jobs were blocked before starting because GitHub reported account payment/spending-limit restrictions.
 - `curl` checks against the mock passed for `/models`, JSON `/images/generations`, SSE `/images/generations`, and multipart `/images/edits`.
 - `git status --short --branch`: clean `main`.
 - `git worktree list`: only `/Users/alive/projects/image2tools`.
 - `git remote -v`: `origin` is `https://github.com/Bliveren/image2tools.git` for fetch and push.
 - `git ls-remote --heads origin main`: remote `main` exists and matched the pushed local history when checked.
 - `gh repo view Bliveren/image2tools --json nameWithOwner,visibility,url,defaultBranchRef`: repository exists as private GitHub repo with default branch `main`.
-- `gh issue list --repo Bliveren/image2tools --state open --limit 10`: external blockers are tracked as issues #1 through #4.
+- `gh issue list --repo Bliveren/image2tools --state open --limit 10`: external blockers are tracked as issues #1 through #5.
 - `git stash show --stat stash@{0}` and `git show stash@{0}:...`: stash inspected; it is an old alternate renderer experiment and is not part of `main`.
 
 ## Remaining External Work
@@ -63,3 +64,4 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - Confirm whether to delete, archive, or restore `stash@{0}`: GitHub issue #2.
 - Add signing identity, notarization, and formal release metadata: GitHub issue #3.
 - Validate non-macOS target platforms: GitHub issue #4.
+- Resolve GitHub Actions billing/spending limit so CI can execute: GitHub issue #5.
