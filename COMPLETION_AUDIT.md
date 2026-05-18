@@ -2,9 +2,9 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: latest runtime-affecting `main` at `977d00b`
+Runtime/config evidence through: latest runtime-affecting `main` at `6d4def9`
 Release evidence through: refreshed private macOS preview assets documented on merged `main` at `1d8e215`
-Audit and blocker-tracking evidence through: merged `main` at `0d3a6b7`
+Audit and blocker-tracking evidence through: merged `main` at `6d4def9`
 Note: docs-only audit merges may advance `main` without changing runtime,
 release artifacts, or external blocker status; the evidence rows below call out
 that distinction explicitly.
@@ -28,7 +28,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected generated asset; main-process IPC rejects malformed job/draft payloads before path or asset handling and rejects download/open/delete paths outside the app image store or current history | Done |
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
-| Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, SSE events, and a mock request-inspection route; `pnpm verify:mock-api` probes models, JSON generation with Image 2 parameter assertions, streaming generation, multipart edit with Image 2 parameter assertions, multi-image mask edit/inpaint, and streaming edit | Done |
+| Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, SSE events, and a mock request-inspection route; `pnpm verify:mock-api` probes models, JSON generation with Image 2 parameter assertions, streaming generation, multipart edit with Image 2 parameter assertions, multi-image mask edit/inpaint with `image[]` and `mask` field assertions, and streaming edit | Done |
 | Tests | `pnpm vitest run src/shared/validation.test.ts`, `pnpm build`, `pnpm verify:mock-api`, and `git diff --check` passed for PR #55; after merge, `pnpm build`, `pnpm verify:mock-api`, and `git diff --check` passed on merged `main` at `88721c4` with 4 test files and 28 tests | Done |
 | Packaging | `electron-builder` config includes main, preload, shared, and renderer runtime outputs; project icons in `build/`; `pnpm package:dir`; `pnpm package:mac`; local app; dmg-copy launch; two-cycle reinstall smoke tests; `pnpm verify:release:mac` uses `ditto` for app bundle copying, verifies copied app signatures, and confirms the app process and main window through CoreGraphics window enumeration; private GitHub pre-release `v0.1.0-mac-unsigned` | Done for ad-hoc signed, unnotarized macOS local/pre-release artifacts |
 | Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR/manual dispatch; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
@@ -254,6 +254,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - Latest `main` CI run `26041388038` for `824d13b620d933546cd48e6c2b31747df76654d2` still failed before workflow steps executed; Build and mock API verifier, macOS package, Windows package, and Linux package all reported empty `steps: []`, `gh run view --log` returned `log not found`, and check-run annotations repeated the GitHub account payment/spending-limit message tracked in issue #5.
 - PR #62 merged docs-only audit evidence refresh into `main` as `0d3a6b774170d840aa1f010c545c68106eb61982`; no runtime, verifier, package, or release artifact files changed.
 - Latest `main` CI run `26042356812` for `0d3a6b774170d840aa1f010c545c68106eb61982` still failed before workflow steps executed; all four jobs reported empty `steps: []`, matching the same GitHub account billing/spending-limit blocker tracked in issue #5.
+- PR #64 merged mock verifier hardening into `main` as `6d4def9ff33c9601cdbe5221d6a537b6310fedf5`; `pnpm verify:mock-api` now asserts multi-image inpaint sends `model`, `prompt`, `stream=false`, exactly two `image[]` fields, and one `mask` field.
+- On merged `main` at `6d4def9`, `pnpm verify:mock-api`, `pnpm build`, and `git diff --check` passed locally; the post-merge GitHub Actions run `26043216928` still failed before workflow steps executed with all jobs reporting empty `steps: []`, matching issue #5.
 
 ## Remaining External Work
 

@@ -78,7 +78,7 @@
 - [x] 增加手工 QA 用例
 - [x] 增加本地 mock API 回归入口
 - [x] 增加本地 mock API 自动校验脚本
-- [x] mock API 自动校验覆盖 Image 2 参数传递（size / quality / format / compression / background / moderation）
+- [x] mock API 自动校验覆盖 Image 2 参数传递（size / quality / format / compression / background / moderation）以及多图局部重绘的 `image[]` / `mask` multipart 字段
 - [x] 增加异常恢复
 - [x] 增加崩溃后草稿恢复
 - [x] 增加错误码归类
