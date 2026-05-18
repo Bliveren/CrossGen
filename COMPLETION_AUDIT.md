@@ -2,8 +2,8 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: `69919b2`
-Docs and external-blocker evidence: current `main` revision
+Runtime/config evidence through: `971998b`
+Docs and external-blocker evidence through: `971998b`
 
 ## Objective Restated
 
@@ -46,6 +46,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm build`: typecheck, Vitest, renderer build, main build passed on 2026-05-18 for the `8f437e2` tree; Vitest reported 3 test files and 15 tests passed.
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for the `d93f2c8` tree after merging the real streaming edit verifier; Vitest reported 3 test files and 15 tests passed.
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for the current `a4b15de` tree; Vitest reported 3 test files and 15 tests passed.
+- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for the current `971998b` tree; Vitest reported 3 test files and 15 tests passed.
 - `pnpm package:dir`: unsigned macOS app directory regenerated successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
 - `open -n release/mac-arm64/Image2Tools.app`: packaged app launched on 2026-05-18 after `8a69b39`; process was observed, then the smoke-test process was terminated after AppleScript quit was not handled by the app.
 - `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg`, `.zip`, and blockmaps successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
@@ -70,6 +71,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `node --check scripts/verify-mac-release.mjs` and `git diff --check`: passed on the PR #26 verifier hardening branch.
 - `node ../image2tools-mac-verifier-fallback/scripts/verify-mac-release.mjs`: hardened verifier passed against the current dmg before PR #26 merge after clearing stale local test processes, completing two copy/launch/window/remove cycles.
 - `pnpm verify:release:mac`: passed on merged `main` at `69919b2` after PR #26; it completed two copy/launch/window/remove cycles and detected the main window with concrete pids in both cycles.
+- `pnpm verify:release:mac`: passed on current `main` at `971998b`; it completed two copy/launch/window/remove cycles and confirmed a main window in both cycles.
 - `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `947450a` tree.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `7b3b9bc` tree.
@@ -78,15 +80,21 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the mock verifier coverage tree; it now checks JSON generation, streaming generation, single-image multipart edit, multi-image mask edit/inpaint, and streaming edit against the local mock.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `d93f2c8` tree after merging the real streaming edit verifier.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the current `a4b15de` tree.
+- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the current `971998b` tree.
 - `pnpm verify:real-api`: without an API key, exits before making real API calls.
+- `pnpm verify:real-api`: on current `971998b`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
 - `IMAGE2TOOLS_API_KEY=sk-test-no-call pnpm verify:real-api`: exits before making real API calls unless `IMAGE2TOOLS_REAL_API_ACCEPT_COST=1` is explicitly set.
 - `IMAGE2TOOLS_API_KEY=sk-mock-image2tools IMAGE2TOOLS_BASE_URL=http://127.0.0.1:8788/v1 IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 pnpm verify:real-api`: passed against the local mock API, covering the script's generation, single-edit, multi-edit, and inpaint request paths; temporary artifacts and mock process were cleaned up.
 - `IMAGE2TOOLS_API_KEY=sk-mock-image2tools IMAGE2TOOLS_BASE_URL=http://127.0.0.1:8788/v1 IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST=1 pnpm verify:real-api`: passed against the local mock API after adding the opt-in streaming generation and edit checks; temporary artifacts and mock process were cleaned up.
 - `pnpm verify:signing-ready`: reported no valid code signing identities, `build.mac.identity` set to `null`, and notarization env vars unset; no signing or notarization was attempted.
+- `pnpm verify:signing-ready`: on current `971998b`, again reported no valid code signing identities, `build.mac.identity` set to `null`, and `CSC_NAME`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` unset; no signing or notarization was attempted.
 - `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/ci.yml")'`: GitHub Actions workflow YAML parsed locally after adding Windows/Linux package jobs and manual dispatch.
 - `gh run view 26011616452 --repo Bliveren/image2tools`: CI was triggered but both jobs were blocked before starting because GitHub reported account payment/spending-limit restrictions.
 - `gh run list --repo Bliveren/image2tools --branch main --limit 5 --json databaseId,displayTitle,status,conclusion,event,headSha,url,createdAt,updatedAt`: repeated `main` CI runs still conclude `failure` before executing workflow steps, including `26018882123` for `cdc73f6` and `26019519641` for `8ac18c6`.
 - `gh run view 26019519641 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: the current observed failure pattern is unchanged; build/mock, Windows package, macOS package, and Linux package jobs all had empty `steps` arrays, matching the external GitHub Actions billing/spending-limit blocker tracked in issue #5.
+- `gh run view 26021791793 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `971998b` still concluded `failure` before workflow steps ran; Linux package, build/mock, macOS package, and Windows package jobs all had empty `steps` arrays.
+- `gh issue list --repo Bliveren/image2tools --state open --json number,title,labels,url,updatedAt`: remaining open issues are external blockers #1, #3, #4, and #5.
+- `gh release view v0.1.0-mac-unsigned --repo Bliveren/image2tools --json tagName,name,isPrerelease,isDraft,url,assets,publishedAt,targetCommitish`: private pre-release `v0.1.0-mac-unsigned` is published, not draft, marked as pre-release, and has the dmg/zip assets uploaded with SHA256 digests matching the local release files.
 - `curl` checks against the mock passed for `/models`, JSON `/images/generations`, SSE `/images/generations`, and multipart `/images/edits`.
 - `git status --short --branch`: clean `main`.
 - `git worktree list`: only `/Users/alive/projects/image2tools`.
