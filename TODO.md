@@ -14,8 +14,8 @@
 
 ## Phase 1 - 工程骨架
 
-- [ ] 初始化 Electron + Vite + React + TypeScript 工程
-- [ ] 建立 main / preload / renderer 分层
+- [x] 初始化 Electron + Vite + React + TypeScript 工程
+- [x] 建立 main / preload / renderer 分层
 - [ ] 建立设置页与工作台路由
 - [ ] 实现本地配置读写
 - [ ] 实现 API Key 加密存储
@@ -23,7 +23,7 @@
 - [ ] 实现统一日志模块
 - [ ] 实现“连接测试”按钮
 - [ ] 实现 baseURL 配置与恢复
-- [ ] 增加 shared 类型与参数校验测试
+- [x] 增加 shared 类型与参数校验测试
 
 ## Phase 2 - 文生图
 
@@ -81,7 +81,7 @@
 - [x] 建立 `main` 基线提交
 - [x] 配置提交身份 `Bliveren <aliveren_89@foxmail.com>`
 - [ ] 配置远程 `origin`
-- [ ] 子任务使用独立 worktree 与独立分支
+- [x] 子任务使用独立 worktree 与独立分支
 - [ ] 子任务完成后由 CTO 审核再合并
 - [ ] 合并后清理无用 worktree 与本地分支
 

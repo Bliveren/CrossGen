@@ -48,13 +48,13 @@
 
 ## 6. 技术质量检查
 
-- [ ] main / preload / renderer 分层清晰
+- [x] main / preload / renderer 分层清晰
 - [ ] 请求封装统一
 - [ ] 错误处理统一
 - [ ] 文件读写统一
 - [ ] 本地数据结构有版本号
-- [ ] 有基础单元测试
-- [ ] main / preload / renderer 的 IPC 类型一致
+- [x] 有基础单元测试
+- [x] main / preload / renderer 的 IPC 类型一致
 - [ ] OpenAI 请求层有无真实 Key 的可测试路径
 
 ## 7. 发布前检查
