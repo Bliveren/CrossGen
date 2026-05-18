@@ -45,8 +45,8 @@ GitHub Actions 已配置基础 CI：push / PR 到 `main` 或手动触发 workflo
 https://github.com/Bliveren/image2tools/releases/tag/v0.1.0-mac-unsigned
 
 当前资产 SHA256：
-- DMG: `a04cc4568a5010ca99a00df747d0317203b56fc86724ab116491c96472b31c96`
-- ZIP: `75e0da8fe7181e3c515fcf8babb49da43acafa199e2cb7737b54601b48c9fd41`
+- DMG: `7c2c6db9eab4b88fe3a5360d1720bb378c56aa7780e74a2c7ccf8c2594102d80`
+- ZIP: `b4c46aa703f822c1575bf6775b5737f43eb7e384a0e7b1f57cadba726121faa9`
 
 ## Mock API 验证
 
