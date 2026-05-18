@@ -2,7 +2,7 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: `246604a`
+Runtime/config evidence through: `69919b2`
 Docs and external-blocker evidence: current `main` revision
 
 ## Objective Restated
@@ -66,6 +66,10 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - PR #24 updated `scripts/verify-mac-release.mjs` to refresh `Image2Tools` pids while waiting for the main window and to fall back to System Events process-name window detection for Electron/macOS pid churn.
 - `node ../image2tools-mac-verifier/scripts/verify-mac-release.mjs`: fixed verifier passed against the current dmg before PR #24 merge, completing two copy/launch/window/remove cycles.
 - `pnpm verify:release:mac`: passed on merged `main` at `246604a` after PR #24; it completed two copy/launch/window/remove cycles and detected the main window via the process-name fallback.
+- PR #26 hardened the macOS release verifier fallback so a pre-existing `Image2Tools` window cannot create a false positive; it now records the baseline process-name window count before launching and only accepts fallback success when the count increases.
+- `node --check scripts/verify-mac-release.mjs` and `git diff --check`: passed on the PR #26 verifier hardening branch.
+- `node ../image2tools-mac-verifier-fallback/scripts/verify-mac-release.mjs`: hardened verifier passed against the current dmg before PR #26 merge after clearing stale local test processes, completing two copy/launch/window/remove cycles.
+- `pnpm verify:release:mac`: passed on merged `main` at `69919b2` after PR #26; it completed two copy/launch/window/remove cycles and detected the main window with concrete pids in both cycles.
 - `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `947450a` tree.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `7b3b9bc` tree.
