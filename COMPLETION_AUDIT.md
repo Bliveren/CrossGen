@@ -2,7 +2,7 @@
 
 Date: 2026-05-18
 Branch: `main`
-Latest audited commit: `09b0f0c`
+Latest audited commit: `122de01`
 
 ## Objective Restated
 
@@ -38,8 +38,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 ## Verification Commands Run
 
 - `pnpm build`: typecheck, Vitest, renderer build, main build passed.
-- `pnpm package:dir`: unsigned macOS app directory generated.
-- `open -n release/mac-arm64/Image2Tools.app`: packaged app launched and process was observed.
+- `pnpm package:dir`: unsigned macOS app directory generated, including latest preload/main IPC changes.
+- `open -n release/mac-arm64/Image2Tools.app`: packaged app launched and process was observed after the latest IPC change.
 - `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg` and `.zip`.
 - `hdiutil attach ...`, copy `Image2Tools.app` to `/tmp/Image2Tools-install-test`, `open -n ...`: dmg install-style smoke test launched successfully.
 - `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
