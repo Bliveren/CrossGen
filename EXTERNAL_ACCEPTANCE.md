@@ -137,7 +137,10 @@ Current partial evidence:
   launch / silent uninstall.
 - `pnpm verify:release:linux` now automates the Linux package checks that can be
   safely run in CI or a Linux shell: AppImage/unpacked executable inspection,
-  unpacked app Xvfb launch, AppImage extraction, and extracted app Xvfb launch.
+  unpacked app Xvfb launch, direct AppImage launch when FUSE is available,
+  AppImage extraction, and extracted app Xvfb launch. Set
+  `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1` during native Linux validation
+  to make direct AppImage execution mandatory.
 - Direct AppImage execution in Docker remains blocked by missing FUSE device
   support, so this is not a substitute for native Linux desktop validation.
 - Windows native manual validation has not been performed.
@@ -151,6 +154,12 @@ pnpm verify:mock-api
 pnpm package
 pnpm verify:release:windows  # Windows only
 pnpm verify:release:linux    # Linux only
+```
+
+For native Linux desktop validation, require direct AppImage execution:
+
+```bash
+IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 pnpm verify:release:linux
 ```
 
 Manual platform checks:
