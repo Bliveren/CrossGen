@@ -29,6 +29,7 @@ export const IMAGE_QUALITY_OPTIONS = ["auto", "low", "medium", "high"] as const 
 export const IMAGE_FORMAT_OPTIONS = ["png", "jpeg", "webp"] as const satisfies readonly ImageFormat[];
 export const IMAGE_BACKGROUND_OPTIONS = ["auto", "opaque"] as const satisfies readonly ImageBackground[];
 export const MODERATION_MODE_OPTIONS = ["auto", "low"] as const satisfies readonly ModerationMode[];
+const IMAGE_PATH_PATTERN = /\.(png|jpe?g|webp)$/i;
 
 export interface ValidationResult {
   ok: boolean;
@@ -235,6 +236,9 @@ export function validateRunJobRequest(request: unknown): ValidationResult {
   if (!Array.isArray(request.inputPaths) || request.inputPaths.some((item) => typeof item !== "string")) {
     return { ok: false, message: "输入图片路径无效。" };
   }
+  if (request.inputPaths.some((item) => !IMAGE_PATH_PATTERN.test(item))) {
+    return { ok: false, message: "输入图片必须是 PNG、JPEG 或 WebP。" };
+  }
   if (request.inputPaths.length > MAX_GPT_IMAGE_INPUTS) {
     return { ok: false, message: `GPT Image 2 输入图片不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
   }
@@ -247,8 +251,19 @@ export function validateRunJobRequest(request: unknown): ValidationResult {
   if (request.maskPath !== undefined && typeof request.maskPath !== "string") {
     return { ok: false, message: "Mask 路径无效。" };
   }
+  if (typeof request.maskPath === "string" && request.maskPath && !/\.(png|webp)$/i.test(request.maskPath)) {
+    return { ok: false, message: "Mask 必须是 PNG 或 WebP。" };
+  }
   if (request.maskDataUrl !== undefined && typeof request.maskDataUrl !== "string") {
     return { ok: false, message: "Mask 数据无效。" };
+  }
+  if (typeof request.maskDataUrl === "string" && request.maskDataUrl) {
+    const maskMimeType = mimeTypeFromDataUrl(request.maskDataUrl);
+    if (!maskMimeType) {
+      return { ok: false, message: "Mask 数据必须是 PNG 或 WebP data URL。" };
+    }
+    const maskType = validateMaskMimeType(maskMimeType);
+    if (!maskType.ok) return maskType;
   }
   const hasMask = Boolean(request.maskPath || request.maskDataUrl);
   if (request.mode !== "inpaint" && hasMask) {

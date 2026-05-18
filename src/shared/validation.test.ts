@@ -135,10 +135,14 @@ describe("gpt-image-2 validation", () => {
     expect(validateRunJobRequest({ ...job, maskPath: "/tmp/mask.png" } as never).ok).toBe(false);
     expect(validateRunJobRequest({ ...job, mode: "edit", inputPaths: [] } as never).ok).toBe(false);
     expect(validateRunJobRequest({ ...job, mode: "edit", inputPaths: ["/tmp/a.png"] } as never).ok).toBe(true);
+    expect(validateRunJobRequest({ ...job, mode: "edit", inputPaths: ["/tmp/a.txt"] } as never).ok).toBe(false);
     expect(validateRunJobRequest({ ...job, mode: "edit", inputPaths: ["/tmp/a.png"], maskPath: "/tmp/mask.png" } as never).ok).toBe(false);
     expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"] } as never).ok).toBe(false);
+    expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskPath: "/tmp/mask.jpg" } as never).ok).toBe(false);
     expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskPath: "/tmp/mask.png" } as never).ok).toBe(true);
     expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskDataUrl: "data:image/png;base64,abc" } as never).ok).toBe(true);
+    expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskDataUrl: "data:image/jpeg;base64,abc" } as never).ok).toBe(false);
+    expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskDataUrl: "not-a-data-url" } as never).ok).toBe(false);
     expect(
       validateRunJobRequest({
         ...job,
