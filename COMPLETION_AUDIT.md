@@ -13,7 +13,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Requirement | Evidence | Status |
 | --- | --- | --- |
 | Desktop app foundation | `package.json`, `src/main/main.ts`, `src/preload/preload.ts`, `src/renderer/App.tsx`; `pnpm build` passes | Done |
-| API key entry and local save | Provider form in `src/renderer/App.tsx`; encrypted storage via Electron `safeStorage` in `src/main/main.ts` | Done |
+| API key entry, local save, and clear | Provider form in `src/renderer/App.tsx`; encrypted storage and `config:clearApiKey` via Electron `safeStorage` in `src/main/main.ts` | Done |
 | Base URL entry and connection test | `baseURL` config in renderer; `/models` connection test via `handleTestConnection` | Done |
 | Simple parameter config | Size, quality, format, compression, count, stream, partial images, moderation, timeout controls in renderer | Done |
 | `gpt-image-2` defaults and limits | `DEFAULT_IMAGE_PARAMS`, size validation, background enum, no transparent or `input_fidelity` in `src/shared/validation.ts` and `src/shared/types.ts` | Done |

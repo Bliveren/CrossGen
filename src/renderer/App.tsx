@@ -216,6 +216,7 @@ export function App() {
   const [notice, setNotice] = useState<Notice>({ kind: bridge ? "info" : "error", text: bridge ? "Ready." : "Browser preview: Electron IPC is unavailable." });
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [isClearingApiKey, setIsClearingApiKey] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -425,6 +426,24 @@ export function App() {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
       setIsTestingConnection(false);
+    }
+  }
+
+  async function clearApiKey() {
+    if (!bridge) {
+      setNotice({ kind: "error", text: "Electron bridge is required to clear the saved API key." });
+      return;
+    }
+    setIsClearingApiKey(true);
+    try {
+      const config = await bridge.clearApiKey();
+      setSnapshot((current) => ({ ...current, config }));
+      setApiKey("");
+      setNotice({ kind: "success", text: "Saved API key cleared." });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsClearingApiKey(false);
     }
   }
 
@@ -698,6 +717,10 @@ export function App() {
             <button type="button" className="secondary" onClick={testConnection} disabled={isTestingConnection}>
               {isTestingConnection ? <Loader2 className="spin" size={16} /> : <PlugZap size={16} />}
               Test
+            </button>
+            <button type="button" className="ghost" onClick={clearApiKey} disabled={isClearingApiKey || !snapshot.config.apiKeySaved}>
+              {isClearingApiKey ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />}
+              Clear key
             </button>
           </div>
           <div className="config-status">

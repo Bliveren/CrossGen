@@ -461,6 +461,18 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
   return toPublicConfig(nextConfig);
 }
 
+async function handleClearApiKey(): Promise<ProviderConfig> {
+  const state = await readState();
+  const nextConfig: StoredConfig = {
+    ...state.config,
+    encryptedApiKey: undefined,
+    encryption: "none",
+    updatedAt: new Date().toISOString()
+  };
+  await writeState({ ...state, config: nextConfig });
+  return toPublicConfig(nextConfig);
+}
+
 async function handleSaveDraft(_event: IpcMainInvokeEvent, input: WorkspaceDraftInput): Promise<WorkspaceDraft> {
   const state = await readState();
   const draft: WorkspaceDraft = {
@@ -646,6 +658,7 @@ function pathsOwnedByJob(job: GenerationJob): string[] {
 function registerIpcHandlers(): void {
   ipcMain.handle("app:getSnapshot", handleGetSnapshot);
   ipcMain.handle("config:save", handleSaveConfig);
+  ipcMain.handle("config:clearApiKey", handleClearApiKey);
   ipcMain.handle("config:testConnection", handleTestConnection);
   ipcMain.handle("draft:save", handleSaveDraft);
   ipcMain.handle("draft:clear", handleClearDraft);

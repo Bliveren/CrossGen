@@ -11,6 +11,7 @@ import type {
 const bridge: AppBridge = {
   getSnapshot: () => ipcRenderer.invoke("app:getSnapshot"),
   saveConfig: (input: ProviderConfigInput) => ipcRenderer.invoke("config:save", input),
+  clearApiKey: () => ipcRenderer.invoke("config:clearApiKey"),
   testConnection: () => ipcRenderer.invoke("config:testConnection"),
   saveDraft: (input: WorkspaceDraftInput) => ipcRenderer.invoke("draft:save", input),
   clearDraft: () => ipcRenderer.invoke("draft:clear"),
