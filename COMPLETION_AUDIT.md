@@ -2,9 +2,9 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: merged `main` at `fda838d`
-Release evidence through: current rebuilt macOS preview assets from `main` at `977d00b`
-Audit and blocker-tracking evidence through: merged `main` at `fda838d`
+Runtime/config evidence through: current `main` at `977d00b`
+Release evidence through: refreshed private macOS preview assets documented on merged `main` at `1d8e215`
+Audit and blocker-tracking evidence through: merged `main` at `1d8e215`
 
 ## Objective Restated
 
@@ -244,7 +244,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:release:mac` passed after the rebuild; it mounted the dmg, copied the app with `ditto`, verified copied-app signatures, launched two install cycles, confirmed main windows `1440x940`, stopped the app, removed temp copies, detached the dmg, and cleaned temp files.
 - `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: refreshed ad-hoc signed preview asset hashes are `ef33ed5b927b057e816a98b20c9597b322b658c95e8a018ed37990d579b08721` for dmg and `674356c295f1ab5170407dd602e1642e933242758c376754aa96abaa47816517` for zip.
 - `gh release upload v0.1.0-mac-unsigned ... --clobber`: refreshed the private pre-release dmg/zip with the verified rebuilt preview artifacts; `gh release view ... --json assets` reported matching GitHub asset digests for both files.
-- Latest `main` CI run `26039431223` for `977d00b13c47bd8d13f707c1741c9573e693d0fc` still failed before workflow steps executed; all four jobs had empty `steps: []`, matching the GitHub Actions billing/spending-limit blocker tracked in issue #5.
+- PR #60 merged the refreshed macOS preview release evidence into `main` as `1d8e215cd4a70a64856484dd1268edf6033b9da1`; the temporary worktree and local/remote branch were pruned after merge.
+- Latest `main` CI run `26040896712` for `1d8e215cd4a70a64856484dd1268edf6033b9da1` still failed before workflow steps executed; all four jobs had empty `steps: []`, matching the GitHub Actions billing/spending-limit blocker tracked in issue #5.
 
 ## Remaining External Work
 
