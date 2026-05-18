@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFile, spawn } from "node:child_process";
 import { open, readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -10,6 +11,7 @@ const productName = "Image2Tools";
 const processName = "Image2Tools";
 const appExecutableName = `${productName}.exe`;
 const installerPattern = /^Image2Tools-.*-win-.*\.exe$/;
+const installerTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_INSTALL_TIMEOUT_MS ?? 120000);
 const smokeTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_SMOKE_TIMEOUT_MS ?? 12000);
 const windowTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_WINDOW_TIMEOUT_MS ?? 15000);
 
@@ -76,6 +78,13 @@ async function findUnpackedExecutable() {
   return candidates[0];
 }
 
+async function assertDirectory(directoryPath, label) {
+  const directoryStat = await stat(directoryPath);
+  if (!directoryStat.isDirectory()) {
+    throw new Error(`${label} is not a directory: ${directoryPath}`);
+  }
+}
+
 async function assertPeExecutable(filePath, label) {
   const dosHeader = await readChunk(filePath, 0, 0x40);
   if (dosHeader.length < 0x40 || dosHeader.toString("ascii", 0, 2) !== "MZ") {
@@ -108,6 +117,111 @@ async function runPowerShell(script, env = {}) {
       ...env
     }
   });
+}
+
+function parseJsonObject(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = JSON.parse(trimmed);
+  return Array.isArray(parsed) ? parsed[0] ?? null : parsed;
+}
+
+function stripIconPathSuffix(rawPath) {
+  const trimmed = rawPath?.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.replace(/,-?\d+$/, "").replace(/^"(.+)"$/, "$1").replace(/^"|"$/g, "");
+}
+
+function parseExecutableFromCommand(command) {
+  const trimmed = command?.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const quotedMatch = /^"([^"]+\.exe)"/i.exec(trimmed);
+  if (quotedMatch) {
+    return quotedMatch[1];
+  }
+  const exeMatch = /^(.+?\.exe)(?:\s|$)/i.exec(trimmed);
+  return exeMatch?.[1] ?? "";
+}
+
+async function findRegistryInstallEntry() {
+  const script = `
+$ErrorActionPreference = "Stop"
+$roots = @(
+  "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+  "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+  "HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"
+)
+$matches = @()
+foreach ($root in $roots) {
+  if (Test-Path $root) {
+    $matches += Get-ChildItem $root -ErrorAction SilentlyContinue |
+      ForEach-Object {
+        try { Get-ItemProperty $_.PSPath } catch { $null }
+      } |
+      Where-Object { $_ -and ($_.DisplayName -eq "${productName}" -or $_.DisplayName -like "${productName} *") }
+  }
+}
+$matches |
+  Select-Object -First 1 DisplayName,InstallLocation,DisplayIcon,UninstallString,PSChildName |
+  ConvertTo-Json -Compress
+`;
+  const { stdout } = await runPowerShell(script);
+  return parseJsonObject(stdout);
+}
+
+function fallbackInstallExecutableCandidates() {
+  const localAppData = process.env.LOCALAPPDATA ?? path.join(homedir(), "AppData", "Local");
+  const programFiles = process.env.ProgramFiles;
+  const programFilesX86 = process.env["ProgramFiles(x86)"];
+  return [
+    path.join(localAppData, "Programs", productName, appExecutableName),
+    path.join(localAppData, "Programs", "image2tools", appExecutableName),
+    programFiles ? path.join(programFiles, productName, appExecutableName) : "",
+    programFiles ? path.join(programFiles, "image2tools", appExecutableName) : "",
+    programFilesX86 ? path.join(programFilesX86, productName, appExecutableName) : "",
+    programFilesX86 ? path.join(programFilesX86, "image2tools", appExecutableName) : ""
+  ].filter(Boolean);
+}
+
+async function findInstalledExecutableFromEntry(entry) {
+  const candidates = [];
+  if (entry?.InstallLocation) {
+    candidates.push(path.join(stripIconPathSuffix(entry.InstallLocation), appExecutableName));
+  }
+  if (entry?.DisplayIcon) {
+    candidates.push(stripIconPathSuffix(entry.DisplayIcon));
+  }
+  candidates.push(...fallbackInstallExecutableCandidates());
+
+  for (const candidate of candidates) {
+    if (candidate && await pathExists(candidate)) {
+      return candidate;
+    }
+  }
+  return "";
+}
+
+async function findUninstallerFromEntry(entry, installedExecutable) {
+  const candidates = [];
+  if (installedExecutable) {
+    candidates.push(path.join(path.dirname(installedExecutable), `Uninstall ${productName}.exe`));
+  }
+  if (entry?.UninstallString) {
+    candidates.push(parseExecutableFromCommand(entry.UninstallString));
+  }
+
+  for (const candidate of candidates) {
+    if (candidate && await pathExists(candidate)) {
+      return candidate;
+    }
+  }
+  return "";
 }
 
 async function findPidsByPath(executablePath, requireWindow = false) {
@@ -169,7 +283,7 @@ async function waitForMainWindow(executablePath) {
   throw new Error(`Packaged app launched but did not show a main window within ${windowTimeoutMs}ms.`);
 }
 
-async function launchUnpackedApp(executablePath) {
+async function launchApp(executablePath, label) {
   await stopProcessTree(executablePath);
   const child = spawn(executablePath, ["--disable-gpu"], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -207,22 +321,99 @@ async function launchUnpackedApp(executablePath) {
     await new Promise((resolve) => setTimeout(resolve, smokeTimeoutMs));
     const runningPids = await findPidsByPath(executablePath);
     if (runningPids.length === 0) {
-      throw new Error(`Packaged app exited before the ${smokeTimeoutMs}ms smoke interval completed.\n${output}`);
+      throw new Error(`${label} exited before the ${smokeTimeoutMs}ms smoke interval completed.\n${output}`);
     }
     const warningLines = output
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
     if (warningLines.length > 0) {
-      console.log(`Unpacked Windows app emitted non-fatal output:\n${warningLines.join("\n")}`);
+      console.log(`${label} emitted non-fatal output:\n${warningLines.join("\n")}`);
     }
-    console.log(`Unpacked Windows app launched with pid ${pids.join(",")}, showed a main window on pid ${windowPid}, and stayed running for ${smokeTimeoutMs}ms.`);
+    console.log(`${label} launched with pid ${pids.join(",")}, showed a main window on pid ${windowPid}, and stayed running for ${smokeTimeoutMs}ms.`);
   } finally {
     await stopProcessTree(executablePath);
     if (!child.killed) {
       child.kill();
     }
   }
+}
+
+async function waitForInstalledApp() {
+  const deadline = Date.now() + installerTimeoutMs;
+  while (Date.now() < deadline) {
+    const entry = await findRegistryInstallEntry();
+    const installedExecutable = await findInstalledExecutableFromEntry(entry);
+    if (installedExecutable) {
+      const uninstaller = await findUninstallerFromEntry(entry, installedExecutable);
+      return { installedExecutable, uninstaller, entry };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(`Silent installer completed but ${productName} was not found in registry or expected install locations.`);
+}
+
+async function waitForUninstalled(installedExecutable) {
+  const deadline = Date.now() + installerTimeoutMs;
+  while (Date.now() < deadline) {
+    const entry = await findRegistryInstallEntry();
+    const executableStillExists = await pathExists(installedExecutable);
+    if (!entry && !executableStillExists) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(`${productName} was still present after silent uninstall: ${installedExecutable}`);
+}
+
+async function runSilentUninstall(installedExecutable, uninstaller) {
+  await stopProcessTree(installedExecutable);
+  await run(uninstaller, ["/S"], { timeout: installerTimeoutMs });
+  await waitForUninstalled(installedExecutable);
+}
+
+async function cleanupExistingInstall() {
+  const entry = await findRegistryInstallEntry();
+  const installedExecutable = await findInstalledExecutableFromEntry(entry);
+  const uninstaller = await findUninstallerFromEntry(entry, installedExecutable);
+  if (!installedExecutable && !uninstaller) {
+    return;
+  }
+  if (!installedExecutable || !uninstaller) {
+    throw new Error(`Found an existing ${productName} install but could not determine both executable and uninstaller paths.`);
+  }
+  console.log(`Removing existing ${productName} install before verification: ${installedExecutable}`);
+  await runSilentUninstall(installedExecutable, uninstaller);
+}
+
+async function runSilentInstallCycle(installerPath) {
+  await cleanupExistingInstall();
+  console.log(`Running silent Windows installer: ${installerPath}`);
+  await run(installerPath, ["/S"], { timeout: installerTimeoutMs });
+
+  let installedExecutable = "";
+  let uninstaller = "";
+  try {
+    const installResult = await waitForInstalledApp();
+    installedExecutable = installResult.installedExecutable;
+    uninstaller = installResult.uninstaller;
+    if (!uninstaller) {
+      throw new Error(`Silent install succeeded but no uninstaller was found for ${installedExecutable}.`);
+    }
+
+    const installDir = path.dirname(installedExecutable);
+    await assertDirectory(installDir, "Installed app directory");
+    await assertPeExecutable(installedExecutable, "Installed Windows app");
+    await launchApp(installedExecutable, "Installed Windows app");
+
+    console.log(`Installed ${installResult.entry?.DisplayName ?? productName} at ${installDir}.`);
+  } finally {
+    if (installedExecutable && uninstaller) {
+      console.log(`Running silent Windows uninstaller: ${uninstaller}`);
+      await runSilentUninstall(installedExecutable, uninstaller);
+    }
+  }
+  console.log("Silent Windows install/uninstall cycle passed.");
 }
 
 async function main() {
@@ -233,7 +424,8 @@ async function main() {
 
   await assertPeExecutable(installerPath, "Windows installer");
   await assertPeExecutable(unpackedExecutable, "Unpacked Windows app");
-  await launchUnpackedApp(unpackedExecutable);
+  await launchApp(unpackedExecutable, "Unpacked Windows app");
+  await runSilentInstallCycle(installerPath);
   console.log("Windows release verification passed.");
 }
 
