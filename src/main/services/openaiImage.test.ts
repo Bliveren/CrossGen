@@ -100,6 +100,21 @@ describe("OpenAI image service", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("saves all generated images when n returns multiple results", async () => {
+    const fetchImpl = (async () => Response.json({
+      data: [{ b64_json: tinyPngBase64 }, { b64_json: tinyPngBase64 }],
+      usage: { total_tokens: 6 }
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job({ params: params({ n: 2, stream: false }) }), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.outputs.map((asset) => asset.fileName)).toEqual(["job_test-result-0.png", "job_test-result-1.png"]);
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+    await expect(readFile(result.outputs[1].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
   it("calls image edits with image[] and mask multipart fields", async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
     const sourcePath = path.join(tmpDir, "source.png");
@@ -131,6 +146,48 @@ describe("OpenAI image service", () => {
     expect(form?.get("prompt")).toBe("Make a clean product render");
     expect(form?.getAll("image[]")).toHaveLength(1);
     expect(form?.get("mask")).toBeInstanceOf(File);
+  });
+
+  it("passes advanced gpt-image-2 parameters through multipart edit requests", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
+    const sourcePath = path.join(tmpDir, "source.png");
+    await writeFile(sourcePath, Buffer.from(tinyPngBase64, "base64"));
+    const source: InputAsset = { id: "source", name: "source.png", path: sourcePath, mimeType: "image/png", sizeBytes: 1 };
+    let form: FormData | undefined;
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      form = init?.body as FormData;
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({
+          size: "1024x1536",
+          quality: "high",
+          outputFormat: "jpeg",
+          outputCompression: 55,
+          background: "opaque",
+          n: 3,
+          moderation: "low",
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(form?.get("size")).toBe("1024x1536");
+    expect(form?.get("quality")).toBe("high");
+    expect(form?.get("output_format")).toBe("jpeg");
+    expect(form?.get("output_compression")).toBe("55");
+    expect(form?.get("background")).toBe("opaque");
+    expect(form?.get("n")).toBe("3");
+    expect(form?.get("moderation")).toBe("low");
+    expect(form?.get("partial_images")).toBeNull();
   });
 
   it("rejects mask requests when the source and mask formats differ", async () => {

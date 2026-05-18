@@ -18,8 +18,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Base URL entry and connection test | `baseURL` config in renderer; `/models` connection test via `handleTestConnection` | Done |
 | Simple parameter config | Size, quality, format, compression, count, stream, partial images, moderation, timeout controls in renderer | Done |
 | `gpt-image-2` defaults and limits | `DEFAULT_IMAGE_PARAMS`, size validation, background enum, no transparent or `input_fidelity` in `src/shared/validation.ts` and `src/shared/types.ts` | Done |
-| Text-to-image generation | `/images/generations` implementation and tests in `src/main/services/openaiImage.ts` / `.test.ts` | Implemented; real API manual run pending |
-| Image edit and inpaint | `/images/edits`, multipart `image[]`, mask support, renderer mode switching, mask editor, and mask/source size, format, and alpha validation | Implemented; real API manual run pending |
+| Text-to-image generation | `/images/generations` implementation and tests in `src/main/services/openaiImage.ts` / `.test.ts`, including saving multiple returned images when `n > 1` | Implemented; real API manual run pending |
+| Image edit and inpaint | `/images/edits`, multipart `image[]`, mask support, renderer mode switching, mask editor, mask/source size, format, and alpha validation, plus service tests for advanced edit parameter transmission | Implemented; real API manual run pending |
 | Streaming partial previews | SSE parsing and partial event handling in main + renderer; covered by tests | Done |
 | Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected generated asset; main-process IPC rejects download/open/delete paths outside the app image store or current history | Done |
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
@@ -119,6 +119,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `033e888`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `d701ae8`.
 - PR #46 extends the mock OpenAI server with request inspection and updates `pnpm verify:mock-api` to assert key Image 2 parameters on JSON generation and multipart edit requests: size, quality, output format, output compression, background, count, and moderation.
+- PR #47 adds service-level tests that verify all returned generation images are saved for multi-result responses and advanced Image 2 parameters are passed through multipart edit requests.
 - `pnpm verify:real-api`: without an API key, exits before making real API calls.
 - `pnpm verify:real-api`: on current `971998b`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
 - `pnpm verify:real-api`: on current `06394ad`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set; issue #1 was updated with this current blocker evidence.
