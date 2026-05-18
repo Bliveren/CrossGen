@@ -15,7 +15,8 @@ import {
   validateGptImage2Size,
   validateImageParams,
   validateMaskMimeType,
-  validateMaskSourceFormat
+  validateMaskSourceFormat,
+  validateProviderConfigInput
 } from "./validation";
 
 describe("gpt-image-2 validation", () => {
@@ -74,6 +75,33 @@ describe("gpt-image-2 validation", () => {
     expect(validateApiKey("sk-test-key-that-is-long-enough").ok).toBe(true);
     expect(getValidationError(DEFAULT_IMAGE_PARAMS, "")).toContain("prompt");
     expect(getValidationError(DEFAULT_IMAGE_PARAMS, "Make a compact icon set")).toBeNull();
+  });
+
+  it("rejects malformed prompt, API key, and base URL runtime inputs", () => {
+    expect(validateApiKey(null).ok).toBe(false);
+    expect(getValidationError(DEFAULT_IMAGE_PARAMS, null as unknown as string)).toContain("Prompt");
+    expect(normalizeBaseURL(null)).toBe("https://api.openai.com/v1");
+    expect(redactSecret(null)).toBe("");
+    expect(validateGptImage2Size(null).ok).toBe(false);
+  });
+
+  it("validates provider config input from IPC before persistence", () => {
+    const valid = {
+      baseURL: "https://api.openai.com/v1",
+      defaultModel: "gpt-image-2",
+      defaultSize: "1024x1024",
+      defaultQuality: "auto",
+      timeoutMs: 240000
+    };
+
+    expect(validateProviderConfigInput(valid).ok).toBe(true);
+    expect(validateProviderConfigInput(null as never).ok).toBe(false);
+    expect(validateProviderConfigInput({ ...valid, baseURL: null } as never).ok).toBe(false);
+    expect(validateProviderConfigInput({ ...valid, defaultModel: "gpt-image-1.5" } as never).ok).toBe(false);
+    expect(validateProviderConfigInput({ ...valid, defaultSize: "512x512" } as never).ok).toBe(false);
+    expect(validateProviderConfigInput({ ...valid, defaultQuality: "standard" } as never).ok).toBe(false);
+    expect(validateProviderConfigInput({ ...valid, timeoutMs: Number.NaN } as never).ok).toBe(false);
+    expect(validateProviderConfigInput({ ...valid, apiKey: null } as never).ok).toBe(false);
   });
 
   it("maps formats and strips data URL prefixes", () => {
