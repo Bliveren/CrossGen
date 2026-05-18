@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const dmgPath = path.resolve("release/Image2Tools-0.1.0-mac-arm64.dmg");
 const appName = "Image2Tools.app";
+const processName = "Image2Tools";
 const appExecutable = "Contents/MacOS/Image2Tools";
 
 function assertDarwin() {
@@ -87,10 +88,20 @@ async function countWindowsForPid(pid) {
   return Number(stdout.trim()) || 0;
 }
 
-async function waitForMainWindow(pids) {
+async function countWindowsForProcessName() {
+  const script = `tell application "System Events" to return count of windows of (first process whose name is "${processName}")`;
+  const { stdout } = await run("osascript", ["-e", script]);
+  return Number(stdout.trim()) || 0;
+}
+
+async function waitForMainWindow(initialPids, executablePath) {
   const deadline = Date.now() + 10000;
+  const pids = new Set(initialPids);
   let lastError;
   while (Date.now() < deadline) {
+    for (const pid of await findPids(executablePath)) {
+      pids.add(pid);
+    }
     for (const pid of pids) {
       try {
         if ((await countWindowsForPid(pid)) > 0) {
@@ -99,6 +110,13 @@ async function waitForMainWindow(pids) {
       } catch (error) {
         lastError = error;
       }
+    }
+    try {
+      if ((await countWindowsForProcessName()) > 0) {
+        return processName;
+      }
+    } catch (error) {
+      lastError = error;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
@@ -126,7 +144,7 @@ async function runInstallCycle(mountPoint, tempRoot, cycle) {
   try {
     await run("open", ["-n", appPath]);
     const pids = await waitForLaunch(executablePath);
-    const windowPid = await waitForMainWindow(pids);
+    const windowPid = await waitForMainWindow(pids, executablePath);
     console.log(`Cycle ${cycle}: launched ${appPath} with pid ${pids.join(",")} and showed a main window on pid ${windowPid}.`);
   } finally {
     await stopApp(executablePath);
