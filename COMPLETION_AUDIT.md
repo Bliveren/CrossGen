@@ -24,7 +24,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected generated asset; main-process IPC rejects download/open/delete paths outside the app image store or current history | Done |
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
-| Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, and SSE events; `pnpm verify:mock-api` probes models, JSON generation, streaming generation, multipart edit, multi-image mask edit/inpaint, and streaming edit | Done |
+| Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, SSE events, and a mock request-inspection route; `pnpm verify:mock-api` probes models, JSON generation with Image 2 parameter assertions, streaming generation, multipart edit with Image 2 parameter assertions, multi-image mask edit/inpaint, and streaming edit | Done |
 | Tests | `pnpm build` passed with 4 test files and 21 tests on `d701ae8` | Done |
 | Packaging | `electron-builder` config includes main, preload, shared, and renderer runtime outputs; project icons in `build/`; `pnpm package:dir`; `pnpm package:mac`; local app; dmg-copy launch; two-cycle reinstall smoke tests; `pnpm verify:release:mac` confirms the app process and main window; private GitHub pre-release `v0.1.0-mac-unsigned` | Done for unsigned macOS local/pre-release artifacts |
 | Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR/manual dispatch; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
@@ -118,6 +118,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `06394ad`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `033e888`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `d701ae8`.
+- PR #46 extends the mock OpenAI server with request inspection and updates `pnpm verify:mock-api` to assert key Image 2 parameters on JSON generation and multipart edit requests: size, quality, output format, output compression, background, count, and moderation.
 - `pnpm verify:real-api`: without an API key, exits before making real API calls.
 - `pnpm verify:real-api`: on current `971998b`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
 - `pnpm verify:real-api`: on current `06394ad`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set; issue #1 was updated with this current blocker evidence.
