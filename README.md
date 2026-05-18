@@ -36,7 +36,7 @@ pnpm verify:release:mac
 
 `pnpm build` 会依次执行类型检查、单元测试、renderer 构建和 main 构建。`pnpm package:dir` 生成未压缩应用目录，适合本地试跑；`pnpm package:mac` 生成 macOS dmg/zip。`pnpm verify:release:mac` 会挂载当前 dmg，复制 app 到临时目录并做两轮启动 / 删除 / 重装烟测。当前配置默认不签名，正式分发前需要补充开发者证书、公证和跨平台安装验证。
 
-GitHub Actions 已配置基础 CI：push / PR 到 `main` 时跑 build、mock API verifier，以及 macOS / Windows / Linux package gates。GUI 启动类烟测保留为本地 `pnpm verify:release:mac`，避免 CI runner 的窗口环境造成误报。
+GitHub Actions 已配置基础 CI：push / PR 到 `main` 或手动触发 workflow 时跑 build、mock API verifier，以及 macOS / Windows / Linux package gates。GUI 启动类烟测保留为本地 `pnpm verify:release:mac`，避免 CI runner 的窗口环境造成误报。
 
 打包图标位于 `build/icon.icns`、`build/icon.ico` 和 `build/icon.png`，源自 `public/favicon.svg`。
 
