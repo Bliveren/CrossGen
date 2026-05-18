@@ -104,6 +104,48 @@ async function verifyMultipartEdit() {
   assert(payload.data?.[0]?.b64_json?.startsWith(tinyPngPrefix), "multipart edit did not return a PNG b64_json");
 }
 
+async function verifyMultipartInpaint() {
+  const form = new FormData();
+  form.append("model", "gpt-image-2");
+  form.append("prompt", "mock inpaint with multiple image references");
+  form.append("stream", "false");
+  form.append("image[]", new Blob([Buffer.from("mock-source-a")], { type: "image/png" }), "source-a.png");
+  form.append("image[]", new Blob([Buffer.from("mock-source-b")], { type: "image/png" }), "source-b.png");
+  form.append("mask", new Blob([Buffer.from("mock-mask")], { type: "image/png" }), "mask.png");
+
+  const response = await fetch(`${baseURL}/images/edits`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form
+  });
+  assert(response.ok, `multipart inpaint failed with HTTP ${response.status}`);
+  const payload = await response.json();
+  assert(payload.data?.[0]?.b64_json?.startsWith(tinyPngPrefix), "multipart inpaint did not return a PNG b64_json");
+}
+
+async function verifySseEdit() {
+  const form = new FormData();
+  form.append("model", "gpt-image-2");
+  form.append("prompt", "mock streaming edit");
+  form.append("stream", "true");
+  form.append("partial_images", "2");
+  form.append("image[]", new Blob([Buffer.from("mock-source")], { type: "image/png" }), "source.png");
+
+  const response = await fetch(`${baseURL}/images/edits`, {
+    method: "POST",
+    headers: {
+      accept: "text/event-stream",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: form
+  });
+  assert(response.ok, `sse edit failed with HTTP ${response.status}`);
+  const text = await response.text();
+  assert(text.includes("image_edit.partial_image"), "sse edit missing partial event");
+  assert(text.includes("image_edit.completed"), "sse edit missing completed event");
+  assert(text.includes(tinyPngPrefix), "sse edit missing PNG payload");
+}
+
 async function main() {
   const { server, getOutput } = startMockServer();
   try {
@@ -112,6 +154,8 @@ async function main() {
     await verifyJsonGeneration();
     await verifySseGeneration();
     await verifyMultipartEdit();
+    await verifyMultipartInpaint();
+    await verifySseEdit();
     console.log("Mock OpenAI Image API verification passed.");
   } catch (error) {
     console.error(getOutput());

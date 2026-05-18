@@ -13,6 +13,29 @@ function sendJson(response, status, payload) {
   response.end(`${JSON.stringify(payload)}\n`);
 }
 
+function hasField(bodyText, name) {
+  if (bodyText.includes(`name="${name}"`)) return true;
+  try {
+    const payload = JSON.parse(bodyText);
+    return Object.hasOwn(payload, name);
+  } catch {
+    return false;
+  }
+}
+
+function validateImageRequest(pathname, bodyText) {
+  if (!hasField(bodyText, "model")) {
+    return "Missing model field";
+  }
+  if (!hasField(bodyText, "prompt")) {
+    return "Missing prompt field";
+  }
+  if (pathname.endsWith("/edits") && !hasField(bodyText, "image[]") && !hasField(bodyText, "image") && !hasField(bodyText, "images")) {
+    return "Missing edit image field";
+  }
+  return null;
+}
+
 function sendSse(response, prefix) {
   response.writeHead(200, {
     "content-type": "text/event-stream",
@@ -56,6 +79,11 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === "POST" && (url.pathname === "/v1/images/generations" || url.pathname === "/v1/images/edits")) {
       const bodyText = await readText(request);
+      const validationError = validateImageRequest(url.pathname, bodyText);
+      if (validationError) {
+        sendJson(response, 400, { error: { message: validationError } });
+        return;
+      }
       const prefix = url.pathname.endsWith("/edits") ? "image_edit" : "image_generation";
       if (wantsStream(request, bodyText)) {
         sendSse(response, prefix);
