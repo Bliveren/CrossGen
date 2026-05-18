@@ -61,6 +61,7 @@
 - [x] OpenAI 请求层有无真实 Key 的可测试路径
 - [x] OpenAI 请求层测试覆盖多结果保存与编辑参数透传
 - [x] shared 参数校验会拒绝运行时非法 Image 2 枚举值
+- [x] shared 参数校验会拒绝畸形参数对象与非整数/非有限数值
 - [x] 状态文件写入有备份与恢复路径
 - [x] 未完成任务重启后会恢复为失败状态
 - [x] 工作区草稿可自动保存并在重启后恢复
@@ -120,5 +121,6 @@
 - [x] 结果按 base64 图像保存
 - [x] `background` 只允许 `auto` / `opaque`
 - [x] `quality`、`output_format`、`background`、`moderation` 运行时枚举值会被校验
+- [x] `n`、`partial_images`、`timeoutMs`、`output_compression` 必须是整数且有限
 - [x] `output_compression` 仅在 `jpeg` / `webp` 时发送
 - [x] `stream` 开启时处理 partial 与 completed 事件

@@ -46,6 +46,21 @@ describe("gpt-image-2 validation", () => {
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, moderation: "strict" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
   });
 
+  it("rejects malformed runtime params without throwing", () => {
+    expect(validateImageParams(null as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, model: null } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, size: null } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, stream: "true" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, n: Number.NaN } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, partialImages: Number.POSITIVE_INFINITY } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, timeoutMs: Number.NaN } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, outputCompression: Number.NEGATIVE_INFINITY } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, n: 1.5 } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, partialImages: 1.5 } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, timeoutMs: 30000.5 } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, outputCompression: 50.5 } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+  });
+
   it("normalizes base URLs and compression behavior", () => {
     expect(normalizeBaseURL("https://api.openai.com/v1///")).toBe("https://api.openai.com/v1");
     expect(shouldSendCompression("png")).toBe(false);
