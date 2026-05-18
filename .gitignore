@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-renderer/
 release/
+real-api-artifacts/
 coverage/
 .DS_Store
 *.log

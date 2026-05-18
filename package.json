@@ -21,7 +21,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
     "verify:mock-api": "node scripts/verify-mock-api.mjs",
-    "verify:release:mac": "node scripts/verify-mac-release.mjs"
+    "verify:release:mac": "node scripts/verify-mac-release.mjs",
+    "verify:real-api": "node scripts/verify-real-api.mjs"
   },
   "build": {
     "appId": "com.bliveren.image2tools",

@@ -60,6 +60,10 @@ pnpm verify:mock-api
 
 mock 支持 `/models`、`/images/generations`、`/images/edits`，并返回有效 PNG base64 和流式 partial/completed 事件。它只能验证本地配置、请求、流式预览、保存、下载、历史等链路，不代表真实 `gpt-image-2` 质量或服务端验收。
 
+## 真实 API 验收
+
+`pnpm verify:real-api` 用于外部手工验收真实 Image API。脚本默认不会发起图片请求；必须提供 `IMAGE2TOOLS_API_KEY` 或 `OPENAI_API_KEY`，并显式设置 `IMAGE2TOOLS_REAL_API_ACCEPT_COST=1`，才会执行真实生成、单图编辑、多图编辑和局部重绘。输出会保存到被 git 忽略的 `real-api-artifacts/`。
+
 ## 默认假设
 
 - 优先直接接 OpenAI API
