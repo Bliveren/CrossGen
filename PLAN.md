@@ -195,8 +195,10 @@
 - `gpt-image-2` 输出固定为 base64 图像数据，不依赖短期 URL
 - `gpt-image-2` 支持 `png` / `jpeg` / `webp` 输出；`jpeg` / `webp` 支持 `output_compression`
 - `gpt-image-2` 支持 `stream: true` 和 `partial_images: 0..3`
+- 流式 `partial_images` 会产生额外 image output token 成本
 - `gpt-image-2` 支持灵活尺寸，宽高必须为 16 的倍数、比例不超过 3:1、最长边不超过 3840、总像素在 655360 到 8294400 之间
 - mask 编辑要求源图和 mask 格式、尺寸一致且小于 50MB，mask 必须包含 alpha 通道
+- 真实 API 验收前需要确认 OpenAI 组织已完成 GPT Image 所需的组织验证
 
 ## 9. 风险与应对
 

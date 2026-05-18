@@ -102,6 +102,7 @@ flowchart LR
 - `output_compression`: 仅在 `jpeg` / `webp` 生效，范围 `0..100`
 - `background`: `auto` / `opaque`；不暴露 `transparent`
 - `partial_images`: `0..3`
+- `partial_images`: 开启流式局部图会产生额外 image output token 成本
 - `input_fidelity`: 不对 `gpt-image-2` 暴露，模型自动高保真处理输入图
 
 ## 7. 数据模型
