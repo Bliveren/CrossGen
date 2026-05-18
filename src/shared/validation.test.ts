@@ -16,7 +16,9 @@ import {
   validateImageParams,
   validateMaskMimeType,
   validateMaskSourceFormat,
-  validateProviderConfigInput
+  validateProviderConfigInput,
+  validateRunJobRequest,
+  validateWorkspaceDraftInput
 } from "./validation";
 
 describe("gpt-image-2 validation", () => {
@@ -102,6 +104,61 @@ describe("gpt-image-2 validation", () => {
     expect(validateProviderConfigInput({ ...valid, defaultQuality: "standard" } as never).ok).toBe(false);
     expect(validateProviderConfigInput({ ...valid, timeoutMs: Number.NaN } as never).ok).toBe(false);
     expect(validateProviderConfigInput({ ...valid, apiKey: null } as never).ok).toBe(false);
+  });
+
+  it("validates job and draft IPC request shapes", () => {
+    const job = {
+      mode: "generate",
+      prompt: "Prompt",
+      inputPaths: [],
+      params: DEFAULT_IMAGE_PARAMS
+    };
+    const draft = {
+      mode: "edit",
+      prompt: "Draft prompt",
+      params: DEFAULT_IMAGE_PARAMS,
+      inputAssets: [],
+      brushSize: 72
+    };
+
+    expect(validateRunJobRequest(job).ok).toBe(true);
+    expect(validateWorkspaceDraftInput(draft).ok).toBe(true);
+    expect(validateRunJobRequest(null).ok).toBe(false);
+    expect(validateRunJobRequest({ ...job, mode: "compose" } as never).ok).toBe(false);
+    expect(validateRunJobRequest({ ...job, prompt: null } as never).ok).toBe(false);
+    expect(validateRunJobRequest({ ...job, inputPaths: ["a.png", 1] } as never).ok).toBe(false);
+    expect(validateRunJobRequest({ ...job, maskPath: 123 } as never).ok).toBe(false);
+    expect(validateRunJobRequest({ ...job, maskDataUrl: 123 } as never).ok).toBe(false);
+    expect(validateRunJobRequest({ ...job, params: { ...DEFAULT_IMAGE_PARAMS, n: 1.5 } } as never).ok).toBe(false);
+    expect(validateWorkspaceDraftInput(null).ok).toBe(false);
+    expect(validateWorkspaceDraftInput({ ...draft, mode: "compose" } as never).ok).toBe(false);
+    expect(validateWorkspaceDraftInput({ ...draft, prompt: null } as never).ok).toBe(false);
+    expect(
+      validateWorkspaceDraftInput({
+        ...draft,
+        inputAssets: Array.from({ length: 11 }, (_, index) => ({
+          id: String(index),
+          name: "a.png",
+          path: "/tmp/a.png",
+          mimeType: "image/png",
+          sizeBytes: 1
+        }))
+      }).ok
+    ).toBe(false);
+    expect(validateWorkspaceDraftInput({ ...draft, inputAssets: [1] } as never).ok).toBe(false);
+    const asset = {
+      id: "1",
+      name: "a.png",
+      path: "/tmp/a.png",
+      mimeType: "image/png",
+      sizeBytes: 1
+    };
+    expect(validateWorkspaceDraftInput({ ...draft, inputAssets: [{ ...asset, dataUrl: 123 }] } as never).ok).toBe(false);
+    expect(validateWorkspaceDraftInput({ ...draft, inputAssets: [{ ...asset, width: 0 }] } as never).ok).toBe(false);
+    expect(validateWorkspaceDraftInput({ ...draft, inputAssets: [{ ...asset, height: 1.5 }] } as never).ok).toBe(false);
+    expect(validateWorkspaceDraftInput({ ...draft, maskAsset: { id: 1 } } as never).ok).toBe(false);
+    expect(validateWorkspaceDraftInput({ ...draft, maskDataUrl: 123 } as never).ok).toBe(false);
+    expect(validateWorkspaceDraftInput({ ...draft, brushSize: 0 } as never).ok).toBe(false);
   });
 
   it("maps formats and strips data URL prefixes", () => {

@@ -73,6 +73,7 @@
 - [x] shared 参数校验拒绝运行时非法枚举值（quality / format / background / moderation）
 - [x] shared 参数校验拒绝畸形运行时参数对象与非整数/非有限数值
 - [x] config / prompt / API Key 运行时输入校验拒绝非字符串畸形值
+- [x] job run / draft save IPC 请求会先做运行时 shape 校验
 - [x] 增加手工 QA 用例
 - [x] 增加本地 mock API 回归入口
 - [x] 增加本地 mock API 自动校验脚本

@@ -63,6 +63,7 @@
 - [x] shared 参数校验会拒绝运行时非法 Image 2 枚举值
 - [x] shared 参数校验会拒绝畸形参数对象与非整数/非有限数值
 - [x] config 保存、prompt、API Key、Base URL 输入会拒绝或归一化畸形运行时值
+- [x] job run / draft save IPC 请求会拒绝畸形 payload、路径数组和草稿资源对象
 - [x] 状态文件写入有备份与恢复路径
 - [x] 未完成任务重启后会恢复为失败状态
 - [x] 工作区草稿可自动保存并在重启后恢复

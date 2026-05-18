@@ -2,7 +2,7 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: `fix/cto-config-input-validation` pre-merge
+Runtime/config evidence through: `fix/cto-ipc-request-validation` pre-merge
 Release and external-blocker evidence through: `6a97504`
 
 ## Objective Restated
@@ -21,11 +21,11 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Text-to-image generation | `/images/generations` implementation and tests in `src/main/services/openaiImage.ts` / `.test.ts`, including saving multiple returned images when `n > 1` | Implemented; real API manual run pending |
 | Image edit and inpaint | `/images/edits`, multipart `image[]`, mask support, renderer mode switching, mask editor, mask/source size, format, and alpha validation, plus service tests for advanced edit parameter transmission | Implemented; real API manual run pending |
 | Streaming partial previews | SSE parsing and partial event handling in main + renderer; covered by tests | Done |
-| Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected generated asset; main-process IPC rejects download/open/delete paths outside the app image store or current history | Done |
+| Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected generated asset; main-process IPC rejects malformed job/draft payloads before path or asset handling and rejects download/open/delete paths outside the app image store or current history | Done |
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
 | Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, SSE events, and a mock request-inspection route; `pnpm verify:mock-api` probes models, JSON generation with Image 2 parameter assertions, streaming generation, multipart edit with Image 2 parameter assertions, multi-image mask edit/inpaint, and streaming edit | Done |
-| Tests | `pnpm build` passed with 4 test files and 27 tests on `fix/cto-config-input-validation` pre-merge | Done |
+| Tests | `pnpm build` passed with 4 test files and 28 tests on `fix/cto-ipc-request-validation` pre-merge | Done |
 | Packaging | `electron-builder` config includes main, preload, shared, and renderer runtime outputs; project icons in `build/`; `pnpm package:dir`; `pnpm package:mac`; local app; dmg-copy launch; two-cycle reinstall smoke tests; `pnpm verify:release:mac` confirms the app process and main window; private GitHub pre-release `v0.1.0-mac-unsigned` | Done for unsigned macOS local/pre-release artifacts |
 | Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR/manual dispatch; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
@@ -60,6 +60,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for `fix/cto-param-shape-validation` pre-merge; Vitest reported 4 test files and 25 tests passed.
 - `pnpm vitest run src/shared/validation.test.ts`: passed on 2026-05-18 for `fix/cto-config-input-validation` pre-merge; Vitest reported 1 test file and 12 tests passed, including malformed prompt/API key/Base URL inputs and provider config IPC payload validation.
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for `fix/cto-config-input-validation` pre-merge; Vitest reported 4 test files and 27 tests passed.
+- `pnpm vitest run src/shared/validation.test.ts`: passed on 2026-05-18 for `fix/cto-ipc-request-validation` pre-merge; Vitest reported 1 test file and 13 tests passed, including malformed job run and workspace draft IPC payloads.
+- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for `fix/cto-ipc-request-validation` pre-merge; Vitest reported 4 test files and 28 tests passed.
 - `pnpm package:dir`: unsigned macOS app directory regenerated successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
 - `open -n release/mac-arm64/Image2Tools.app`: packaged app launched on 2026-05-18 after `8a69b39`; process was observed, then the smoke-test process was terminated after AppleScript quit was not handled by the app.
 - `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg`, `.zip`, and blockmaps successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
@@ -127,11 +129,13 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `fix/cto-param-enum-validation` pre-merge.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `fix/cto-param-shape-validation` pre-merge.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `fix/cto-config-input-validation` pre-merge.
+- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `fix/cto-ipc-request-validation` pre-merge.
 - PR #46 extends the mock OpenAI server with request inspection and updates `pnpm verify:mock-api` to assert key Image 2 parameters on JSON generation and multipart edit requests: size, quality, output format, output compression, background, count, and moderation.
 - PR #47 adds service-level tests that verify all returned generation images are saved for multi-result responses and advanced Image 2 parameters are passed through multipart edit requests.
 - `fix/cto-param-enum-validation` adds shared runtime allow-list validation for `quality`, `outputFormat`, `background`, and `moderation`, so malformed persisted state or direct IPC payloads are rejected before OpenAI request construction.
 - `fix/cto-param-shape-validation` adds shared runtime shape and finite-integer validation for Image 2 params, so malformed persisted state or direct IPC payloads return validation errors instead of throwing or passing invalid numeric values into request construction.
 - `fix/cto-config-input-validation` adds runtime validation for provider config save payloads and hardens prompt, API key, Base URL, and size helpers against malformed non-string inputs.
+- `fix/cto-ipc-request-validation` adds runtime validation for job run and workspace draft save payloads, including mode, prompt, input path arrays, optional mask data, Image 2 params, brush size, and draft asset object metadata before main-process handlers touch paths or persisted state.
 - `pnpm verify:real-api`: without an API key, exits before making real API calls.
 - `pnpm verify:real-api`: on current `971998b`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
 - `pnpm verify:real-api`: on current `06394ad`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set; issue #1 was updated with this current blocker evidence.
