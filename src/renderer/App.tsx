@@ -37,7 +37,8 @@ import type {
   InputAsset,
   ModerationMode,
   ProviderConfig,
-  WorkMode
+  WorkMode,
+  WorkspaceDraft
 } from "../shared/types";
 
 type NoticeKind = "info" | "success" | "error";
@@ -221,6 +222,9 @@ export function App() {
   const [historySearch, setHistorySearch] = useState("");
   const [brushSize, setBrushSize] = useState(72);
   const [isPainting, setIsPainting] = useState(false);
+  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+  const [hasUserChangedDraft, setHasUserChangedDraft] = useState(false);
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
@@ -256,6 +260,26 @@ export function App() {
   useEffect(() => {
     void refreshSnapshot();
   }, []);
+
+  useEffect(() => {
+    if (!bridge || !hasRestoredDraft || !hasUserChangedDraft) return;
+    const timer = window.setTimeout(() => {
+      bridge
+        .saveDraft({
+          mode,
+          prompt,
+          params,
+          inputAssets,
+          maskAsset: maskAsset ?? undefined,
+          maskDataUrl: maskDataUrl ?? undefined,
+          brushSize
+        })
+        .then((draft) => setDraftUpdatedAt(draft.updatedAt))
+        .catch((error) => setNotice({ kind: "error", text: normalizeNotice(error) }));
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [bridge, brushSize, hasRestoredDraft, hasUserChangedDraft, inputAssets, maskAsset, maskDataUrl, mode, params, prompt]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -312,6 +336,9 @@ export function App() {
         quality: next.config.defaultQuality,
         timeoutMs: next.config.timeoutMs
       }));
+      if (!hasRestoredDraft) {
+        restoreDraft(next.draft);
+      }
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
@@ -319,8 +346,41 @@ export function App() {
     }
   }
 
+  function restoreDraft(draft?: WorkspaceDraft) {
+    setHasRestoredDraft(true);
+    if (!draft) return;
+    setMode(draft.mode);
+    setPrompt(draft.prompt);
+    setParams(draft.params);
+    setInputAssets(draft.inputAssets);
+    setMaskAsset(draft.maskAsset ?? null);
+    setMaskDataUrl(draft.maskDataUrl ?? null);
+    setBrushSize(draft.brushSize);
+    setDraftUpdatedAt(draft.updatedAt);
+    setNotice({ kind: "info", text: `Draft restored from ${formatDate(draft.updatedAt)}.` });
+  }
+
+  async function clearDraft() {
+    if (!bridge) return;
+    try {
+      await bridge.clearDraft();
+      setDraftUpdatedAt(null);
+      setHasUserChangedDraft(false);
+      setNotice({ kind: "success", text: "Draft cleared." });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
   function updateParams(patch: Partial<ImageParams>) {
+    markDraftChanged();
     setParams((current) => ({ ...current, ...patch }));
+  }
+
+  function markDraftChanged() {
+    if (hasRestoredDraft) {
+      setHasUserChangedDraft(true);
+    }
   }
 
   async function saveConfig() {
@@ -375,6 +435,7 @@ export function App() {
     }
     const assets = await bridge.selectImages();
     if (assets.length > 0) {
+      markDraftChanged();
       setInputAssets((current) => dedupeAssets([...current, ...assets]));
       if (mode === "generate") setMode("edit");
       setNotice({ kind: "success", text: `${assets.length} image${assets.length === 1 ? "" : "s"} added.` });
@@ -388,6 +449,7 @@ export function App() {
     }
     const asset = await bridge.selectMask();
     if (asset) {
+      markDraftChanged();
       setMaskAsset(asset);
       setMaskDataUrl(null);
       setMode("inpaint");
@@ -425,6 +487,11 @@ export function App() {
         history: [job, ...current.history.filter((item) => item.id !== job.id)]
       }));
       setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? `${modeLabels[mode].action} finished.` });
+      if (job.status === "succeeded") {
+        await bridge.clearDraft();
+        setDraftUpdatedAt(null);
+        setHasUserChangedDraft(false);
+      }
       await refreshSnapshot();
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
@@ -496,10 +563,12 @@ export function App() {
     setMaskAsset(job.maskAsset ?? null);
     setMaskDataUrl(null);
     setActiveJob(job);
+    setHasUserChangedDraft(true);
     setNotice({ kind: "info", text: "Job loaded into workspace." });
   }
 
   function removeInputAsset(assetId: string) {
+    markDraftChanged();
     setInputAssets((current) => current.filter((asset) => asset.id !== assetId));
     if (inputAssets[0]?.id === assetId) {
       clearPaintedMask();
@@ -549,6 +618,7 @@ export function App() {
     setIsPainting(false);
     const canvas = maskCanvasRef.current;
     if (canvas && paintedDuringStrokeRef.current) {
+      markDraftChanged();
       setMaskDataUrl(canvas.toDataURL("image/png"));
       setMaskAsset(null);
     }
@@ -580,6 +650,7 @@ export function App() {
     if (canvas && context) {
       context.clearRect(0, 0, canvas.width, canvas.height);
     }
+    markDraftChanged();
     setMaskDataUrl(null);
   }
 
@@ -777,6 +848,18 @@ export function App() {
           )}
         </section>
 
+        <section className="tool-section draft-section">
+          <div className="section-title">
+            <RefreshCw size={16} />
+            <h2>Draft</h2>
+          </div>
+          <p className="muted">{draftUpdatedAt ? `Autosaved ${formatDate(draftUpdatedAt)}` : "Workspace autosaves after edits."}</p>
+          <button type="button" className="secondary" onClick={clearDraft} disabled={!draftUpdatedAt}>
+            <Trash2 size={16} />
+            Clear draft
+          </button>
+        </section>
+
         <section className="notice-area" data-kind={notice.kind}>
           {notice.kind === "error" ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
           <span>{notice.text}</span>
@@ -791,7 +874,10 @@ export function App() {
                 key={item}
                 type="button"
                 className={mode === item ? "mode-tab active" : "mode-tab"}
-                onClick={() => setMode(item)}
+                onClick={() => {
+                  markDraftChanged();
+                  setMode(item);
+                }}
               >
                 {item === "generate" && <Wand2 size={16} />}
                 {item === "edit" && <ImagePlus size={16} />}
@@ -851,7 +937,13 @@ export function App() {
             <div className="prompt-block">
               <label>
                 Prompt
-                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+                <textarea
+                  value={prompt}
+                  onChange={(event) => {
+                    markDraftChanged();
+                    setPrompt(event.target.value);
+                  }}
+                />
               </label>
               <div className="run-row">
                 <button type="button" className="primary-run" onClick={runJob} disabled={!canRun}>
@@ -876,7 +968,14 @@ export function App() {
                 Upload mask
               </button>
               {inputAssets.length > 0 && (
-                <button type="button" className="ghost" onClick={() => setInputAssets([])}>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => {
+                    markDraftChanged();
+                    setInputAssets([]);
+                  }}
+                >
                   <X size={16} />
                   Clear
                 </button>
@@ -917,7 +1016,10 @@ export function App() {
                       min="16"
                       max="180"
                       value={brushSize}
-                      onChange={(event) => setBrushSize(Number(event.target.value))}
+                      onChange={(event) => {
+                        markDraftChanged();
+                        setBrushSize(Number(event.target.value));
+                      }}
                     />
                     <button type="button" className="icon-button" onClick={clearPaintedMask} title="Clear painted mask">
                       <Trash2 size={15} />

@@ -21,7 +21,9 @@ import type {
   JobProgressEvent,
   ProviderConfig,
   ProviderConfigInput,
-  RunJobRequest
+  RunJobRequest,
+  WorkspaceDraft,
+  WorkspaceDraftInput
 } from "../shared/types.js";
 import {
   DEFAULT_BASE_URL,
@@ -32,6 +34,7 @@ import {
   validateApiKey
 } from "../shared/validation.js";
 import { buildEndpoint, fetchWithTimeout, runOpenAIImageJob } from "./services/openaiImage.js";
+import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STATE_VERSION = 1;
@@ -57,6 +60,7 @@ interface AppStateFile {
   version: number;
   config: StoredConfig;
   history: GenerationJob[];
+  draft?: WorkspaceDraft;
 }
 
 interface ApiErrorPayload {
@@ -81,6 +85,11 @@ const defaultStoredConfig: StoredConfig = {
 };
 
 let stateCache: AppStateFile | null = null;
+let recoveredInterruptedJobs = false;
+
+interface WriteStateOptions {
+  updateBackup?: boolean;
+}
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -109,6 +118,10 @@ function createWindow(): void {
 
 function getStatePath(): string {
   return path.join(app.getPath("userData"), "image2tools-state.v1.json");
+}
+
+function getBackupStatePath(): string {
+  return `${getStatePath()}.bak`;
 }
 
 function getImagesDir(): string {
@@ -146,37 +159,79 @@ async function readState(): Promise<AppStateFile> {
   if (stateCache) return stateCache;
 
   try {
-    const raw = await fs.readFile(getStatePath(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<AppStateFile>;
-    stateCache = {
-      version: STATE_VERSION,
-      config: {
-        ...defaultStoredConfig,
-        ...(parsed.config ?? {}),
-        baseURL: normalizeBaseURL(parsed.config?.baseURL ?? DEFAULT_BASE_URL)
-      },
-      history: Array.isArray(parsed.history) ? parsed.history : []
-    };
+    stateCache = applyStartupRecovery(normalizeState(await readStateFile(getStatePath())));
   } catch (error) {
     if (!isNodeError(error) || error.code !== "ENOENT") {
-      console.warn("[image2tools] Failed to read state file; using defaults.", sanitizeError(error));
+      console.warn("[image2tools] Failed to read state file; trying backup.", sanitizeError(error));
     }
-    stateCache = getDefaultState();
-    await writeState(stateCache);
+
+    try {
+      stateCache = applyStartupRecovery(normalizeState(await readStateFile(getBackupStatePath())));
+      await writeState(stateCache, { updateBackup: false });
+      return stateCache;
+    } catch (backupError) {
+      if (!isNodeError(backupError) || backupError.code !== "ENOENT") {
+        console.warn("[image2tools] Failed to read backup state file; using defaults.", sanitizeError(backupError));
+      }
+      stateCache = getDefaultState();
+      await writeState(stateCache);
+    }
   }
 
+  if (recoveredInterruptedJobs) {
+    recoveredInterruptedJobs = false;
+    await writeState(stateCache);
+  }
   return stateCache;
 }
 
-async function writeState(state: AppStateFile): Promise<void> {
+async function writeState(state: AppStateFile, options: WriteStateOptions = {}): Promise<void> {
   await ensureDir(app.getPath("userData"));
   const payload: AppStateFile = {
     version: STATE_VERSION,
     config: state.config,
-    history: state.history.slice(0, MAX_HISTORY)
+    history: state.history.slice(0, MAX_HISTORY),
+    draft: state.draft
   };
-  await fs.writeFile(getStatePath(), `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  const statePath = getStatePath();
+  const backupPath = getBackupStatePath();
+  const tmpPath = `${statePath}.tmp`;
+  if (options.updateBackup !== false) {
+    try {
+      await fs.copyFile(statePath, backupPath);
+    } catch (error) {
+      if (!isNodeError(error) || error.code !== "ENOENT") {
+        console.warn("[image2tools] Failed to update state backup.", sanitizeError(error));
+      }
+    }
+  }
+  await fs.writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  await fs.rename(tmpPath, statePath);
   stateCache = payload;
+}
+
+async function readStateFile(filePath: string): Promise<Partial<AppStateFile>> {
+  const raw = await fs.readFile(filePath, "utf8");
+  return JSON.parse(raw) as Partial<AppStateFile>;
+}
+
+function normalizeState(parsed: Partial<AppStateFile>): AppStateFile {
+  return {
+    version: STATE_VERSION,
+    config: {
+      ...defaultStoredConfig,
+      ...(parsed.config ?? {}),
+      baseURL: normalizeBaseURL(parsed.config?.baseURL ?? DEFAULT_BASE_URL)
+    },
+    history: Array.isArray(parsed.history) ? parsed.history : [],
+    draft: parsed.draft
+  };
+}
+
+function applyStartupRecovery(state: AppStateFile): AppStateFile {
+  const result = recoverInterruptedJobs(state.history);
+  recoveredInterruptedJobs = recoveredInterruptedJobs || result.changed;
+  return result.changed ? { ...state, history: result.history } : state;
 }
 
 function encryptApiKey(apiKey: string): Pick<StoredConfig, "encryptedApiKey" | "encryption"> {
@@ -376,7 +431,8 @@ async function handleGetSnapshot(): Promise<AppSnapshot> {
   const state = await readState();
   return {
     config: toPublicConfig(state.config),
-    history: state.history
+    history: state.history,
+    draft: state.draft
   };
 }
 
@@ -403,6 +459,24 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
 
   await writeState({ ...state, config: nextConfig });
   return toPublicConfig(nextConfig);
+}
+
+async function handleSaveDraft(_event: IpcMainInvokeEvent, input: WorkspaceDraftInput): Promise<WorkspaceDraft> {
+  const state = await readState();
+  const draft: WorkspaceDraft = {
+    ...input,
+    prompt: input.prompt,
+    inputAssets: input.inputAssets.slice(0, 10),
+    maskDataUrl: input.maskDataUrl,
+    updatedAt: new Date().toISOString()
+  };
+  await writeState({ ...state, draft });
+  return draft;
+}
+
+async function handleClearDraft(): Promise<void> {
+  const state = await readState();
+  await writeState({ ...state, draft: undefined });
 }
 
 async function handleTestConnection(): Promise<ConnectionTestResult> {
@@ -573,6 +647,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle("app:getSnapshot", handleGetSnapshot);
   ipcMain.handle("config:save", handleSaveConfig);
   ipcMain.handle("config:testConnection", handleTestConnection);
+  ipcMain.handle("draft:save", handleSaveDraft);
+  ipcMain.handle("draft:clear", handleClearDraft);
   ipcMain.handle("dialog:selectImages", handleSelectImages);
   ipcMain.handle("dialog:selectMask", handleSelectMask);
   ipcMain.handle("job:run", handleRunJob);

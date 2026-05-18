@@ -4,13 +4,16 @@ import type {
   DownloadRequest,
   JobProgressEvent,
   ProviderConfigInput,
-  RunJobRequest
+  RunJobRequest,
+  WorkspaceDraftInput
 } from "../shared/types.js";
 
 const bridge: AppBridge = {
   getSnapshot: () => ipcRenderer.invoke("app:getSnapshot"),
   saveConfig: (input: ProviderConfigInput) => ipcRenderer.invoke("config:save", input),
   testConnection: () => ipcRenderer.invoke("config:testConnection"),
+  saveDraft: (input: WorkspaceDraftInput) => ipcRenderer.invoke("draft:save", input),
+  clearDraft: () => ipcRenderer.invoke("draft:clear"),
   selectImages: () => ipcRenderer.invoke("dialog:selectImages"),
   selectMask: () => ipcRenderer.invoke("dialog:selectMask"),
   runJob: (request: RunJobRequest) => ipcRenderer.invoke("job:run", request),

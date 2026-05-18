@@ -122,6 +122,7 @@ export interface ConnectionTestResult {
 export interface AppSnapshot {
   config: ProviderConfig;
   history: GenerationJob[];
+  draft?: WorkspaceDraft;
 }
 
 export interface DownloadRequest {
@@ -129,10 +130,26 @@ export interface DownloadRequest {
   suggestedName: string;
 }
 
+export interface WorkspaceDraftInput {
+  mode: WorkMode;
+  prompt: string;
+  params: ImageParams;
+  inputAssets: InputAsset[];
+  maskAsset?: InputAsset;
+  maskDataUrl?: string;
+  brushSize: number;
+}
+
+export interface WorkspaceDraft extends WorkspaceDraftInput {
+  updatedAt: string;
+}
+
 export interface AppBridge {
   getSnapshot: () => Promise<AppSnapshot>;
   saveConfig: (input: ProviderConfigInput) => Promise<ProviderConfig>;
   testConnection: () => Promise<ConnectionTestResult>;
+  saveDraft: (input: WorkspaceDraftInput) => Promise<WorkspaceDraft>;
+  clearDraft: () => Promise<void>;
   selectImages: () => Promise<InputAsset[]>;
   selectMask: () => Promise<InputAsset | null>;
   runJob: (request: RunJobRequest) => Promise<GenerationJob>;
