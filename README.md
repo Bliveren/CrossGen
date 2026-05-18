@@ -43,6 +43,10 @@ GitHub Actions 已配置基础 CI：push / PR 到 `main` 或手动触发 workflo
 当前 unsigned macOS arm64 试用包已发布到 private GitHub pre-release：
 https://github.com/Bliveren/image2tools/releases/tag/v0.1.0-mac-unsigned
 
+当前资产 SHA256：
+- DMG: `a04cc4568a5010ca99a00df747d0317203b56fc86724ab116491c96472b31c96`
+- ZIP: `75e0da8fe7181e3c515fcf8babb49da43acafa199e2cb7737b54601b48c9fd41`
+
 ## Mock API 验证
 
 没有真实 API Key 时，可以先启动本地 mock：

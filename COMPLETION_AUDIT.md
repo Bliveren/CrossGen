@@ -55,8 +55,9 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm package:mac`: regenerated unsigned macOS dmg/zip on 2026-05-18 after fixing packaged runtime files to include `dist/preload` and `dist/shared`; command reran build, typecheck, and 15 tests first.
 - `pnpm verify:release:mac`: stronger macOS dmg verification passed on 2026-05-18 after fixing packaged runtime files; it mounted the dmg, copied the app to a temp directory twice, confirmed a main process and visible main window each time, stopped the app, removed the copy, detached the dmg, and cleaned temp files.
 - `gh release create v0.1.0-mac-unsigned ... --prerelease --latest=false`: uploaded `Image2Tools-0.1.0-mac-arm64.dmg` and `.zip` to private GitHub pre-release.
-- `gh release view v0.1.0-mac-unsigned --json ...`: release is private repo pre-release with both assets uploaded.
-- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: local SHA256 values match GitHub asset digests (`8c6190d3225929c26c2946dd9596db306d2c6a9be909ada51e64a427ae45adf9` for dmg, `027c415c7b9a59011d42ee6cca309122c52921b2b0706376df795d96eec99842` for zip).
+- `gh release upload v0.1.0-mac-unsigned ... --clobber`: replaced the private pre-release dmg/zip with the fixed packaged build after stronger main-window verification passed.
+- `gh release view v0.1.0-mac-unsigned --json ...`: release is private repo pre-release with both fixed assets uploaded.
+- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: local SHA256 values match GitHub asset digests (`a04cc4568a5010ca99a00df747d0317203b56fc86724ab116491c96472b31c96` for dmg, `75e0da8fe7181e3c515fcf8babb49da43acafa199e2cb7737b54601b48c9fd41` for zip).
 - `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `947450a` tree.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `7b3b9bc` tree.
