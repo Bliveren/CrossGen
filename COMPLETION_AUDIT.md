@@ -39,7 +39,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 
 - `pnpm build`: typecheck, Vitest, renderer build, main build passed on 2026-05-18 after `b36e11a`; Vitest reported 3 test files and 15 tests passed.
 - `pnpm package:dir`: unsigned macOS app directory regenerated successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
-- `open -n release/mac-arm64/Image2Tools.app`: packaged app launched and process was observed after the latest IPC change.
+- `open -n release/mac-arm64/Image2Tools.app`: packaged app launched on 2026-05-18 after `8a69b39`; process was observed, then the smoke-test process was terminated after AppleScript quit was not handled by the app.
 - `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg`, `.zip`, and blockmaps successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
 - `hdiutil attach ...`, copy `Image2Tools.app` to `/tmp/Image2Tools-install-test`, `open -n ...`: dmg install-style smoke test launched successfully.
 - `hdiutil attach ...`, copy/run/remove/copy/run/remove in `/tmp/Image2Tools-reinstall-test`: two-cycle macOS uninstall/reinstall smoke test passed.
