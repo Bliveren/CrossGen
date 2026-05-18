@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_IMAGE_PARAMS,
+  MAX_GPT_IMAGE_INPUTS,
   dataUrlToBase64,
   extensionForFormat,
   getValidationError,
@@ -130,13 +131,37 @@ describe("gpt-image-2 validation", () => {
     expect(validateRunJobRequest({ ...job, maskPath: 123 } as never).ok).toBe(false);
     expect(validateRunJobRequest({ ...job, maskDataUrl: 123 } as never).ok).toBe(false);
     expect(validateRunJobRequest({ ...job, params: { ...DEFAULT_IMAGE_PARAMS, n: 1.5 } } as never).ok).toBe(false);
+    expect(
+      validateRunJobRequest({
+        ...job,
+        inputPaths: Array.from({ length: MAX_GPT_IMAGE_INPUTS }, (_, index) => `/tmp/${index}.png`)
+      }).ok
+    ).toBe(true);
+    expect(
+      validateRunJobRequest({
+        ...job,
+        inputPaths: Array.from({ length: MAX_GPT_IMAGE_INPUTS + 1 }, (_, index) => `/tmp/${index}.png`)
+      }).ok
+    ).toBe(false);
     expect(validateWorkspaceDraftInput(null).ok).toBe(false);
     expect(validateWorkspaceDraftInput({ ...draft, mode: "compose" } as never).ok).toBe(false);
     expect(validateWorkspaceDraftInput({ ...draft, prompt: null } as never).ok).toBe(false);
     expect(
       validateWorkspaceDraftInput({
         ...draft,
-        inputAssets: Array.from({ length: 11 }, (_, index) => ({
+        inputAssets: Array.from({ length: MAX_GPT_IMAGE_INPUTS }, (_, index) => ({
+          id: String(index),
+          name: "a.png",
+          path: "/tmp/a.png",
+          mimeType: "image/png",
+          sizeBytes: 1
+        }))
+      }).ok
+    ).toBe(true);
+    expect(
+      validateWorkspaceDraftInput({
+        ...draft,
+        inputAssets: Array.from({ length: MAX_GPT_IMAGE_INPUTS + 1 }, (_, index) => ({
           id: String(index),
           name: "a.png",
           path: "/tmp/a.png",

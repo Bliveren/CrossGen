@@ -23,6 +23,7 @@ import {
 import {
   DEFAULT_BASE_URL,
   DEFAULT_IMAGE_PARAMS,
+  MAX_GPT_IMAGE_INPUTS,
   maskMimeTypeForSource,
   mimeTypeFromDataUrl,
   validateMaskMimeType,
@@ -261,6 +262,9 @@ export function App() {
   const modeError = useMemo(() => {
     if (mode === "edit" && inputAssets.length === 0) return "Add at least one reference image.";
     if (mode === "inpaint" && inputAssets.length === 0) return "Add a source image before inpainting.";
+    if (mode !== "generate" && inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
+      return `GPT Image 2 supports up to ${MAX_GPT_IMAGE_INPUTS} input images.`;
+    }
     if (mode === "inpaint" && !maskPreview) return "Paint or upload a mask before inpainting.";
     if (mode === "inpaint" && maskCheck && !maskCheck.ok) return maskCheck.message;
     return null;
@@ -466,9 +470,17 @@ export function App() {
     const assets = await bridge.selectImages();
     if (assets.length > 0) {
       markDraftChanged();
-      setInputAssets((current) => dedupeAssets([...current, ...assets]));
+      const next = dedupeAssets([...inputAssets, ...assets]);
+      const cappedNext = next.slice(0, MAX_GPT_IMAGE_INPUTS);
+      const addedCount = Math.max(0, cappedNext.length - inputAssets.length);
+      const capped = next.length > MAX_GPT_IMAGE_INPUTS;
+      setInputAssets(cappedNext);
       if (mode === "generate") setMode("edit");
-      setNotice({ kind: "success", text: `${assets.length} image${assets.length === 1 ? "" : "s"} added.` });
+      const cappedNote = capped ? ` GPT Image 2 accepts up to ${MAX_GPT_IMAGE_INPUTS} input images.` : "";
+      setNotice({
+        kind: capped ? "info" : "success",
+        text: `${addedCount} image${addedCount === 1 ? "" : "s"} added, ${cappedNext.length} selected.${cappedNote}`
+      });
     }
   }
 
