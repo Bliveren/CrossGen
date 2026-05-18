@@ -107,7 +107,7 @@ GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 - [ ] 非 macOS 平台安装验证（GitHub issue #4）
 - [x] 已评估 `stash@{0}` 中未合并的 renderer 实验；当前 `main` 已覆盖其核心能力并包含更新的草稿恢复、mask 校验和打包配置
 - [x] 已将 `stash@{0}` 非破坏性归档到 `origin/archive/abandoned-renderer-stash`
-- [ ] 经用户确认后删除或保留本地 `stash@{0}`（GitHub issue #2）
+- [x] 本地 `stash@{0}` 已在确认远程归档后删除（GitHub issue #2）
 
 ## 建议优先级
 
