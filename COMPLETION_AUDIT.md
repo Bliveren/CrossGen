@@ -58,6 +58,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `gh release upload v0.1.0-mac-unsigned ... --clobber`: replaced the private pre-release dmg/zip with the fixed packaged build after stronger main-window verification passed.
 - `gh release view v0.1.0-mac-unsigned --json ...`: release is private repo pre-release with both fixed assets uploaded.
 - `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: local SHA256 values match GitHub asset digests (`a04cc4568a5010ca99a00df747d0317203b56fc86724ab116491c96472b31c96` for dmg, `75e0da8fe7181e3c515fcf8babb49da43acafa199e2cb7737b54601b48c9fd41` for zip).
+- Packaged app UI mock smoke on 2026-05-18: launched `release/mac-arm64/Image2Tools.app`, saved fake key `sk-mock-image2tools` and `http://127.0.0.1:8787/v1`, confirmed connection success in the UI, ran Generate through the UI, observed `Generate finished.`, history/result controls, a partial preview, and result files under Electron `userData`.
 - `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `947450a` tree.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `7b3b9bc` tree.
