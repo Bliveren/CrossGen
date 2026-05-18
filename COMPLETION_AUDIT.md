@@ -26,7 +26,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
 | Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, and SSE events; `pnpm verify:mock-api` probes all mock routes | Done |
 | Tests | `pnpm build` passed with 3 test files and 15 tests | Done |
-| Packaging | `electron-builder` config, project icons in `build/`, `pnpm package:dir`, `pnpm package:mac`, local app, dmg-copy launch, two-cycle reinstall smoke tests, `pnpm verify:release:mac` automation, and private GitHub pre-release `v0.1.0-mac-unsigned` | Done for unsigned macOS local/pre-release artifacts |
+| Packaging | `electron-builder` config includes main, preload, shared, and renderer runtime outputs; project icons in `build/`; `pnpm package:dir`; `pnpm package:mac`; local app; dmg-copy launch; two-cycle reinstall smoke tests; `pnpm verify:release:mac` confirms the app process and main window; private GitHub pre-release `v0.1.0-mac-unsigned` | Done for unsigned macOS local/pre-release artifacts |
 | Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR/manual dispatch; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
@@ -52,6 +52,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:release:mac`: automated macOS dmg verification passed on 2026-05-18 for the `659b0c4` tree; it mounted the current dmg, copied the app to a temp directory, launched it twice, removed it twice, detached the dmg, and cleaned temp files.
 - `pnpm package:mac`: regenerated current unsigned macOS dmg/zip on 2026-05-18 before creating GitHub pre-release `v0.1.0-mac-unsigned`.
 - `pnpm verify:release:mac`: automated macOS dmg verification passed on 2026-05-18 before creating GitHub pre-release `v0.1.0-mac-unsigned`.
+- `pnpm package:mac`: regenerated unsigned macOS dmg/zip on 2026-05-18 after fixing packaged runtime files to include `dist/preload` and `dist/shared`; command reran build, typecheck, and 15 tests first.
+- `pnpm verify:release:mac`: stronger macOS dmg verification passed on 2026-05-18 after fixing packaged runtime files; it mounted the dmg, copied the app to a temp directory twice, confirmed a main process and visible main window each time, stopped the app, removed the copy, detached the dmg, and cleaned temp files.
 - `gh release create v0.1.0-mac-unsigned ... --prerelease --latest=false`: uploaded `Image2Tools-0.1.0-mac-arm64.dmg` and `.zip` to private GitHub pre-release.
 - `gh release view v0.1.0-mac-unsigned --json ...`: release is private repo pre-release with both assets uploaded.
 - `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: local SHA256 values match GitHub asset digests (`8c6190d3225929c26c2946dd9596db306d2c6a9be909ada51e64a427ae45adf9` for dmg, `027c415c7b9a59011d42ee6cca309122c52921b2b0706376df795d96eec99842` for zip).
