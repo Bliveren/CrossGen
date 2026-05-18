@@ -2,9 +2,9 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: latest runtime-affecting `main` at `6d4def9`
+Runtime/config evidence through: latest runtime-affecting `main` at `ae38e13`
 Release evidence through: refreshed private macOS preview assets documented on merged `main` at `1d8e215`
-Audit and blocker-tracking evidence through: merged `main` at `6d4def9`
+Audit and blocker-tracking evidence through: merged `main` at `ae38e13`
 Note: docs-only audit merges may advance `main` without changing runtime,
 release artifacts, or external blocker status; the evidence rows below call out
 that distinction explicitly.
@@ -25,7 +25,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Text-to-image generation | `/images/generations` implementation and tests in `src/main/services/openaiImage.ts` / `.test.ts`, including saving multiple returned images when `n > 1` | Implemented; real API manual run pending |
 | Image edit and inpaint | `/images/edits`, multipart `image[]`, mask support, renderer mode switching, 16-image reference cap, mask editor, mask/source size, format, and alpha validation, plus service tests for advanced edit parameter transmission | Implemented; real API manual run pending |
 | Streaming partial previews | SSE parsing and partial event handling in main + renderer; covered by tests | Done |
-| Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected generated asset; main-process IPC rejects malformed job/draft payloads before path or asset handling and rejects download/open/delete paths outside the app image store or current history | Done |
+| Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected generated asset; main-process IPC rejects malformed job/draft payloads and mode/input/mask mismatches before path, job, or asset handling, and rejects download/open/delete paths outside the app image store or current history | Done |
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
 | Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, SSE events, and a mock request-inspection route; `pnpm verify:mock-api` probes models, JSON generation with Image 2 parameter assertions, streaming generation, multipart edit with Image 2 parameter assertions, multi-image mask edit/inpaint with `image[]` and `mask` field assertions, and streaming edit | Done |
@@ -256,6 +256,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - Latest `main` CI run `26042356812` for `0d3a6b774170d840aa1f010c545c68106eb61982` still failed before workflow steps executed; all four jobs reported empty `steps: []`, matching the same GitHub account billing/spending-limit blocker tracked in issue #5.
 - PR #64 merged mock verifier hardening into `main` as `6d4def9ff33c9601cdbe5221d6a537b6310fedf5`; `pnpm verify:mock-api` now asserts multi-image inpaint sends `model`, `prompt`, `stream=false`, exactly two `image[]` fields, and one `mask` field.
 - On merged `main` at `6d4def9`, `pnpm verify:mock-api`, `pnpm build`, and `git diff --check` passed locally; the post-merge GitHub Actions run `26043216928` still failed before workflow steps executed with all jobs reporting empty `steps: []`, matching issue #5.
+- `fix/cto-run-request-mode-validation` hardens shared job-run IPC validation so direct payloads are rejected before job creation when generate carries input images, edit has no input images, non-inpaint requests carry mask data, or inpaint has no mask.
+- `pnpm vitest run src/shared/validation.test.ts`, `pnpm verify:mock-api`, `pnpm build`, and `git diff --check` passed on the run-request mode validation branch before PR review.
 
 ## Remaining External Work
 
