@@ -29,11 +29,11 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
-| Abandoned renderer stash | `stash@{0}` inspected; touches only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation | Evaluated; delete only with user confirmation |
+| Abandoned renderer stash | `stash@{0}` inspected; touches only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; tracked in GitHub issue #2 | Evaluated; delete only with user confirmation |
 | Remote/PR parity | private GitHub `origin` configured at `https://github.com/Bliveren/image2tools.git`; `main` pushed and tracks `origin/main`; `git ls-remote --heads origin main` matches local pushed history | Done for current `main`; future subtask branches can use PR flow |
-| Real API generation/edit/inpaint | No real API key was provided or used | External/manual pending |
-| Signed installable distribution | Unsigned macOS dmg/zip generated; no certificate/notarization | External/manual pending |
-| Cross-platform install validation | macOS local package smoke-tested only | External/manual pending |
+| Real API generation/edit/inpaint | No real API key was provided or used; tracked in GitHub issue #1 | External/manual pending |
+| Signed installable distribution | Unsigned macOS dmg/zip generated; no certificate/notarization; tracked in GitHub issue #3 | External/manual pending |
+| Cross-platform install validation | macOS local package smoke-tested only; tracked in GitHub issue #4 | External/manual pending |
 
 ## Verification Commands Run
 
@@ -52,11 +52,12 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `git remote -v`: `origin` is `https://github.com/Bliveren/image2tools.git` for fetch and push.
 - `git ls-remote --heads origin main`: remote `main` exists and matched the pushed local history when checked.
 - `gh repo view Bliveren/image2tools --json nameWithOwner,visibility,url,defaultBranchRef`: repository exists as private GitHub repo with default branch `main`.
+- `gh issue list --repo Bliveren/image2tools --state open --limit 10`: external blockers are tracked as issues #1 through #4.
 - `git stash show --stat stash@{0}` and `git show stash@{0}:...`: stash inspected; it is an old alternate renderer experiment and is not part of `main`.
 
 ## Remaining External Work
 
-- Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting.
-- Add signing identity, notarization, and formal release metadata.
-- Validate non-macOS target platforms.
-- Confirm whether to delete `stash@{0}`.
+- Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting: GitHub issue #1.
+- Confirm whether to delete, archive, or restore `stash@{0}`: GitHub issue #2.
+- Add signing identity, notarization, and formal release metadata: GitHub issue #3.
+- Validate non-macOS target platforms: GitHub issue #4.

@@ -93,13 +93,13 @@
 ## 当前未完成 / 待外部条件
 
 - [x] 配置远程 `origin` 并推送当前 `main`
-- [ ] 用真实 API Key 做一次实际生成、编辑、局部重绘手工验收
+- [ ] 用真实 API Key 做一次实际生成、编辑、局部重绘手工验收（GitHub issue #1）
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
 - [x] 完成 macOS 临时目录卸载与重装 smoke test
-- [ ] 补充签名、公证与正式分发元数据
-- [ ] 非 macOS 平台安装验证
+- [ ] 补充签名、公证与正式分发元数据（GitHub issue #3）
+- [ ] 非 macOS 平台安装验证（GitHub issue #4）
 - [x] 已评估 `stash@{0}` 中未合并的 renderer 实验；当前 `main` 已覆盖其核心能力并包含更新的草稿恢复、mask 校验和打包配置
-- [ ] 经用户确认后删除 `stash@{0}`
+- [ ] 经用户确认后删除、归档或恢复 `stash@{0}`（GitHub issue #2）
 
 ## 建议优先级
 
