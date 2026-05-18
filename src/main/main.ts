@@ -489,7 +489,6 @@ async function handleSaveDraft(_event: IpcMainInvokeEvent, input: WorkspaceDraft
   const state = await readState();
   const draft: WorkspaceDraft = {
     ...input,
-    inputAssets: input.inputAssets.slice(0, 10),
     updatedAt: new Date().toISOString()
   };
   await writeState({ ...state, draft });

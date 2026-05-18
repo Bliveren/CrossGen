@@ -103,6 +103,7 @@ flowchart LR
 - `background`: `auto` / `opaque`；不暴露 `transparent`
 - `partial_images`: `0..3`
 - `partial_images`: 开启流式局部图会产生额外 image output token 成本
+- 编辑输入/参考图最多 16 张；使用 mask 时 mask 只应用到第一张输入图
 - `input_fidelity`: 不对 `gpt-image-2` 暴露，模型自动高保真处理输入图
 
 ## 7. 数据模型

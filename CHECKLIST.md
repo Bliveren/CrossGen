@@ -39,6 +39,7 @@
 - [x] mask 与首张源图格式一致性校验生效
 - [x] mask alpha 通道校验生效
 - [x] 编辑结果可下载
+- [x] 参考图数量限制为 GPT Image 2 支持的最多 16 张
 - [x] 多图编辑时 mask 只应用到第一张图的提示清晰
 
 ## 5. 体验检查
@@ -124,5 +125,6 @@
 - [x] `background` 只允许 `auto` / `opaque`
 - [x] `quality`、`output_format`、`background`、`moderation` 运行时枚举值会被校验
 - [x] `n`、`partial_images`、`timeoutMs`、`output_compression` 必须是整数且有限
+- [x] 编辑输入/参考图数量最多 16 张
 - [x] `output_compression` 仅在 `jpeg` / `webp` 时发送
 - [x] `stream` 开启时处理 partial 与 completed 事件

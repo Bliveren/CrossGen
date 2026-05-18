@@ -9,6 +9,7 @@ import type {
 export const GPT_IMAGE_2_MODEL = "gpt-image-2";
 
 export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
+export const MAX_GPT_IMAGE_INPUTS = 16;
 
 export const DEFAULT_IMAGE_PARAMS: ImageParams = {
   model: GPT_IMAGE_2_MODEL,
@@ -234,6 +235,9 @@ export function validateRunJobRequest(request: unknown): ValidationResult {
   if (!Array.isArray(request.inputPaths) || request.inputPaths.some((item) => typeof item !== "string")) {
     return { ok: false, message: "输入图片路径无效。" };
   }
+  if (request.inputPaths.length > MAX_GPT_IMAGE_INPUTS) {
+    return { ok: false, message: `GPT Image 2 输入图片不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
+  }
   if (request.maskPath !== undefined && typeof request.maskPath !== "string") {
     return { ok: false, message: "Mask 路径无效。" };
   }
@@ -256,8 +260,8 @@ export function validateWorkspaceDraftInput(input: unknown): ValidationResult {
   if (!Array.isArray(input.inputAssets)) {
     return { ok: false, message: "草稿输入资源无效。" };
   }
-  if (input.inputAssets.length > 10) {
-    return { ok: false, message: "草稿输入资源不能超过 10 张。" };
+  if (input.inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
+    return { ok: false, message: `草稿输入资源不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
   }
   for (const asset of input.inputAssets) {
     const assetValidation = validateInputAssetShape(asset);
