@@ -3,7 +3,7 @@
 Date: 2026-05-18
 Branch: `main`
 Runtime/config evidence through: merged `main` at `fda838d`
-Release evidence through: merged `main` at `703139d`
+Release evidence through: current rebuilt macOS preview assets from `main` at `977d00b`
 Audit and blocker-tracking evidence through: merged `main` at `fda838d`
 
 ## Objective Restated
@@ -233,6 +233,18 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - On current `main` at `fda838d`, `pnpm build` passed with 4 test files and 28 tests, followed by successful renderer and main builds.
 - On current `main` at `fda838d`, `pnpm verify:mock-api` passed.
 - On current `main` at `fda838d`, `git diff --check` passed and workflow YAML parsing passed.
+- On current `main` at `977d00b`, `pnpm build` passed with 4 test files and 28 tests, followed by successful renderer and main builds.
+- On current `main` at `977d00b`, `pnpm verify:mock-api` passed.
+- On current `main` at `977d00b`, `git diff --check` passed and workflow YAML parsing passed.
+- `pnpm verify:real-api` on current `main` at `977d00b` exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set, matching issue #1.
+- `pnpm verify:signing-ready` on current `main` at `977d00b` still failed for expected external prerequisites: no valid code signing identities and unset `CSC_NAME`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`; no signing or notarization was attempted, matching issue #3.
+- `pnpm verify:release:mac` initially failed against the stale local macOS preview artifacts whose SHA256 values matched the previously published private pre-release assets (`d6bab3af7b318f12025c350aa3b7c1e7e50362a138ee5d23cec0539cde0d3a90` dmg and `ade24acf2d467abb74094a9e47738b3eb1c142c3ca6719ed0641fdca528d0b25` zip). The strict copied-app signature check reported `code has no resources but signature indicates they must be present`, so those preview assets were treated as stale and refreshed.
+- `pnpm package:mac` on current `main` at `977d00b` regenerated the ad-hoc signed, unnotarized macOS preview dmg/zip; the command reran typecheck, 28 tests, renderer build, and main build first.
+- `codesign --verify --deep --strict release/mac-arm64/Image2Tools.app` passed after the rebuild, and the app bundle contained `Contents/_CodeSignature/CodeResources`.
+- `pnpm verify:release:mac` passed after the rebuild; it mounted the dmg, copied the app with `ditto`, verified copied-app signatures, launched two install cycles, confirmed main windows `1440x940`, stopped the app, removed temp copies, detached the dmg, and cleaned temp files.
+- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: refreshed ad-hoc signed preview asset hashes are `ef33ed5b927b057e816a98b20c9597b322b658c95e8a018ed37990d579b08721` for dmg and `674356c295f1ab5170407dd602e1642e933242758c376754aa96abaa47816517` for zip.
+- `gh release upload v0.1.0-mac-unsigned ... --clobber`: refreshed the private pre-release dmg/zip with the verified rebuilt preview artifacts; `gh release view ... --json assets` reported matching GitHub asset digests for both files.
+- Latest `main` CI run `26039431223` for `977d00b13c47bd8d13f707c1741c9573e693d0fc` still failed before workflow steps executed; all four jobs had empty `steps: []`, matching the GitHub Actions billing/spending-limit blocker tracked in issue #5.
 
 ## Remaining External Work
 
