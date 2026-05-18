@@ -29,6 +29,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Packaging | `electron-builder` config includes main, preload, shared, and renderer runtime outputs; project icons in `build/`; `pnpm package:dir`; `pnpm package:mac`; local app; dmg-copy launch; two-cycle reinstall smoke tests; `pnpm verify:release:mac` confirms the app process and main window; private GitHub pre-release `v0.1.0-mac-unsigned` | Done for unsigned macOS local/pre-release artifacts |
 | Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR/manual dispatch; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
+| External acceptance runbook | `EXTERNAL_ACCEPTANCE.md` consolidates the remaining real API, signing/notarization, Windows/Linux, and CI billing gates with commands and evidence requirements | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
 | Abandoned renderer stash | `stash@{0}` inspected; touched only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; archived non-destructively to `origin/archive/abandoned-renderer-stash`; local stash dropped after verifying the archive commit matched | Resolved; tracked in GitHub issue #2 |
@@ -113,6 +114,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 ## Remaining External Work
 
 GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
+
+Runbook: [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md)
 
 - Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting: GitHub issue #1.
 - Confirm the OpenAI organization behind the real API key has GPT Image organization verification before manual acceptance: GitHub issue #1.

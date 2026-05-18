@@ -17,6 +17,7 @@
 - [TODO.md](./TODO.md): 可直接执行的任务清单
 - [CHECKLIST.md](./CHECKLIST.md): 开发与发布检查清单
 - [COMPLETION_AUDIT.md](./COMPLETION_AUDIT.md): 当前交付证据、验证命令和外部待办
+- [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md): 真实 API、签名、公证、跨平台和 CI 外部验收步骤
 
 ## 本地运行
 
