@@ -55,6 +55,12 @@ async function detachDmg(mountPoint) {
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
+  try {
+    await run("hdiutil", ["detach", "-force", mountPoint]);
+    return;
+  } catch (error) {
+    lastError = error;
+  }
   throw lastError;
 }
 
@@ -170,10 +176,10 @@ async function main() {
     await runInstallCycle(mountPoint, tempRoot, 2);
     console.log("macOS release verification passed.");
   } finally {
+    await rm(tempRoot, { recursive: true, force: true });
     if (mountPoint) {
       await detachDmg(mountPoint);
     }
-    await rm(tempRoot, { recursive: true, force: true });
   }
 }
 
