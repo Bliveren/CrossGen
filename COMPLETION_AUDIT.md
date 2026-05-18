@@ -30,7 +30,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
-| Abandoned renderer stash | `stash@{0}` inspected; touches only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; archived non-destructively to `origin/archive/abandoned-renderer-stash`; tracked in GitHub issue #2 | Archived; local stash delete/keep decision still needs user confirmation |
+| Abandoned renderer stash | `stash@{0}` inspected; touched only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; archived non-destructively to `origin/archive/abandoned-renderer-stash`; local stash dropped after verifying the archive commit matched | Resolved; tracked in GitHub issue #2 |
 | Remote/PR parity | private GitHub `origin` configured at `https://github.com/Bliveren/image2tools.git`; `main` pushed and tracks `origin/main`; `git ls-remote --heads origin main` matches local pushed history | Done for current `main`; future subtask branches can use PR flow |
 | Real API generation/edit/inpaint | `pnpm verify:real-api` provides a cost-confirmed real API acceptance path for generation, single-image edit, multi-image edit, and inpaint; no real API key was provided or used; tracked in GitHub issue #1 | External/manual pending |
 | Signed installable distribution | Unsigned macOS dmg/zip generated; `pnpm verify:signing-ready` checks code signing identity, notarization env vars, and signing config without exposing secrets; no certificate/notarization available; tracked in GitHub issue #3 | External/manual pending |
@@ -70,17 +70,18 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `git remote -v`: `origin` is `https://github.com/Bliveren/image2tools.git` for fetch and push.
 - `git ls-remote --heads origin main`: remote `main` exists and matched the pushed local history when checked.
 - `gh repo view Bliveren/image2tools --json nameWithOwner,visibility,url,defaultBranchRef`: repository exists as private GitHub repo with default branch `main`.
-- `gh issue list --repo Bliveren/image2tools --state open --limit 10`: external blockers are tracked as issues #1 through #5.
+- `gh issue list --repo Bliveren/image2tools --state open --limit 10`: remaining external blockers are tracked as issues #1 and #3 through #5.
 - GitHub milestone `v0.1.0 external acceptance`: tracks the open external blocker issues at https://github.com/Bliveren/image2tools/milestone/1.
 - `git stash show --stat stash@{0}` and `git show stash@{0}:...`: stash inspected; it is an old alternate renderer experiment and is not part of `main`.
-- `git branch archive/abandoned-renderer-stash stash@{0}` and `git push origin archive/abandoned-renderer-stash`: non-destructive archive branch created at `78b2c683fc180c8e511d1802b37545fd48c8c887`; `stash@{0}` was intentionally left in place.
+- `git branch archive/abandoned-renderer-stash stash@{0}` and `git push origin archive/abandoned-renderer-stash`: non-destructive archive branch created at `78b2c683fc180c8e511d1802b37545fd48c8c887`.
+- `git rev-parse stash@{0}`, `git rev-parse archive/abandoned-renderer-stash`, and `git ls-remote --heads origin archive/abandoned-renderer-stash`: local stash, local archive branch, and remote archive branch all matched `78b2c683fc180c8e511d1802b37545fd48c8c887`.
+- `git stash drop stash@{0}` and `git stash list`: local duplicate stash was dropped after archive verification; no local stash entries remain.
 
 ## Remaining External Work
 
 GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 
 - Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting: GitHub issue #1.
-- Confirm whether to delete or keep local `stash@{0}` now that it is archived to `origin/archive/abandoned-renderer-stash`: GitHub issue #2.
 - Add signing identity, notarization, and formal release metadata: GitHub issue #3.
 - Validate non-macOS target platforms: GitHub issue #4.
 - Resolve GitHub Actions billing/spending limit so CI can execute: GitHub issue #5.
