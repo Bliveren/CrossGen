@@ -66,6 +66,7 @@
 - [x] config 保存、prompt、API Key、Base URL 输入会拒绝或归一化畸形运行时值
 - [x] job run / draft save IPC 请求会拒绝畸形 payload、路径数组和草稿资源对象
 - [x] job run IPC 请求会在创建历史任务前拒绝文生图携带输入、编辑缺少输入、非局部重绘携带 mask、局部重绘缺少 mask
+- [x] job run IPC 请求会在写入 mask 文件前拒绝非图片输入路径、非 PNG/WebP mask 路径和畸形 mask data URL
 - [x] 状态文件写入有备份与恢复路径
 - [x] 未完成任务重启后会恢复为失败状态
 - [x] 工作区草稿可自动保存并在重启后恢复

@@ -76,6 +76,7 @@
 - [x] config / prompt / API Key 运行时输入校验拒绝非字符串畸形值
 - [x] job run / draft save IPC 请求会先做运行时 shape 校验
 - [x] job run IPC 请求会拒绝 mode 与输入图片 / mask 不匹配的无效组合
+- [x] job run IPC 请求会拒绝非图片输入路径、非 PNG/WebP mask 路径和畸形 mask data URL
 - [x] 增加手工 QA 用例
 - [x] 增加本地 mock API 回归入口
 - [x] 增加本地 mock API 自动校验脚本
