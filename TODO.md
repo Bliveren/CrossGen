@@ -107,9 +107,10 @@ GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 - [x] 增加受额外成本确认保护的真实 streaming 生成/编辑验收路径
 - [x] 增加 macOS 签名/公证 readiness 检查脚本
 - [x] 增加显式 signed macOS 打包命令，默认 unsigned 试用包不受影响
+- [x] 在 Ubuntu ARM64 Docker 环境补充 Linux build、mock verifier、AppImage 打包、AppImage 解包与 Xvfb 启动烟测证据
 - [ ] 解除 GitHub Actions billing/spending limit 阻塞并取得绿色 CI（GitHub issue #5）
 - [ ] 补充签名、公证与正式分发元数据（GitHub issue #3）
-- [ ] 非 macOS 平台安装验证（GitHub issue #4）
+- [ ] 非 macOS 平台安装验证（GitHub issue #4；Windows 与原生 Linux 桌面 shell 行为仍待验证）
 - [x] 已评估 `stash@{0}` 中未合并的 renderer 实验；当前 `main` 已覆盖其核心能力并包含更新的草稿恢复、mask 校验和打包配置
 - [x] 已将 `stash@{0}` 非破坏性归档到 `origin/archive/abandoned-renderer-stash`
 - [x] 本地 `stash@{0}` 已在确认远程归档后删除（GitHub issue #2）
