@@ -92,7 +92,8 @@
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
 - [ ] 补充签名、公证与正式分发元数据
 - [ ] 非 macOS 平台安装验证
-- [ ] 评估或删除 `stash@{0}` 中未合并的 renderer 实验；该实验未进入 `main`
+- [x] 已评估 `stash@{0}` 中未合并的 renderer 实验；当前 `main` 已覆盖其核心能力并包含更新的草稿恢复、mask 校验和打包配置
+- [ ] 经用户确认后删除 `stash@{0}`
 
 ## 建议优先级
 

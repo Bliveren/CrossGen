@@ -2,7 +2,7 @@
 
 Date: 2026-05-18
 Branch: `main`
-Latest audited commit: `f5ae70b`
+Latest audited commit: `0ae1851`
 
 ## Objective Restated
 
@@ -28,6 +28,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
+| Abandoned renderer stash | `stash@{0}` inspected; touches only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation | Evaluated; delete only with user confirmation |
 | Remote/PR parity | `git remote -v` is empty | Blocked by missing `origin` |
 | Real API generation/edit/inpaint | No real API key was provided or used | External/manual pending |
 | Signed installable distribution | Unsigned macOS dmg/zip generated; no certificate/notarization | External/manual pending |
@@ -43,7 +44,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `git status --short --branch`: clean `main`.
 - `git worktree list`: only `/Users/alive/projects/image2tools`.
 - `git remote -v`: no remote configured.
-- `git stash list`: `stash@{0}` preserves an abandoned renderer experiment and is not part of `main`.
+- `git stash show --stat stash@{0}` and `git show stash@{0}:...`: stash inspected; it is an old alternate renderer experiment and is not part of `main`.
 
 ## Remaining External Work
 
@@ -51,4 +52,4 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting.
 - Add signing identity, notarization, and formal release metadata.
 - Validate uninstall/reinstall and non-macOS target platforms.
-- Decide whether to drop or inspect `stash@{0}`.
+- Confirm whether to delete `stash@{0}`.
