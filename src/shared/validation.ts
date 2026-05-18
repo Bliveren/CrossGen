@@ -28,18 +28,23 @@ export interface ValidationResult {
   message?: string;
 }
 
-export function normalizeBaseURL(value: string): string {
+export function normalizeBaseURL(value: unknown): string {
+  if (typeof value !== "string") return DEFAULT_BASE_URL;
   const trimmed = value.trim().replace(/\/+$/, "");
   return trimmed || DEFAULT_BASE_URL;
 }
 
-export function redactSecret(value: string): string {
+export function redactSecret(value: unknown): string {
+  if (typeof value !== "string") return "";
   if (!value) return "";
   if (value.length <= 8) return "****";
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
-export function validateApiKey(value: string): ValidationResult {
+export function validateApiKey(value: unknown): ValidationResult {
+  if (typeof value !== "string") {
+    return { ok: false, message: "API Key 格式无效。" };
+  }
   if (!value.trim()) {
     return { ok: false, message: "API Key 不能为空。" };
   }
@@ -49,7 +54,10 @@ export function validateApiKey(value: string): ValidationResult {
   return { ok: true };
 }
 
-export function validatePrompt(value: string): ValidationResult {
+export function validatePrompt(value: unknown): ValidationResult {
+  if (typeof value !== "string") {
+    return { ok: false, message: "Prompt 格式无效。" };
+  }
   const length = value.trim().length;
   if (length === 0) {
     return { ok: false, message: "请输入 prompt。" };
@@ -60,7 +68,8 @@ export function validatePrompt(value: string): ValidationResult {
   return { ok: true };
 }
 
-export function parseImageSize(size: string): { width: number; height: number } | null {
+export function parseImageSize(size: unknown): { width: number; height: number } | null {
+  if (typeof size !== "string") return null;
   const match = /^(\d+)x(\d+)$/.exec(size.trim());
   if (!match) return null;
   return {
@@ -69,7 +78,10 @@ export function parseImageSize(size: string): { width: number; height: number } 
   };
 }
 
-export function validateGptImage2Size(size: string): ValidationResult {
+export function validateGptImage2Size(size: unknown): ValidationResult {
+  if (typeof size !== "string") {
+    return { ok: false, message: "尺寸参数无效。" };
+  }
   if (size === "auto") return { ok: true };
   const parsed = parseImageSize(size);
   if (!parsed) {
@@ -134,6 +146,40 @@ export function validateImageParams(params: ImageParams): ValidationResult {
   }
   if (!isInteger(params.outputCompression) || params.outputCompression < 0 || params.outputCompression > 100) {
     return { ok: false, message: "压缩率需在 0 到 100 之间。" };
+  }
+  return { ok: true };
+}
+
+export function validateProviderConfigInput(input: unknown): ValidationResult {
+  if (!isRecord(input)) {
+    return { ok: false, message: "配置参数格式无效。" };
+  }
+  if (typeof input.baseURL !== "string") {
+    return { ok: false, message: "Base URL 格式无效。" };
+  }
+  if (typeof input.defaultModel !== "string") {
+    return { ok: false, message: "默认模型格式无效。" };
+  }
+  if (typeof input.defaultSize !== "string") {
+    return { ok: false, message: "默认尺寸格式无效。" };
+  }
+  const defaultModel = input.defaultModel.trim();
+  if (defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
+    return { ok: false, message: `默认模型仅支持 ${DEFAULT_IMAGE_PARAMS.model}。` };
+  }
+  const defaultSize = input.defaultSize.trim();
+  if (defaultSize) {
+    const size = validateGptImage2Size(defaultSize);
+    if (!size.ok) return size;
+  }
+  if (typeof input.defaultQuality !== "string" || !isOneOf(input.defaultQuality, IMAGE_QUALITY_OPTIONS)) {
+    return { ok: false, message: "默认质量需为 auto、low、medium 或 high。" };
+  }
+  if (!isInteger(input.timeoutMs) || input.timeoutMs < 30000 || input.timeoutMs > 600000) {
+    return { ok: false, message: "默认超时时间需在 30 到 600 秒之间。" };
+  }
+  if (input.apiKey !== undefined && typeof input.apiKey !== "string") {
+    return { ok: false, message: "API Key 格式无效。" };
   }
   return { ok: true };
 }

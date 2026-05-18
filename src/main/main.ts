@@ -31,7 +31,8 @@ import {
   dataUrlToBase64,
   getValidationError,
   normalizeBaseURL,
-  validateApiKey
+  validateApiKey,
+  validateProviderConfigInput
 } from "../shared/validation.js";
 import { buildEndpoint, fetchWithTimeout, runOpenAIImageJob } from "./services/openaiImage.js";
 import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePaths } from "./services/assetOwnership.js";
@@ -439,6 +440,10 @@ async function handleGetSnapshot(): Promise<AppSnapshot> {
 
 async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfigInput): Promise<ProviderConfig> {
   const state = await readState();
+  const configValidation = validateProviderConfigInput(input);
+  if (!configValidation.ok) {
+    throw new Error(configValidation.message ?? "配置参数无效。");
+  }
   const now = new Date().toISOString();
   const nextConfig: StoredConfig = {
     ...state.config,
