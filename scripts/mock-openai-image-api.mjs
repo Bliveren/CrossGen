@@ -4,6 +4,7 @@ import http from "node:http";
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
+const recentRequests = [];
 
 function sendJson(response, status, payload) {
   response.writeHead(status, {
@@ -23,6 +24,31 @@ function hasField(bodyText, name) {
   }
 }
 
+function multipartFieldValues(bodyText) {
+  const fields = {};
+  const parts = bodyText.split(/\r?\n--/);
+  for (const part of parts) {
+    const [rawHeaders, ...bodyParts] = part.split(/\r?\n\r?\n/);
+    const name = /name="([^"]+)"/.exec(rawHeaders)?.[1];
+    if (!name) continue;
+    if (!fields[name]) {
+      fields[name] = [];
+    }
+    const value = bodyParts.join("\n\n").replace(/\r?\n$/, "");
+    fields[name].push(value);
+  }
+  return fields;
+}
+
+function parseRequestFields(bodyText) {
+  try {
+    const payload = JSON.parse(bodyText);
+    return Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, [value]]));
+  } catch {
+    return multipartFieldValues(bodyText);
+  }
+}
+
 function validateImageRequest(pathname, bodyText) {
   if (!hasField(bodyText, "model")) {
     return "Missing model field";
@@ -34,6 +60,14 @@ function validateImageRequest(pathname, bodyText) {
     return "Missing edit image field";
   }
   return null;
+}
+
+function recordImageRequest(pathname, bodyText) {
+  recentRequests.push({
+    pathname,
+    fields: parseRequestFields(bodyText)
+  });
+  recentRequests.splice(0, Math.max(0, recentRequests.length - 20));
 }
 
 function sendSse(response, prefix) {
@@ -77,6 +111,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && url.pathname === "/v1/mock/requests") {
+      sendJson(response, 200, { data: recentRequests });
+      return;
+    }
+
     if (request.method === "POST" && (url.pathname === "/v1/images/generations" || url.pathname === "/v1/images/edits")) {
       const bodyText = await readText(request);
       const validationError = validateImageRequest(url.pathname, bodyText);
@@ -84,6 +123,7 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 400, { error: { message: validationError } });
         return;
       }
+      recordImageRequest(url.pathname, bodyText);
       const prefix = url.pathname.endsWith("/edits") ? "image_edit" : "image_generation";
       if (wantsStream(request, bodyText)) {
         sendSse(response, prefix);

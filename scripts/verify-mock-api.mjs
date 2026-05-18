@@ -56,6 +56,23 @@ async function verifyModels() {
   assert(payload.data?.[0]?.id === "gpt-image-2", "models response did not include gpt-image-2");
 }
 
+async function recentMockRequests() {
+  const response = await fetch(`${baseURL}/mock/requests`, {
+    headers: { Authorization: `Bearer ${apiKey}` }
+  });
+  assert(response.ok, `mock requests failed with HTTP ${response.status}`);
+  const payload = await response.json();
+  return payload.data ?? [];
+}
+
+function fieldValue(request, name) {
+  return request?.fields?.[name]?.[0];
+}
+
+function latestRequest(requests, pathname) {
+  return requests.findLast?.((item) => item.pathname === pathname) ?? [...requests].reverse().find((item) => item.pathname === pathname);
+}
+
 async function verifyJsonGeneration() {
   const response = await fetch(`${baseURL}/images/generations`, {
     method: "POST",
@@ -63,11 +80,33 @@ async function verifyJsonGeneration() {
       Authorization: `Bearer ${apiKey}`,
       "content-type": "application/json"
     },
-    body: JSON.stringify({ model: "gpt-image-2", prompt: "mock generation", stream: false })
+    body: JSON.stringify({
+      model: "gpt-image-2",
+      prompt: "mock generation",
+      size: "1536x1024",
+      quality: "medium",
+      output_format: "webp",
+      output_compression: 42,
+      background: "opaque",
+      n: 2,
+      stream: false,
+      moderation: "low"
+    })
   });
   assert(response.ok, `json generation failed with HTTP ${response.status}`);
   const payload = await response.json();
   assert(payload.data?.[0]?.b64_json?.startsWith(tinyPngPrefix), "json generation did not return a PNG b64_json");
+
+  const requests = await recentMockRequests();
+  const request = latestRequest(requests, "/v1/images/generations");
+  assert(fieldValue(request, "model") === "gpt-image-2", "json generation did not send model");
+  assert(fieldValue(request, "size") === "1536x1024", "json generation did not send size");
+  assert(fieldValue(request, "quality") === "medium", "json generation did not send quality");
+  assert(fieldValue(request, "output_format") === "webp", "json generation did not send output_format");
+  assert(fieldValue(request, "output_compression") === 42, "json generation did not send output_compression");
+  assert(fieldValue(request, "background") === "opaque", "json generation did not send background");
+  assert(fieldValue(request, "n") === 2, "json generation did not send n");
+  assert(fieldValue(request, "moderation") === "low", "json generation did not send moderation");
 }
 
 async function verifySseGeneration() {
@@ -91,6 +130,13 @@ async function verifyMultipartEdit() {
   const form = new FormData();
   form.append("model", "gpt-image-2");
   form.append("prompt", "mock edit");
+  form.append("size", "1024x1536");
+  form.append("quality", "high");
+  form.append("output_format", "jpeg");
+  form.append("output_compression", "55");
+  form.append("background", "opaque");
+  form.append("n", "1");
+  form.append("moderation", "low");
   form.append("stream", "false");
   form.append("image[]", new Blob([Buffer.from("mock")], { type: "image/png" }), "source.png");
 
@@ -102,6 +148,18 @@ async function verifyMultipartEdit() {
   assert(response.ok, `multipart edit failed with HTTP ${response.status}`);
   const payload = await response.json();
   assert(payload.data?.[0]?.b64_json?.startsWith(tinyPngPrefix), "multipart edit did not return a PNG b64_json");
+
+  const requests = await recentMockRequests();
+  const request = latestRequest(requests, "/v1/images/edits");
+  assert(fieldValue(request, "model") === "gpt-image-2", "multipart edit did not send model");
+  assert(fieldValue(request, "size") === "1024x1536", "multipart edit did not send size");
+  assert(fieldValue(request, "quality") === "high", "multipart edit did not send quality");
+  assert(fieldValue(request, "output_format") === "jpeg", "multipart edit did not send output_format");
+  assert(fieldValue(request, "output_compression") === "55", "multipart edit did not send output_compression");
+  assert(fieldValue(request, "background") === "opaque", "multipart edit did not send background");
+  assert(fieldValue(request, "n") === "1", "multipart edit did not send n");
+  assert(fieldValue(request, "moderation") === "low", "multipart edit did not send moderation");
+  assert(request?.fields?.["image[]"]?.length === 1, "multipart edit did not send one image[] field");
 }
 
 async function verifyMultipartInpaint() {

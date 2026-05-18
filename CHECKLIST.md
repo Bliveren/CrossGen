@@ -68,6 +68,7 @@
 - [x] 关键路径手动回归通过（无真实 API 调用）
 - [x] 本地 mock OpenAI Image API 可用于无真实 Key 回归
 - [x] 本地 mock API 自动校验脚本通过
+- [x] mock API 自动校验覆盖关键 Image 2 参数传递
 - [x] packaged app 可通过 UI 保存 mock 配置、连接测试并完成一次 mock 生成
 - [x] 无控制台报错
 - [x] 打包配置已添加
