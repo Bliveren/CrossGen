@@ -1,4 +1,4 @@
-import type { ImageFormat, ImageParams } from "./types.js";
+import type { ImageBackground, ImageFormat, ImageParams, ImageQuality, ModerationMode } from "./types.js";
 
 export const GPT_IMAGE_2_MODEL = "gpt-image-2";
 
@@ -17,6 +17,11 @@ export const DEFAULT_IMAGE_PARAMS: ImageParams = {
   moderation: "auto",
   timeoutMs: 240000
 };
+
+export const IMAGE_QUALITY_OPTIONS = ["auto", "low", "medium", "high"] as const satisfies readonly ImageQuality[];
+export const IMAGE_FORMAT_OPTIONS = ["png", "jpeg", "webp"] as const satisfies readonly ImageFormat[];
+export const IMAGE_BACKGROUND_OPTIONS = ["auto", "opaque"] as const satisfies readonly ImageBackground[];
+export const MODERATION_MODE_OPTIONS = ["auto", "low"] as const satisfies readonly ModerationMode[];
 
 export interface ValidationResult {
   ok: boolean;
@@ -92,6 +97,18 @@ export function validateImageParams(params: ImageParams): ValidationResult {
   if (params.model.trim() !== GPT_IMAGE_2_MODEL) {
     return { ok: false, message: `MVP 仅支持 ${GPT_IMAGE_2_MODEL}。` };
   }
+  if (!isOneOf(params.quality, IMAGE_QUALITY_OPTIONS)) {
+    return { ok: false, message: "质量参数需为 auto、low、medium 或 high。" };
+  }
+  if (!isOneOf(params.outputFormat, IMAGE_FORMAT_OPTIONS)) {
+    return { ok: false, message: "输出格式需为 png、jpeg 或 webp。" };
+  }
+  if (!isOneOf(params.background, IMAGE_BACKGROUND_OPTIONS)) {
+    return { ok: false, message: "背景参数需为 auto 或 opaque。" };
+  }
+  if (!isOneOf(params.moderation, MODERATION_MODE_OPTIONS)) {
+    return { ok: false, message: "内容审核参数需为 auto 或 low。" };
+  }
   const size = validateGptImage2Size(params.size);
   if (!size.ok) return size;
   if (params.n < 1 || params.n > 10) {
@@ -107,6 +124,10 @@ export function validateImageParams(params: ImageParams): ValidationResult {
     return { ok: false, message: "压缩率需在 0 到 100 之间。" };
   }
   return { ok: true };
+}
+
+function isOneOf<T extends string>(value: string, options: readonly T[]): value is T {
+  return (options as readonly string[]).includes(value);
 }
 
 export function normalizeImageMimeType(mimeType?: string): string {

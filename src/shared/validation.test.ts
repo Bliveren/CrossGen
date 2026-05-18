@@ -39,6 +39,13 @@ describe("gpt-image-2 validation", () => {
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, model: "gpt-image-1.5" }).ok).toBe(false);
   });
 
+  it("rejects invalid enum-like params from runtime state or IPC", () => {
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, quality: "standard" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, outputFormat: "gif" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, background: "transparent" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, moderation: "strict" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+  });
+
   it("normalizes base URLs and compression behavior", () => {
     expect(normalizeBaseURL("https://api.openai.com/v1///")).toBe("https://api.openai.com/v1");
     expect(shouldSendCompression("png")).toBe(false);

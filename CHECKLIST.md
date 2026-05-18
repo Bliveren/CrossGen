@@ -60,6 +60,7 @@
 - [x] main / preload / renderer 的 IPC 类型一致
 - [x] OpenAI 请求层有无真实 Key 的可测试路径
 - [x] OpenAI 请求层测试覆盖多结果保存与编辑参数透传
+- [x] shared 参数校验会拒绝运行时非法 Image 2 枚举值
 - [x] 状态文件写入有备份与恢复路径
 - [x] 未完成任务重启后会恢复为失败状态
 - [x] 工作区草稿可自动保存并在重启后恢复
@@ -118,5 +119,6 @@
 - [x] 编辑调用 `/v1/images/edits`
 - [x] 结果按 base64 图像保存
 - [x] `background` 只允许 `auto` / `opaque`
+- [x] `quality`、`output_format`、`background`、`moderation` 运行时枚举值会被校验
 - [x] `output_compression` 仅在 `jpeg` / `webp` 时发送
 - [x] `stream` 开启时处理 partial 与 completed 事件
