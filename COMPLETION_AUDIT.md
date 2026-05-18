@@ -2,9 +2,9 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: current `main` at `977d00b`
+Runtime/config evidence through: current `main` at `824d13b`
 Release evidence through: refreshed private macOS preview assets documented on merged `main` at `1d8e215`
-Audit and blocker-tracking evidence through: merged `main` at `1d8e215`
+Audit and blocker-tracking evidence through: merged `main` at `824d13b`
 
 ## Objective Restated
 
@@ -246,6 +246,9 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `gh release upload v0.1.0-mac-unsigned ... --clobber`: refreshed the private pre-release dmg/zip with the verified rebuilt preview artifacts; `gh release view ... --json assets` reported matching GitHub asset digests for both files.
 - PR #60 merged the refreshed macOS preview release evidence into `main` as `1d8e215cd4a70a64856484dd1268edf6033b9da1`; the temporary worktree and local/remote branch were pruned after merge.
 - Latest `main` CI run `26040896712` for `1d8e215cd4a70a64856484dd1268edf6033b9da1` still failed before workflow steps executed; all four jobs had empty `steps: []`, matching the GitHub Actions billing/spending-limit blocker tracked in issue #5.
+- PR #61 merged docs-only current audit metadata cleanup into `main` as `824d13b620d933546cd48e6c2b31747df76654d2`; no runtime, verifier, package, or release artifact files changed.
+- On current `main` at `824d13b`, `git status --short --branch` showed a clean worktree synced with `origin/main`, `git worktree list` showed only `/Users/alive/projects/image2tools`, and `gh pr list --state open` returned no open PRs.
+- Latest `main` CI run `26041388038` for `824d13b620d933546cd48e6c2b31747df76654d2` still failed before workflow steps executed; Build and mock API verifier, macOS package, Windows package, and Linux package all reported empty `steps: []`, `gh run view --log` returned `log not found`, and check-run annotations repeated the GitHub account payment/spending-limit message tracked in issue #5.
 
 ## Remaining External Work
 
