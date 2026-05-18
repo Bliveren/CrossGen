@@ -125,6 +125,15 @@ After success, update release metadata, `CHECKLIST.md`, `TODO.md`, and
 
 Tracked by GitHub issue #4.
 
+Current partial evidence:
+
+- Ubuntu/Debian Bookworm ARM64 Docker validation on the macOS host passed
+  `pnpm build`, `pnpm verify:mock-api`, Linux AppImage packaging, AppImage
+  extraction, and extracted-app launch under Xvfb.
+- Direct AppImage execution in Docker remains blocked by missing FUSE device
+  support, so this is not a substitute for native Linux desktop validation.
+- Windows native validation has not been performed.
+
 Run on each native platform:
 
 ```bash
