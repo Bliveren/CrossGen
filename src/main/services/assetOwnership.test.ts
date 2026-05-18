@@ -47,24 +47,25 @@ function makeJob(imagesDir: string, outputPath = path.join(imagesDir, "result.pn
 
 describe("asset ownership checks", () => {
   it("accepts only paths inside the managed images directory", () => {
-    const imagesDir = "/tmp/image2tools/images";
+    const imagesDir = path.join(os.tmpdir(), "image2tools", "images");
+    const resultPath = path.join(imagesDir, "result.png");
 
-    expect(normalizeManagedAssetPath(imagesDir, "/tmp/image2tools/images/result.png")).toBe("/tmp/image2tools/images/result.png");
-    expect(normalizeManagedAssetPath(imagesDir, "/tmp/image2tools/images/../outside.png")).toBeNull();
+    expect(normalizeManagedAssetPath(imagesDir, resultPath)).toBe(path.resolve(resultPath));
+    expect(normalizeManagedAssetPath(imagesDir, path.join(imagesDir, "..", "outside.png"))).toBeNull();
     expect(normalizeManagedAssetPath(imagesDir, "/tmp/image2tools/images")).toBeNull();
   });
 
   it("requires output paths to belong to current history", () => {
-    const imagesDir = "/tmp/image2tools/images";
-    const knownPath = "/tmp/image2tools/images/result.png";
+    const imagesDir = path.join(os.tmpdir(), "image2tools", "images");
+    const knownPath = path.join(imagesDir, "result.png");
     const job = makeJob(imagesDir, knownPath);
 
-    expect(assertKnownOutputPath(imagesDir, [job], knownPath)).toBe(knownPath);
-    expect(() => assertKnownOutputPath(imagesDir, [job], "/tmp/image2tools/images/other.png")).toThrow("当前历史");
-    expect(() => assertKnownOutputPath(imagesDir, [job], "/tmp/image2tools/other.png")).toThrow("管理目录");
+    expect(assertKnownOutputPath(imagesDir, [job], knownPath)).toBe(path.resolve(knownPath));
+    expect(() => assertKnownOutputPath(imagesDir, [job], path.join(imagesDir, "other.png"))).toThrow("当前历史");
+    expect(() => assertKnownOutputPath(imagesDir, [job], path.join(imagesDir, "..", "other.png"))).toThrow("管理目录");
   });
 
-  it("rejects symlinks that resolve outside the managed images directory", async () => {
+  it.skipIf(process.platform === "win32")("rejects symlinks that resolve outside the managed images directory", async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-assets-"));
     const imagesDir = path.join(tmpDir, "images");
     await mkdir(imagesDir);
@@ -77,13 +78,15 @@ describe("asset ownership checks", () => {
   });
 
   it("collects only generated files and locally persisted masks owned by a job", () => {
-    const imagesDir = "/tmp/image2tools/images";
+    const imagesDir = path.join(os.tmpdir(), "image2tools", "images");
+    const resultPath = path.join(imagesDir, "result.png");
+    const maskPath = path.join(imagesDir, "mask.png");
     const job = {
-      ...makeJob(imagesDir),
+      ...makeJob(imagesDir, resultPath),
       maskAsset: {
         id: "mask",
         name: "mask.png",
-        path: "/tmp/image2tools/images/mask.png",
+        path: maskPath,
         mimeType: "image/png",
         sizeBytes: 1
       },
@@ -98,6 +101,6 @@ describe("asset ownership checks", () => {
       ]
     };
 
-    expect(collectOwnedJobFilePaths(imagesDir, job)).toEqual(["/tmp/image2tools/images/result.png", "/tmp/image2tools/images/mask.png"]);
+    expect(collectOwnedJobFilePaths(imagesDir, job)).toEqual([path.resolve(resultPath), path.resolve(maskPath)]);
   });
 });

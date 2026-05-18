@@ -2,8 +2,8 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: `46213ea` (no code changes after PR #31)
-Release, docs, and external-blocker evidence through: `e6225f0`
+Runtime/config evidence through: `131efe4`
+Release and external-blocker evidence through: `e6225f0`
 
 ## Objective Restated
 
@@ -21,11 +21,11 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Text-to-image generation | `/images/generations` implementation and tests in `src/main/services/openaiImage.ts` / `.test.ts` | Implemented; real API manual run pending |
 | Image edit and inpaint | `/images/edits`, multipart `image[]`, mask support, renderer mode switching, mask editor, and mask/source size, format, and alpha validation | Implemented; real API manual run pending |
 | Streaming partial previews | SSE parsing and partial event handling in main + renderer; covered by tests | Done |
-| Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected asset | Done |
+| Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected generated asset; main-process IPC rejects download/open/delete paths outside the app image store or current history | Done |
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
 | Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, and SSE events; `pnpm verify:mock-api` probes models, JSON generation, streaming generation, multipart edit, multi-image mask edit/inpaint, and streaming edit | Done |
-| Tests | `pnpm build` passed with 3 test files and 17 tests | Done |
+| Tests | `pnpm build` passed with 4 test files and 21 tests | Done |
 | Packaging | `electron-builder` config includes main, preload, shared, and renderer runtime outputs; project icons in `build/`; `pnpm package:dir`; `pnpm package:mac`; local app; dmg-copy launch; two-cycle reinstall smoke tests; `pnpm verify:release:mac` confirms the app process and main window; private GitHub pre-release `v0.1.0-mac-unsigned` | Done for unsigned macOS local/pre-release artifacts |
 | Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR/manual dispatch; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
@@ -49,6 +49,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for the current `a4b15de` tree; Vitest reported 3 test files and 15 tests passed.
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for the current `971998b` tree; Vitest reported 3 test files and 15 tests passed.
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for merged `main` at `46213ea`; Vitest reported 3 test files and 17 tests passed.
+- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for `131efe4`; Vitest reported 4 test files and 21 tests passed, including IPC asset path ownership checks.
 - `pnpm package:dir`: unsigned macOS app directory regenerated successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
 - `open -n release/mac-arm64/Image2Tools.app`: packaged app launched on 2026-05-18 after `8a69b39`; process was observed, then the smoke-test process was terminated after AppleScript quit was not handled by the app.
 - `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg`, `.zip`, and blockmaps successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
@@ -88,6 +89,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the current `a4b15de` tree.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the current `971998b` tree.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for merged `main` at `46213ea`.
+- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `131efe4` after hardening IPC asset file operations.
 - `pnpm verify:real-api`: without an API key, exits before making real API calls.
 - `pnpm verify:real-api`: on current `971998b`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
 - `IMAGE2TOOLS_API_KEY=sk-test-no-call pnpm verify:real-api`: exits before making real API calls unless `IMAGE2TOOLS_REAL_API_ACCEPT_COST=1` is explicitly set.
@@ -121,6 +123,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `mcp__openaiDeveloperDocs__.fetch_openai_doc` for `https://developers.openai.com/api/docs/guides/image-generation`: current official guide confirms Image API generation/edit endpoints, `gpt-image-2` examples, streaming `partial_images: 0..3`, mask requirements, base64 output, output customization, `gpt-image-2` size limits, no transparent background, no `input_fidelity`, organization verification, and partial image token cost.
 - `mcp__openaiDeveloperDocs__.get_openapi_spec` for `https://api.openai.com/v1/images/generations` and `https://api.openai.com/v1/images/edits`: endpoint metadata confirms JSON generation, multipart edit uploads, JSON edit support, streaming event response types, and image response schemas.
 - PR #31 aligned inpaint mask handling with the current official Image API mask requirements by enforcing PNG/WebP mask types, source/mask format compatibility, and request-layer rejection for mismatches; local `pnpm build` and `pnpm verify:mock-api` passed before merge.
+- `131efe4` hardened main-process asset IPC so download/open-folder/delete operations only act on generated resources inside the app image store and current history; local `pnpm build`, `pnpm verify:mock-api`, and `git diff --check` passed on the feature branch before PR review.
 
 ## Remaining External Work
 
