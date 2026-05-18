@@ -1,8 +1,8 @@
 # Image2Tools Completion Audit
 
 Date: 2026-05-18
-Branch: `main`
-Latest audited implementation commit: `8f437e2`
+Branch: `docs/openai-docs-audit`
+Latest audited implementation commit: `5e7be05`
 
 ## Objective Restated
 
@@ -32,6 +32,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
 | Abandoned renderer stash | `stash@{0}` inspected; touched only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; archived non-destructively to `origin/archive/abandoned-renderer-stash`; local stash dropped after verifying the archive commit matched | Resolved; tracked in GitHub issue #2 |
 | Remote/PR parity | private GitHub `origin` configured at `https://github.com/Bliveren/image2tools.git`; `main` pushed and tracks `origin/main`; `git ls-remote --heads origin main` matches local pushed history | Done for current `main`; future subtask branches can use PR flow |
+| Official OpenAI docs parity | Current OpenAI Image Generation guide and OpenAPI endpoint metadata confirm `gpt-image-2`, `/images/generations`, `/images/edits`, base64 output, streaming partial images, mask requirements, size/format/quality/compression/background/moderation parameters, no transparent background for `gpt-image-2`, and omitted `input_fidelity` for `gpt-image-2`; docs also note GPT Image organization verification and extra partial-image token cost | Done |
 | Real API generation/edit/inpaint | `pnpm verify:real-api` provides a cost-confirmed real API acceptance path for generation, single-image edit, multi-image edit, and inpaint; no real API key was provided or used; tracked in GitHub issue #1 | External/manual pending |
 | Signed installable distribution | Unsigned macOS dmg/zip generated; `pnpm verify:signing-ready` checks code signing identity, notarization env vars, and signing config without exposing secrets; no certificate/notarization available; tracked in GitHub issue #3 | External/manual pending |
 | Cross-platform install validation | Windows and Linux package gates are configured in GitHub Actions; native install/launch validation still needs corresponding environments; tracked in GitHub issue #4 | External/manual pending |
@@ -76,12 +77,15 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `git branch archive/abandoned-renderer-stash stash@{0}` and `git push origin archive/abandoned-renderer-stash`: non-destructive archive branch created at `78b2c683fc180c8e511d1802b37545fd48c8c887`.
 - `git rev-parse stash@{0}`, `git rev-parse archive/abandoned-renderer-stash`, and `git ls-remote --heads origin archive/abandoned-renderer-stash`: local stash, local archive branch, and remote archive branch all matched `78b2c683fc180c8e511d1802b37545fd48c8c887`.
 - `git stash drop stash@{0}` and `git stash list`: local duplicate stash was dropped after archive verification; no local stash entries remain.
+- `mcp__openaiDeveloperDocs__.fetch_openai_doc` for `https://developers.openai.com/api/docs/guides/image-generation`: current official guide confirms Image API generation/edit endpoints, `gpt-image-2` examples, streaming `partial_images: 0..3`, mask requirements, base64 output, output customization, `gpt-image-2` size limits, no transparent background, no `input_fidelity`, organization verification, and partial image token cost.
+- `mcp__openaiDeveloperDocs__.get_openapi_spec` for `https://api.openai.com/v1/images/generations` and `https://api.openai.com/v1/images/edits`: endpoint metadata confirms JSON generation, multipart edit uploads, JSON edit support, streaming event response types, and image response schemas.
 
 ## Remaining External Work
 
 GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 
 - Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting: GitHub issue #1.
+- Confirm the OpenAI organization behind the real API key has GPT Image organization verification before manual acceptance: GitHub issue #1.
 - Add signing identity, notarization, and formal release metadata: GitHub issue #3.
 - Validate non-macOS target platforms: GitHub issue #4.
 - Resolve GitHub Actions billing/spending limit so CI can execute: GitHub issue #5.
