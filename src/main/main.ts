@@ -34,6 +34,7 @@ import {
   validateApiKey
 } from "../shared/validation.js";
 import { buildEndpoint, fetchWithTimeout, runOpenAIImageJob } from "./services/openaiImage.js";
+import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePaths } from "./services/assetOwnership.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -606,27 +607,28 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
 }
 
 async function handleDownloadAsset(_event: IpcMainInvokeEvent, request: DownloadRequest): Promise<string | null> {
-  const sourceStat = await fs.stat(request.assetPath);
-  if (!sourceStat.isFile()) {
-    throw new Error("无法下载：资源不是文件。");
-  }
+  const state = await readState();
+  const sourcePath = assertKnownOutputPath(getImagesDir(), state.history, request.assetPath);
+  await assertManagedRegularFile(getImagesDir(), sourcePath);
 
   const result = await dialog.showSaveDialog({
     title: "Save image",
-    defaultPath: request.suggestedName || path.basename(request.assetPath)
+    defaultPath: request.suggestedName || path.basename(sourcePath)
   });
 
   if (result.canceled || !result.filePath) return null;
-  await fs.copyFile(request.assetPath, result.filePath);
+  await fs.copyFile(sourcePath, result.filePath);
   return result.filePath;
 }
 
 async function handleOpenAssetFolder(_event: IpcMainInvokeEvent, assetPath: string): Promise<void> {
+  const state = await readState();
+  const sourcePath = assertKnownOutputPath(getImagesDir(), state.history, assetPath);
   try {
-    await fs.access(assetPath);
-    shell.showItemInFolder(assetPath);
+    await assertManagedRegularFile(getImagesDir(), sourcePath);
+    shell.showItemInFolder(sourcePath);
   } catch {
-    await shell.openPath(path.dirname(assetPath));
+    await shell.openPath(getImagesDir());
   }
 }
 
@@ -650,9 +652,7 @@ async function handleClearHistory(): Promise<GenerationJob[]> {
 }
 
 function pathsOwnedByJob(job: GenerationJob): string[] {
-  const outputPaths = job.outputs.map((asset) => asset.path);
-  const maskPath = job.maskAsset?.path.startsWith(getImagesDir()) ? [job.maskAsset.path] : [];
-  return [...outputPaths, ...maskPath];
+  return collectOwnedJobFilePaths(getImagesDir(), job);
 }
 
 function registerIpcHandlers(): void {
