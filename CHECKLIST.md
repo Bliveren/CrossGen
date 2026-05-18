@@ -74,6 +74,7 @@
 - [x] dmg 可挂载、复制 app 并启动
 - [x] macOS 临时目录卸载与重装 smoke test 正常
 - [x] macOS dmg 安装 smoke test 可通过 `pnpm verify:release:mac` 自动复跑
+- [x] GitHub Actions 已配置 build、mock API verifier、macOS package gate
 - [x] 配置迁移到当前 state v1 正常
 - [x] 长时间生成不会轻易超时
 
