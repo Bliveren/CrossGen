@@ -71,9 +71,12 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `git ls-remote --heads origin main`: remote `main` exists and matched the pushed local history when checked.
 - `gh repo view Bliveren/image2tools --json nameWithOwner,visibility,url,defaultBranchRef`: repository exists as private GitHub repo with default branch `main`.
 - `gh issue list --repo Bliveren/image2tools --state open --limit 10`: external blockers are tracked as issues #1 through #5.
+- GitHub milestone `v0.1.0 external acceptance`: tracks the open external blocker issues at https://github.com/Bliveren/image2tools/milestone/1.
 - `git stash show --stat stash@{0}` and `git show stash@{0}:...`: stash inspected; it is an old alternate renderer experiment and is not part of `main`.
 
 ## Remaining External Work
+
+GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 
 - Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting: GitHub issue #1.
 - Confirm whether to delete, archive, or restore `stash@{0}`: GitHub issue #2.

@@ -92,6 +92,8 @@
 
 ## 当前未完成 / 待外部条件
 
+GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
+
 - [x] 配置远程 `origin` 并推送当前 `main`
 - [ ] 用真实 API Key 做一次实际生成、编辑、局部重绘手工验收（GitHub issue #1）
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
