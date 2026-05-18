@@ -41,7 +41,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm package:dir`: unsigned macOS app directory regenerated successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
 - `open -n release/mac-arm64/Image2Tools.app`: packaged app launched on 2026-05-18 after `8a69b39`; process was observed, then the smoke-test process was terminated after AppleScript quit was not handled by the app.
 - `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg`, `.zip`, and blockmaps successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
-- `hdiutil attach ...`, copy `Image2Tools.app` to `/tmp/Image2Tools-install-test`, `open -n ...`: dmg install-style smoke test launched successfully.
+- `hdiutil attach ...`, copy `Image2Tools.app` to `/tmp/Image2Tools-current-dmg-test.*`, `open -n ...`: current dmg install-style smoke test launched successfully on 2026-05-18 after `f9fe082`; test process, mount point, and temp directory were cleaned up.
 - `hdiutil attach ...`, copy/run/remove/copy/run/remove in `/tmp/Image2Tools-reinstall-test`: two-cycle macOS uninstall/reinstall smoke test passed.
 - `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 after `b36e11a`.
