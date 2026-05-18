@@ -8,6 +8,7 @@ const model = "gpt-image-2";
 const baseURL = (process.env.IMAGE2TOOLS_BASE_URL ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/+$/, "");
 const apiKey = process.env.IMAGE2TOOLS_API_KEY ?? process.env.OPENAI_API_KEY ?? "";
 const acceptCost = process.env.IMAGE2TOOLS_REAL_API_ACCEPT_COST === "1";
+const acceptStreamCost = process.env.IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST === "1";
 const outputRoot = path.resolve("real-api-artifacts");
 
 function requireAcceptance() {
@@ -130,16 +131,20 @@ function commonFields() {
   };
 }
 
-async function saveB64Image(label, payload, outputDir) {
-  const b64 = payload.data?.[0]?.b64_json;
-  if (!b64) {
-    throw new Error(`${label} did not return data[0].b64_json.`);
-  }
+async function saveB64(label, b64, outputDir) {
   const buffer = Buffer.from(b64, "base64");
   const digest = createHash("sha256").update(buffer).digest("hex").slice(0, 12);
   const outputPath = path.join(outputDir, `${label}-${digest}.png`);
   await writeFile(outputPath, buffer);
   return outputPath;
+}
+
+async function saveB64Image(label, payload, outputDir) {
+  const b64 = payload.data?.[0]?.b64_json;
+  if (!b64) {
+    throw new Error(`${label} did not return data[0].b64_json.`);
+  }
+  return saveB64(label, b64, outputDir);
 }
 
 async function requestGeneration(outputDir) {
@@ -153,6 +158,68 @@ async function requestGeneration(outputDir) {
   });
   const payload = await parseJsonResponse(response, "generation");
   return saveB64Image("generation", payload, outputDir);
+}
+
+async function parseSseResponse(response, label) {
+  const text = await response.text();
+  if (!response.ok) {
+    let message = text.slice(0, 500);
+    try {
+      const payload = text ? JSON.parse(text) : {};
+      message = payload?.error?.message ?? JSON.stringify(payload).slice(0, 500);
+    } catch {
+      // Keep the raw text snippet.
+    }
+    throw new Error(`${label} failed with HTTP ${response.status}: ${message}`);
+  }
+
+  const events = [];
+  for (const block of text.split(/\r?\n\r?\n/)) {
+    const data = block
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n");
+    if (!data || data === "[DONE]") continue;
+    try {
+      events.push(JSON.parse(data));
+    } catch {
+      throw new Error(`${label} returned an unparsable SSE event: ${data.slice(0, 500)}`);
+    }
+  }
+  return events;
+}
+
+async function requestStreamingGeneration(outputDir) {
+  const response = await fetch(endpoint("/images/generations"), {
+    method: "POST",
+    headers: authHeaders({
+      accept: "text/event-stream",
+      "content-type": "application/json"
+    }),
+    body: JSON.stringify({
+      ...commonFields(),
+      prompt: "A small app icon for a streaming image preview feature, simple geometric style.",
+      stream: true,
+      partial_images: 1
+    })
+  });
+
+  const events = await parseSseResponse(response, "streaming generation");
+  const completed = events.find((event) => event.type === "image_generation.completed" && event.b64_json);
+  if (!completed) {
+    throw new Error("streaming generation did not return an image_generation.completed event with b64_json.");
+  }
+
+  const outputs = [];
+  const partial = events.find((event) => event.type === "image_generation.partial_image" && event.b64_json);
+  if (partial) {
+    outputs.push(await saveB64("streaming-generation-partial", partial.b64_json, outputDir));
+  } else {
+    console.log("Streaming generation completed without a partial image event; this is allowed when the final image is ready quickly.");
+  }
+  outputs.push(await saveB64("streaming-generation-final", completed.b64_json, outputDir));
+  return outputs;
 }
 
 async function requestEdit(outputDir, images, mask) {
@@ -197,6 +264,11 @@ async function main() {
     await requestEdit(outputDir, [sourceA, sourceB]),
     await requestEdit(outputDir, [sourceA], mask)
   ];
+  if (acceptStreamCost) {
+    outputs.push(...(await requestStreamingGeneration(outputDir)));
+  } else {
+    console.log("Skipping real streaming acceptance. Set IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST=1 to add a streaming generation check.");
+  }
 
   console.log("Real Image API acceptance passed.");
   for (const output of outputs) {
