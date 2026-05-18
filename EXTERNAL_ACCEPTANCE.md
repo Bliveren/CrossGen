@@ -89,10 +89,12 @@ Prerequisites:
 - Valid Developer ID Application signing identity on the build host
 - Apple notarization credentials available only through local env vars or CI
   secrets
-- A signing branch that removes or replaces the current
-  `build.mac.identity: null` unsigned-build override
+- Signing/notarization readiness passing locally. The default `pnpm package:mac`
+  path intentionally remains unsigned; use `pnpm package:mac:signed` for the
+  signed/notarized release path.
 
-Use the required CTO branch/worktree flow before changing signing config:
+Use the required CTO branch/worktree flow before producing signed release
+evidence or changing release config:
 
 ```bash
 git worktree add -b release/cto-signed-mac ../image2tools-signed-mac main
@@ -112,7 +114,7 @@ Then run:
 
 ```bash
 pnpm verify:signing-ready
-pnpm package:mac
+pnpm package:mac:signed
 pnpm verify:release:mac
 ```
 
