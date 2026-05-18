@@ -2,8 +2,8 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: `fix/cto-ipc-request-validation` pre-merge
-Release and external-blocker evidence through: `chore/cto-refresh-preview-release` pre-merge
+Runtime/config evidence through: merged `main` at `703139d`
+Release and external-blocker evidence through: merged `main` at `703139d`
 
 ## Objective Restated
 
@@ -25,13 +25,13 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
 | Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, SSE events, and a mock request-inspection route; `pnpm verify:mock-api` probes models, JSON generation with Image 2 parameter assertions, streaming generation, multipart edit with Image 2 parameter assertions, multi-image mask edit/inpaint, and streaming edit | Done |
-| Tests | `pnpm build` passed with 4 test files and 28 tests on `fix/cto-ipc-request-validation` pre-merge | Done |
+| Tests | `pnpm build` passed with 4 test files and 28 tests on merged `main` at `703139d` | Done |
 | Packaging | `electron-builder` config includes main, preload, shared, and renderer runtime outputs; project icons in `build/`; `pnpm package:dir`; `pnpm package:mac`; local app; dmg-copy launch; two-cycle reinstall smoke tests; `pnpm verify:release:mac` uses `ditto` for app bundle copying, verifies copied app signatures, and confirms the app process and main window through CoreGraphics window enumeration; private GitHub pre-release `v0.1.0-mac-unsigned` | Done for ad-hoc signed, unnotarized macOS local/pre-release artifacts |
 | Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR/manual dispatch; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | External acceptance runbook | `EXTERNAL_ACCEPTANCE.md` consolidates the remaining real API, signing/notarization, Windows/Linux, and CI billing gates with commands and evidence requirements | Done |
-| CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
-| Clean main worktree | `git status --short --branch` shows clean `main` | Done |
+| CTO worktree cleanup | After PR #52, stale worktree and branch were pruned; `git worktree list` showed only the main worktree before this audit-refresh branch was opened | Done |
+| Clean main worktree | `git status --short --branch` showed clean `main` at `703139d` before this audit-refresh branch was opened | Done |
 | Abandoned renderer stash | `stash@{0}` inspected; touched only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; archived non-destructively to `origin/archive/abandoned-renderer-stash`; local stash dropped after verifying the archive commit matched | Resolved; tracked in GitHub issue #2 |
 | Remote/PR parity | private GitHub `origin` configured at `https://github.com/Bliveren/image2tools.git`; `main` pushed and tracks `origin/main`; `git ls-remote --heads origin main` matches local pushed history | Done for current `main`; future subtask branches can use PR flow |
 | Official OpenAI docs parity | Current OpenAI Image Generation guide and OpenAPI endpoint metadata confirm `gpt-image-2`, `/images/generations`, `/images/edits`, base64 output, streaming partial images, mask requirements, size/format/quality/compression/background/moderation parameters, no transparent background for `gpt-image-2`, and omitted `input_fidelity` for `gpt-image-2`; docs also note GPT Image organization verification and extra partial-image token cost | Done |
@@ -104,6 +104,14 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `chore/cto-refresh-preview-release`.
 - `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: refreshed ad-hoc signed preview asset hashes are `d6bab3af7b318f12025c350aa3b7c1e7e50362a138ee5d23cec0539cde0d3a90` for dmg and `ade24acf2d467abb74094a9e47738b3eb1c142c3ca6719ed0641fdca528d0b25` for zip.
 - `gh release upload v0.1.0-mac-unsigned ... --clobber`: refreshed the private pre-release dmg/zip with the ad-hoc signed build from current `main` at `cd331b3`; `gh release view ... --json assets` reported matching GitHub asset digests for both files.
+- PR #52 merged `chore/cto-refresh-preview-release` into `main` as `703139d569befb371f1b25ae16a78f0ef6363ecb`; the branch was pushed, reviewed, merged through GitHub, and the temporary worktree/local branch were pruned.
+- `pnpm install --frozen-lockfile`: installed dependencies in a fresh audit-refresh worktree based on merged `main` at `703139d` after an initial `pnpm build` attempt failed before typecheck because `node_modules` was absent (`tsc: command not found`).
+- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for merged `main` at `703139d`; Vitest reported 4 test files and 28 tests passed.
+- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for merged `main` at `703139d`.
+- `pnpm verify:real-api`: on merged `main` at `703139d`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
+- `pnpm verify:signing-ready`: on merged `main` at `703139d`, still failed for the expected external reasons (no Developer ID code signing identity and Apple notarization env vars unset) while confirming the default local preview path uses ad-hoc signing and `package:mac:signed` can override `mac.identity` and enable notarization.
+- `gh release view v0.1.0-mac-unsigned --repo Bliveren/image2tools --json assets,url`: private pre-release assets still report GitHub SHA256 digests matching the refreshed ad-hoc signed preview build (`d6bab3af7b318f12025c350aa3b7c1e7e50362a138ee5d23cec0539cde0d3a90` for dmg and `ade24acf2d467abb74094a9e47738b3eb1c142c3ca6719ed0641fdca528d0b25` for zip).
+- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: in the fresh audit-refresh worktree, the command failed because release artifacts are ignored build outputs and are not present in a new worktree; this does not change the earlier local/GitHub digest match from the release-refresh worktree.
 - `docker pull --platform linux/arm64 node:25-bookworm`: after one transient TLS copy error, downloaded the Node 25 Debian Bookworm ARM64 image for Linux container validation.
 - `docker run --platform linux/arm64 ... node:25-bookworm ... pnpm build && pnpm verify:mock-api && pnpm package`: in an Ubuntu/Debian Bookworm ARM64 container, `pnpm build` passed with 4 test files and 21 tests, `pnpm verify:mock-api` passed, and `pnpm package` produced `release/Image2Tools-0.1.0-linux-arm64.AppImage` plus `release/linux-arm64-unpacked/image2tools`.
 - `file release/Image2Tools-0.1.0-linux-arm64.AppImage release/linux-arm64-unpacked/image2tools`: confirmed both Linux artifacts are ARM aarch64 ELF executables.
@@ -173,6 +181,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `gh run view 26026330595 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `06394ad` still concluded `failure` before workflow steps ran; Build and mock API verifier, macOS package, Windows package, and Linux package jobs all had empty `steps` arrays; issues #4 and #5 record this as current blocker evidence.
 - `gh run view 26027165476 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `033e888` still concluded `failure` before workflow steps ran; Build and mock API verifier, macOS package, Windows package, and Linux package jobs all had empty `steps` arrays; issues #4 and #5 record this as current blocker evidence.
 - `gh run view 26027440740 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `d701ae8` still concluded `failure` before workflow steps ran; Build and mock API verifier, macOS package, Windows package, and Linux package jobs all had empty `steps` arrays; issue #5 records this as current blocker evidence.
+- `gh pr checks 52 --repo Bliveren/image2tools` and `gh run view 26035753105 --repo Bliveren/image2tools`: PR #52 CI failed before any workflow step executed; GitHub annotated all jobs with the account payment/spending-limit message and the JSON run view showed empty `steps` arrays for build/mock, macOS package, Windows package, and Linux package.
+- `gh run view 26035833906 --repo Bliveren/image2tools`: the post-merge `main` CI run for `703139d` also failed before any workflow step executed with the same GitHub account billing/spending-limit annotation; this remains an external account blocker, not repository-code evidence.
 - `gh issue list --repo Bliveren/image2tools --state open --json number,title,labels,url,updatedAt`: remaining open issues are external blockers #1, #3, #4, and #5.
 - `gh release view v0.1.0-mac-unsigned --repo Bliveren/image2tools --json tagName,name,isPrerelease,isDraft,url,assets,publishedAt,targetCommitish`: private pre-release `v0.1.0-mac-unsigned` is published, not draft, marked as pre-release, and has the dmg/zip assets uploaded with SHA256 digests matching the local release files.
 - `EXTERNAL_ACCEPTANCE.md`: added in PR #29 and linked from `README.md`, `TODO.md`, and this audit so the remaining external gates have a single repo-level runbook.
@@ -196,6 +206,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `06394ad` is a docs-only merge after the `780af4d` release refresh; current local `pnpm build`, `pnpm verify:mock-api`, `pnpm verify:release:mac`, and release SHA256 verification passed, while the remaining real API, signing, Windows/Linux, and CI gates remain external blockers.
 - `033e888` includes PR #39 signing package path improvements; current local `pnpm build` and `pnpm verify:mock-api` passed, `pnpm verify:real-api` refused to call without a key, and `pnpm verify:signing-ready` confirmed the signed packaging override while remaining blocked on external signing materials.
 - `d701ae8` is a docs-only merge after PR #40. Current local `pnpm build` and `pnpm verify:mock-api` pass; `pnpm verify:real-api` still refuses to call without a key; `pnpm verify:signing-ready` still confirms the signed packaging override while remaining blocked on external signing materials; latest CI still fails before steps due to issue #5; Linux ARM64 container packaging/extracted-launch evidence is now captured, while native Windows/Linux desktop validation remains open under issue #4.
+- `703139d` includes PR #52, which refreshed the private macOS preview release assets from current `main`, switched the local preview package to ad-hoc signing, hardened the macOS release verifier around bundle copy/signature/window checks, and updated docs. Current local `pnpm build` and `pnpm verify:mock-api` pass; `pnpm verify:real-api` still refuses to call without a key; `pnpm verify:signing-ready` still confirms the signed packaging override while remaining blocked on external signing materials; latest CI still fails before steps due to issue #5; real API, signed/notarized distribution, and native Windows/Linux desktop validation remain open external gates.
 
 ## Remaining External Work
 
