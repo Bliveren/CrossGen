@@ -12,17 +12,50 @@
     "build": "pnpm typecheck && pnpm test && pnpm build:renderer && pnpm build:main",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
+    "package": "pnpm build && electron-builder",
+    "package:dir": "pnpm build && electron-builder --dir",
+    "package:mac": "pnpm build && electron-builder --mac",
     "preview": "vite preview --host 127.0.0.1",
     "start": "pnpm build:main && electron .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json"
   },
+  "build": {
+    "appId": "com.bliveren.image2tools",
+    "productName": "Image2Tools",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/main/**/*",
+      "dist-renderer/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "publish": null,
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "identity": null,
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "category": "Graphics",
+      "target": [
+        "AppImage"
+      ]
+    }
+  },
   "dependencies": {
-    "@vitejs/plugin-react": "^5.1.1",
-    "electron": "^39.2.6",
     "lucide-react": "^0.554.0",
-    "vite": "^7.2.4",
-    "typescript": "^5.9.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -30,9 +63,14 @@
     "@types/node": "^25.0.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
+    "electron": "^39.2.6",
+    "electron-builder": "^26.8.1",
     "jsdom": "^27.2.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.4",
     "vitest": "^4.0.13",
     "wait-on": "^9.0.3"
   }

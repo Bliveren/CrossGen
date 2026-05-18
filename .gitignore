@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-renderer/
+release/
 coverage/
 .DS_Store
 *.log

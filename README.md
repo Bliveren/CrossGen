@@ -1,6 +1,6 @@
 # Image2Tools
 
-一个面向 `gpt-image-2` 的极简桌面工具规划目录。
+一个面向 `gpt-image-2` 的极简桌面工具。
 
 目标很明确：
 - 录入 API Key 后即可生成图片
@@ -15,10 +15,26 @@
 - [TODO.md](./TODO.md): 可直接执行的任务清单
 - [CHECKLIST.md](./CHECKLIST.md): 开发与发布检查清单
 
+## 本地运行
+
+```bash
+pnpm install
+pnpm dev:electron
+```
+
+## 验证与打包
+
+```bash
+pnpm build
+pnpm package:dir
+pnpm package:mac
+```
+
+`pnpm build` 会依次执行类型检查、单元测试、renderer 构建和 main 构建。`pnpm package:dir` 生成未压缩应用目录，适合本地试跑；`pnpm package:mac` 生成 macOS dmg/zip。当前配置默认不签名，正式分发前需要补充开发者证书、公证和跨平台安装验证。
+
 ## 默认假设
 
 - 优先直接接 OpenAI API
 - 默认模型为 `gpt-image-2`
 - 使用本地存储保存配置、历史与图片文件
 - 先做桌面端单机版，不做账号体系和云同步
-
