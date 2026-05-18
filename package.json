@@ -12,6 +12,7 @@
     "build": "pnpm typecheck && pnpm test && pnpm build:renderer && pnpm build:main",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
+    "mock:openai": "node scripts/mock-openai-image-api.mjs",
     "package": "pnpm build && electron-builder",
     "package:dir": "pnpm build && electron-builder --dir",
     "package:mac": "pnpm build && electron-builder --mac",

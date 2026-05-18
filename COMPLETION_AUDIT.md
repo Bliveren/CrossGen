@@ -23,6 +23,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected asset | Done |
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
+| Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, and SSE events | Done |
 | Tests | `pnpm build` passed with 3 test files and 15 tests | Done |
 | Packaging | `electron-builder` config, project icons in `build/`, `pnpm package:dir`, `pnpm package:mac`, local app and dmg-copy launch smoke tests | Done for unsigned macOS local artifacts |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
@@ -41,6 +42,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `open -n release/mac-arm64/Image2Tools.app`: packaged app launched and process was observed.
 - `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg` and `.zip`.
 - `hdiutil attach ...`, copy `Image2Tools.app` to `/tmp/Image2Tools-install-test`, `open -n ...`: dmg install-style smoke test launched successfully.
+- `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
 - `git status --short --branch`: clean `main`.
 - `git worktree list`: only `/Users/alive/projects/image2tools`.
 - `git remote -v`: no remote configured.

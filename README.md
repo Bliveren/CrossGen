@@ -36,6 +36,20 @@ pnpm package:mac
 
 打包图标位于 `build/icon.icns`、`build/icon.ico` 和 `build/icon.png`，源自 `public/favicon.svg`。
 
+## Mock API 验证
+
+没有真实 API Key 时，可以先启动本地 mock：
+
+```bash
+pnpm mock:openai
+```
+
+然后在应用里填写：
+- API Key: `sk-mock-image2tools`
+- Base URL: `http://127.0.0.1:8787/v1`
+
+mock 支持 `/models`、`/images/generations`、`/images/edits`，并返回有效 PNG base64 和流式 partial/completed 事件。它只能验证本地配置、请求、流式预览、保存、下载、历史等链路，不代表真实 `gpt-image-2` 质量或服务端验收。
+
 ## 默认假设
 
 - 优先直接接 OpenAI API
