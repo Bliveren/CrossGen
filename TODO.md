@@ -71,6 +71,7 @@
 - [x] 增加自动化测试
 - [x] OpenAI 请求层单元测试覆盖多结果保存与编辑参数透传
 - [x] shared 参数校验拒绝运行时非法枚举值（quality / format / background / moderation）
+- [x] shared 参数校验拒绝畸形运行时参数对象与非整数/非有限数值
 - [x] 增加手工 QA 用例
 - [x] 增加本地 mock API 回归入口
 - [x] 增加本地 mock API 自动校验脚本

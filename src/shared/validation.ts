@@ -94,6 +94,18 @@ export function validateGptImage2Size(size: string): ValidationResult {
 }
 
 export function validateImageParams(params: ImageParams): ValidationResult {
+  if (!isRecord(params)) {
+    return { ok: false, message: "参数格式无效。" };
+  }
+  if (typeof params.model !== "string") {
+    return { ok: false, message: "模型参数无效。" };
+  }
+  if (typeof params.size !== "string") {
+    return { ok: false, message: "尺寸参数无效。" };
+  }
+  if (typeof params.stream !== "boolean") {
+    return { ok: false, message: "流式预览参数无效。" };
+  }
   if (params.model.trim() !== GPT_IMAGE_2_MODEL) {
     return { ok: false, message: `MVP 仅支持 ${GPT_IMAGE_2_MODEL}。` };
   }
@@ -111,23 +123,31 @@ export function validateImageParams(params: ImageParams): ValidationResult {
   }
   const size = validateGptImage2Size(params.size);
   if (!size.ok) return size;
-  if (params.n < 1 || params.n > 10) {
+  if (!isInteger(params.n) || params.n < 1 || params.n > 10) {
     return { ok: false, message: "生成数量需在 1 到 10 之间。" };
   }
-  if (params.partialImages < 0 || params.partialImages > 3) {
+  if (!isInteger(params.partialImages) || params.partialImages < 0 || params.partialImages > 3) {
     return { ok: false, message: "partial_images 需在 0 到 3 之间。" };
   }
-  if (params.timeoutMs < 30000 || params.timeoutMs > 600000) {
+  if (!isInteger(params.timeoutMs) || params.timeoutMs < 30000 || params.timeoutMs > 600000) {
     return { ok: false, message: "超时时间需在 30 到 600 秒之间。" };
   }
-  if (params.outputCompression < 0 || params.outputCompression > 100) {
+  if (!isInteger(params.outputCompression) || params.outputCompression < 0 || params.outputCompression > 100) {
     return { ok: false, message: "压缩率需在 0 到 100 之间。" };
   }
   return { ok: true };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function isOneOf<T extends string>(value: string, options: readonly T[]): value is T {
   return (options as readonly string[]).includes(value);
+}
+
+function isInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value);
 }
 
 export function normalizeImageMimeType(mimeType?: string): string {
