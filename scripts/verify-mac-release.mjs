@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -88,57 +87,64 @@ async function waitForLaunch(executablePath) {
   throw new Error(`Packaged app did not launch from ${executablePath}`);
 }
 
-async function countWindowsForPid(pid) {
-  const script = `tell application "System Events" to return count of windows of (first process whose unix id is ${pid})`;
-  const { stdout } = await run("osascript", ["-e", script]);
-  return Number(stdout.trim()) || 0;
+async function listMainWindows() {
+  const script = [
+    "import CoreGraphics",
+    "import Foundation",
+    "let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []",
+    "for window in windows {",
+    `  let owner = window[kCGWindowOwnerName as String] as? String ?? ""`,
+    `  guard owner == "${processName}" else { continue }`,
+    `  let title = window[kCGWindowName as String] as? String ?? ""`,
+    `  let pid = window[kCGWindowOwnerPID as String] as? Int32 ?? 0`,
+    `  let bounds = window[kCGWindowBounds as String] as? [String: Any] ?? [:]`,
+    `  let width = bounds["Width"] as? Double ?? 0`,
+    `  let height = bounds["Height"] as? Double ?? 0`,
+    `  if width > 100 && height > 100 { print("\\(pid)|\\(title)|\\(Int(width))x\\(Int(height))") }`,
+    "}"
+  ].join("\n");
+  const { stdout } = await run("swift", ["-e", script], { timeout: 10000, killSignal: "SIGKILL" });
+  return stdout
+    .trim()
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
-async function countWindowsForProcessName() {
-  const script = `
-tell application "System Events"
-  set totalWindows to 0
-  repeat with candidate in (processes whose name is "${processName}")
-    set totalWindows to totalWindows + (count of windows of candidate)
-  end repeat
-  return totalWindows
-end tell`;
-  const { stdout } = await run("osascript", ["-e", script]);
-  return Number(stdout.trim()) || 0;
-}
-
-async function waitForMainWindow(initialPids, executablePath, baselineWindowCount) {
-  const deadline = Date.now() + 10000;
+async function waitForMainWindow(initialPids, executablePath) {
+  const deadline = Date.now() + 20000;
   const pids = new Set(initialPids);
   let lastError;
+  let lastPids = "";
+  let lastWindows = "";
   while (Date.now() < deadline) {
     for (const pid of await findPids(executablePath)) {
       pids.add(pid);
     }
-    for (const pid of pids) {
-      try {
-        if ((await countWindowsForPid(pid)) > 0) {
-          return pid;
-        }
-      } catch (error) {
-        lastError = error;
-      }
-    }
+    lastPids = [...pids].join(",");
     try {
-      if ((await countWindowsForProcessName()) > baselineWindowCount) {
-        return processName;
-      }
+      const windows = await listMainWindows();
+      lastWindows = windows.join("; ");
+      const matchingWindow = windows.find((window) => {
+        const [pid] = window.split("|");
+        return pids.has(Number(pid));
+      });
+      if (matchingWindow) return matchingWindow;
     } catch (error) {
       lastError = error;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  const detail = lastError instanceof Error ? ` Last accessibility error: ${lastError.message}` : "";
-  throw new Error(`Packaged app launched but did not show a main window.${detail}`);
+  const detail = lastError instanceof Error ? ` Last window enumeration error: ${lastError.message}` : "";
+  throw new Error(`Packaged app launched but did not show a main window. Last pids: ${lastPids || "none"}. Last windows: ${lastWindows || "none"}.${detail}`);
 }
 
 async function stopApp(executablePath) {
-  const pids = await findPids(executablePath);
+  const appContentsPath = executablePath.slice(0, executablePath.indexOf("/Contents/") + "/Contents/".length);
+  const pids = new Set([
+    ...(await findPids(executablePath)),
+    ...(appContentsPath ? await findPids(appContentsPath) : [])
+  ]);
   for (const pid of pids) {
     try {
       process.kill(pid, "SIGTERM");
@@ -147,19 +153,40 @@ async function stopApp(executablePath) {
     }
   }
   await new Promise((resolve) => setTimeout(resolve, 500));
+  for (const pid of await findPids(appContentsPath || executablePath)) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Process may have exited between pgrep and kill.
+    }
+  }
 }
 
 async function runInstallCycle(mountPoint, tempRoot, cycle) {
   const appPath = path.join(tempRoot, appName);
   const executablePath = path.join(appPath, appExecutable);
+  const logPath = path.join(tempRoot, `cycle-${cycle}.log`);
   await rm(appPath, { recursive: true, force: true });
-  await cp(path.join(mountPoint, appName), appPath, { recursive: true });
+  await run("ditto", [path.join(mountPoint, appName), appPath]);
+  await run("codesign", ["--verify", "--deep", "--strict", appPath]);
+  await new Promise((resolve) => setTimeout(resolve, 1000));
   try {
-    const baselineWindowCount = await countWindowsForProcessName();
     await run("open", ["-n", appPath]);
     const pids = await waitForLaunch(executablePath);
-    const windowPid = await waitForMainWindow(pids, executablePath, baselineWindowCount);
-    console.log(`Cycle ${cycle}: launched ${appPath} with pid ${pids.join(",")} and showed a main window on pid ${windowPid}.`);
+    let window;
+    try {
+      window = await waitForMainWindow(pids, executablePath);
+    } catch (error) {
+      let logTail = "";
+      try {
+        logTail = (await readFile(logPath, "utf8")).slice(-4000);
+      } catch {
+        logTail = "";
+      }
+      const suffix = logTail ? `\nApp log tail:\n${logTail}` : "";
+      throw new Error(`${error instanceof Error ? error.message : String(error)}${suffix}`);
+    }
+    console.log(`Cycle ${cycle}: launched ${appPath} with pid ${pids.join(",")} and showed a main window (${window}).`);
   } finally {
     await stopApp(executablePath);
     await rm(appPath, { recursive: true, force: true });
@@ -168,7 +195,7 @@ async function runInstallCycle(mountPoint, tempRoot, cycle) {
 
 async function main() {
   assertDarwin();
-  const tempRoot = await mkdtemp(path.join(tmpdir(), "Image2Tools-release-test-"));
+  const tempRoot = await mkdtemp(path.join("/tmp", "Image2Tools-release-test-"));
   let mountPoint;
   try {
     mountPoint = await attachDmg();

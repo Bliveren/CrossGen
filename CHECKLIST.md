@@ -80,7 +80,7 @@
 - [x] 打包图标已添加
 - [x] 本机未压缩 app 可启动
 - [x] macOS dmg/zip 可生成
-- [x] unsigned macOS arm64 试用包已上传 private GitHub pre-release
+- [x] ad-hoc signed、未公证 macOS arm64 试用包已上传 private GitHub pre-release
 - [x] dmg 可挂载、复制 app 并启动
 - [x] macOS 临时目录卸载与重装 smoke test 正常
 - [x] macOS dmg 安装 smoke test 可通过 `pnpm verify:release:mac` 自动复跑

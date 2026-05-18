@@ -108,12 +108,12 @@ GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 - [ ] 用真实 API Key 做一次实际生成、编辑、局部重绘手工验收（GitHub issue #1）
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
 - [x] 完成 macOS 临时目录卸载与重装 smoke test
-- [x] 发布 unsigned macOS arm64 试用包到 private GitHub pre-release
+- [x] 发布 ad-hoc signed、未公证 macOS arm64 试用包到 private GitHub pre-release
 - [x] 增加 GitHub Actions CI（build、mock verifier、macOS / Windows / Linux package）
 - [x] 增加受成本保护的真实 API 验收脚本
 - [x] 增加受额外成本确认保护的真实 streaming 生成/编辑验收路径
 - [x] 增加 macOS 签名/公证 readiness 检查脚本
-- [x] 增加显式 signed macOS 打包命令，默认 unsigned 试用包不受影响
+- [x] 增加显式 Developer ID signed macOS 打包命令，默认 ad-hoc signed 试用包不受影响
 - [x] 在 Ubuntu ARM64 Docker 环境补充 Linux build、mock verifier、AppImage 打包、AppImage 解包与 Xvfb 启动烟测证据
 - [x] 增加 `pnpm verify:release:windows` 并接入 Windows CI package gate
 - [x] 将 Windows release verifier 扩展到 silent install / launch / uninstall 烟测
