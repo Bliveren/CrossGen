@@ -84,14 +84,15 @@
 
 - [x] 建立 `main` 基线提交
 - [x] 配置提交身份 `Bliveren <aliveren_89@foxmail.com>`
-- [ ] 配置远程 `origin`
+- [x] 配置远程 `origin`
+- [x] 推送 `main` 到 private GitHub 远程
 - [x] 子任务使用独立 worktree 与独立分支
 - [x] 子任务完成后由 CTO 审核再合并
 - [x] 合并后清理无用 worktree 与本地分支
 
 ## 当前未完成 / 待外部条件
 
-- [ ] 配置远程 `origin` 后补推送与 PR 流程
+- [x] 配置远程 `origin` 并推送当前 `main`
 - [ ] 用真实 API Key 做一次实际生成、编辑、局部重绘手工验收
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
 - [x] 完成 macOS 临时目录卸载与重装 smoke test

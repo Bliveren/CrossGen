@@ -30,7 +30,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
 | Clean main worktree | `git status --short --branch` shows clean `main` | Done |
 | Abandoned renderer stash | `stash@{0}` inspected; touches only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation | Evaluated; delete only with user confirmation |
-| Remote/PR parity | `git remote -v` is empty | Blocked by missing `origin` |
+| Remote/PR parity | private GitHub `origin` configured at `https://github.com/Bliveren/image2tools.git`; `main` pushed and tracks `origin/main`; `git ls-remote --heads origin main` matches local pushed history | Done for current `main`; future subtask branches can use PR flow |
 | Real API generation/edit/inpaint | No real API key was provided or used | External/manual pending |
 | Signed installable distribution | Unsigned macOS dmg/zip generated; no certificate/notarization | External/manual pending |
 | Cross-platform install validation | macOS local package smoke-tested only | External/manual pending |
@@ -49,12 +49,13 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `curl` checks against the mock passed for `/models`, JSON `/images/generations`, SSE `/images/generations`, and multipart `/images/edits`.
 - `git status --short --branch`: clean `main`.
 - `git worktree list`: only `/Users/alive/projects/image2tools`.
-- `git remote -v`: no remote configured.
+- `git remote -v`: `origin` is `https://github.com/Bliveren/image2tools.git` for fetch and push.
+- `git ls-remote --heads origin main`: remote `main` exists and matched the pushed local history when checked.
+- `gh repo view Bliveren/image2tools --json nameWithOwner,visibility,url,defaultBranchRef`: repository exists as private GitHub repo with default branch `main`.
 - `git stash show --stat stash@{0}` and `git show stash@{0}:...`: stash inspected; it is an old alternate renderer experiment and is not part of `main`.
 
 ## Remaining External Work
 
-- Configure `origin`, push `main`, and run the requested remote PR flow.
 - Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting.
 - Add signing identity, notarization, and formal release metadata.
 - Validate non-macOS target platforms.
