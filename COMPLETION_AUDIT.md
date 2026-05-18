@@ -3,7 +3,7 @@
 Date: 2026-05-18
 Branch: `main`
 Runtime/config evidence through: `971998b`
-Docs and external-blocker evidence through: `971998b`
+Docs and external-blocker evidence through: `c08d82f`
 
 ## Objective Restated
 
@@ -94,8 +94,10 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `gh run list --repo Bliveren/image2tools --branch main --limit 5 --json databaseId,displayTitle,status,conclusion,event,headSha,url,createdAt,updatedAt`: repeated `main` CI runs still conclude `failure` before executing workflow steps, including `26018882123` for `cdc73f6` and `26019519641` for `8ac18c6`.
 - `gh run view 26019519641 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: the current observed failure pattern is unchanged; build/mock, Windows package, macOS package, and Linux package jobs all had empty `steps` arrays, matching the external GitHub Actions billing/spending-limit blocker tracked in issue #5.
 - `gh run view 26021791793 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `971998b` still concluded `failure` before workflow steps ran; Linux package, build/mock, macOS package, and Windows package jobs all had empty `steps` arrays.
+- `gh run view 26022641368 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `c08d82f` still concluded `failure` before workflow steps ran; Linux package, build/mock, macOS package, and Windows package jobs all had empty `steps` arrays.
 - `gh issue list --repo Bliveren/image2tools --state open --json number,title,labels,url,updatedAt`: remaining open issues are external blockers #1, #3, #4, and #5.
 - `gh release view v0.1.0-mac-unsigned --repo Bliveren/image2tools --json tagName,name,isPrerelease,isDraft,url,assets,publishedAt,targetCommitish`: private pre-release `v0.1.0-mac-unsigned` is published, not draft, marked as pre-release, and has the dmg/zip assets uploaded with SHA256 digests matching the local release files.
+- `EXTERNAL_ACCEPTANCE.md`: added in PR #29 and linked from `README.md`, `TODO.md`, and this audit so the remaining external gates have a single repo-level runbook.
 - `curl` checks against the mock passed for `/models`, JSON `/images/generations`, SSE `/images/generations`, and multipart `/images/edits`.
 - `git status --short --branch`: clean `main`.
 - `git worktree list`: only `/Users/alive/projects/image2tools`.
