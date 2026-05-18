@@ -78,6 +78,7 @@
 - [x] 增加 macOS / Windows / Linux 打包配置
 - [x] 完成发布前检查
 - [x] 产出试用版安装包
+- [x] 增加 macOS dmg 自动安装烟测脚本
 
 ## CTO / 多分支治理
 

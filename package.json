@@ -20,7 +20,8 @@
     "start": "pnpm build:main && electron .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
-    "verify:mock-api": "node scripts/verify-mock-api.mjs"
+    "verify:mock-api": "node scripts/verify-mock-api.mjs",
+    "verify:release:mac": "node scripts/verify-mac-release.mjs"
   },
   "build": {
     "appId": "com.bliveren.image2tools",
