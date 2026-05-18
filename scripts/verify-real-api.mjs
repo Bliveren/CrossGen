@@ -190,6 +190,23 @@ async function parseSseResponse(response, label) {
   return events;
 }
 
+async function saveStreamingOutputs(label, eventPrefix, events, outputDir) {
+  const completed = events.find((event) => event.type === `${eventPrefix}.completed` && event.b64_json);
+  if (!completed) {
+    throw new Error(`${label} did not return a ${eventPrefix}.completed event with b64_json.`);
+  }
+
+  const outputs = [];
+  const partial = events.find((event) => event.type === `${eventPrefix}.partial_image` && event.b64_json);
+  if (partial) {
+    outputs.push(await saveB64(`${label}-partial`, partial.b64_json, outputDir));
+  } else {
+    console.log(`${label} completed without a partial image event; this is allowed when the final image is ready quickly.`);
+  }
+  outputs.push(await saveB64(`${label}-final`, completed.b64_json, outputDir));
+  return outputs;
+}
+
 async function requestStreamingGeneration(outputDir) {
   const response = await fetch(endpoint("/images/generations"), {
     method: "POST",
@@ -206,20 +223,31 @@ async function requestStreamingGeneration(outputDir) {
   });
 
   const events = await parseSseResponse(response, "streaming generation");
-  const completed = events.find((event) => event.type === "image_generation.completed" && event.b64_json);
-  if (!completed) {
-    throw new Error("streaming generation did not return an image_generation.completed event with b64_json.");
-  }
+  return saveStreamingOutputs("streaming-generation", "image_generation", events, outputDir);
+}
 
-  const outputs = [];
-  const partial = events.find((event) => event.type === "image_generation.partial_image" && event.b64_json);
-  if (partial) {
-    outputs.push(await saveB64("streaming-generation-partial", partial.b64_json, outputDir));
-  } else {
-    console.log("Streaming generation completed without a partial image event; this is allowed when the final image is ready quickly.");
+async function requestStreamingEdit(outputDir, image) {
+  const form = new FormData();
+  for (const [key, value] of Object.entries({
+    ...commonFields(),
+    stream: true,
+    partial_images: 1
+  })) {
+    form.append(key, String(value));
   }
-  outputs.push(await saveB64("streaming-generation-final", completed.b64_json, outputDir));
-  return outputs;
+  form.append("prompt", "Turn the source into a simple icon while preserving the square composition.");
+  form.append("image[]", new Blob([image], { type: "image/png" }), "source-stream.png");
+
+  const response = await fetch(endpoint("/images/edits"), {
+    method: "POST",
+    headers: authHeaders({
+      accept: "text/event-stream"
+    }),
+    body: form
+  });
+
+  const events = await parseSseResponse(response, "streaming edit");
+  return saveStreamingOutputs("streaming-edit", "image_edit", events, outputDir);
 }
 
 async function requestEdit(outputDir, images, mask) {
@@ -266,8 +294,9 @@ async function main() {
   ];
   if (acceptStreamCost) {
     outputs.push(...(await requestStreamingGeneration(outputDir)));
+    outputs.push(...(await requestStreamingEdit(outputDir, sourceA)));
   } else {
-    console.log("Skipping real streaming acceptance. Set IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST=1 to add a streaming generation check.");
+    console.log("Skipping real streaming acceptance. Set IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST=1 to add streaming generation and edit checks.");
   }
 
   console.log("Real Image API acceptance passed.");
