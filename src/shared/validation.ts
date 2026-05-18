@@ -238,11 +238,24 @@ export function validateRunJobRequest(request: unknown): ValidationResult {
   if (request.inputPaths.length > MAX_GPT_IMAGE_INPUTS) {
     return { ok: false, message: `GPT Image 2 输入图片不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
   }
+  if (request.mode === "generate" && request.inputPaths.length > 0) {
+    return { ok: false, message: "文生图不应携带输入图片。" };
+  }
+  if ((request.mode === "edit" || request.mode === "inpaint") && request.inputPaths.length === 0) {
+    return { ok: false, message: request.mode === "inpaint" ? "局部重绘至少需要一张源图。" : "图像编辑至少需要一张源图。" };
+  }
   if (request.maskPath !== undefined && typeof request.maskPath !== "string") {
     return { ok: false, message: "Mask 路径无效。" };
   }
   if (request.maskDataUrl !== undefined && typeof request.maskDataUrl !== "string") {
     return { ok: false, message: "Mask 数据无效。" };
+  }
+  const hasMask = Boolean(request.maskPath || request.maskDataUrl);
+  if (request.mode !== "inpaint" && hasMask) {
+    return { ok: false, message: "只有局部重绘可以携带 mask。" };
+  }
+  if (request.mode === "inpaint" && !hasMask) {
+    return { ok: false, message: "局部重绘需要提供 mask。" };
   }
   return validateImageParams(request.params);
 }
