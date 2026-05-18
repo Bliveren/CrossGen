@@ -91,6 +91,9 @@ jobs:
       - name: Package Windows app
         run: pnpm package
 
+      - name: Verify Windows package
+        run: pnpm verify:release:windows
+
   linux-package:
     name: Linux package
     runs-on: ubuntu-latest
