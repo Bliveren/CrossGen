@@ -45,6 +45,12 @@ pnpm package:mac
 pnpm mock:openai
 ```
 
+或直接运行自动校验：
+
+```bash
+pnpm verify:mock-api
+```
+
 然后在应用里填写：
 - API Key: `sk-mock-image2tools`
 - Base URL: `http://127.0.0.1:8787/v1`

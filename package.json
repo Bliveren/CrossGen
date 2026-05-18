@@ -19,7 +19,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "start": "pnpm build:main && electron .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
+    "verify:mock-api": "node scripts/verify-mock-api.mjs"
   },
   "build": {
     "appId": "com.bliveren.image2tools",

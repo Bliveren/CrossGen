@@ -1,0 +1,127 @@
+#!/usr/bin/env node
+import { spawn } from "node:child_process";
+
+const port = Number(process.env.PORT ?? 8787);
+const host = process.env.HOST ?? "127.0.0.1";
+const baseURL = `http://${host}:${port}/v1`;
+const apiKey = "sk-mock-image2tools";
+const tinyPngPrefix = "iVBORw0KGgoAAAANSUhEUg";
+
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function startMockServer() {
+  const server = spawn(process.execPath, ["scripts/mock-openai-image-api.mjs"], {
+    cwd: process.cwd(),
+    env: { ...process.env, PORT: String(port), HOST: host },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  let output = "";
+  server.stdout.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+  server.stderr.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+
+  return { server, getOutput: () => output };
+}
+
+async function waitForServer() {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${baseURL}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+      if (response.ok) return;
+    } catch {
+      // Retry until the server is listening.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Mock server did not start at ${baseURL}`);
+}
+
+async function verifyModels() {
+  const response = await fetch(`${baseURL}/models`, {
+    headers: { Authorization: `Bearer ${apiKey}` }
+  });
+  assert(response.ok, `models failed with HTTP ${response.status}`);
+  const payload = await response.json();
+  assert(payload.data?.[0]?.id === "gpt-image-2", "models response did not include gpt-image-2");
+}
+
+async function verifyJsonGeneration() {
+  const response = await fetch(`${baseURL}/images/generations`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ model: "gpt-image-2", prompt: "mock generation", stream: false })
+  });
+  assert(response.ok, `json generation failed with HTTP ${response.status}`);
+  const payload = await response.json();
+  assert(payload.data?.[0]?.b64_json?.startsWith(tinyPngPrefix), "json generation did not return a PNG b64_json");
+}
+
+async function verifySseGeneration() {
+  const response = await fetch(`${baseURL}/images/generations`, {
+    method: "POST",
+    headers: {
+      accept: "text/event-stream",
+      Authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ model: "gpt-image-2", prompt: "mock stream", stream: true })
+  });
+  assert(response.ok, `sse generation failed with HTTP ${response.status}`);
+  const text = await response.text();
+  assert(text.includes("image_generation.partial_image"), "sse generation missing partial event");
+  assert(text.includes("image_generation.completed"), "sse generation missing completed event");
+  assert(text.includes(tinyPngPrefix), "sse generation missing PNG payload");
+}
+
+async function verifyMultipartEdit() {
+  const form = new FormData();
+  form.append("model", "gpt-image-2");
+  form.append("prompt", "mock edit");
+  form.append("stream", "false");
+  form.append("image[]", new Blob([Buffer.from("mock")], { type: "image/png" }), "source.png");
+
+  const response = await fetch(`${baseURL}/images/edits`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form
+  });
+  assert(response.ok, `multipart edit failed with HTTP ${response.status}`);
+  const payload = await response.json();
+  assert(payload.data?.[0]?.b64_json?.startsWith(tinyPngPrefix), "multipart edit did not return a PNG b64_json");
+}
+
+async function main() {
+  const { server, getOutput } = startMockServer();
+  try {
+    await waitForServer();
+    await verifyModels();
+    await verifyJsonGeneration();
+    await verifySseGeneration();
+    await verifyMultipartEdit();
+    console.log("Mock OpenAI Image API verification passed.");
+  } catch (error) {
+    console.error(getOutput());
+    throw error;
+  } finally {
+    server.kill("SIGTERM");
+  }
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});
