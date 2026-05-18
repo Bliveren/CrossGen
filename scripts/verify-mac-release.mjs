@@ -89,12 +89,19 @@ async function countWindowsForPid(pid) {
 }
 
 async function countWindowsForProcessName() {
-  const script = `tell application "System Events" to return count of windows of (first process whose name is "${processName}")`;
+  const script = `
+tell application "System Events"
+  set totalWindows to 0
+  repeat with candidate in (processes whose name is "${processName}")
+    set totalWindows to totalWindows + (count of windows of candidate)
+  end repeat
+  return totalWindows
+end tell`;
   const { stdout } = await run("osascript", ["-e", script]);
   return Number(stdout.trim()) || 0;
 }
 
-async function waitForMainWindow(initialPids, executablePath) {
+async function waitForMainWindow(initialPids, executablePath, baselineWindowCount) {
   const deadline = Date.now() + 10000;
   const pids = new Set(initialPids);
   let lastError;
@@ -112,7 +119,7 @@ async function waitForMainWindow(initialPids, executablePath) {
       }
     }
     try {
-      if ((await countWindowsForProcessName()) > 0) {
+      if ((await countWindowsForProcessName()) > baselineWindowCount) {
         return processName;
       }
     } catch (error) {
@@ -142,9 +149,10 @@ async function runInstallCycle(mountPoint, tempRoot, cycle) {
   await rm(appPath, { recursive: true, force: true });
   await cp(path.join(mountPoint, appName), appPath, { recursive: true });
   try {
+    const baselineWindowCount = await countWindowsForProcessName();
     await run("open", ["-n", appPath]);
     const pids = await waitForLaunch(executablePath);
-    const windowPid = await waitForMainWindow(pids, executablePath);
+    const windowPid = await waitForMainWindow(pids, executablePath, baselineWindowCount);
     console.log(`Cycle ${cycle}: launched ${appPath} with pid ${pids.join(",")} and showed a main window on pid ${windowPid}.`);
   } finally {
     await stopApp(executablePath);
