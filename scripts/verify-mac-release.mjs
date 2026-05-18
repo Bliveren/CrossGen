@@ -123,12 +123,15 @@ async function runInstallCycle(mountPoint, tempRoot, cycle) {
   const executablePath = path.join(appPath, appExecutable);
   await rm(appPath, { recursive: true, force: true });
   await cp(path.join(mountPoint, appName), appPath, { recursive: true });
-  await run("open", ["-n", appPath]);
-  const pids = await waitForLaunch(executablePath);
-  const windowPid = await waitForMainWindow(pids);
-  console.log(`Cycle ${cycle}: launched ${appPath} with pid ${pids.join(",")} and showed a main window on pid ${windowPid}.`);
-  await stopApp(executablePath);
-  await rm(appPath, { recursive: true, force: true });
+  try {
+    await run("open", ["-n", appPath]);
+    const pids = await waitForLaunch(executablePath);
+    const windowPid = await waitForMainWindow(pids);
+    console.log(`Cycle ${cycle}: launched ${appPath} with pid ${pids.join(",")} and showed a main window on pid ${windowPid}.`);
+  } finally {
+    await stopApp(executablePath);
+    await rm(appPath, { recursive: true, force: true });
+  }
 }
 
 async function main() {
