@@ -133,6 +133,31 @@ describe("OpenAI image service", () => {
     expect(form?.get("mask")).toBeInstanceOf(File);
   });
 
+  it("rejects mask requests when the source and mask formats differ", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
+    const sourcePath = path.join(tmpDir, "source.webp");
+    const maskPath = path.join(tmpDir, "mask.png");
+    await writeFile(sourcePath, Buffer.from(tinyPngBase64, "base64"));
+    await writeFile(maskPath, Buffer.from(tinyPngBase64, "base64"));
+    const source: InputAsset = { id: "source", name: "source.webp", path: sourcePath, mimeType: "image/webp", sizeBytes: 1 };
+    const mask: InputAsset = { id: "mask", name: "mask.png", path: maskPath, mimeType: "image/png", sizeBytes: 1 };
+    const { runtime } = await createRuntime((async () => Response.json({ data: [] })) as typeof fetch);
+
+    await expect(
+      runOpenAIImageJob(
+        job({
+          mode: "inpaint",
+          inputAssets: [source],
+          maskAsset: mask,
+          params: params({ stream: false })
+        }),
+        "sk-test-key",
+        "https://api.test/v1",
+        runtime
+      )
+    ).rejects.toThrow("Mask format must match the first source image.");
+  });
+
   it("parses streaming partial and final events", async () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {

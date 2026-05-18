@@ -547,7 +547,7 @@ async function handleSelectMask(): Promise<InputAsset | null> {
   const result = await dialog.showOpenDialog({
     title: "Select mask",
     properties: ["openFile"],
-    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }]
+    filters: [{ name: "Mask images with alpha", extensions: ["png", "webp"] }]
   });
 
   if (result.canceled || !result.filePaths[0]) return null;

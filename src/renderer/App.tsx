@@ -23,6 +23,10 @@ import {
 import {
   DEFAULT_BASE_URL,
   DEFAULT_IMAGE_PARAMS,
+  maskMimeTypeForSource,
+  mimeTypeFromDataUrl,
+  validateMaskMimeType,
+  validateMaskSourceFormat,
   getValidationError,
   validateGptImage2Size
 } from "../shared/validation";
@@ -150,14 +154,21 @@ async function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
-async function inspectMask(sourceDataUrl: string | undefined, maskDataUrl: string | undefined, maskMimeType?: string): Promise<MaskCheck> {
+async function inspectMask(
+  sourceDataUrl: string | undefined,
+  maskDataUrl: string | undefined,
+  maskMimeType?: string,
+  sourceMimeType?: string
+): Promise<MaskCheck> {
   if (!maskDataUrl) {
     return { ok: false, message: "Paint or upload a mask before inpaint." };
   }
 
-  if (maskMimeType && maskMimeType !== "image/png" && maskMimeType !== "image/webp") {
-    return { ok: false, message: "Mask must be PNG or WebP with alpha." };
-  }
+  const maskType = validateMaskMimeType(maskMimeType);
+  if (!maskType.ok) return { ok: false, message: maskType.message ?? "Mask format is invalid." };
+
+  const sourceFormat = validateMaskSourceFormat(sourceMimeType, maskMimeType);
+  if (!sourceFormat.ok) return { ok: false, message: sourceFormat.message ?? "Mask format is invalid." };
 
   const mask = await loadImage(maskDataUrl);
   if (sourceDataUrl) {
@@ -195,7 +206,7 @@ async function inspectMask(sourceDataUrl: string | undefined, maskDataUrl: strin
     return { ok: false, message: "Mask needs an alpha channel with transparent areas." };
   }
 
-  return { ok: true, message: "Mask size and alpha look valid." };
+  return { ok: true, message: "Mask format, size, and alpha look valid." };
 }
 
 export function App() {
@@ -310,7 +321,7 @@ export function App() {
     }
 
     let cancelled = false;
-    inspectMask(source, mask, maskAsset?.mimeType)
+    inspectMask(source, mask, maskAsset?.mimeType ?? mimeTypeFromDataUrl(mask) ?? "image/png", inputAssets[0]?.mimeType)
       .then((result) => {
         if (!cancelled) setMaskCheck(result);
       })
@@ -321,7 +332,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [maskAsset?.mimeType, maskPreview, mode, sourcePreview]);
+  }, [inputAssets, maskAsset?.mimeType, maskPreview, mode, sourcePreview]);
 
   async function refreshSnapshot() {
     if (!bridge) return;
@@ -638,7 +649,7 @@ export function App() {
     const canvas = maskCanvasRef.current;
     if (canvas && paintedDuringStrokeRef.current) {
       markDraftChanged();
-      setMaskDataUrl(canvas.toDataURL("image/png"));
+      setMaskDataUrl(canvas.toDataURL(maskMimeTypeForSource(inputAssets[0]?.mimeType)));
       setMaskAsset(null);
     }
   }

@@ -2,7 +2,13 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { GenerationJob, ImageAsset, ImageParams, InputAsset, JobProgressEvent, UsageDetails } from "../../shared/types.js";
-import { extensionForFormat, mimeTypeForFormat, shouldSendCompression } from "../../shared/validation.js";
+import {
+  extensionForFormat,
+  mimeTypeForFormat,
+  shouldSendCompression,
+  validateMaskMimeType,
+  validateMaskSourceFormat
+} from "../../shared/validation.js";
 
 export interface ImagesResponse {
   data?: Array<{ b64_json?: string; revised_prompt?: string }>;
@@ -137,6 +143,16 @@ async function runEdit(
   }
   if (job.mode === "inpaint" && !job.maskAsset) {
     throw new Error("局部重绘需要提供 mask。");
+  }
+  if (job.maskAsset) {
+    const maskType = validateMaskMimeType(job.maskAsset.mimeType);
+    if (!maskType.ok) {
+      throw new Error(maskType.message ?? "Mask format is invalid.");
+    }
+    const sourceFormat = validateMaskSourceFormat(job.inputAssets[0]?.mimeType, job.maskAsset.mimeType);
+    if (!sourceFormat.ok) {
+      throw new Error(sourceFormat.message ?? "Mask format is invalid.");
+    }
   }
 
   const form = new FormData();

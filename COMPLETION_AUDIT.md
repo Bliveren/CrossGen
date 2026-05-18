@@ -19,7 +19,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Simple parameter config | Size, quality, format, compression, count, stream, partial images, moderation, timeout controls in renderer | Done |
 | `gpt-image-2` defaults and limits | `DEFAULT_IMAGE_PARAMS`, size validation, background enum, no transparent or `input_fidelity` in `src/shared/validation.ts` and `src/shared/types.ts` | Done |
 | Text-to-image generation | `/images/generations` implementation and tests in `src/main/services/openaiImage.ts` / `.test.ts` | Implemented; real API manual run pending |
-| Image edit and inpaint | `/images/edits`, multipart `image[]`, mask support, renderer mode switching and mask editor | Implemented; real API manual run pending |
+| Image edit and inpaint | `/images/edits`, multipart `image[]`, mask support, renderer mode switching, mask editor, and mask/source size, format, and alpha validation | Implemented; real API manual run pending |
 | Streaming partial previews | SSE parsing and partial event handling in main + renderer; covered by tests | Done |
 | Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected asset | Done |
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
@@ -112,6 +112,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `git stash drop stash@{0}` and `git stash list`: local duplicate stash was dropped after archive verification; no local stash entries remain.
 - `mcp__openaiDeveloperDocs__.fetch_openai_doc` for `https://developers.openai.com/api/docs/guides/image-generation`: current official guide confirms Image API generation/edit endpoints, `gpt-image-2` examples, streaming `partial_images: 0..3`, mask requirements, base64 output, output customization, `gpt-image-2` size limits, no transparent background, no `input_fidelity`, organization verification, and partial image token cost.
 - `mcp__openaiDeveloperDocs__.get_openapi_spec` for `https://api.openai.com/v1/images/generations` and `https://api.openai.com/v1/images/edits`: endpoint metadata confirms JSON generation, multipart edit uploads, JSON edit support, streaming event response types, and image response schemas.
+- PR #31 aligned inpaint mask handling with the current official Image API mask requirements by enforcing PNG/WebP mask types, source/mask format compatibility, and request-layer rejection for mismatches; local `pnpm build` and `pnpm verify:mock-api` passed before merge.
 
 ## Remaining External Work
 

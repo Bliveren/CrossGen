@@ -109,6 +109,43 @@ export function validateImageParams(params: ImageParams): ValidationResult {
   return { ok: true };
 }
 
+export function normalizeImageMimeType(mimeType?: string): string {
+  const normalized = mimeType?.trim().toLowerCase() ?? "";
+  if (normalized === "image/jpg") return "image/jpeg";
+  return normalized;
+}
+
+export function validateMaskMimeType(maskMimeType?: string): ValidationResult {
+  const normalizedMask = normalizeImageMimeType(maskMimeType);
+  if (!normalizedMask) return { ok: true };
+  if (normalizedMask !== "image/png" && normalizedMask !== "image/webp") {
+    return { ok: false, message: "Mask must be PNG or WebP with alpha." };
+  }
+  return { ok: true };
+}
+
+export function validateMaskSourceFormat(sourceMimeType?: string, maskMimeType?: string): ValidationResult {
+  const normalizedSource = normalizeImageMimeType(sourceMimeType);
+  const normalizedMask = normalizeImageMimeType(maskMimeType);
+  if (!normalizedSource || !normalizedMask) return { ok: true };
+  if (normalizedSource !== "image/png" && normalizedSource !== "image/webp") {
+    return { ok: false, message: "Mask-based inpaint requires the first source image to be PNG or WebP." };
+  }
+  if (normalizedSource !== normalizedMask) {
+    return { ok: false, message: "Mask format must match the first source image." };
+  }
+  return { ok: true };
+}
+
+export function mimeTypeFromDataUrl(dataUrl: string): string | null {
+  const match = /^data:([^;]+);base64,/.exec(dataUrl);
+  return match ? normalizeImageMimeType(match[1]) : null;
+}
+
+export function maskMimeTypeForSource(sourceMimeType?: string): "image/png" | "image/webp" {
+  return normalizeImageMimeType(sourceMimeType) === "image/webp" ? "image/webp" : "image/png";
+}
+
 export function shouldSendCompression(format: ImageFormat): boolean {
   return format === "jpeg" || format === "webp";
 }

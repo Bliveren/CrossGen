@@ -4,13 +4,18 @@ import {
   dataUrlToBase64,
   extensionForFormat,
   getValidationError,
+  maskMimeTypeForSource,
   mimeTypeForFormat,
+  mimeTypeFromDataUrl,
   normalizeBaseURL,
+  normalizeImageMimeType,
   redactSecret,
   validateApiKey,
   shouldSendCompression,
   validateGptImage2Size,
-  validateImageParams
+  validateImageParams,
+  validateMaskMimeType,
+  validateMaskSourceFormat
 } from "./validation";
 
 describe("gpt-image-2 validation", () => {
@@ -56,6 +61,21 @@ describe("gpt-image-2 validation", () => {
     expect(extensionForFormat("jpeg")).toBe("jpg");
     expect(dataUrlToBase64("data:image/png;base64,abc123")).toBe("abc123");
     expect(dataUrlToBase64("abc123")).toBe("abc123");
+  });
+
+  it("validates mask MIME type and source format compatibility", () => {
+    expect(normalizeImageMimeType(" image/JPG ")).toBe("image/jpeg");
+    expect(validateMaskMimeType("image/png").ok).toBe(true);
+    expect(validateMaskMimeType("image/webp").ok).toBe(true);
+    expect(validateMaskMimeType("image/jpeg").ok).toBe(false);
+    expect(validateMaskSourceFormat("image/png", "image/png").ok).toBe(true);
+    expect(validateMaskSourceFormat("image/jpeg", "image/jpg").ok).toBe(false);
+    expect(validateMaskSourceFormat("image/webp", "image/png").ok).toBe(false);
+    expect(validateMaskSourceFormat("image/jpeg", "image/png").ok).toBe(false);
+    expect(mimeTypeFromDataUrl("data:image/webp;base64,abc123")).toBe("image/webp");
+    expect(mimeTypeFromDataUrl("abc123")).toBeNull();
+    expect(maskMimeTypeForSource("image/webp")).toBe("image/webp");
+    expect(maskMimeTypeForSource("image/jpeg")).toBe("image/png");
   });
 
   it("redacts secrets without leaking middle content", () => {
