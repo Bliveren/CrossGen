@@ -15,6 +15,7 @@
 - [ARCHITECTURE.md](./ARCHITECTURE.md): 技术架构、数据流、模块拆分
 - [TODO.md](./TODO.md): 可直接执行的任务清单
 - [CHECKLIST.md](./CHECKLIST.md): 开发与发布检查清单
+- [COMPLETION_AUDIT.md](./COMPLETION_AUDIT.md): 当前交付证据、验证命令和外部待办
 
 ## 本地运行
 
