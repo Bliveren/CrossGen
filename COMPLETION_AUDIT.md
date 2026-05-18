@@ -2,8 +2,8 @@
 
 Date: 2026-05-18
 Branch: `main`
-Runtime/config evidence through: `d701ae8`
-Release and external-blocker evidence through: `d701ae8`
+Runtime/config evidence through: `fix/cto-param-enum-validation` pre-merge
+Release and external-blocker evidence through: `a4f93f2`
 
 ## Objective Restated
 
@@ -17,7 +17,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | API key entry, local save, and clear | Provider form in `src/renderer/App.tsx`; encrypted storage and `config:clearApiKey` via Electron `safeStorage` in `src/main/main.ts` | Done |
 | Base URL entry and connection test | `baseURL` config in renderer; `/models` connection test via `handleTestConnection` | Done |
 | Simple parameter config | Size, quality, format, compression, count, stream, partial images, moderation, timeout controls in renderer | Done |
-| `gpt-image-2` defaults and limits | `DEFAULT_IMAGE_PARAMS`, size validation, background enum, no transparent or `input_fidelity` in `src/shared/validation.ts` and `src/shared/types.ts` | Done |
+| `gpt-image-2` defaults and limits | `DEFAULT_IMAGE_PARAMS`, size validation, runtime enum validation for quality/format/background/moderation, no transparent or `input_fidelity` in `src/shared/validation.ts` and `src/shared/types.ts` | Done |
 | Text-to-image generation | `/images/generations` implementation and tests in `src/main/services/openaiImage.ts` / `.test.ts`, including saving multiple returned images when `n > 1` | Implemented; real API manual run pending |
 | Image edit and inpaint | `/images/edits`, multipart `image[]`, mask support, renderer mode switching, mask editor, mask/source size, format, and alpha validation, plus service tests for advanced edit parameter transmission | Implemented; real API manual run pending |
 | Streaming partial previews | SSE parsing and partial event handling in main + renderer; covered by tests | Done |
@@ -25,7 +25,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
 | Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, SSE events, and a mock request-inspection route; `pnpm verify:mock-api` probes models, JSON generation with Image 2 parameter assertions, streaming generation, multipart edit with Image 2 parameter assertions, multi-image mask edit/inpaint, and streaming edit | Done |
-| Tests | `pnpm build` passed with 4 test files and 21 tests on `d701ae8` | Done |
+| Tests | `pnpm build` passed with 4 test files and 24 tests on `fix/cto-param-enum-validation` pre-merge | Done |
 | Packaging | `electron-builder` config includes main, preload, shared, and renderer runtime outputs; project icons in `build/`; `pnpm package:dir`; `pnpm package:mac`; local app; dmg-copy launch; two-cycle reinstall smoke tests; `pnpm verify:release:mac` confirms the app process and main window; private GitHub pre-release `v0.1.0-mac-unsigned` | Done for unsigned macOS local/pre-release artifacts |
 | Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR/manual dispatch; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
@@ -54,6 +54,8 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for current `main` at `06394ad`; Vitest reported 4 test files and 21 tests passed.
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for current `main` at `033e888`; Vitest reported 4 test files and 21 tests passed.
 - `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for current `main` at `d701ae8`; Vitest reported 4 test files and 21 tests passed.
+- `pnpm vitest run src/shared/validation.test.ts`: passed on 2026-05-18 for `fix/cto-param-enum-validation` pre-merge; Vitest reported 1 test file and 9 tests passed, including runtime rejection of invalid quality, output format, background, and moderation values.
+- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for `fix/cto-param-enum-validation` pre-merge; Vitest reported 4 test files and 24 tests passed.
 - `pnpm package:dir`: unsigned macOS app directory regenerated successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
 - `open -n release/mac-arm64/Image2Tools.app`: packaged app launched on 2026-05-18 after `8a69b39`; process was observed, then the smoke-test process was terminated after AppleScript quit was not handled by the app.
 - `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg`, `.zip`, and blockmaps successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
@@ -118,8 +120,10 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `06394ad`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `033e888`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `d701ae8`.
+- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `fix/cto-param-enum-validation` pre-merge.
 - PR #46 extends the mock OpenAI server with request inspection and updates `pnpm verify:mock-api` to assert key Image 2 parameters on JSON generation and multipart edit requests: size, quality, output format, output compression, background, count, and moderation.
 - PR #47 adds service-level tests that verify all returned generation images are saved for multi-result responses and advanced Image 2 parameters are passed through multipart edit requests.
+- `fix/cto-param-enum-validation` adds shared runtime allow-list validation for `quality`, `outputFormat`, `background`, and `moderation`, so malformed persisted state or direct IPC payloads are rejected before OpenAI request construction.
 - `pnpm verify:real-api`: without an API key, exits before making real API calls.
 - `pnpm verify:real-api`: on current `971998b`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
 - `pnpm verify:real-api`: on current `06394ad`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set; issue #1 was updated with this current blocker evidence.
