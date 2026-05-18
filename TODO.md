@@ -102,7 +102,7 @@ GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 - [x] 发布 unsigned macOS arm64 试用包到 private GitHub pre-release
 - [x] 增加 GitHub Actions CI（build、mock verifier、macOS / Windows / Linux package）
 - [x] 增加受成本保护的真实 API 验收脚本
-- [x] 增加受额外成本确认保护的真实 streaming 验收路径
+- [x] 增加受额外成本确认保护的真实 streaming 生成/编辑验收路径
 - [x] 增加 macOS 签名/公证 readiness 检查脚本
 - [ ] 解除 GitHub Actions billing/spending limit 阻塞并取得绿色 CI（GitHub issue #5）
 - [ ] 补充签名、公证与正式分发元数据（GitHub issue #3）
