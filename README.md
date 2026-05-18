@@ -40,6 +40,9 @@ GitHub Actions 已配置基础 CI：push / PR 到 `main` 时跑 build、mock API
 
 打包图标位于 `build/icon.icns`、`build/icon.ico` 和 `build/icon.png`，源自 `public/favicon.svg`。
 
+当前 unsigned macOS arm64 试用包已发布到 private GitHub pre-release：
+https://github.com/Bliveren/image2tools/releases/tag/v0.1.0-mac-unsigned
+
 ## Mock API 验证
 
 没有真实 API Key 时，可以先启动本地 mock：

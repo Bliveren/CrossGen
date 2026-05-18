@@ -25,7 +25,7 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
 | Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, and SSE events; `pnpm verify:mock-api` probes all mock routes | Done |
 | Tests | `pnpm build` passed with 3 test files and 15 tests | Done |
-| Packaging | `electron-builder` config, project icons in `build/`, `pnpm package:dir`, `pnpm package:mac`, local app, dmg-copy launch, two-cycle reinstall smoke tests, and `pnpm verify:release:mac` automation | Done for unsigned macOS local artifacts |
+| Packaging | `electron-builder` config, project icons in `build/`, `pnpm package:dir`, `pnpm package:mac`, local app, dmg-copy launch, two-cycle reinstall smoke tests, `pnpm verify:release:mac` automation, and private GitHub pre-release `v0.1.0-mac-unsigned` | Done for unsigned macOS local/pre-release artifacts |
 | Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR to `main`; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | CTO worktree cleanup | `git worktree list` shows only main worktree | Done |
@@ -48,6 +48,11 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `hdiutil attach ...`, copy `Image2Tools.app` to `/tmp/Image2Tools-current-dmg-test.*`, `open -n ...`: current dmg install-style smoke test launched successfully on 2026-05-18 after `f9fe082`; test process, mount point, and temp directory were cleaned up.
 - `hdiutil attach ...`, copy/run/remove/copy/run/remove in `/tmp/Image2Tools-current-reinstall-test.*`: current dmg two-cycle macOS uninstall/reinstall smoke test passed on 2026-05-18 after `7da178b`; test processes, mount point, and temp directory were cleaned up.
 - `pnpm verify:release:mac`: automated macOS dmg verification passed on 2026-05-18 for the `659b0c4` tree; it mounted the current dmg, copied the app to a temp directory, launched it twice, removed it twice, detached the dmg, and cleaned temp files.
+- `pnpm package:mac`: regenerated current unsigned macOS dmg/zip on 2026-05-18 before creating GitHub pre-release `v0.1.0-mac-unsigned`.
+- `pnpm verify:release:mac`: automated macOS dmg verification passed on 2026-05-18 before creating GitHub pre-release `v0.1.0-mac-unsigned`.
+- `gh release create v0.1.0-mac-unsigned ... --prerelease --latest=false`: uploaded `Image2Tools-0.1.0-mac-arm64.dmg` and `.zip` to private GitHub pre-release.
+- `gh release view v0.1.0-mac-unsigned --json ...`: release is private repo pre-release with both assets uploaded.
+- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: local SHA256 values match GitHub asset digests (`8c6190d3225929c26c2946dd9596db306d2c6a9be909ada51e64a427ae45adf9` for dmg, `027c415c7b9a59011d42ee6cca309122c52921b2b0706376df795d96eec99842` for zip).
 - `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `947450a` tree.
 - `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `7b3b9bc` tree.
