@@ -1,10 +1,10 @@
 # Image2Tools Completion Audit
 
-Date: 2026-05-18
+Date: 2026-05-19
 Branch: `main`
-Runtime/config evidence through: latest runtime-affecting `main` at `7e33313`
+Runtime/config evidence through: latest runtime-affecting `main` at `5d93e44`
 Release evidence through: refreshed private macOS preview assets documented on merged `main` at `1d8e215`
-Audit and blocker-tracking evidence through: merged `main` at `7e33313`
+Audit and blocker-tracking evidence through: merged `main` at `5d93e44`
 Note: docs-only audit merges may advance `main` without changing runtime,
 release artifacts, or external blocker status; the evidence rows below call out
 that distinction explicitly.
@@ -29,13 +29,13 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 | History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
 | Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
 | Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, SSE events, and a mock request-inspection route; `pnpm verify:mock-api` probes models, JSON generation with Image 2 parameter assertions, streaming generation, multipart edit with Image 2 parameter assertions, multi-image mask edit/inpaint with `image[]` and `mask` field assertions, and streaming edit | Done |
-| Tests | `pnpm vitest run src/shared/validation.test.ts`, `pnpm build`, `pnpm verify:mock-api`, and `git diff --check` passed for PR #55; after merge, `pnpm build`, `pnpm verify:mock-api`, and `git diff --check` passed on merged `main` at `88721c4` with 4 test files and 28 tests | Done |
+| Tests | `pnpm vitest run src/shared/validation.test.ts`, `pnpm build`, `pnpm verify:mock-api`, and `git diff --check` passed for PR #67; after merge, the same local replacement gates passed on merged `main` at `5d93e44` with 4 test files and 28 tests | Done |
 | Packaging | `electron-builder` config includes main, preload, shared, and renderer runtime outputs; project icons in `build/`; `pnpm package:dir`; `pnpm package:mac`; local app; dmg-copy launch; two-cycle reinstall smoke tests; `pnpm verify:release:mac` uses `ditto` for app bundle copying, verifies copied app signatures, and confirms the app process and main window through CoreGraphics window enumeration; private GitHub pre-release `v0.1.0-mac-unsigned` | Done for ad-hoc signed, unnotarized macOS local/pre-release artifacts |
 | Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR/manual dispatch; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
 | Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
 | External acceptance runbook | `EXTERNAL_ACCEPTANCE.md` consolidates the remaining real API, signing/notarization, Windows/Linux, and CI billing gates with commands and evidence requirements | Done |
-| CTO worktree cleanup | After PR #55, stale worktrees and local/remote feature branches were pruned; `git worktree list` showed only the main worktree before this audit-refresh branch was opened | Done |
-| Clean main worktree | `git status --short --branch` showed clean and synced `main` at `fda838d` before this audit-refresh branch was opened | Done |
+| CTO worktree cleanup | After PR #67, the feature worktree and local/remote feature branches were pruned; `git worktree list` showed only the main worktree before this audit-refresh branch was opened | Done |
+| Clean main worktree | `git status --short --branch` showed clean and synced `main` at `5d93e44` before this audit-refresh branch was opened | Done |
 | Abandoned renderer stash | `stash@{0}` inspected; touched only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; archived non-destructively to `origin/archive/abandoned-renderer-stash`; local stash dropped after verifying the archive commit matched | Resolved; tracked in GitHub issue #2 |
 | Remote/PR parity | private GitHub `origin` configured at `https://github.com/Bliveren/image2tools.git`; `main` pushed and tracks `origin/main`; `git ls-remote --heads origin main` matches local pushed history | Done for current `main`; future subtask branches can use PR flow |
 | Official OpenAI docs parity | Current OpenAI Image Generation guide and OpenAPI endpoint metadata confirm `gpt-image-2`, `/images/generations`, `/images/edits`, base64 output, streaming partial images, up to 16 input/reference images for GPT image edit requests, mask-first-image behavior for multi-image masks, mask requirements, size/format/quality/compression/background/moderation parameters, no transparent background for `gpt-image-2`, and omitted `input_fidelity` for `gpt-image-2`; docs also note GPT Image organization verification and extra partial-image token cost | Done |
@@ -260,6 +260,10 @@ Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save
 - `pnpm vitest run src/shared/validation.test.ts`, `pnpm verify:mock-api`, `pnpm build`, and `git diff --check` passed on the run-request mode validation branch before PR review.
 - `fix/cto-run-request-mask-source-validation` hardens shared job-run IPC validation so direct payloads with non-image input paths, non-PNG/WebP mask paths, JPEG mask data URLs, or malformed mask data URLs are rejected before main persists mask files or creates jobs.
 - `pnpm vitest run src/shared/validation.test.ts`, `pnpm verify:mock-api`, `pnpm build`, and `git diff --check` passed on the run-request mask/source validation branch before PR review.
+- PR #67 merged the run-request mask/source validation hardening into `main` as `5d93e446c7677b7f3ca93cb592c23d431118cb64`.
+- On merged `main` at `5d93e44`, `pnpm vitest run src/shared/validation.test.ts` passed with 1 test file and 13 tests, `pnpm verify:mock-api` passed, `pnpm build` passed with 4 test files and 28 tests followed by renderer and main builds, and `git diff --check HEAD` passed.
+- PR #67 run `26045242531` and post-merge main run `26045333738` both failed before any workflow step executed; all four jobs had empty `steps: []`, no runner name, and check annotations repeated the GitHub account payment/spending-limit message tracked in issue #5 rather than a repository-code failure.
+- After PR #67, `git status --short --branch` showed clean synced `main`, `gh pr list --state open` returned `[]`, `git worktree list` showed only `/Users/alive/projects/image2tools`, and the local/remote `fix/cto-run-request-mask-source-validation` branch was removed.
 
 ## Remaining External Work
 
