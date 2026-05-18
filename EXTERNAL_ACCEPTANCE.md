@@ -90,8 +90,9 @@ Prerequisites:
 - Apple notarization credentials available only through local env vars or CI
   secrets
 - Signing/notarization readiness passing locally. The default `pnpm package:mac`
-  path intentionally remains unsigned; use `pnpm package:mac:signed` for the
-  signed/notarized release path.
+  path intentionally remains ad-hoc signed and unnotarized for local preview;
+  use `pnpm package:mac:signed` for the Developer ID signed/notarized release
+  path.
 
 Use the required CTO branch/worktree flow before producing signed release
 evidence or changing release config:

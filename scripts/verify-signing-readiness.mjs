@@ -45,10 +45,15 @@ async function main() {
   const signedPackageScript = String(scripts["package:mac:signed"] ?? "");
   const hasSignedPackageOverride =
     signedPackageScript.includes("-c.mac.identity") && signedPackageScript.includes("-c.mac.notarize=true");
-  if (macConfig.identity === null && !hasSignedPackageOverride) {
+  if ((macConfig.identity === null || macConfig.identity === "-") && !hasSignedPackageOverride) {
     checks.push({
       ok: false,
-      message: "package.json sets build.mac.identity to null and does not provide a signed/notarized packaging override."
+      message: "package.json does not provide a Developer ID signed/notarized packaging override."
+    });
+  } else if (macConfig.identity === "-") {
+    checks.push({
+      ok: true,
+      message: "package.json uses ad-hoc signing for local preview builds and provides package:mac:signed to override mac.identity and enable notarization."
     });
   } else if (macConfig.identity === null) {
     checks.push({
