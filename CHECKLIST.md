@@ -7,6 +7,7 @@
 - [ ] 高级参数默认折叠
 - [ ] 参考图与 mask 入口明确
 - [ ] 失败提示用户可理解
+- [ ] `gpt-image-2` 的不可用能力没有出现在 UI 中
 
 ## 2. 安全检查
 
@@ -23,6 +24,8 @@
 - [ ] 终图可保存到本地
 - [ ] 可选择 PNG / JPEG / WEBP
 - [ ] 可配置质量和尺寸
+- [ ] 自定义尺寸校验符合 `gpt-image-2` 约束
+- [ ] 流式 `partial_images` 配置范围限制为 0..3
 - [ ] 超时提示清晰
 
 ## 4. 编辑流程检查
@@ -33,6 +36,7 @@
 - [ ] mask 尺寸校验生效
 - [ ] mask alpha 通道校验生效
 - [ ] 编辑结果可下载
+- [ ] 多图编辑时 mask 只应用到第一张图的提示清晰
 
 ## 5. 体验检查
 
@@ -50,6 +54,8 @@
 - [ ] 文件读写统一
 - [ ] 本地数据结构有版本号
 - [ ] 有基础单元测试
+- [ ] main / preload / renderer 的 IPC 类型一致
+- [ ] OpenAI 请求层有无真实 Key 的可测试路径
 
 ## 7. 发布前检查
 
@@ -76,3 +82,12 @@
 - [ ] 无效 Key 时能立即失败
 - [ ] 生成历史可恢复
 
+## 9. GPT Image 2 API 检查
+
+- [ ] 默认模型为 `gpt-image-2`
+- [ ] 文生图调用 `/v1/images/generations`
+- [ ] 编辑调用 `/v1/images/edits`
+- [ ] 结果按 base64 图像保存
+- [ ] `background` 只允许 `auto` / `opaque`
+- [ ] `output_compression` 仅在 `jpeg` / `webp` 时发送
+- [ ] `stream` 开启时处理 partial 与 completed 事件

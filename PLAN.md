@@ -97,6 +97,14 @@
 | Phase 4 | 历史与体验 | 历史列表、搜索、复制 prompt、快捷操作 | 可以回看并复用任务 |
 | Phase 5 | 稳定性与发布 | 测试、打包、日志、异常恢复 | 可交付试用版 |
 
+## 6.1 当前执行策略
+
+- 本仓库已从规划目录升级为实现仓库，集成分支为 `main`。
+- 所有提交使用 `Bliveren <aliveren_89@foxmail.com>`。
+- 当前目录尚未配置 `origin` 远程；在远程补齐前，子任务以本地分支 + 本地 worktree + CTO 审核合并替代 PR。
+- 远程补齐后，再恢复“分支推送 -> PR -> CTO 审核 -> 合并”的完整流程。
+- 本轮优先交付可运行 MVP：配置、连接测试、文生图、图像编辑、mask 编辑、下载、历史、错误提示、基础测试。
+
 ## 7. 里程碑拆解
 
 ### Phase 0: 需求冻结
@@ -182,7 +190,12 @@
 - 只在未来版本考虑 Responses API 的对话式 image tool
 - 默认输出格式优先 PNG
 - 请求超时设置要高于复杂生成耗时，建议 180-300 秒
-- 透明背景先不作为默认能力，因为 `gpt-image-2` 当前不支持
+- `gpt-image-2` 当前不支持透明背景，UI 只提供 `auto` 和 `opaque`
+- `gpt-image-2` 输出固定为 base64 图像数据，不依赖短期 URL
+- `gpt-image-2` 支持 `png` / `jpeg` / `webp` 输出；`jpeg` / `webp` 支持 `output_compression`
+- `gpt-image-2` 支持 `stream: true` 和 `partial_images: 0..3`
+- `gpt-image-2` 支持灵活尺寸，宽高必须为 16 的倍数、比例不超过 3:1、最长边不超过 3840、总像素在 655360 到 8294400 之间
+- mask 编辑要求源图和 mask 格式、尺寸一致且小于 50MB，mask 必须包含 alpha 通道
 
 ## 9. 风险与应对
 
@@ -207,4 +220,3 @@
 - [Image tool options](https://developers.openai.com/api/docs/guides/tools-image-generation#tool-options)
 - [Create image](https://developers.openai.com/api/docs/api-reference/images/create)
 - [Create image edit](https://developers.openai.com/api/docs/api-reference/images/createEdit)
-
