@@ -342,6 +342,26 @@ describe("OpenAI image service", () => {
 
     await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime)).rejects.toThrow("sk-...redacted");
   });
+
+  it("redacts API keys from JSON and streaming API errors", async () => {
+    const jsonFetch = (async () =>
+      Response.json({ error: { message: "failed for sk-abcdefghijklmnopqrstuvwxyz" } }, { status: 401 })) as typeof fetch;
+    const { runtime: jsonRuntime } = await createRuntime(jsonFetch);
+
+    await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", jsonRuntime)).rejects.toThrow("sk-...redacted");
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode('data: {"error":{"message":"failed for sk-abcdefghijklmnopqrstuvwxyz"}}\n\n'));
+        controller.close();
+      }
+    });
+    const streamFetch = (async () => new Response(stream, { headers: { "content-type": "text/event-stream" } })) as typeof fetch;
+    const { runtime: streamRuntime } = await createRuntime(streamFetch);
+
+    await expect(runOpenAIImageJob(job({ params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", streamRuntime)).rejects.toThrow("sk-...redacted");
+  });
 });
 
 async function sourceAsset(): Promise<InputAsset> {

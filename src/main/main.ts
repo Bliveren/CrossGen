@@ -363,7 +363,7 @@ async function readApiError(response: Response): Promise<string> {
     if (contentType.includes("application/json")) {
       const payload = (await response.json()) as ApiErrorPayload;
       const message = payload.error?.message ?? payload.error?.code ?? payload.error?.type;
-      return message ? `OpenAI API 请求失败：${message}${requestSuffix}` : fallback;
+      return message ? `OpenAI API 请求失败：${redactLikelySecrets(message)}${requestSuffix}` : fallback;
     }
 
     const text = await response.text();
