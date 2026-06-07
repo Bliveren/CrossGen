@@ -2,278 +2,76 @@
 
 Date: 2026-05-19
 Branch: `main`
-Runtime/config evidence through: latest runtime-affecting `main` at `5d93e44`
-Release evidence through: refreshed private macOS preview assets documented on merged `main` at `1d8e215`
-Audit and blocker-tracking evidence through: merged `main` at `ec4289c`
-Note: docs-only audit merges may advance `main` without changing runtime,
-release artifacts, or external blocker status; the evidence rows below call out
-that distinction explicitly.
 
 ## Objective Restated
 
-Deliver a simple Electron desktop tool for `gpt-image-2` that lets the user save an Image 2 API key and base URL, configure common parameters, generate images, edit images, perform mask-based inpainting, download outputs, and reuse local history. Keep `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, and `CHECKLIST.md` current. Use CTO-style branch/worktree governance where possible.
+Deliver a simple Electron desktop tool for `gpt-image-2` that lets users save an
+Image API key and Base URL, configure common parameters, generate images, edit
+images, perform mask-based inpainting, download outputs, reuse local history,
+package the app for desktop platforms, and publish the code under the MIT
+license without leaking secrets or private local artifacts.
 
 ## Evidence Checklist
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
 | Desktop app foundation | `package.json`, `src/main/main.ts`, `src/preload/preload.ts`, `src/renderer/App.tsx`; `pnpm build` passes | Done |
-| API key entry, local save, and clear | Provider form in `src/renderer/App.tsx`; encrypted storage and `config:clearApiKey` via Electron `safeStorage` in `src/main/main.ts`; runtime API key shape validation in `src/shared/validation.ts` | Done |
-| Base URL entry and connection test | `baseURL` config in renderer; `/models` connection test via `handleTestConnection`; runtime Base URL normalization handles malformed values safely | Done |
-| Simple parameter config | Size, quality, format, compression, count, stream, partial images, moderation, timeout controls in renderer | Done |
-| `gpt-image-2` defaults and limits | `DEFAULT_IMAGE_PARAMS`, size validation, 16 input/reference image cap, runtime shape validation, enum validation for quality/format/background/moderation, finite integer validation for count-like parameters, no transparent or `input_fidelity` in `src/shared/validation.ts` and `src/shared/types.ts` | Done |
-| Text-to-image generation | `/images/generations` implementation and tests in `src/main/services/openaiImage.ts` / `.test.ts`, including saving multiple returned images when `n > 1` | Implemented; real API manual run pending |
-| Image edit and inpaint | `/images/edits`, multipart `image[]`, mask support, renderer mode switching, 16-image reference cap, mask editor, mask/source size, format, and alpha validation, plus service tests for advanced edit parameter transmission | Implemented; real API manual run pending |
-| Streaming partial previews | SSE parsing and partial event handling in main + renderer; covered by tests | Done |
-| Local file save and download | Base64 output saved under Electron `userData`; download dialog copies selected generated asset; main-process IPC rejects malformed job/draft payloads, mode/input/mask mismatches, non-image input paths, non-PNG/WebP mask paths, and malformed mask data URLs before path, mask persistence, job, or asset handling, and rejects download/open/delete paths outside the app image store or current history | Done |
-| History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, clear | Done |
-| Recovery | Atomic state writes with `.bak`, interrupted job recovery, workspace draft autosave/restore | Done |
-| Local no-key integration path | `pnpm mock:openai` serves `/models`, `/images/generations`, `/images/edits`, JSON results, SSE events, and a mock request-inspection route; `pnpm verify:mock-api` probes models, JSON generation with Image 2 parameter assertions, streaming generation, multipart edit with Image 2 parameter assertions, multi-image mask edit/inpaint with `image[]` and `mask` field assertions, and streaming edit | Done |
-| Tests | `pnpm vitest run src/shared/validation.test.ts`, `pnpm build`, `pnpm verify:mock-api`, and `git diff --check` passed for PR #67; after merge, the same local replacement gates passed on merged `main` at `5d93e44` with 4 test files and 28 tests | Done |
-| Packaging | `electron-builder` config includes main, preload, shared, and renderer runtime outputs; project icons in `build/`; `pnpm package:dir`; `pnpm package:mac`; local app; dmg-copy launch; two-cycle reinstall smoke tests; `pnpm verify:release:mac` uses `ditto` for app bundle copying, verifies copied app signatures, and confirms the app process and main window through CoreGraphics window enumeration; private GitHub pre-release `v0.1.0-mac-unsigned` | Done for ad-hoc signed, unnotarized macOS local/pre-release artifacts |
-| Remote CI | `.github/workflows/ci.yml` runs build + mock API verifier on Ubuntu and macOS, Windows, and Linux package gates for push/PR/manual dispatch; runs are blocked before job steps by GitHub billing/spending limit | Configured; external billing blocker tracked in GitHub issue #5 |
-| Docs updated | `README.md`, `PLAN.md`, `ARCHITECTURE.md`, `TODO.md`, `CHECKLIST.md` updated | Done |
-| External acceptance runbook | `EXTERNAL_ACCEPTANCE.md` consolidates the remaining real API, signing/notarization, Windows/Linux, and CI billing gates with commands and evidence requirements | Done |
-| CTO worktree cleanup | After PR #67, the feature worktree and local/remote feature branches were pruned; `git worktree list` showed only the main worktree before this audit-refresh branch was opened | Done |
-| Clean main worktree | `git status --short --branch` showed clean and synced `main` at `5d93e44` before this audit-refresh branch was opened | Done |
-| Abandoned renderer stash | `stash@{0}` inspected; touched only `src/renderer/App.tsx` and `src/renderer/styles.css`; current `main` has newer renderer behavior including draft recovery and mask alpha validation; archived non-destructively to `origin/archive/abandoned-renderer-stash`; local stash dropped after verifying the archive commit matched | Resolved; tracked in GitHub issue #2 |
-| Remote/PR parity | private GitHub `origin` configured at `https://github.com/Bliveren/image2tools.git`; `main` pushed and tracks `origin/main`; `git ls-remote --heads origin main` matches local pushed history | Done for current `main`; future subtask branches can use PR flow |
-| Official OpenAI docs parity | Current OpenAI Image Generation guide and OpenAPI endpoint metadata confirm `gpt-image-2`, `/images/generations`, `/images/edits`, base64 output, streaming partial images, up to 16 input/reference images for GPT image edit requests, mask-first-image behavior for multi-image masks, mask requirements, size/format/quality/compression/background/moderation parameters, no transparent background for `gpt-image-2`, and omitted `input_fidelity` for `gpt-image-2`; docs also note GPT Image organization verification and extra partial-image token cost | Done |
-| Real API generation/edit/inpaint | `pnpm verify:real-api` provides a cost-confirmed real API acceptance path for generation, single-image edit, multi-image edit, and inpaint; an extra opt-in cost flag adds real streaming generation and edit coverage; no real API key was provided or used; tracked in GitHub issue #1 | External/manual pending |
-| Signed installable distribution | Ad-hoc signed, unnotarized macOS dmg/zip generated for preview; `pnpm verify:signing-ready` checks Developer ID code signing identity, notarization env vars, and signed packaging override without exposing secrets; `pnpm package:mac:signed` is available for the future Developer ID/notarization path; no certificate/notarization available; tracked in GitHub issue #3 | External/manual pending |
-| Cross-platform install validation | Windows and Linux package gates are configured in GitHub Actions; `pnpm verify:release:windows` automates Windows NSIS installer/unpacked executable PE inspection, unpacked app launch, silent install, installed app launch, and silent uninstall checks; `pnpm verify:release:linux` automates Linux AppImage/unpacked executable inspection, unpacked app Xvfb launch, direct AppImage launch when FUSE is available, AppImage extraction, and extracted app Xvfb launch, with `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1` available for native Linux acceptance. Ubuntu 24.04 ARM64 Docker validation on the macOS host passed build, mock API verification, Linux AppImage packaging, AppImage extraction, and extracted-app launch under Xvfb. Direct AppImage execution is still blocked in Docker by missing FUSE device support, and native Windows manual shell checks plus native Linux desktop shell checks are still pending; tracked in GitHub issue #4 | Partially verified; external/manual pending |
+| MIT licensing | `LICENSE` contains MIT text; `package.json` declares `MIT`; README links to `LICENSE` | Done |
+| API key entry, local save, and clear | Provider form in renderer; encrypted storage and `config:clearApiKey` via Electron `safeStorage` in `src/main/main.ts`; runtime API key validation in `src/shared/validation.ts` | Done |
+| Secret handling and open-source scan | `.gitignore` excludes env files, logs, build outputs, release outputs, and real API artifacts; `SECURITY.md` and `OPEN_SOURCE_AUDIT.md` document accepted and blocking scan hits | Done |
+| Base URL entry and connection test | Renderer config form; `/models` connection test via `handleTestConnection`; Base URL normalization in shared validation | Done |
+| Parameter config | Size, quality, format, compression, count, stream, partial images, moderation, and timeout controls | Done |
+| `gpt-image-2` defaults and limits | `DEFAULT_IMAGE_PARAMS`, size validation, 16 image cap, enum validation, finite integer validation, no transparent background option, and no `input_fidelity` exposure | Done |
+| Text-to-image generation | `/images/generations` implementation and tests in `src/main/services/openaiImage.ts` / `.test.ts` | Implemented; real API manual run still depends on user credentials |
+| Image edit and inpaint | `/images/edits`, multipart image upload, mask support, renderer mode switching, mask/source validation, and service tests | Implemented; real API manual run still depends on user credentials |
+| Streaming partial previews | SSE parsing and partial event handling in main + renderer, covered by tests | Done |
+| Local preview and file serving | Generated outputs are saved under Electron `userData`; renderer previews use a restricted `image2tools-asset://` protocol that only serves managed app image files | Done |
+| Download and file operations | Download/open/delete IPC paths reject assets outside the app image store or current history | Done |
+| History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, and clear | Done |
+| Recovery | Atomic state writes with backup, interrupted job recovery, workspace draft autosave/restore | Done |
+| English/Chinese UI | Renderer includes a Language / 语言 switch backed by `localStorage`; text is centralized in `src/renderer/i18n.ts`; `src/renderer/i18n.test.ts` verifies copy shape, saved preference, navigator fallback, and validation-message localization | Done |
+| Local no-key integration path | `pnpm mock:openai` and `pnpm verify:mock-api` cover models, generation, edit, inpaint, streaming, and multipart request inspection | Done |
+| Windows packaging | `package.json` has `package:win`; electron-builder has an NSIS Windows target; `.github/workflows/ci.yml` includes a Windows package job; `scripts/verify-windows-release.mjs` validates installer, unpacked app launch, silent install, installed app launch, and silent uninstall | Configured; native Windows execution required for final binary acceptance |
+| macOS packaging | `package:mac`, mac icon, DMG/ZIP targets, and macOS release verifier are present | Configured |
+| Linux packaging | AppImage target and Linux verifier are present | Configured |
+| Tests | `pnpm build`, targeted Vitest, `pnpm verify:mock-api`, dependency license scan, and `git diff --check` pass on the current worktree | Done |
 
-## Verification Commands Run
+## Current Verification Commands
 
-- `pnpm build`: typecheck, Vitest, renderer build, main build passed on 2026-05-18 for the `947450a` tree; Vitest reported 3 test files and 15 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, main build passed on 2026-05-18 for the `7b3b9bc` tree; Vitest reported 3 test files and 15 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, main build passed on 2026-05-18 for the `39f4a3d` tree; Vitest reported 3 test files and 15 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, main build passed on 2026-05-18 for the `8f437e2` tree; Vitest reported 3 test files and 15 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for the `d93f2c8` tree after merging the real streaming edit verifier; Vitest reported 3 test files and 15 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for the current `a4b15de` tree; Vitest reported 3 test files and 15 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for the current `971998b` tree; Vitest reported 3 test files and 15 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for merged `main` at `46213ea`; Vitest reported 3 test files and 17 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for `131efe4`; Vitest reported 4 test files and 21 tests passed, including IPC asset path ownership checks.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for current `main` at `780af4d`; Vitest reported 4 test files and 21 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for current `main` at `06394ad`; Vitest reported 4 test files and 21 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for current `main` at `033e888`; Vitest reported 4 test files and 21 tests passed.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for current `main` at `d701ae8`; Vitest reported 4 test files and 21 tests passed.
-- `pnpm vitest run src/shared/validation.test.ts`: passed on 2026-05-18 for `fix/cto-param-enum-validation` pre-merge; Vitest reported 1 test file and 9 tests passed, including runtime rejection of invalid quality, output format, background, and moderation values.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for `fix/cto-param-enum-validation` pre-merge; Vitest reported 4 test files and 24 tests passed.
-- `pnpm vitest run src/shared/validation.test.ts`: passed on 2026-05-18 for `fix/cto-param-shape-validation` pre-merge; Vitest reported 1 test file and 10 tests passed, including malformed runtime parameter objects and non-integer or non-finite numeric values.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for `fix/cto-param-shape-validation` pre-merge; Vitest reported 4 test files and 25 tests passed.
-- `pnpm vitest run src/shared/validation.test.ts`: passed on 2026-05-18 for `fix/cto-config-input-validation` pre-merge; Vitest reported 1 test file and 12 tests passed, including malformed prompt/API key/Base URL inputs and provider config IPC payload validation.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for `fix/cto-config-input-validation` pre-merge; Vitest reported 4 test files and 27 tests passed.
-- `pnpm vitest run src/shared/validation.test.ts`: passed on 2026-05-18 for `fix/cto-ipc-request-validation` pre-merge; Vitest reported 1 test file and 13 tests passed, including malformed job run and workspace draft IPC payloads.
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for `fix/cto-ipc-request-validation` pre-merge; Vitest reported 4 test files and 28 tests passed.
-- `pnpm package:dir`: unsigned macOS app directory regenerated successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
-- `open -n release/mac-arm64/Image2Tools.app`: packaged app launched on 2026-05-18 after `8a69b39`; process was observed, then the smoke-test process was terminated after AppleScript quit was not handled by the app.
-- `pnpm package:mac`: regenerated `release/Image2Tools-0.1.0-mac-arm64.dmg`, `.zip`, and blockmaps successfully on 2026-05-18 after `9111b90`; command reran build, typecheck, and 15 tests first.
-- `hdiutil attach ...`, copy `Image2Tools.app` to `/tmp/Image2Tools-current-dmg-test.*`, `open -n ...`: current dmg install-style smoke test launched successfully on 2026-05-18 after `f9fe082`; test process, mount point, and temp directory were cleaned up.
-- `hdiutil attach ...`, copy/run/remove/copy/run/remove in `/tmp/Image2Tools-current-reinstall-test.*`: current dmg two-cycle macOS uninstall/reinstall smoke test passed on 2026-05-18 after `7da178b`; test processes, mount point, and temp directory were cleaned up.
-- `pnpm verify:release:mac`: automated macOS dmg verification passed on 2026-05-18 for the `659b0c4` tree; it mounted the current dmg, copied the app to a temp directory, launched it twice, removed it twice, detached the dmg, and cleaned temp files.
-- `pnpm package:mac`: regenerated current unsigned macOS dmg/zip on 2026-05-18 before creating GitHub pre-release `v0.1.0-mac-unsigned`.
-- `pnpm verify:release:mac`: automated macOS dmg verification passed on 2026-05-18 before creating GitHub pre-release `v0.1.0-mac-unsigned`.
-- `pnpm package:mac`: regenerated unsigned macOS dmg/zip on 2026-05-18 after fixing packaged runtime files to include `dist/preload` and `dist/shared`; command reran build, typecheck, and 15 tests first.
-- `pnpm verify:release:mac`: stronger macOS dmg verification passed on 2026-05-18 after fixing packaged runtime files; it mounted the dmg, copied the app to a temp directory twice, confirmed a main process and visible main window each time, stopped the app, removed the copy, detached the dmg, and cleaned temp files.
-- `gh release create v0.1.0-mac-unsigned ... --prerelease --latest=false`: uploaded `Image2Tools-0.1.0-mac-arm64.dmg` and `.zip` to private GitHub pre-release.
-- `gh release upload v0.1.0-mac-unsigned ... --clobber`: replaced the private pre-release dmg/zip with the fixed packaged build after stronger main-window verification passed.
-- `gh release view v0.1.0-mac-unsigned --json ...`: release is private repo pre-release with both fixed assets uploaded.
-- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: local SHA256 values match GitHub asset digests (`a04cc4568a5010ca99a00df747d0317203b56fc86724ab116491c96472b31c96` for dmg, `75e0da8fe7181e3c515fcf8babb49da43acafa199e2cb7737b54601b48c9fd41` for zip).
-- `pnpm package:mac`: regenerated unsigned macOS dmg/zip on 2026-05-18 from current `main` at `3eab3f7`; command reran typecheck, 17 tests, renderer build, and main build first.
-- `pnpm verify:release:mac`: automated macOS dmg verification passed on 2026-05-18 for the refreshed unsigned `3eab3f7` package; it completed two copy/launch/window/remove cycles with concrete pids.
-- `gh release upload v0.1.0-mac-unsigned ... --clobber`: refreshed the private pre-release dmg/zip with the current unsigned build from `3eab3f7`.
-- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: refreshed local SHA256 values match GitHub asset digests (`7c2c6db9eab4b88fe3a5360d1720bb378c56aa7780e74a2c7ccf8c2594102d80` for dmg, `b4c46aa703f822c1575bf6775b5737f43eb7e384a0e7b1f57cadba726121faa9` for zip).
-- Packaged app UI mock smoke on 2026-05-18: launched `release/mac-arm64/Image2Tools.app`, saved fake key `sk-mock-image2tools` and `http://127.0.0.1:8787/v1`, confirmed connection success in the UI, ran Generate through the UI, observed `Generate finished.`, history/result controls, a partial preview, and result files under Electron `userData`.
-- `pnpm package:mac` and `pnpm verify:release:mac`: passed on 2026-05-18 after hardening the release verifier so failed launch/window checks still stop the copied app and remove the temporary app path.
-- `pnpm verify:release:mac`: failed on 2026-05-18 for the current unsigned dmg because the old verifier held a stale launch pid and reported `Packaged app launched but did not show a main window`; manual investigation showed the packaged `Image2Tools` process was alive and System Events could see one window, so this was a verifier false negative rather than an app launch failure.
-- PR #24 updated `scripts/verify-mac-release.mjs` to refresh `Image2Tools` pids while waiting for the main window and to fall back to System Events process-name window detection for Electron/macOS pid churn.
-- `node ../image2tools-mac-verifier/scripts/verify-mac-release.mjs`: fixed verifier passed against the current dmg before PR #24 merge, completing two copy/launch/window/remove cycles.
-- `pnpm verify:release:mac`: passed on merged `main` at `246604a` after PR #24; it completed two copy/launch/window/remove cycles and detected the main window via the process-name fallback.
-- PR #26 hardened the macOS release verifier fallback so a pre-existing `Image2Tools` window cannot create a false positive; it now records the baseline process-name window count before launching and only accepts fallback success when the count increases.
-- `node --check scripts/verify-mac-release.mjs` and `git diff --check`: passed on the PR #26 verifier hardening branch.
-- `node ../image2tools-mac-verifier-fallback/scripts/verify-mac-release.mjs`: hardened verifier passed against the current dmg before PR #26 merge after clearing stale local test processes, completing two copy/launch/window/remove cycles.
-- `pnpm verify:release:mac`: passed on merged `main` at `69919b2` after PR #26; it completed two copy/launch/window/remove cycles and detected the main window with concrete pids in both cycles.
-- `pnpm verify:release:mac`: passed on current `main` at `971998b`; it completed two copy/launch/window/remove cycles and confirmed a main window in both cycles.
-- PR #36 hardened `scripts/verify-mac-release.mjs` so the copied temporary app is removed before dmg detach, with a forced-detach fallback after normal retry attempts.
-- `pnpm package:mac`: regenerated unsigned macOS dmg/zip on 2026-05-18 for current `main` at `780af4d`; command reran typecheck, 21 tests, renderer build, and main build first.
-- `pnpm verify:release:mac`: passed on current `main` at `780af4d` after PR #36; it completed two copy/launch/window/remove cycles and detached the dmg after cleanup.
-- `gh release upload v0.1.0-mac-unsigned ... --clobber`: refreshed the private pre-release dmg/zip with the current unsigned build from `780af4d`.
-- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: refreshed local SHA256 values match GitHub asset digests (`194efb3e19c28d72ee32a9e386a4f74e89e4fa81de7420ddc751c1f0b264b96a` for dmg, `f8b14515a7b92b755dc3d9f1d6b8cbf374ff7f8f47299a22cdfe3141300451a7` for zip).
-- `pnpm verify:release:mac`: passed on current `main` at `06394ad`; it completed two copy/launch/window/remove cycles and confirmed a main window in both cycles.
-- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: current local unsigned release files still match the documented GitHub release asset digests (`194efb3e19c28d72ee32a9e386a4f74e89e4fa81de7420ddc751c1f0b264b96a` for dmg, `f8b14515a7b92b755dc3d9f1d6b8cbf374ff7f8f47299a22cdfe3141300451a7` for zip).
-- `pnpm package:mac`: regenerated ad-hoc signed, unnotarized macOS dmg/zip on 2026-05-18 for `chore/cto-refresh-preview-release` from current `main` at `cd331b3`; command reran typecheck, 28 tests, renderer build, and main build first.
-- `codesign --verify --deep --strict --verbose=4 release/mac-arm64/Image2Tools.app`: passed on the refreshed ad-hoc signed preview app, validating the app bundle, Electron helpers, frameworks, and crashpad handler.
-- `pnpm verify:release:mac`: passed on 2026-05-18 after switching the verifier from System Events window counting to CoreGraphics window enumeration and using `ditto` plus copied-app `codesign --verify --deep --strict`; it completed two dmg copy/launch/window/remove cycles and confirmed main windows `1440x940` in both cycles.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `chore/cto-refresh-preview-release`.
-- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: refreshed ad-hoc signed preview asset hashes are `d6bab3af7b318f12025c350aa3b7c1e7e50362a138ee5d23cec0539cde0d3a90` for dmg and `ade24acf2d467abb74094a9e47738b3eb1c142c3ca6719ed0641fdca528d0b25` for zip.
-- `gh release upload v0.1.0-mac-unsigned ... --clobber`: refreshed the private pre-release dmg/zip with the ad-hoc signed build from current `main` at `cd331b3`; `gh release view ... --json assets` reported matching GitHub asset digests for both files.
-- PR #52 merged `chore/cto-refresh-preview-release` into `main` as `703139d569befb371f1b25ae16a78f0ef6363ecb`; the branch was pushed, reviewed, merged through GitHub, and the temporary worktree/local branch were pruned.
-- `pnpm install --frozen-lockfile`: installed dependencies in a fresh audit-refresh worktree based on merged `main` at `703139d` after an initial `pnpm build` attempt failed before typecheck because `node_modules` was absent (`tsc: command not found`).
-- `pnpm build`: typecheck, Vitest, renderer build, and main build passed on 2026-05-18 for merged `main` at `703139d`; Vitest reported 4 test files and 28 tests passed.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for merged `main` at `703139d`.
-- `pnpm verify:real-api`: on merged `main` at `703139d`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
-- `pnpm verify:signing-ready`: on merged `main` at `703139d`, still failed for the expected external reasons (no Developer ID code signing identity and Apple notarization env vars unset) while confirming the default local preview path uses ad-hoc signing and `package:mac:signed` can override `mac.identity` and enable notarization.
-- `gh release view v0.1.0-mac-unsigned --repo Bliveren/image2tools --json assets,url`: private pre-release assets still report GitHub SHA256 digests matching the refreshed ad-hoc signed preview build (`d6bab3af7b318f12025c350aa3b7c1e7e50362a138ee5d23cec0539cde0d3a90` for dmg and `ade24acf2d467abb74094a9e47738b3eb1c142c3ca6719ed0641fdca528d0b25` for zip).
-- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: in the fresh audit-refresh worktree, the command failed because release artifacts are ignored build outputs and are not present in a new worktree; this does not change the earlier local/GitHub digest match from the release-refresh worktree.
-- PR #53 merged a docs-only completion audit refresh into `main` as `465dc9bfdc0f0f9eeaaa3cf5aeed73a21c825483`; before and after cleanup, `git status --short --branch` was clean, `git worktree list` had only the main worktree, and `gh pr list --state open` returned no open PRs.
-- The four remaining blocker issue bodies were refreshed after PR #53 so their top-level acceptance text matches current commands and state: #1 real API acceptance, #3 Developer ID signed/notarized macOS release, #4 native Windows/Linux validation, and #5 GitHub Actions billing/spending-limit.
-- `docker pull --platform linux/arm64 node:25-bookworm`: after one transient TLS copy error, downloaded the Node 25 Debian Bookworm ARM64 image for Linux container validation.
-- `docker run --platform linux/arm64 ... node:25-bookworm ... pnpm build && pnpm verify:mock-api && pnpm package`: in an Ubuntu/Debian Bookworm ARM64 container, `pnpm build` passed with 4 test files and 21 tests, `pnpm verify:mock-api` passed, and `pnpm package` produced `release/Image2Tools-0.1.0-linux-arm64.AppImage` plus `release/linux-arm64-unpacked/image2tools`.
-- `file release/Image2Tools-0.1.0-linux-arm64.AppImage release/linux-arm64-unpacked/image2tools`: confirmed both Linux artifacts are ARM aarch64 ELF executables.
-- `xvfb-run -a release/linux-arm64-unpacked/image2tools --no-sandbox`: unpacked Linux app stayed running for the smoke window interval in the Ubuntu ARM64 container; only expected container DBus/GPU initialization warnings were logged before the process was terminated.
-- `release/Image2Tools-0.1.0-linux-arm64.AppImage --appimage-extract` followed by `xvfb-run -a squashfs-root/image2tools --no-sandbox`: AppImage extraction succeeded and the extracted app stayed running for the smoke window interval in the Ubuntu ARM64 container.
-- Direct `xvfb-run -a release/Image2Tools-0.1.0-linux-arm64.AppImage --no-sandbox`: failed in the Docker container because FUSE device support is unavailable (`fuse: device not found, try 'modprobe fuse' first`); this is an environment limitation of the container, so native Linux AppImage execution remains pending under issue #4.
-- PR #42 adds `pnpm verify:release:linux`, which automates Linux release checks for the generated AppImage and unpacked executable, launches the unpacked app under Xvfb, extracts the AppImage, and launches the extracted app under Xvfb.
-- PR #45 extends `pnpm verify:release:linux` to directly launch the AppImage under Xvfb when FUSE support is available, skip with a clear message when FUSE is missing, and fail instead when `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1` is set for native Linux acceptance.
-- `node --check scripts/verify-linux-release.mjs`, `git diff --check`, `pnpm build`, and `pnpm verify:mock-api`: passed on the Linux release verifier branch before PR #42.
-- `docker run --platform linux/arm64 ... pnpm package`: produced the Linux AppImage and unpacked executable on the Linux release verifier branch in a Node 25 Debian Bookworm ARM64 container. The first verifier run confirmed ELF metadata plus Xvfb launch for both unpacked and extracted AppImage apps, but left Electron child processes alive after printing success; the verifier was fixed to kill the launched app process tree by executable path, and `docker run --platform linux/arm64 ... pnpm verify:release:linux` then passed and exited cleanly against those Linux artifacts.
-- PR #43 adds `pnpm verify:release:windows`, which automates Windows release checks for the generated NSIS installer and unpacked executable, verifies PE metadata, launches the unpacked app, waits for a main window, confirms the app remains running for a smoke interval, and kills the launched process tree.
-- PR #44 extends `pnpm verify:release:windows` to run the NSIS installer silently, discover the installed app through Windows uninstall metadata and expected install locations, launch the installed app, then run the uninstaller silently and verify the app executable and registry entry are removed.
-- `docker run --platform linux/arm64 ... pnpm package && pnpm verify:release:linux`: passed on the direct-AppImage verifier branch in a clean Node 25 Debian Bookworm ARM64 container after installing Xvfb dependencies and pnpm. The verifier confirmed AppImage/unpacked ELF metadata, launched the unpacked app under Xvfb, skipped direct AppImage execution with the expected missing-FUSE message, extracted the AppImage, and launched the extracted app under Xvfb.
-- `pnpm mock:openai`: local mock API server starts at `http://127.0.0.1:8787/v1`.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `947450a` tree.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `7b3b9bc` tree.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `39f4a3d` tree.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `8f437e2` tree.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the mock verifier coverage tree; it now checks JSON generation, streaming generation, single-image multipart edit, multi-image mask edit/inpaint, and streaming edit against the local mock.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the `d93f2c8` tree after merging the real streaming edit verifier.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the current `a4b15de` tree.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for the current `971998b` tree.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for merged `main` at `46213ea`.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `131efe4` after hardening IPC asset file operations.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `780af4d`.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `06394ad`.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `033e888`.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for current `main` at `d701ae8`.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `fix/cto-param-enum-validation` pre-merge.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `fix/cto-param-shape-validation` pre-merge.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `fix/cto-config-input-validation` pre-merge.
-- `pnpm verify:mock-api`: automatic mock verification passed on 2026-05-18 for `fix/cto-ipc-request-validation` pre-merge.
-- PR #46 extends the mock OpenAI server with request inspection and updates `pnpm verify:mock-api` to assert key Image 2 parameters on JSON generation and multipart edit requests: size, quality, output format, output compression, background, count, and moderation.
-- PR #47 adds service-level tests that verify all returned generation images are saved for multi-result responses and advanced Image 2 parameters are passed through multipart edit requests.
-- `fix/cto-param-enum-validation` adds shared runtime allow-list validation for `quality`, `outputFormat`, `background`, and `moderation`, so malformed persisted state or direct IPC payloads are rejected before OpenAI request construction.
-- `fix/cto-param-shape-validation` adds shared runtime shape and finite-integer validation for Image 2 params, so malformed persisted state or direct IPC payloads return validation errors instead of throwing or passing invalid numeric values into request construction.
-- `fix/cto-config-input-validation` adds runtime validation for provider config save payloads and hardens prompt, API key, Base URL, and size helpers against malformed non-string inputs.
-- `fix/cto-ipc-request-validation` adds runtime validation for job run and workspace draft save payloads, including mode, prompt, input path arrays, optional mask data, Image 2 params, brush size, and draft asset object metadata before main-process handlers touch paths or persisted state.
-- `pnpm verify:real-api`: without an API key, exits before making real API calls.
-- `pnpm verify:real-api`: on current `971998b`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
-- `pnpm verify:real-api`: on current `06394ad`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set; issue #1 was updated with this current blocker evidence.
-- `pnpm verify:real-api`: on current `033e888`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
-- `pnpm verify:real-api`: on current `d701ae8`, exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set.
-- `IMAGE2TOOLS_API_KEY=sk-test-no-call pnpm verify:real-api`: exits before making real API calls unless `IMAGE2TOOLS_REAL_API_ACCEPT_COST=1` is explicitly set.
-- `IMAGE2TOOLS_API_KEY=sk-mock-image2tools IMAGE2TOOLS_BASE_URL=http://127.0.0.1:8788/v1 IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 pnpm verify:real-api`: passed against the local mock API, covering the script's generation, single-edit, multi-edit, and inpaint request paths; temporary artifacts and mock process were cleaned up.
-- `IMAGE2TOOLS_API_KEY=sk-mock-image2tools IMAGE2TOOLS_BASE_URL=http://127.0.0.1:8788/v1 IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST=1 pnpm verify:real-api`: passed against the local mock API after adding the opt-in streaming generation and edit checks; temporary artifacts and mock process were cleaned up.
-- `pnpm verify:signing-ready`: reported no valid code signing identities, `build.mac.identity` set to `null`, and notarization env vars unset; no signing or notarization was attempted.
-- `pnpm verify:signing-ready`: on current `971998b`, again reported no valid code signing identities, `build.mac.identity` set to `null`, and `CSC_NAME`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` unset; no signing or notarization was attempted.
-- `pnpm verify:signing-ready`: on current `06394ad`, again reported no valid code signing identities, `build.mac.identity` set to `null`, and `CSC_NAME`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` unset; no signing or notarization was attempted; issue #3 was updated with this current blocker evidence.
-- PR #39 added an explicit `pnpm package:mac:signed` path that allows future Developer ID/notarized packaging to override `mac.identity` from `CSC_NAME` and enable notarization.
-- `node --check scripts/verify-signing-readiness.mjs`, `pnpm build`, and `pnpm verify:mock-api`: passed on the signing opt-in branch before PR #39.
-- `pnpm verify:signing-ready`: on the signing opt-in branch, still failed for the expected external reasons (no code signing identity and Apple notarization env vars unset) while confirming the signed packaging override is present.
-- `pnpm package:mac`: passed on the signing opt-in branch and still generated an unsigned macOS dmg/zip using explicit `mac.identity=null` and `mac.notarize=false` overrides.
-- `pnpm verify:release:mac`: passed on the signing opt-in branch after the unsigned package rebuild; it completed two copy/launch/window/remove cycles and confirmed a main window in both cycles.
-- `pnpm verify:signing-ready`: on current `033e888`, still failed for the expected external reasons (no code signing identity and Apple notarization env vars unset) while confirming `package:mac:signed` can override `mac.identity` and enable notarization; issue #3 was updated with this current blocker evidence.
-- `pnpm verify:signing-ready`: on current `d701ae8`, still failed for the expected external reasons (no code signing identity and Apple notarization env vars unset) while confirming `package:mac:signed` can override `mac.identity` and enable notarization.
-- `pnpm verify:signing-ready`: on `chore/cto-refresh-preview-release`, still failed for the expected external reasons (no Developer ID code signing identity and Apple notarization env vars unset) while confirming the default local preview path uses ad-hoc signing and `package:mac:signed` can override `mac.identity` and enable notarization.
-- `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/ci.yml")'`: GitHub Actions workflow YAML parsed locally after adding Windows/Linux package jobs and manual dispatch.
-- `gh run view 26011616452 --repo Bliveren/image2tools`: CI was triggered but both jobs were blocked before starting because GitHub reported account payment/spending-limit restrictions.
-- `gh run list --repo Bliveren/image2tools --branch main --limit 5 --json databaseId,displayTitle,status,conclusion,event,headSha,url,createdAt,updatedAt`: repeated `main` CI runs still conclude `failure` before executing workflow steps, including `26018882123` for `cdc73f6` and `26019519641` for `8ac18c6`.
-- `gh run view 26019519641 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: the current observed failure pattern is unchanged; build/mock, Windows package, macOS package, and Linux package jobs all had empty `steps` arrays, matching the external GitHub Actions billing/spending-limit blocker tracked in issue #5.
-- `gh run view 26021791793 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `971998b` still concluded `failure` before workflow steps ran; Linux package, build/mock, macOS package, and Windows package jobs all had empty `steps` arrays.
-- `gh run view 26022641368 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `c08d82f` still concluded `failure` before workflow steps ran; Linux package, build/mock, macOS package, and Windows package jobs all had empty `steps` arrays.
-- `gh run view 26023298065 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `46213ea` still concluded `failure` before workflow steps ran; Linux package, build/mock, macOS package, and Windows package jobs all had empty `steps` arrays.
-- `gh run view 26023987641 --repo Bliveren/image2tools --json jobs,status,conclusion,url,headSha`: latest observed `main` CI run for `e6225f0` still concluded `failure` before workflow steps ran; Build and mock API verifier, macOS package, Windows package, and Linux package jobs all had empty `steps` arrays.
-- `gh run view 26025852856 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `780af4d` still concluded `failure` before workflow steps ran; Build and mock API verifier, macOS package, Windows package, and Linux package jobs all had empty `steps` arrays.
-- `gh run view 26026330595 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `06394ad` still concluded `failure` before workflow steps ran; Build and mock API verifier, macOS package, Windows package, and Linux package jobs all had empty `steps` arrays; issues #4 and #5 record this as current blocker evidence.
-- `gh run view 26027165476 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `033e888` still concluded `failure` before workflow steps ran; Build and mock API verifier, macOS package, Windows package, and Linux package jobs all had empty `steps` arrays; issues #4 and #5 record this as current blocker evidence.
-- `gh run view 26027440740 --repo Bliveren/image2tools --json jobs,status,conclusion,event,url,headSha`: latest observed `main` CI run for `d701ae8` still concluded `failure` before workflow steps ran; Build and mock API verifier, macOS package, Windows package, and Linux package jobs all had empty `steps` arrays; issue #5 records this as current blocker evidence.
-- `gh pr checks 52 --repo Bliveren/image2tools` and `gh run view 26035753105 --repo Bliveren/image2tools`: PR #52 CI failed before any workflow step executed; GitHub annotated all jobs with the account payment/spending-limit message and the JSON run view showed empty `steps` arrays for build/mock, macOS package, Windows package, and Linux package.
-- `gh run view 26035833906 --repo Bliveren/image2tools`: the post-merge `main` CI run for `703139d` also failed before any workflow step executed with the same GitHub account billing/spending-limit annotation; this remains an external account blocker, not repository-code evidence.
-- `gh issue list --repo Bliveren/image2tools --state open --json number,title,labels,url,updatedAt`: remaining open issues are external blockers #1, #3, #4, and #5.
-- `gh release view v0.1.0-mac-unsigned --repo Bliveren/image2tools --json tagName,name,isPrerelease,isDraft,url,assets,publishedAt,targetCommitish`: private pre-release `v0.1.0-mac-unsigned` is published, not draft, marked as pre-release, and has the dmg/zip assets uploaded with SHA256 digests matching the local release files.
-- `EXTERNAL_ACCEPTANCE.md`: added in PR #29 and linked from `README.md`, `TODO.md`, and this audit so the remaining external gates have a single repo-level runbook.
-- `curl` checks against the mock passed for `/models`, JSON `/images/generations`, SSE `/images/generations`, and multipart `/images/edits`.
-- `git status --short --branch`: clean `main`.
-- `git worktree list`: only `/Users/alive/projects/image2tools`.
-- `git remote -v`: `origin` is `https://github.com/Bliveren/image2tools.git` for fetch and push.
-- `git ls-remote --heads origin main`: remote `main` exists and matched the pushed local history when checked.
-- `gh repo view Bliveren/image2tools --json nameWithOwner,visibility,url,defaultBranchRef`: repository exists as private GitHub repo with default branch `main`.
-- `gh issue list --repo Bliveren/image2tools --state open --limit 10`: remaining external blockers are tracked as issues #1 and #3 through #5.
-- GitHub milestone `v0.1.0 external acceptance`: tracks the open external blocker issues at https://github.com/Bliveren/image2tools/milestone/1.
-- `git stash show --stat stash@{0}` and `git show stash@{0}:...`: stash inspected; it is an old alternate renderer experiment and is not part of `main`.
-- `git branch archive/abandoned-renderer-stash stash@{0}` and `git push origin archive/abandoned-renderer-stash`: non-destructive archive branch created at `78b2c683fc180c8e511d1802b37545fd48c8c887`.
-- `git rev-parse stash@{0}`, `git rev-parse archive/abandoned-renderer-stash`, and `git ls-remote --heads origin archive/abandoned-renderer-stash`: local stash, local archive branch, and remote archive branch all matched `78b2c683fc180c8e511d1802b37545fd48c8c887`.
-- `git stash drop stash@{0}` and `git stash list`: local duplicate stash was dropped after archive verification; no local stash entries remain.
-- `mcp__openaiDeveloperDocs__.fetch_openai_doc` for `https://developers.openai.com/api/docs/guides/image-generation`: current official guide confirms Image API generation/edit endpoints, `gpt-image-2` examples, streaming `partial_images: 0..3`, mask requirements, base64 output, output customization, `gpt-image-2` size limits, no transparent background, no `input_fidelity`, organization verification, and partial image token cost.
-- `mcp__openaiDeveloperDocs__.get_openapi_spec` for `https://api.openai.com/v1/images/generations` and `https://api.openai.com/v1/images/edits`: endpoint metadata confirms JSON generation, multipart edit uploads, JSON edit support, streaming event response types, and image response schemas.
-- PR #31 aligned inpaint mask handling with the current official Image API mask requirements by enforcing PNG/WebP mask types, source/mask format compatibility, and request-layer rejection for mismatches; local `pnpm build` and `pnpm verify:mock-api` passed before merge.
-- `131efe4` hardened main-process asset IPC so download/open-folder/delete operations only act on generated resources inside the app image store and current history; local `pnpm build`, `pnpm verify:mock-api`, and `git diff --check` passed on the feature branch before PR review.
-- `780af4d` includes PR #35 IPC asset path hardening and PR #36 macOS release verifier cleanup/detach hardening; local `pnpm build`, `pnpm verify:mock-api`, `pnpm package:mac`, and `pnpm verify:release:mac` passed before refreshing the unsigned private pre-release assets.
-- `06394ad` is a docs-only merge after the `780af4d` release refresh; current local `pnpm build`, `pnpm verify:mock-api`, `pnpm verify:release:mac`, and release SHA256 verification passed, while the remaining real API, signing, Windows/Linux, and CI gates remain external blockers.
-- `033e888` includes PR #39 signing package path improvements; current local `pnpm build` and `pnpm verify:mock-api` passed, `pnpm verify:real-api` refused to call without a key, and `pnpm verify:signing-ready` confirmed the signed packaging override while remaining blocked on external signing materials.
-- `d701ae8` is a docs-only merge after PR #40. Current local `pnpm build` and `pnpm verify:mock-api` pass; `pnpm verify:real-api` still refuses to call without a key; `pnpm verify:signing-ready` still confirms the signed packaging override while remaining blocked on external signing materials; latest CI still fails before steps due to issue #5; Linux ARM64 container packaging/extracted-launch evidence is now captured, while native Windows/Linux desktop validation remains open under issue #4.
-- `703139d` includes PR #52, which refreshed the private macOS preview release assets from current `main`, switched the local preview package to ad-hoc signing, hardened the macOS release verifier around bundle copy/signature/window checks, and updated docs. Current local `pnpm build` and `pnpm verify:mock-api` pass; `pnpm verify:real-api` still refuses to call without a key; `pnpm verify:signing-ready` still confirms the signed packaging override while remaining blocked on external signing materials; latest CI still fails before steps due to issue #5; real API, signed/notarized distribution, and native Windows/Linux desktop validation remain open external gates.
-- `465dc9b` includes PR #53, a docs-only merge that refreshed this completion audit after PR #52. It does not change runtime, packaging, or release artifacts; the latest local repo state is clean and synced, and the remaining open GitHub issues are still the same external blockers #1, #3, #4, and #5.
-- `88721c4` includes PR #55, which aligned Image 2 edit input/reference handling to the current 16-image API limit. It added `MAX_GPT_IMAGE_INPUTS`, runtime validation for run/draft payloads, renderer selection capping, removal of the stale 10-image draft truncation, validation tests, and matching `PLAN.md`, `ARCHITECTURE.md`, and `CHECKLIST.md` updates.
-- `pnpm vitest run src/shared/validation.test.ts`: passed for PR #55 with 1 test file and 13 tests, including acceptance of 16 input images and rejection of 17 for both run requests and workspace drafts.
-- `pnpm build`: passed for PR #55 and again on merged `main` at `88721c4`; both runs reported 4 test files and 28 tests passed, then completed renderer and main builds.
-- `pnpm verify:mock-api`: passed for PR #55 and again on merged `main` at `88721c4`.
-- `git diff --check`: passed for PR #55 and again on merged `main` at `88721c4`.
-- PR #55 run `26037712575` and post-merge main run `26037826481` both failed before any workflow step executed; all four jobs had empty `steps: []`, matching the GitHub Actions billing/spending-limit blocker tracked in issue #5 rather than a repository-code failure.
-- After PR #55, `git status --short --branch` showed clean synced `main`, `gh pr list --state open` returned `[]`, `git worktree list` showed only `/Users/alive/projects/image2tools`, and the local/remote `fix/cto-image-input-limit` branch was removed.
-- `9d8feac` includes PR #56, a docs-only merge that refreshed `TODO.md` and this completion audit after PR #55. It added the 16-image input/reference cap to `TODO.md` and updated audit evidence through PR #55.
-- On current `main` at `9d8feac`, `pnpm build` passed with 4 test files and 28 tests, followed by successful renderer and main builds.
-- On current `main` at `9d8feac`, `pnpm verify:mock-api` passed.
-- On current `main` at `9d8feac`, `git diff --check` passed.
-- On current `main` at `9d8feac`, `pnpm verify:real-api` exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set, matching issue #1.
-- On current `main` at `9d8feac`, `pnpm verify:signing-ready` failed for the expected external prerequisites: no valid code signing identity and unset `CSC_NAME`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`; no signing or notarization was attempted, matching issue #3.
-- PR #56 run `26038247847` and post-merge main run `26038331901` both failed before any workflow step executed; all four jobs had empty `steps: []`, matching the GitHub Actions billing/spending-limit blocker tracked in issue #5 rather than a repository-code failure.
-- `0240923` includes PR #57, a docs-only merge that recorded final local audit checks in this completion audit.
-- Post-PR #57 main CI run `26038660344` partially started: build, macOS, and Windows jobs still failed before steps, but the Linux package job reached `Install Linux smoke-test dependencies` and failed because Ubuntu 24.04 had no installable `libasound2` package candidate.
-- `fda838d` includes PR #58, which replaced the Linux package gate dependency `libasound2` with Ubuntu 24.04's `libasound2t64` in `.github/workflows/ci.yml`.
-- PR #58 local checks passed: workflow YAML parsed with Ruby and `git diff --check` passed.
-- PR #58 run `26038840030` and post-merge main run `26038929593` both failed before any workflow step executed; all four jobs had empty `steps: []`, so the `libasound2t64` fix is merged but still not remotely exercised because issue #5 blocks CI execution.
-- On current `main` at `fda838d`, `pnpm build` passed with 4 test files and 28 tests, followed by successful renderer and main builds.
-- On current `main` at `fda838d`, `pnpm verify:mock-api` passed.
-- On current `main` at `fda838d`, `git diff --check` passed and workflow YAML parsing passed.
-- On current `main` at `977d00b`, `pnpm build` passed with 4 test files and 28 tests, followed by successful renderer and main builds.
-- On current `main` at `977d00b`, `pnpm verify:mock-api` passed.
-- On current `main` at `977d00b`, `git diff --check` passed and workflow YAML parsing passed.
-- `pnpm verify:real-api` on current `main` at `977d00b` exited before making real API calls because neither `IMAGE2TOOLS_API_KEY` nor `OPENAI_API_KEY` was set, matching issue #1.
-- `pnpm verify:signing-ready` on current `main` at `977d00b` still failed for expected external prerequisites: no valid code signing identities and unset `CSC_NAME`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`; no signing or notarization was attempted, matching issue #3.
-- `pnpm verify:release:mac` initially failed against the stale local macOS preview artifacts whose SHA256 values matched the previously published private pre-release assets (`d6bab3af7b318f12025c350aa3b7c1e7e50362a138ee5d23cec0539cde0d3a90` dmg and `ade24acf2d467abb74094a9e47738b3eb1c142c3ca6719ed0641fdca528d0b25` zip). The strict copied-app signature check reported `code has no resources but signature indicates they must be present`, so those preview assets were treated as stale and refreshed.
-- `pnpm package:mac` on current `main` at `977d00b` regenerated the ad-hoc signed, unnotarized macOS preview dmg/zip; the command reran typecheck, 28 tests, renderer build, and main build first.
-- `codesign --verify --deep --strict release/mac-arm64/Image2Tools.app` passed after the rebuild, and the app bundle contained `Contents/_CodeSignature/CodeResources`.
-- `pnpm verify:release:mac` passed after the rebuild; it mounted the dmg, copied the app with `ditto`, verified copied-app signatures, launched two install cycles, confirmed main windows `1440x940`, stopped the app, removed temp copies, detached the dmg, and cleaned temp files.
-- `shasum -a 256 release/Image2Tools-0.1.0-mac-arm64.dmg release/Image2Tools-0.1.0-mac-arm64.zip`: refreshed ad-hoc signed preview asset hashes are `ef33ed5b927b057e816a98b20c9597b322b658c95e8a018ed37990d579b08721` for dmg and `674356c295f1ab5170407dd602e1642e933242758c376754aa96abaa47816517` for zip.
-- `gh release upload v0.1.0-mac-unsigned ... --clobber`: refreshed the private pre-release dmg/zip with the verified rebuilt preview artifacts; `gh release view ... --json assets` reported matching GitHub asset digests for both files.
-- PR #60 merged the refreshed macOS preview release evidence into `main` as `1d8e215cd4a70a64856484dd1268edf6033b9da1`; the temporary worktree and local/remote branch were pruned after merge.
-- Latest `main` CI run `26040896712` for `1d8e215cd4a70a64856484dd1268edf6033b9da1` still failed before workflow steps executed; all four jobs had empty `steps: []`, matching the GitHub Actions billing/spending-limit blocker tracked in issue #5.
-- PR #61 merged docs-only current audit metadata cleanup into `main` as `824d13b620d933546cd48e6c2b31747df76654d2`; no runtime, verifier, package, or release artifact files changed.
-- On current `main` at `824d13b`, `git status --short --branch` showed a clean worktree synced with `origin/main`, `git worktree list` showed only `/Users/alive/projects/image2tools`, and `gh pr list --state open` returned no open PRs.
-- Latest `main` CI run `26041388038` for `824d13b620d933546cd48e6c2b31747df76654d2` still failed before workflow steps executed; Build and mock API verifier, macOS package, Windows package, and Linux package all reported empty `steps: []`, `gh run view --log` returned `log not found`, and check-run annotations repeated the GitHub account payment/spending-limit message tracked in issue #5.
-- PR #62 merged docs-only audit evidence refresh into `main` as `0d3a6b774170d840aa1f010c545c68106eb61982`; no runtime, verifier, package, or release artifact files changed.
-- Latest `main` CI run `26042356812` for `0d3a6b774170d840aa1f010c545c68106eb61982` still failed before workflow steps executed; all four jobs reported empty `steps: []`, matching the same GitHub account billing/spending-limit blocker tracked in issue #5.
-- PR #64 merged mock verifier hardening into `main` as `6d4def9ff33c9601cdbe5221d6a537b6310fedf5`; `pnpm verify:mock-api` now asserts multi-image inpaint sends `model`, `prompt`, `stream=false`, exactly two `image[]` fields, and one `mask` field.
-- On merged `main` at `6d4def9`, `pnpm verify:mock-api`, `pnpm build`, and `git diff --check` passed locally; the post-merge GitHub Actions run `26043216928` still failed before workflow steps executed with all jobs reporting empty `steps: []`, matching issue #5.
-- `fix/cto-run-request-mode-validation` hardens shared job-run IPC validation so direct payloads are rejected before job creation when generate carries input images, edit has no input images, non-inpaint requests carry mask data, or inpaint has no mask.
-- `pnpm vitest run src/shared/validation.test.ts`, `pnpm verify:mock-api`, `pnpm build`, and `git diff --check` passed on the run-request mode validation branch before PR review.
-- `fix/cto-run-request-mask-source-validation` hardens shared job-run IPC validation so direct payloads with non-image input paths, non-PNG/WebP mask paths, JPEG mask data URLs, or malformed mask data URLs are rejected before main persists mask files or creates jobs.
-- `pnpm vitest run src/shared/validation.test.ts`, `pnpm verify:mock-api`, `pnpm build`, and `git diff --check` passed on the run-request mask/source validation branch before PR review.
-- PR #67 merged the run-request mask/source validation hardening into `main` as `5d93e446c7677b7f3ca93cb592c23d431118cb64`.
-- On merged `main` at `5d93e44`, `pnpm vitest run src/shared/validation.test.ts` passed with 1 test file and 13 tests, `pnpm verify:mock-api` passed, `pnpm build` passed with 4 test files and 28 tests followed by renderer and main builds, and `git diff --check HEAD` passed.
-- PR #67 run `26045242531` and post-merge main run `26045333738` both failed before any workflow step executed; all four jobs had empty `steps: []`, no runner name, and check annotations repeated the GitHub account payment/spending-limit message tracked in issue #5 rather than a repository-code failure.
-- After PR #67, `git status --short --branch` showed clean synced `main`, `gh pr list --state open` returned `[]`, `git worktree list` showed only `/Users/alive/projects/image2tools`, and the local/remote `fix/cto-run-request-mask-source-validation` branch was removed.
-- PR #68 refreshed this completion audit so the evidence pointers match current merged `main` at `ec4289c`.
+The current worktree was verified with:
 
-## Remaining External Work
+```bash
+pnpm vitest run src/main/services/openaiImage.test.ts src/shared/validation.test.ts
+pnpm vitest run src/renderer/i18n.test.ts
+pnpm verify:mock-api
+pnpm build
+git diff --check
+pnpm licenses list --prod
+rg -n "sk-[A-Za-z0-9_-]{8,}|Bearer |Authorization|apiKey|encryptedApiKey|secret|password|token|private|/Users/|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}|github\\.com/.+/milestone|release/tag|origin/archive" -g '!node_modules' -g '!dist*' -g '!release' -g '!pnpm-lock.yaml'
+find . -maxdepth 3 \( -name '.env*' -o -name '*.pem' -o -name '*.p12' -o -name '*.key' -o -name '*state*.json' -o -name '*secret*' \) -not -path './node_modules/*' -print
+git ls-files | rg '(^|/)(dist|dist-renderer|release|real-api-artifacts|node_modules)/|\.env|\.pem|\.p12|state\.json|\.DS_Store' || true
+```
 
-GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
+`pnpm build` includes TypeScript checks, all Vitest tests, renderer build, and
+main-process build. The current suite is 5 test files / 37 tests. Production
+dependencies report only ISC/MIT licenses. The file scans produced no sensitive file or tracked output
+matches; the content scan only found documented acceptable hits listed in
+`OPEN_SOURCE_AUDIT.md`. A separate project-specific scan for known internal
+identifiers, old draft release names, and account-specific URLs also produced no
+blocking hits.
 
-Runbook: [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md)
+## Remaining External Gates
 
-- Use a real Image 2 API key to manually verify text generation, single-image edit, multi-image edit, and inpainting: GitHub issue #1.
-- Confirm the OpenAI organization behind the real API key has GPT Image organization verification before manual acceptance: GitHub issue #1.
-- Add signing identity, notarization, and formal release metadata: GitHub issue #3.
-- Validate non-macOS target platforms: GitHub issue #4. Linux ARM64 container packaging and extracted launch evidence exists, but native Windows validation and native Linux desktop shell behavior are still pending.
-- Resolve GitHub Actions billing/spending limit so CI can execute: GitHub issue #5.
+- Real API acceptance requires a user-provided key and explicit cost
+  confirmation through `pnpm verify:real-api`.
+- Windows installer verification must be run on Windows with:
+
+  ```powershell
+  pnpm package:win
+  pnpm verify:release:windows
+  ```
+
+- Signed and notarized macOS distribution requires external Developer ID and
+  Apple notarization credentials supplied through local env vars or CI secrets.
+- Public release artifacts should be generated after rerunning the
+  pre-publication scan documented in `SECURITY.md`.

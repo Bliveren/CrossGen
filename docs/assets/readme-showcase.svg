@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="840" viewBox="0 0 1440 840" role="img" aria-label="Image2Tools desktop workspace showcase">
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1440" y2="840" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7f3ec"/>
+      <stop offset="1" stop-color="#e8f0ef"/>
+    </linearGradient>
+    <linearGradient id="stage" x1="372" y1="170" x2="1018" y2="728" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fffdf8"/>
+      <stop offset="1" stop-color="#e5efef"/>
+    </linearGradient>
+    <linearGradient id="image" x1="456" y1="250" x2="912" y2="642" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1f7a67"/>
+      <stop offset="1" stop-color="#103042"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#0e2528" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <rect width="1440" height="840" fill="url(#page)"/>
+  <rect x="90" y="72" width="1260" height="696" rx="34" fill="#f4f1ea" stroke="#d8d0c0" filter="url(#shadow)"/>
+  <rect x="90" y="72" width="286" height="696" rx="34" fill="#f4f1ea"/>
+  <path d="M376 72V768" stroke="#ddd5c6"/>
+  <rect x="1070" y="72" width="280" height="696" rx="34" fill="#f4f1ea"/>
+  <path d="M1070 72V768" stroke="#ddd5c6"/>
+  <text x="132" y="132" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#8a7254">IMAGE2TOOLS</text>
+  <text x="132" y="177" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="800" fill="#221f1c">GPT Image 2</text>
+  <text x="132" y="212" font-family="Inter, Arial, sans-serif" font-size="18" fill="#6c6258">Local-first desktop image workspace</text>
+  <rect x="132" y="258" width="206" height="48" rx="12" fill="#fffdf8" stroke="#d6d0c3"/>
+  <circle cx="158" cy="282" r="10" fill="#1f7a67"/>
+  <text x="180" y="289" font-family="Inter, Arial, sans-serif" font-size="18" fill="#2b2925">English / 中文</text>
+  <rect x="132" y="334" width="206" height="56" rx="12" fill="#1f6f61"/>
+  <text x="158" y="369" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#fffdf8">Provider saved</text>
+  <rect x="132" y="414" width="206" height="54" rx="12" fill="#fffdf8" stroke="#d6d0c3"/>
+  <text x="158" y="448" font-family="Inter, Arial, sans-serif" font-size="17" fill="#2b2925">Streaming preview</text>
+  <rect x="132" y="486" width="206" height="54" rx="12" fill="#fffdf8" stroke="#d6d0c3"/>
+  <text x="158" y="520" font-family="Inter, Arial, sans-serif" font-size="17" fill="#2b2925">Autosaved draft</text>
+  <rect x="412" y="112" width="616" height="66" rx="16" fill="#fffdf8" stroke="#d6d0c3"/>
+  <rect x="422" y="122" width="188" height="46" rx="10" fill="#1f6f61"/>
+  <text x="462" y="151" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700" fill="#fff">Generate</text>
+  <text x="660" y="151" font-family="Inter, Arial, sans-serif" font-size="17" fill="#4e473f">Edit image</text>
+  <text x="840" y="151" font-family="Inter, Arial, sans-serif" font-size="17" fill="#4e473f">Inpaint</text>
+  <rect x="412" y="210" width="616" height="500" rx="18" fill="url(#stage)" stroke="#d6d0c3"/>
+  <rect x="482" y="282" width="476" height="332" rx="32" fill="url(#image)"/>
+  <circle cx="594" cy="380" r="42" fill="#f1c86b"/>
+  <path d="M548 560 668 425l82 92 68-86 96 129H548Z" fill="#fffdf8"/>
+  <path d="M820 337 904 421" stroke="#fffdf8" stroke-width="28" stroke-linecap="round"/>
+  <path d="M852 306 936 390" stroke="#f1c86b" stroke-width="28" stroke-linecap="round"/>
+  <rect x="430" y="224" width="112" height="24" rx="12" fill="#e6f2ee"/>
+  <rect x="880" y="224" width="52" height="24" rx="12" fill="#fffdf8" stroke="#d6d0c3"/>
+  <rect x="944" y="224" width="52" height="24" rx="12" fill="#fffdf8" stroke="#d6d0c3"/>
+  <rect x="412" y="728" width="616" height="18" rx="9" fill="#e1d9ca"/>
+  <rect x="412" y="728" width="420" height="18" rx="9" fill="#1f6f61"/>
+  <text x="1108" y="132" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#8a7254">HISTORY</text>
+  <rect x="1108" y="166" width="204" height="126" rx="16" fill="#fffdf8" stroke="#d6d0c3"/>
+  <rect x="1124" y="182" width="70" height="70" rx="12" fill="#1f6f61"/>
+  <circle cx="1146" cy="207" r="9" fill="#f1c86b"/>
+  <path d="M1132 242 1156 215l18 20 14-18 20 25H1132Z" fill="#fffdf8"/>
+  <text x="1210" y="204" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#221f1c">succeeded</text>
+  <text x="1210" y="232" font-family="Inter, Arial, sans-serif" font-size="14" fill="#70665b">1024 x 1024</text>
+  <rect x="1108" y="316" width="204" height="126" rx="16" fill="#fffdf8" stroke="#d6d0c3"/>
+  <rect x="1124" y="332" width="70" height="70" rx="12" fill="#e8efe9"/>
+  <text x="1210" y="354" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#221f1c">partial</text>
+  <text x="1210" y="382" font-family="Inter, Arial, sans-serif" font-size="14" fill="#70665b">streaming</text>
+  <rect x="1108" y="466" width="204" height="126" rx="16" fill="#fffdf8" stroke="#d6d0c3"/>
+  <rect x="1124" y="482" width="70" height="70" rx="12" fill="#fbf2de"/>
+  <text x="1210" y="504" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#221f1c">reuse</text>
+  <text x="1210" y="532" font-family="Inter, Arial, sans-serif" font-size="14" fill="#70665b">prompt ready</text>
+</svg>

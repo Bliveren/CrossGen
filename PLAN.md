@@ -100,11 +100,9 @@
 ## 6.1 当前执行策略
 
 - 本仓库已从规划目录升级为实现仓库，集成分支为 `main`。
-- 所有提交使用 `Bliveren <aliveren_89@foxmail.com>`。
-- 已创建 private GitHub 远程 `origin`：`https://github.com/Bliveren/image2tools.git`，当前 `main` 已推送并跟踪 `origin/main`。
-- 后续子任务恢复“分支推送 -> PR -> CTO 审核 -> 合并”的完整流程；远程创建前完成的本地分支工作已由 CTO 本地审核合并后推送为 `main` 基线。
-- 本轮已交付可运行 MVP：配置、连接测试、文生图、图像编辑、mask 编辑、下载、历史、错误提示、基础测试、草稿/异常恢复、macOS 本地打包配置。
-- 当前本地 worktree 已清理完毕，仅保留 `main`。被放弃的 renderer 实验已非破坏性归档到远程分支 `origin/archive/abandoned-renderer-stash`，本地 stash 已删除。该实验已评估为旧版 UI 实验，未合入 `main`。
+- 采用常规 feature branch / pull request / review 流程；公开协作时不要求特定个人账号或私有远程。
+- 本轮已交付可运行 MVP：配置、连接测试、文生图、图像编辑、mask 编辑、下载、历史、错误提示、基础测试、草稿/异常恢复、跨平台打包配置。
+- 开源发布目标：MIT 许可证、敏感信息审计、Windows 安装包路径、中英文界面切换。
 
 ## 7. 里程碑拆解
 

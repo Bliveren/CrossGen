@@ -20,6 +20,8 @@ const bridge: AppBridge = {
   runJob: (request: RunJobRequest) => ipcRenderer.invoke("job:run", request),
   downloadAsset: (request: DownloadRequest) => ipcRenderer.invoke("asset:download", request),
   openAssetFolder: (assetPath: string) => ipcRenderer.invoke("asset:openFolder", assetPath),
+  checkForUpdates: () => ipcRenderer.invoke("updates:check"),
+  downloadAndInstallUpdate: () => ipcRenderer.invoke("updates:downloadAndInstall"),
   deleteJob: (jobId: string) => ipcRenderer.invoke("history:deleteJob", jobId),
   clearHistory: () => ipcRenderer.invoke("history:clear"),
   onJobEvent: (callback: (event: JobProgressEvent) => void) => {

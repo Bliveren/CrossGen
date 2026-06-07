@@ -9,6 +9,7 @@ import {
   FolderOpen,
   ImagePlus,
   KeyRound,
+  Languages,
   Loader2,
   Paintbrush,
   PlugZap,
@@ -18,7 +19,9 @@ import {
   SlidersHorizontal,
   Trash2,
   Wand2,
-  X
+  X,
+  ZoomIn,
+  ZoomOut
 } from "lucide-react";
 import {
   DEFAULT_BASE_URL,
@@ -43,8 +46,10 @@ import type {
   ModerationMode,
   ProviderConfig,
   WorkMode,
+  UpdateCheckResult,
   WorkspaceDraft
 } from "../shared/types";
+import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 
 type NoticeKind = "info" | "success" | "error";
 
@@ -63,6 +68,9 @@ const qualityOptions: ImageQuality[] = ["auto", "low", "medium", "high"];
 const formatOptions: ImageFormat[] = ["png", "jpeg", "webp"];
 const backgroundOptions: ImageBackground[] = ["auto", "opaque"];
 const moderationOptions: ModerationMode[] = ["auto", "low"];
+const MIN_PREVIEW_ZOOM = 0.25;
+const MAX_PREVIEW_ZOOM = 4;
+const PREVIEW_ZOOM_STEP = 0.25;
 
 const fallbackConfig: ProviderConfig = {
   id: "default",
@@ -78,26 +86,9 @@ const fallbackConfig: ProviderConfig = {
 };
 
 const fallbackSnapshot: AppSnapshot = {
+  appVersion: "0.0.0",
   config: fallbackConfig,
   history: []
-};
-
-const modeLabels: Record<WorkMode, { title: string; action: string; hint: string }> = {
-  generate: {
-    title: "Generate",
-    action: "Generate",
-    hint: "Prompt only"
-  },
-  edit: {
-    title: "Edit",
-    action: "Edit",
-    hint: "Use references"
-  },
-  inpaint: {
-    title: "Inpaint",
-    action: "Inpaint",
-    hint: "Source + mask"
-  }
 };
 
 function getBridge() {
@@ -107,6 +98,7 @@ function getBridge() {
 function assetSource(asset?: ImageAsset | InputAsset | null): string | undefined {
   if (!asset) return undefined;
   if ("dataUrl" in asset && asset.dataUrl) return asset.dataUrl;
+  if ("fileName" in asset && asset.path) return `image2tools-asset://image?path=${encodeURIComponent(asset.path)}`;
   if (asset.path) return `file://${encodeURI(asset.path)}`;
   return undefined;
 }
@@ -118,6 +110,10 @@ function getResultAssets(job?: GenerationJob | null): ImageAsset[] {
 function getBestResult(job?: GenerationJob | null): ImageAsset | undefined {
   const results = getResultAssets(job);
   return results[results.length - 1] ?? job?.outputs[job.outputs.length - 1];
+}
+
+function getJobError(job?: GenerationJob | null): string | null {
+  return job?.status === "failed" && job.error ? job.error : null;
 }
 
 function formatBytes(bytes: number): string {
@@ -146,11 +142,11 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-async function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+async function loadImage(dataUrl: string, copy: UiCopy): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("无法读取图片。"));
+    image.onerror = () => reject(new Error(copy.validation.cannotReadImage));
     image.src = dataUrl;
   });
 }
@@ -158,24 +154,25 @@ async function loadImage(dataUrl: string): Promise<HTMLImageElement> {
 async function inspectMask(
   sourceDataUrl: string | undefined,
   maskDataUrl: string | undefined,
+  copy: UiCopy,
   maskMimeType?: string,
   sourceMimeType?: string
 ): Promise<MaskCheck> {
   if (!maskDataUrl) {
-    return { ok: false, message: "Paint or upload a mask before inpaint." };
+    return { ok: false, message: copy.validation.paintOrUploadMask };
   }
 
   const maskType = validateMaskMimeType(maskMimeType);
-  if (!maskType.ok) return { ok: false, message: maskType.message ?? "Mask format is invalid." };
+  if (!maskType.ok) return { ok: false, message: localizeValidationMessage(maskType.message, copy) ?? copy.validation.maskFormatInvalid };
 
   const sourceFormat = validateMaskSourceFormat(sourceMimeType, maskMimeType);
-  if (!sourceFormat.ok) return { ok: false, message: sourceFormat.message ?? "Mask format is invalid." };
+  if (!sourceFormat.ok) return { ok: false, message: localizeValidationMessage(sourceFormat.message, copy) ?? copy.validation.maskFormatInvalid };
 
-  const mask = await loadImage(maskDataUrl);
+  const mask = await loadImage(maskDataUrl, copy);
   if (sourceDataUrl) {
-    const source = await loadImage(sourceDataUrl);
+    const source = await loadImage(sourceDataUrl, copy);
     if (source.naturalWidth !== mask.naturalWidth || source.naturalHeight !== mask.naturalHeight) {
-      return { ok: false, message: "Mask size must match the first source image." };
+      return { ok: false, message: copy.validation.maskSizeMismatch };
     }
   }
 
@@ -184,7 +181,7 @@ async function inspectMask(
   canvas.height = mask.naturalHeight;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) {
-    return { ok: false, message: "Cannot inspect mask alpha." };
+    return { ok: false, message: copy.validation.cannotInspectMaskAlpha };
   }
 
   context.drawImage(mask, 0, 0);
@@ -200,18 +197,21 @@ async function inspectMask(
   }
 
   if (paintedPixels === 0) {
-    return { ok: false, message: "Mask is empty." };
+    return { ok: false, message: copy.validation.maskEmpty };
   }
 
   if (transparentPixels === 0) {
-    return { ok: false, message: "Mask needs an alpha channel with transparent areas." };
+    return { ok: false, message: copy.validation.maskNeedsAlpha };
   }
 
-  return { ok: true, message: "Mask format, size, and alpha look valid." };
+  return { ok: true, message: copy.validation.maskLooksValid };
 }
 
 export function App() {
   const bridge = getBridge();
+  const [language, setLanguage] = useState<Language>(() => getInitialLanguage());
+  const copy = translations[language];
+  const modeLabels = copy.modes;
   const [snapshot, setSnapshot] = useState<AppSnapshot>(fallbackSnapshot);
   const [mode, setMode] = useState<WorkMode>("generate");
   const [prompt, setPrompt] = useState("A clean product photo of a matte black travel mug on a brushed steel counter");
@@ -225,7 +225,10 @@ export function App() {
   const [maskCheck, setMaskCheck] = useState<MaskCheck | null>(null);
   const [activeJob, setActiveJob] = useState<GenerationJob | null>(null);
   const [partialImages, setPartialImages] = useState<ImageAsset[]>([]);
-  const [notice, setNotice] = useState<Notice>({ kind: bridge ? "info" : "error", text: bridge ? "Ready." : "Browser preview: Electron IPC is unavailable." });
+  const [notice, setNotice] = useState<Notice>({
+    kind: bridge ? "info" : "error",
+    text: bridge ? copy.notices.ready : copy.notices.browserPreview
+  });
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [isClearingApiKey, setIsClearingApiKey] = useState(false);
@@ -238,6 +241,11 @@ export function App() {
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [hasUserChangedDraft, setHasUserChangedDraft] = useState(false);
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const [buttonFeedback, setButtonFeedback] = useState<Record<string, number>>({});
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
@@ -248,30 +256,58 @@ export function App() {
   const maskPreview = maskDataUrl ?? assetSource(maskAsset);
   const activeImage = getBestResult(activeJob) ?? partialImages[partialImages.length - 1];
   const activeImageSource = assetSource(activeImage);
+  const activeJobError = getJobError(activeJob);
   const sizeSelectValue = sizePresets.includes(params.size) ? params.size : "custom";
+  const previewZoomPercent = Math.round(previewZoom * 100);
 
   const filteredHistory = useMemo(() => {
     const query = historySearch.trim().toLowerCase();
     if (!query) return snapshot.history;
     return snapshot.history.filter((job) => {
-      const haystack = `${job.prompt} ${job.mode} ${job.status} ${job.createdAt}`.toLowerCase();
+      const haystack = `${job.prompt} ${job.mode} ${job.status} ${job.error ?? ""} ${job.createdAt}`.toLowerCase();
       return haystack.includes(query);
     });
   }, [historySearch, snapshot.history]);
 
   const modeError = useMemo(() => {
-    if (mode === "edit" && inputAssets.length === 0) return "Add at least one reference image.";
-    if (mode === "inpaint" && inputAssets.length === 0) return "Add a source image before inpainting.";
+    if (mode === "edit" && inputAssets.length === 0) return copy.validation.addReference;
+    if (mode === "inpaint" && inputAssets.length === 0) return copy.validation.addSource;
     if (mode !== "generate" && inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
-      return `GPT Image 2 supports up to ${MAX_GPT_IMAGE_INPUTS} input images.`;
+      return copy.validation.maxInputs(MAX_GPT_IMAGE_INPUTS);
     }
-    if (mode === "inpaint" && !maskPreview) return "Paint or upload a mask before inpainting.";
+    if (mode === "inpaint" && !maskPreview) return copy.validation.paintOrUploadMask;
     if (mode === "inpaint" && maskCheck && !maskCheck.ok) return maskCheck.message;
     return null;
-  }, [inputAssets.length, maskCheck, maskPreview, mode]);
+  }, [copy, inputAssets.length, maskCheck, maskPreview, mode]);
 
-  const validationError = getValidationError(params, prompt) ?? modeError;
+  const validationError = localizeValidationMessage(getValidationError(params, prompt), copy) ?? modeError;
   const canRun = !validationError && !isRunning;
+
+  useEffect(() => {
+    window.localStorage.setItem("image2tools.language", language);
+  }, [language]);
+
+  useEffect(() => {
+    if (!bridge) return;
+    setIsCheckingUpdate(true);
+    bridge
+      .checkForUpdates()
+      .then((result) => setUpdateCheck(result))
+      .catch((error) =>
+        setUpdateCheck({
+          status: "error",
+          currentVersion: snapshot.appVersion,
+          updateAvailable: false,
+          checkedAt: new Date().toISOString(),
+          message: normalizeNotice(error)
+        })
+      )
+      .finally(() => setIsCheckingUpdate(false));
+  }, []);
+
+  useEffect(() => {
+    setPreviewZoom(1);
+  }, [activeImageSource]);
 
   useEffect(() => {
     void refreshSnapshot();
@@ -301,20 +337,20 @@ export function App() {
     if (!bridge) return;
     return bridge.onJobEvent((event) => {
       if (event.type === "started") {
-        setNotice({ kind: "info", text: "Job started." });
+        setNotice({ kind: "info", text: copy.notices.jobStarted });
       }
       if (event.type === "partial" && event.image) {
         setPartialImages((current) => [...current, event.image as ImageAsset]);
-        setNotice({ kind: "info", text: `Partial image ${event.partialIndex ?? currentPartialLabel(partialImages.length)} received.` });
+        setNotice({ kind: "info", text: copy.notices.partialReceived(event.partialIndex ?? currentPartialLabel(partialImages.length)) });
       }
       if (event.type === "completed") {
-        setNotice({ kind: "success", text: "Image completed." });
+        setNotice({ kind: "success", text: copy.notices.imageCompleted });
       }
       if (event.type === "failed") {
-        setNotice({ kind: "error", text: event.error ?? "Job failed." });
+        setNotice({ kind: "error", text: event.error ?? copy.jobFailed });
       }
     });
-  }, [bridge, partialImages.length]);
+  }, [bridge, copy, partialImages.length]);
 
   useEffect(() => {
     const source = sourcePreview;
@@ -325,18 +361,18 @@ export function App() {
     }
 
     let cancelled = false;
-    inspectMask(source, mask, maskAsset?.mimeType ?? mimeTypeFromDataUrl(mask) ?? "image/png", inputAssets[0]?.mimeType)
+    inspectMask(source, mask, copy, maskAsset?.mimeType ?? mimeTypeFromDataUrl(mask) ?? "image/png", inputAssets[0]?.mimeType)
       .then((result) => {
         if (!cancelled) setMaskCheck(result);
       })
       .catch((error) => {
-        if (!cancelled) setMaskCheck({ ok: false, message: error instanceof Error ? error.message : "Mask validation failed." });
+        if (!cancelled) setMaskCheck({ ok: false, message: error instanceof Error ? error.message : copy.notices.maskValidationFailed });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [inputAssets, maskAsset?.mimeType, maskPreview, mode, sourcePreview]);
+  }, [copy, inputAssets, maskAsset?.mimeType, maskPreview, mode, sourcePreview]);
 
   async function refreshSnapshot() {
     if (!bridge) return;
@@ -373,7 +409,7 @@ export function App() {
     setMaskDataUrl(draft.maskDataUrl ?? null);
     setBrushSize(draft.brushSize);
     setDraftUpdatedAt(draft.updatedAt);
-    setNotice({ kind: "info", text: `Draft restored from ${formatDate(draft.updatedAt)}.` });
+    setNotice({ kind: "info", text: copy.notices.draftRestored(formatDate(draft.updatedAt)) });
   }
 
   async function clearDraft() {
@@ -382,7 +418,7 @@ export function App() {
       await bridge.clearDraft();
       setDraftUpdatedAt(null);
       setHasUserChangedDraft(false);
-      setNotice({ kind: "success", text: "Draft cleared." });
+      setNotice({ kind: "success", text: copy.notices.draftCleared });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -401,7 +437,7 @@ export function App() {
 
   async function saveConfig() {
     if (!bridge) {
-      setNotice({ kind: "error", text: "Electron bridge is required to save config." });
+      setNotice({ kind: "error", text: copy.notices.bridgeSaveConfig });
       return;
     }
     setIsSavingConfig(true);
@@ -416,7 +452,7 @@ export function App() {
       });
       setSnapshot((current) => ({ ...current, config }));
       setApiKey("");
-      setNotice({ kind: "success", text: "Config saved locally." });
+      setNotice({ kind: "success", text: copy.notices.configSaved });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
@@ -426,7 +462,7 @@ export function App() {
 
   async function testConnection() {
     if (!bridge) {
-      setNotice({ kind: "error", text: "Electron bridge is required to test the API connection." });
+      setNotice({ kind: "error", text: copy.notices.bridgeTestConnection });
       return;
     }
     setIsTestingConnection(true);
@@ -446,7 +482,7 @@ export function App() {
 
   async function clearApiKey() {
     if (!bridge) {
-      setNotice({ kind: "error", text: "Electron bridge is required to clear the saved API key." });
+      setNotice({ kind: "error", text: copy.notices.bridgeClearKey });
       return;
     }
     setIsClearingApiKey(true);
@@ -454,7 +490,7 @@ export function App() {
       const config = await bridge.clearApiKey();
       setSnapshot((current) => ({ ...current, config }));
       setApiKey("");
-      setNotice({ kind: "success", text: "Saved API key cleared." });
+      setNotice({ kind: "success", text: copy.notices.keyCleared });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
@@ -462,9 +498,45 @@ export function App() {
     }
   }
 
+  async function checkForUpdates() {
+    if (!bridge) return;
+    setIsCheckingUpdate(true);
+    try {
+      const result = await bridge.checkForUpdates();
+      setUpdateCheck(result);
+      setNotice({ kind: result.status === "error" ? "error" : "info", text: formatUpdateStatus(result) });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  }
+
+  async function downloadAndInstallUpdate() {
+    if (!bridge) return;
+    setIsInstallingUpdate(true);
+    try {
+      const result = await bridge.downloadAndInstallUpdate();
+      setNotice({ kind: "success", text: copy.updateReady(result.version) });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsInstallingUpdate(false);
+    }
+  }
+
+  function formatUpdateStatus(result: UpdateCheckResult | null): string {
+    if (!result) return copy.updateNotConfigured;
+    if (result.status === "not-configured") return result.message ?? copy.updateNotConfigured;
+    if (result.status === "current") return result.message ?? copy.updateCurrent;
+    if (result.status === "available" && result.latestVersion) return copy.updateAvailable(result.latestVersion);
+    if (result.status === "error") return result.message ?? copy.updateCheckFailed;
+    return result.message ?? copy.updateCurrent;
+  }
+
   async function selectImages() {
     if (!bridge) {
-      setNotice({ kind: "error", text: "Electron bridge is required to select local image paths." });
+      setNotice({ kind: "error", text: copy.notices.bridgeSelectImages });
       return;
     }
     const assets = await bridge.selectImages();
@@ -476,17 +548,16 @@ export function App() {
       const capped = next.length > MAX_GPT_IMAGE_INPUTS;
       setInputAssets(cappedNext);
       if (mode === "generate") setMode("edit");
-      const cappedNote = capped ? ` GPT Image 2 accepts up to ${MAX_GPT_IMAGE_INPUTS} input images.` : "";
       setNotice({
         kind: capped ? "info" : "success",
-        text: `${addedCount} image${addedCount === 1 ? "" : "s"} added, ${cappedNext.length} selected.${cappedNote}`
+        text: copy.notices.imagesAdded(addedCount, cappedNext.length, capped, MAX_GPT_IMAGE_INPUTS)
       });
     }
   }
 
   async function selectMask() {
     if (!bridge) {
-      setNotice({ kind: "error", text: "Electron bridge is required to select a mask." });
+      setNotice({ kind: "error", text: copy.notices.bridgeSelectMask });
       return;
     }
     const asset = await bridge.selectMask();
@@ -495,13 +566,13 @@ export function App() {
       setMaskAsset(asset);
       setMaskDataUrl(null);
       setMode("inpaint");
-      setNotice({ kind: "success", text: "Mask added." });
+      setNotice({ kind: "success", text: copy.notices.maskAdded });
     }
   }
 
   async function runJob() {
     if (!bridge) {
-      setNotice({ kind: "error", text: "Electron bridge is required to run image jobs." });
+      setNotice({ kind: "error", text: copy.notices.bridgeRunJob });
       return;
     }
     if (validationError) {
@@ -512,7 +583,7 @@ export function App() {
     setIsRunning(true);
     setPartialImages([]);
     setActiveJob(null);
-    setNotice({ kind: "info", text: `${modeLabels[mode].action} request sent.` });
+    setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[mode].action) });
 
     try {
       const job = await bridge.runJob({
@@ -528,7 +599,7 @@ export function App() {
         ...current,
         history: [job, ...current.history.filter((item) => item.id !== job.id)]
       }));
-      setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? `${modeLabels[mode].action} finished.` });
+      setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? copy.notices.actionFinished(modeLabels[mode].action) });
       if (job.status === "succeeded") {
         await bridge.clearDraft();
         setDraftUpdatedAt(null);
@@ -545,11 +616,12 @@ export function App() {
   async function downloadAsset(asset?: ImageAsset) {
     if (!bridge || !asset) return;
     try {
+      flashButton(`download:${asset.id}`);
       const savedPath = await bridge.downloadAsset({
         assetPath: asset.path,
         suggestedName: asset.fileName
       });
-      if (savedPath) setNotice({ kind: "success", text: `Saved to ${savedPath}` });
+      if (savedPath) setNotice({ kind: "success", text: copy.notices.savedTo(savedPath) });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -558,6 +630,7 @@ export function App() {
   async function openAssetFolder(asset?: ImageAsset) {
     if (!bridge || !asset) return;
     try {
+      flashButton(`folder:${asset.id}`);
       await bridge.openAssetFolder(asset.path);
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
@@ -570,7 +643,7 @@ export function App() {
       const history = await bridge.deleteJob(jobId);
       setSnapshot((current) => ({ ...current, history }));
       if (activeJob?.id === jobId) setActiveJob(null);
-      setNotice({ kind: "success", text: "Job deleted." });
+      setNotice({ kind: "success", text: copy.notices.jobDeleted });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -582,22 +655,24 @@ export function App() {
       const history = await bridge.clearHistory();
       setSnapshot((current) => ({ ...current, history }));
       setActiveJob(null);
-      setNotice({ kind: "success", text: "History cleared." });
+      setNotice({ kind: "success", text: copy.notices.historyCleared });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
   }
 
-  async function copyPrompt(value: string) {
+  async function copyPrompt(value: string, feedbackId = "copy:prompt") {
     try {
       await navigator.clipboard.writeText(value);
-      setNotice({ kind: "success", text: "Prompt copied." });
+      flashButton(feedbackId);
+      setNotice({ kind: "success", text: copy.notices.promptCopied });
     } catch {
-      setNotice({ kind: "error", text: "Clipboard is unavailable." });
+      setNotice({ kind: "error", text: copy.notices.clipboardUnavailable });
     }
   }
 
   function reuseJob(job: GenerationJob) {
+    flashButton(`reuse:${job.id}`);
     setMode(job.mode);
     setPrompt(job.prompt);
     setParams(job.params);
@@ -606,7 +681,7 @@ export function App() {
     setMaskDataUrl(null);
     setActiveJob(job);
     setHasUserChangedDraft(true);
-    setNotice({ kind: "info", text: "Job loaded into workspace." });
+    setNotice({ kind: "info", text: copy.notices.jobLoaded });
   }
 
   function removeInputAsset(assetId: string) {
@@ -615,6 +690,24 @@ export function App() {
     if (inputAssets[0]?.id === assetId) {
       clearPaintedMask();
     }
+  }
+
+  function flashButton(id: string) {
+    setButtonFeedback((current) => ({ ...current, [id]: Date.now() }));
+    window.setTimeout(() => {
+      setButtonFeedback((current) => {
+        const { [id]: _removed, ...rest } = current;
+        return rest;
+      });
+    }, 850);
+  }
+
+  function buttonFeedbackClass(id: string, base = "icon-button"): string {
+    return buttonFeedback[id] ? `${base} clicked` : base;
+  }
+
+  function adjustPreviewZoom(delta: number) {
+    setPreviewZoom((current) => clamp(Math.round((current + delta) * 100) / 100, MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM));
   }
 
   function handleSourceImageLoad() {
@@ -704,8 +797,48 @@ export function App() {
         <header className="brand-block">
           <p className="eyebrow">Image2Tools</p>
           <h1>GPT Image 2</h1>
-          <p className="muted">Generate, edit, inpaint, download.</p>
+          <p className="muted">{copy.tagline}</p>
         </header>
+
+        <section className="language-switcher" aria-label={copy.language}>
+          <Languages size={16} />
+          <span>{copy.language}</span>
+          <div className="segmented-control">
+            <button type="button" className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>
+              {copy.english}
+            </button>
+            <button type="button" className={language === "zh" ? "active" : ""} onClick={() => setLanguage("zh")}>
+              {copy.chinese}
+            </button>
+          </div>
+        </section>
+
+        <section className="update-panel">
+          <div className="section-title">
+            <RefreshCw size={16} />
+            <h2>{copy.updates}</h2>
+          </div>
+          <div className="update-status">
+            <span>
+              {copy.currentVersion}: {snapshot.appVersion}
+            </span>
+            <strong data-status={updateCheck?.status ?? "idle"}>{isCheckingUpdate ? copy.checkingUpdates : formatUpdateStatus(updateCheck)}</strong>
+          </div>
+          <div className="button-row">
+            <button type="button" className="secondary" onClick={checkForUpdates} disabled={!bridge || isCheckingUpdate || isInstallingUpdate}>
+              {isCheckingUpdate ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
+              {isCheckingUpdate ? copy.checkingUpdates : copy.checkUpdates}
+            </button>
+            <button
+              type="button"
+              onClick={downloadAndInstallUpdate}
+              disabled={!bridge || updateCheck?.status !== "available" || isCheckingUpdate || isInstallingUpdate}
+            >
+              {isInstallingUpdate ? <Loader2 className="spin" size={16} /> : <Download size={16} />}
+              {isInstallingUpdate ? copy.downloadingUpdate : copy.installUpdate}
+            </button>
+          </div>
+        </section>
 
         <form
           className="tool-section"
@@ -716,62 +849,62 @@ export function App() {
         >
           <div className="section-title">
             <KeyRound size={16} />
-            <h2>Provider</h2>
+            <h2>{copy.provider}</h2>
           </div>
           <label>
-            API Key
+            {copy.apiKey}
             <input
               type="password"
               autoComplete="off"
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
-              placeholder={snapshot.config.apiKeySaved ? "Saved locally" : "Paste API key"}
+              placeholder={snapshot.config.apiKeySaved ? copy.savedLocally : copy.pasteApiKey}
             />
           </label>
           <label>
-            Base URL
+            {copy.baseURL}
             <input value={baseURL} onChange={(event) => setBaseURL(event.target.value)} />
           </label>
           <div className="button-row">
             <button type="button" onClick={saveConfig} disabled={isSavingConfig}>
               {isSavingConfig ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-              Save
+              {copy.save}
             </button>
             <button type="button" className="secondary" onClick={testConnection} disabled={isTestingConnection}>
               {isTestingConnection ? <Loader2 className="spin" size={16} /> : <PlugZap size={16} />}
-              Test
+              {copy.test}
             </button>
             <button type="button" className="ghost" onClick={clearApiKey} disabled={isClearingApiKey || !snapshot.config.apiKeySaved}>
               {isClearingApiKey ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />}
-              Clear key
+              {copy.clearKey}
             </button>
           </div>
           <div className="config-status">
             <span className={snapshot.config.apiKeySaved ? "dot ok" : "dot"} />
-            {snapshot.config.apiKeySaved ? "Key saved" : "No key saved"}
+            {snapshot.config.apiKeySaved ? copy.keySaved : copy.noKeySaved}
           </div>
         </form>
 
         <section className="tool-section">
           <button type="button" className="section-toggle" onClick={() => setShowAdvanced((current) => !current)}>
             <SlidersHorizontal size={16} />
-            Parameters
-            <span>{showAdvanced ? "Hide" : "Show"}</span>
+            {copy.parameters}
+            <span>{showAdvanced ? copy.hide : copy.show}</span>
           </button>
 
           <div className="compact-grid">
-            <span>Size</span>
+            <span>{copy.size}</span>
             <strong>{params.size}</strong>
-            <span>Quality</span>
+            <span>{copy.quality}</span>
             <strong>{params.quality}</strong>
-            <span>Format</span>
+            <span>{copy.format}</span>
             <strong>{params.outputFormat.toUpperCase()}</strong>
           </div>
 
           {showAdvanced && (
             <div className="advanced-controls">
               <label>
-                Size
+                {copy.size}
                 <select
                   value={sizeSelectValue}
                   onChange={(event) => {
@@ -784,12 +917,12 @@ export function App() {
                       {size}
                     </option>
                   ))}
-                  <option value="custom">custom</option>
+                  <option value="custom">{copy.custom}</option>
                 </select>
               </label>
               {sizeSelectValue === "custom" && (
                 <label>
-                  Custom size
+                  {copy.customSize}
                   <input
                     value={customSize}
                     onChange={(event) => {
@@ -801,7 +934,7 @@ export function App() {
                 </label>
               )}
               <label>
-                Quality
+                {copy.quality}
                 <select value={params.quality} onChange={(event) => updateParams({ quality: event.target.value as ImageQuality })}>
                   {qualityOptions.map((quality) => (
                     <option key={quality} value={quality}>
@@ -811,7 +944,7 @@ export function App() {
                 </select>
               </label>
               <label>
-                Format
+                {copy.format}
                 <select value={params.outputFormat} onChange={(event) => updateParams({ outputFormat: event.target.value as ImageFormat })}>
                   {formatOptions.map((format) => (
                     <option key={format} value={format}>
@@ -821,7 +954,7 @@ export function App() {
                 </select>
               </label>
               <label>
-                Compression
+                {copy.compression}
                 <input
                   type="range"
                   min="0"
@@ -830,10 +963,10 @@ export function App() {
                   disabled={params.outputFormat === "png"}
                   onChange={(event) => updateParams({ outputCompression: Number(event.target.value) })}
                 />
-                <span className="range-value">{params.outputFormat === "png" ? "PNG ignores compression" : `${params.outputCompression}%`}</span>
+                <span className="range-value">{params.outputFormat === "png" ? copy.pngIgnoresCompression : `${params.outputCompression}%`}</span>
               </label>
               <label>
-                Background
+                {copy.background}
                 <select value={params.background} onChange={(event) => updateParams({ background: event.target.value as ImageBackground })}>
                   {backgroundOptions.map((background) => (
                     <option key={background} value={background}>
@@ -843,7 +976,7 @@ export function App() {
                 </select>
               </label>
               <label>
-                Count
+                {copy.count}
                 <input
                   type="number"
                   min="1"
@@ -854,10 +987,10 @@ export function App() {
               </label>
               <label className="checkbox-row">
                 <input type="checkbox" checked={params.stream} onChange={(event) => updateParams({ stream: event.target.checked })} />
-                Stream partial preview
+                {copy.streamPartialPreview}
               </label>
               <label>
-                Partial images
+                {copy.partialImages}
                 <input
                   type="number"
                   min="0"
@@ -868,7 +1001,7 @@ export function App() {
                 />
               </label>
               <label>
-                Moderation
+                {copy.moderation}
                 <select value={params.moderation} onChange={(event) => updateParams({ moderation: event.target.value as ModerationMode })}>
                   {moderationOptions.map((moderation) => (
                     <option key={moderation} value={moderation}>
@@ -878,7 +1011,7 @@ export function App() {
                 </select>
               </label>
               <label>
-                Timeout seconds
+                {copy.timeoutSeconds}
                 <input
                   type="number"
                   min="30"
@@ -888,7 +1021,7 @@ export function App() {
                 />
               </label>
               <p className={sizeValidation.ok ? "inline-check ok" : "inline-check error"}>
-                {sizeValidation.ok ? "Size is valid for GPT Image 2." : sizeValidation.message}
+                {sizeValidation.ok ? copy.sizeValid : localizeValidationMessage(sizeValidation.message, copy)}
               </p>
             </div>
           )}
@@ -897,12 +1030,12 @@ export function App() {
         <section className="tool-section draft-section">
           <div className="section-title">
             <RefreshCw size={16} />
-            <h2>Draft</h2>
+            <h2>{copy.draft}</h2>
           </div>
-          <p className="muted">{draftUpdatedAt ? `Autosaved ${formatDate(draftUpdatedAt)}` : "Workspace autosaves after edits."}</p>
+          <p className="muted">{draftUpdatedAt ? `${copy.autosaved} ${formatDate(draftUpdatedAt)}` : copy.workspaceAutosaves}</p>
           <button type="button" className="secondary" onClick={clearDraft} disabled={!draftUpdatedAt}>
             <Trash2 size={16} />
-            Clear draft
+            {copy.clearDraft}
           </button>
         </section>
 
@@ -914,7 +1047,7 @@ export function App() {
 
       <section className="workspace">
         <div className="workspace-topbar">
-          <div className="mode-tabs" role="tablist" aria-label="Mode">
+          <div className="mode-tabs" role="tablist" aria-label={copy.parameters}>
             {(Object.keys(modeLabels) as WorkMode[]).map((item) => (
               <button
                 key={item}
@@ -935,7 +1068,7 @@ export function App() {
           </div>
           <button type="button" className="ghost" onClick={refreshSnapshot} disabled={isLoadingSnapshot}>
             {isLoadingSnapshot ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
-            Sync
+            {copy.sync}
           </button>
         </div>
 
@@ -943,14 +1076,36 @@ export function App() {
           <section className="result-stage">
             <div className="stage-toolbar">
               <div>
-                <p className="eyebrow">Preview</p>
-                <h2>{activeJob ? `${modeLabels[activeJob.mode].title} result` : "Output canvas"}</h2>
+                <p className="eyebrow">{copy.preview}</p>
+                <h2>{activeJob ? `${modeLabels[activeJob.mode].title} ${copy.resultSuffix}` : copy.outputCanvas}</h2>
               </div>
               <div className="stage-actions">
-                <button type="button" className="icon-button" disabled={!activeImage} onClick={() => downloadAsset(activeImage)} title="Download">
+                <button type="button" className="icon-button" disabled={!activeImage} onClick={() => adjustPreviewZoom(-PREVIEW_ZOOM_STEP)} title={copy.zoomOut}>
+                  <ZoomOut size={17} />
+                </button>
+                <span className="zoom-readout" title={copy.zoomLevel}>{previewZoomPercent}%</span>
+                <button type="button" className="icon-button" disabled={!activeImage} onClick={() => adjustPreviewZoom(PREVIEW_ZOOM_STEP)} title={copy.zoomIn}>
+                  <ZoomIn size={17} />
+                </button>
+                <button type="button" className="ghost reset-zoom" disabled={!activeImage || previewZoom === 1} onClick={() => setPreviewZoom(1)}>
+                  {copy.resetZoom}
+                </button>
+                <button
+                  type="button"
+                  className={activeImage ? buttonFeedbackClass(`download:${activeImage.id}`) : "icon-button"}
+                  disabled={!activeImage}
+                  onClick={() => downloadAsset(activeImage)}
+                  title={copy.download}
+                >
                   <Download size={17} />
                 </button>
-                <button type="button" className="icon-button" disabled={!activeImage} onClick={() => openAssetFolder(activeImage)} title="Open folder">
+                <button
+                  type="button"
+                  className={activeImage ? buttonFeedbackClass(`folder:${activeImage.id}`) : "icon-button"}
+                  disabled={!activeImage}
+                  onClick={() => openAssetFolder(activeImage)}
+                  title={copy.openFolder}
+                >
                   <FolderOpen size={17} />
                 </button>
               </div>
@@ -958,11 +1113,19 @@ export function App() {
 
             <div className="result-canvas">
               {activeImageSource ? (
-                <img src={activeImageSource} alt="Generated result" />
+                <div className="zoom-surface">
+                  <img src={activeImageSource} alt={copy.generatedResult} style={{ width: `${previewZoom * 100}%` }} />
+                </div>
+              ) : activeJobError ? (
+                <div className="job-error-panel" role="alert">
+                  <AlertTriangle size={30} />
+                  <strong>{copy.jobFailed}</strong>
+                  <span>{activeJobError}</span>
+                </div>
               ) : (
                 <div className="empty-state">
                   <Wand2 size={30} />
-                  <span>Generated images and partial previews appear here.</span>
+                  <span>{copy.outputEmpty}</span>
                 </div>
               )}
             </div>
@@ -971,7 +1134,7 @@ export function App() {
               <div className="partial-strip">
                 {partialImages.map((asset, index) => (
                   <button key={asset.id} type="button" onClick={() => setActiveJob((job) => (job ? { ...job, outputs: [...job.outputs, asset] } : job))}>
-                    <img src={assetSource(asset)} alt={`Partial ${index + 1}`} />
+                    <img src={assetSource(asset)} alt={`${copy.partialImages} ${index + 1}`} />
                     <span>P{index + 1}</span>
                   </button>
                 ))}
@@ -982,7 +1145,7 @@ export function App() {
           <section className="input-panel">
             <div className="prompt-block">
               <label>
-                Prompt
+                {copy.prompt}
                 <textarea
                   value={prompt}
                   onChange={(event) => {
@@ -994,11 +1157,11 @@ export function App() {
               <div className="run-row">
                 <button type="button" className="primary-run" onClick={runJob} disabled={!canRun}>
                   {isRunning ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
-                  {isRunning ? "Running" : modeLabels[mode].action}
+                  {isRunning ? copy.running : modeLabels[mode].action}
                 </button>
-                <button type="button" className="secondary" onClick={() => copyPrompt(prompt)}>
+                <button type="button" className={buttonFeedbackClass("copy:prompt", "secondary")} onClick={() => copyPrompt(prompt)}>
                   <Clipboard size={16} />
-                  Copy
+                  {buttonFeedback["copy:prompt"] ? copy.clicked : copy.copy}
                 </button>
               </div>
               {validationError && <p className="inline-check error">{validationError}</p>}
@@ -1007,11 +1170,11 @@ export function App() {
             <div className="asset-tools">
               <button type="button" className="secondary" onClick={selectImages}>
                 <ImagePlus size={16} />
-                Add references
+                {copy.addReferences}
               </button>
               <button type="button" className="secondary" onClick={selectMask}>
                 <Paintbrush size={16} />
-                Upload mask
+                {copy.uploadMask}
               </button>
               {inputAssets.length > 0 && (
                 <button
@@ -1023,23 +1186,23 @@ export function App() {
                   }}
                 >
                   <X size={16} />
-                  Clear
+                  {copy.clear}
                 </button>
               )}
             </div>
 
             <div className="reference-grid">
               {inputAssets.length === 0 ? (
-                <div className="empty-inline">No reference images selected.</div>
+                <div className="empty-inline">{copy.noReferences}</div>
               ) : (
                 inputAssets.map((asset, index) => (
                   <div key={asset.id} className="asset-tile">
                     {assetSource(asset) && <img src={assetSource(asset)} alt={asset.name} />}
-                    <button type="button" className="tile-remove" onClick={() => removeInputAsset(asset.id)} title="Remove">
+                    <button type="button" className="tile-remove" onClick={() => removeInputAsset(asset.id)} title={copy.delete}>
                       <X size={14} />
                     </button>
                     <div>
-                      <strong>{index === 0 ? "Source" : `Reference ${index + 1}`}</strong>
+                      <strong>{index === 0 ? copy.source : `${copy.reference} ${index + 1}`}</strong>
                       <span>{asset.name}</span>
                       <small>{formatBytes(asset.sizeBytes)}</small>
                     </div>
@@ -1052,8 +1215,8 @@ export function App() {
               <div className="mask-editor">
                 <div className="mask-header">
                   <div>
-                    <h3>Mask</h3>
-                    <p>Paint the area to replace. With multiple references, the mask applies to the first image.</p>
+                    <h3>{copy.mask}</h3>
+                    <p>{copy.maskDescription}</p>
                   </div>
                   <div className="brush-controls">
                     <Eraser size={16} />
@@ -1067,7 +1230,7 @@ export function App() {
                         setBrushSize(Number(event.target.value));
                       }}
                     />
-                    <button type="button" className="icon-button" onClick={clearPaintedMask} title="Clear painted mask">
+                    <button type="button" className="icon-button" onClick={clearPaintedMask} title={copy.clearPaintedMask}>
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -1075,7 +1238,7 @@ export function App() {
                 <div className="mask-canvas-wrap">
                   {sourcePreview ? (
                     <>
-                      <img ref={sourceImageRef} src={sourcePreview} alt="Source for mask" onLoad={handleSourceImageLoad} />
+                      <img ref={sourceImageRef} src={sourcePreview} alt={copy.sourceForMask} onLoad={handleSourceImageLoad} />
                       <canvas
                         ref={maskCanvasRef}
                         onPointerDown={startPaint}
@@ -1087,14 +1250,14 @@ export function App() {
                   ) : (
                     <div className="empty-state">
                       <Brush size={24} />
-                      <span>Add a source image to paint a mask.</span>
+                      <span>{copy.addSourceForMask}</span>
                     </div>
                   )}
                 </div>
                 {maskPreview && (
                   <div className="mask-status">
                     {maskCheck?.ok ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
-                    <span>{maskCheck?.message ?? "Checking mask..."}</span>
+                    <span>{maskCheck?.message ?? copy.checkingMask}</span>
                   </div>
                 )}
               </div>
@@ -1106,29 +1269,36 @@ export function App() {
       <aside className="history">
         <header className="history-header">
           <div>
-            <p className="eyebrow">History</p>
-            <h2>Recent jobs</h2>
+            <p className="eyebrow">{copy.history}</p>
+            <h2>{copy.recentJobs}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={clearHistory} disabled={snapshot.history.length === 0} title="Clear history">
+          <button type="button" className="icon-button" onClick={clearHistory} disabled={snapshot.history.length === 0} title={copy.clearHistory}>
             <Trash2 size={16} />
           </button>
         </header>
 
         <label className="search-box">
           <Search size={15} />
-          <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder="Search prompt" />
+          <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder={copy.searchPrompt} />
         </label>
 
         <div className="history-list">
           {filteredHistory.length === 0 ? (
-            <div className="history-empty">No jobs yet.</div>
+            <div className="history-empty">{copy.noJobsYet}</div>
           ) : (
             filteredHistory.map((job) => {
               const result = getBestResult(job);
+              const jobError = getJobError(job);
               return (
                 <article key={job.id} className={activeJob?.id === job.id ? "history-item active" : "history-item"}>
-                  <button type="button" className="history-preview" onClick={() => setActiveJob(job)}>
-                    {result ? <img src={assetSource(result)} alt="History result" /> : <span>{job.status}</span>}
+                  <button
+                    type="button"
+                    className="history-preview"
+                    onClick={() => setActiveJob(job)}
+                    title={jobError ?? job.status}
+                    aria-label={jobError ? `${copy.jobFailed}: ${jobError}` : `${copy.openJob}: ${job.status}`}
+                  >
+                    {result ? <img src={assetSource(result)} alt={copy.historyResult} /> : <span>{job.status}</span>}
                   </button>
                   <div className="history-copy">
                     <div className="history-meta">
@@ -1139,19 +1309,30 @@ export function App() {
                     <small>
                       {job.status} · {job.params.size} · {job.params.quality} · {formatDuration(job.durationMs)}
                     </small>
+                    {jobError && <p className="history-error">{jobError}</p>}
                   </div>
                   <div className="history-actions">
-                    <button type="button" className="icon-button" onClick={() => reuseJob(job)} title="Reuse">
+                    <button type="button" className={buttonFeedbackClass(`reuse:${job.id}`, "history-action-button")} onClick={() => reuseJob(job)} title={copy.reuse}>
                       <RefreshCw size={15} />
+                      <span>{buttonFeedback[`reuse:${job.id}`] ? copy.clicked : copy.reuse}</span>
                     </button>
-                    <button type="button" className="icon-button" onClick={() => copyPrompt(job.prompt)} title="Copy prompt">
+                    <button type="button" className={buttonFeedbackClass(`copy:${job.id}`, "history-action-button")} onClick={() => copyPrompt(job.prompt, `copy:${job.id}`)} title={copy.copyPrompt}>
                       <Clipboard size={15} />
+                      <span>{buttonFeedback[`copy:${job.id}`] ? copy.clicked : copy.copy}</span>
                     </button>
-                    <button type="button" className="icon-button" disabled={!result} onClick={() => downloadAsset(result)} title="Download">
+                    <button
+                      type="button"
+                      className={result ? buttonFeedbackClass(`download:${result.id}`, "history-action-button") : "history-action-button"}
+                      disabled={!result}
+                      onClick={() => downloadAsset(result)}
+                      title={copy.download}
+                    >
                       <Download size={15} />
+                      <span>{result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}</span>
                     </button>
-                    <button type="button" className="icon-button danger" onClick={() => deleteJob(job.id)} title="Delete">
+                    <button type="button" className="history-action-button danger" onClick={() => deleteJob(job.id)} title={copy.delete}>
                       <Trash2 size={15} />
+                      <span>{copy.delete}</span>
                     </button>
                   </div>
                 </article>

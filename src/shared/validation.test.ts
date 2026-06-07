@@ -67,6 +67,7 @@ describe("gpt-image-2 validation", () => {
 
   it("normalizes base URLs and compression behavior", () => {
     expect(normalizeBaseURL("https://api.openai.com/v1///")).toBe("https://api.openai.com/v1");
+    expect(normalizeBaseURL("https://proxy.example.com//v1")).toBe("https://proxy.example.com/v1");
     expect(shouldSendCompression("png")).toBe(false);
     expect(shouldSendCompression("jpeg")).toBe(true);
     expect(shouldSendCompression("webp")).toBe(true);

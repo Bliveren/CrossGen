@@ -2,8 +2,11 @@
   "name": "image2tools",
   "version": "0.1.0",
   "description": "A simple GPT Image 2 desktop tool for generation, edits, inpainting, downloads, and local history.",
-  "author": "Bliveren <aliveren_89@foxmail.com>",
-  "license": "UNLICENSED",
+  "author": "Nowo, Corgnitor, and Image2Tools contributors",
+  "license": "MIT",
+  "image2tools": {
+    "updateManifestUrl": "https://bliveren.github.io/image2tools/updates/latest.json"
+  },
   "type": "module",
   "main": "dist/main/main.js",
   "scripts": {
@@ -17,6 +20,7 @@
     "package:dir": "pnpm build && electron-builder --dir",
     "package:mac": "pnpm build && electron-builder --mac -c.mac.notarize=false",
     "package:mac:signed": "pnpm verify:signing-ready && pnpm build && electron-builder --mac -c.mac.identity=\"$CSC_NAME\" -c.mac.notarize=true",
+    "package:win": "pnpm build && electron-builder --win",
     "preview": "vite preview --host 127.0.0.1",
     "start": "pnpm build:main && electron .",
     "test": "vitest run",

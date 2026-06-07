@@ -89,7 +89,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Package Windows app
-        run: pnpm package
+        run: pnpm package:win
 
       - name: Verify Windows package
         run: pnpm verify:release:windows

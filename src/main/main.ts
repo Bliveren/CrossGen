@@ -3,11 +3,13 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  protocol,
   safeStorage,
   shell,
   type IpcMainInvokeEvent
 } from "electron";
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +24,10 @@ import type {
   ProviderConfig,
   ProviderConfigInput,
   RunJobRequest,
+  UpdateCheckResult,
+  UpdateInstallResult,
+  UpdateManifestAsset,
+  UpdatePlatform,
   WorkspaceDraft,
   WorkspaceDraftInput
 } from "../shared/types.js";
@@ -37,7 +43,7 @@ import {
   validateWorkspaceDraftInput
 } from "../shared/validation.js";
 import { buildEndpoint, fetchWithTimeout, runOpenAIImageJob } from "./services/openaiImage.js";
-import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePaths } from "./services/assetOwnership.js";
+import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePaths, normalizeManagedAssetPath } from "./services/assetOwnership.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -45,6 +51,19 @@ const STATE_VERSION = 1;
 const MAX_HISTORY = 100;
 const FALLBACK_KEY_PREFIX = "plain:";
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+const ASSET_PROTOCOL = "image2tools-asset";
+const UPDATE_TIMEOUT_MS = 30000;
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: ASSET_PROTOCOL,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true
+    }
+  }
+]);
 
 interface StoredConfig {
   id: string;
@@ -75,6 +94,19 @@ interface ApiErrorPayload {
   };
 }
 
+interface UpdateManifest {
+  version?: unknown;
+  notes?: unknown;
+  pubDate?: unknown;
+  assets?: unknown;
+}
+
+interface PackageMetadata {
+  image2tools?: {
+    updateManifestUrl?: unknown;
+  };
+}
+
 const defaultStoredConfig: StoredConfig = {
   id: "default",
   name: "OpenAI",
@@ -90,6 +122,7 @@ const defaultStoredConfig: StoredConfig = {
 
 let stateCache: AppStateFile | null = null;
 let recoveredInterruptedJobs = false;
+let latestUpdateCheck: UpdateCheckResult | null = null;
 
 interface WriteStateOptions {
   updateBackup?: boolean;
@@ -118,6 +151,33 @@ function createWindow(): void {
   } else {
     void window.loadFile(path.join(__dirname, "../../dist-renderer/index.html"));
   }
+}
+
+function registerAssetProtocol(): void {
+  protocol.handle(ASSET_PROTOCOL, async (request) => {
+    const url = new URL(request.url);
+    const assetPath = url.searchParams.get("path") ?? "";
+    const normalized = normalizeManagedAssetPath(getImagesDir(), assetPath);
+
+    if (!normalized) {
+      return new Response("Forbidden", { status: 403 });
+    }
+
+    try {
+      const safePath = await assertManagedRegularFile(getImagesDir(), normalized);
+      const content = await fs.readFile(safePath);
+      const mimeType = mimeTypeForFile(safePath);
+      return new Response(new Blob([content], { type: mimeType }), {
+        headers: {
+          "cache-control": "no-store",
+          "content-type": mimeType
+        }
+      });
+    } catch (error) {
+      console.warn("[image2tools] Failed to serve image asset.", sanitizeError(error));
+      return new Response("Not found", { status: 404 });
+    }
+  });
 }
 
 function getStatePath(): string {
@@ -153,6 +213,10 @@ function toPublicConfig(config: StoredConfig): ProviderConfig {
     timeoutMs: config.timeoutMs,
     updatedAt: config.updatedAt
   };
+}
+
+function getAppVersion(): string {
+  return app.getVersion();
 }
 
 async function ensureDir(dirPath: string): Promise<void> {
@@ -322,6 +386,132 @@ function redactLikelySecrets(value: string): string {
   return value.replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-...redacted");
 }
 
+function compareVersions(a: string, b: string): number {
+  const left = parseVersion(a);
+  const right = parseVersion(b);
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (left[index] ?? 0) - (right[index] ?? 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+function parseVersion(version: string): number[] {
+  return version
+    .replace(/^v/i, "")
+    .split(/[.-]/)
+    .map((part) => Number.parseInt(part, 10))
+    .map((part) => (Number.isFinite(part) ? part : 0));
+}
+
+function parseUpdateManifest(payload: unknown): { version: string; notes?: string; pubDate?: string; assets: UpdateManifestAsset[] } {
+  if (!isRecord(payload)) {
+    throw new Error("更新 manifest 格式无效。");
+  }
+
+  const manifest = payload as UpdateManifest;
+  if (typeof manifest.version !== "string" || !manifest.version.trim()) {
+    throw new Error("更新 manifest 缺少 version。");
+  }
+  if (!Array.isArray(manifest.assets)) {
+    throw new Error("更新 manifest 缺少 assets。");
+  }
+
+  return {
+    version: manifest.version.trim(),
+    notes: typeof manifest.notes === "string" ? manifest.notes : undefined,
+    pubDate: typeof manifest.pubDate === "string" ? manifest.pubDate : undefined,
+    assets: manifest.assets.map(parseUpdateAsset)
+  };
+}
+
+function parseUpdateAsset(value: unknown): UpdateManifestAsset {
+  if (!isRecord(value)) {
+    throw new Error("更新资源格式无效。");
+  }
+  if (!isUpdatePlatform(value.platform)) {
+    throw new Error("更新资源平台无效。");
+  }
+  if (typeof value.url !== "string" || !isAllowedUpdateUrl(value.url)) {
+    throw new Error("更新资源 URL 必须是 https，或本地调试用 http loopback。");
+  }
+  if (value.arch !== undefined && typeof value.arch !== "string") {
+    throw new Error("更新资源架构无效。");
+  }
+  if (value.fileName !== undefined && typeof value.fileName !== "string") {
+    throw new Error("更新资源文件名无效。");
+  }
+  if (typeof value.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(value.sha256)) {
+    throw new Error("更新资源必须提供 64 位 sha256。");
+  }
+  return {
+    platform: value.platform,
+    arch: typeof value.arch === "string" && value.arch.trim() ? value.arch.trim() : undefined,
+    url: value.url,
+    fileName: typeof value.fileName === "string" && value.fileName.trim() ? value.fileName.trim() : undefined,
+    sha256: value.sha256.toLowerCase()
+  };
+}
+
+function selectUpdateAsset(assets: UpdateManifestAsset[]): UpdateManifestAsset | undefined {
+  const platform = process.platform as UpdatePlatform;
+  const arch = process.arch;
+  return (
+    assets.find((asset) => asset.platform === platform && asset.arch === arch) ??
+    assets.find((asset) => asset.platform === platform && !asset.arch) ??
+    assets.find((asset) => asset.platform === "all" && asset.arch === arch) ??
+    assets.find((asset) => asset.platform === "all" && !asset.arch)
+  );
+}
+
+function isUpdatePlatform(value: unknown): value is UpdatePlatform {
+  return value === "darwin" || value === "win32" || value === "linux" || value === "all";
+}
+
+function isAllowedUpdateUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:") return true;
+    return url.protocol === "http:" && isLoopbackHostname(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function safeUpdateFileName(asset: UpdateManifestAsset): string {
+  const fromManifest = asset.fileName?.trim();
+  if (fromManifest) return path.basename(fromManifest);
+  const fromUrl = path.basename(new URL(asset.url).pathname);
+  return fromUrl || `Image2Tools-update-${Date.now()}`;
+}
+
+function getUpdatesDir(): string {
+  return path.join(app.getPath("userData"), "updates");
+}
+
+function getUpdateManifestUrl(): string {
+  const envUrl = process.env.IMAGE2TOOLS_UPDATE_URL?.trim();
+  if (envUrl) return envUrl;
+
+  try {
+    const packagePath = path.join(app.getAppPath(), "package.json");
+    const packageJson = JSON.parse(readFileSync(packagePath, "utf8")) as PackageMetadata;
+    const packageUrl = packageJson.image2tools?.updateManifestUrl;
+    return typeof packageUrl === "string" ? packageUrl.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
@@ -434,6 +624,7 @@ function sendJobEvent(event: JobProgressEvent): void {
 async function handleGetSnapshot(): Promise<AppSnapshot> {
   const state = await readState();
   return {
+    appVersion: getAppVersion(),
     config: toPublicConfig(state.config),
     history: state.history,
     draft: state.draft
@@ -644,6 +835,114 @@ async function handleOpenAssetFolder(_event: IpcMainInvokeEvent, assetPath: stri
   }
 }
 
+async function handleCheckForUpdates(): Promise<UpdateCheckResult> {
+  const currentVersion = getAppVersion();
+  const checkedAt = new Date().toISOString();
+  const manifestUrl = getUpdateManifestUrl();
+
+  if (!manifestUrl) {
+    latestUpdateCheck = {
+      status: "not-configured",
+      currentVersion,
+      updateAvailable: false,
+      checkedAt,
+      message: "未配置更新检查地址。"
+    };
+    return latestUpdateCheck;
+  }
+
+  if (!isAllowedUpdateUrl(manifestUrl)) {
+    latestUpdateCheck = {
+      status: "error",
+      currentVersion,
+      updateAvailable: false,
+      checkedAt,
+      message: "更新 manifest URL 必须是 https，或本地调试用 http loopback。"
+    };
+    return latestUpdateCheck;
+  }
+
+  try {
+    const response = await fetchWithTimeout(
+      fetch,
+      manifestUrl,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      UPDATE_TIMEOUT_MS
+    );
+
+    if (!response.ok) {
+      throw new Error(`更新检查失败：HTTP ${response.status}`);
+    }
+
+    const manifest = parseUpdateManifest(await response.json());
+    const asset = selectUpdateAsset(manifest.assets);
+    const updateAvailable = compareVersions(manifest.version, currentVersion) > 0;
+    latestUpdateCheck = {
+      status: updateAvailable && asset ? "available" : "current",
+      currentVersion,
+      latestVersion: manifest.version,
+      updateAvailable: updateAvailable && Boolean(asset),
+      checkedAt,
+      notes: manifest.notes,
+      pubDate: manifest.pubDate,
+      asset,
+      message: updateAvailable && !asset ? "发现新版本，但没有适用于当前系统的安装包。" : undefined
+    };
+    return latestUpdateCheck;
+  } catch (error) {
+    latestUpdateCheck = {
+      status: "error",
+      currentVersion,
+      updateAvailable: false,
+      checkedAt,
+      message: normalizeError(error)
+    };
+    return latestUpdateCheck;
+  }
+}
+
+async function handleDownloadAndInstallUpdate(): Promise<UpdateInstallResult> {
+  const update = latestUpdateCheck?.status === "available" ? latestUpdateCheck : await handleCheckForUpdates();
+  if (update.status !== "available" || !update.asset || !update.latestVersion) {
+    throw new Error(update.message ?? "当前没有可安装的更新。");
+  }
+
+  await ensureDir(getUpdatesDir());
+  const fileName = safeUpdateFileName(update.asset);
+  const filePath = path.join(getUpdatesDir(), fileName);
+  const response = await fetchWithTimeout(fetch, update.asset.url, { method: "GET" }, UPDATE_TIMEOUT_MS);
+
+  if (!response.ok) {
+    throw new Error(`更新包下载失败：HTTP ${response.status}`);
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const actual = createHash("sha256").update(bytes).digest("hex");
+  if (actual !== update.asset.sha256) {
+    throw new Error("更新包校验失败。");
+  }
+
+  await fs.writeFile(filePath, bytes);
+  if (process.platform !== "win32") {
+    await fs.chmod(filePath, 0o755).catch(() => undefined);
+  }
+  const openError = await shell.openPath(filePath);
+  if (openError) {
+    throw new Error(`更新包已下载，但无法打开安装程序：${openError}`);
+  }
+
+  return {
+    version: update.latestVersion,
+    filePath,
+    message: "更新包已下载并打开安装程序。"
+  };
+}
+
 async function handleDeleteJob(_event: IpcMainInvokeEvent, jobId: string): Promise<GenerationJob[]> {
   const state = await readState();
   const job = state.history.find((item) => item.id === jobId);
@@ -679,12 +978,15 @@ function registerIpcHandlers(): void {
   ipcMain.handle("job:run", handleRunJob);
   ipcMain.handle("asset:download", handleDownloadAsset);
   ipcMain.handle("asset:openFolder", handleOpenAssetFolder);
+  ipcMain.handle("updates:check", handleCheckForUpdates);
+  ipcMain.handle("updates:downloadAndInstall", handleDownloadAndInstallUpdate);
   ipcMain.handle("history:deleteJob", handleDeleteJob);
   ipcMain.handle("history:clear", handleClearHistory);
 }
 
 app.whenReady().then(() => {
   registerIpcHandlers();
+  registerAssetProtocol();
   createWindow();
 
   app.on("activate", () => {

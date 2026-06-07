@@ -16,12 +16,12 @@ pnpm build
 pnpm verify:mock-api
 ```
 
-Current tracking milestone:
-https://github.com/Bliveren/image2tools/milestone/1
+Use public issues, milestones, or project boards only after the repository is
+public. Do not include private account or billing details in public trackers.
 
 ## 1. Real Image 2 API Acceptance
 
-Tracked by GitHub issue #1.
+Use a public tracking issue after the repository is public.
 
 Prerequisites:
 
@@ -59,11 +59,12 @@ Expected coverage:
 - optional streaming generation and edit partial/final events
 
 Artifacts are written to ignored `real-api-artifacts/`. After success, update
-`CHECKLIST.md`, `TODO.md`, and `COMPLETION_AUDIT.md`, then close issue #1.
+`CHECKLIST.md`, `TODO.md`, and `COMPLETION_AUDIT.md`, then close the related
+tracking issue if one exists.
 
 ## 2. GitHub Actions Billing Gate
 
-Tracked by GitHub issue #5.
+Use a public tracking issue after the repository is public.
 
 Do not rerun known-failing workflows until the account billing or spending-limit
 restriction is fixed. The current failure signature is jobs that fail before
@@ -77,12 +78,12 @@ UI or use a fresh PR/push if rerun is unavailable. Acceptance requires:
 - Windows package job starts and passes, or a runner-policy issue is documented
 - Linux package job starts and passes, or a runner-policy issue is documented
 
-Record the green run URL in `COMPLETION_AUDIT.md` and close issue #5 when CI
-can execute normally.
+Record the green run URL in `COMPLETION_AUDIT.md` and close the related
+tracking issue when CI can execute normally.
 
 ## 3. Signed And Notarized macOS Release
 
-Tracked by GitHub issue #3.
+Use a public tracking issue after the repository is public.
 
 Prerequisites:
 
@@ -120,11 +121,11 @@ pnpm verify:release:mac
 ```
 
 After success, update release metadata, `CHECKLIST.md`, `TODO.md`, and
-`COMPLETION_AUDIT.md`, then close issue #3.
+`COMPLETION_AUDIT.md`, then close the related tracking issue if one exists.
 
 ## 4. Windows And Linux Native Validation
 
-Tracked by GitHub issue #4.
+Use a public tracking issue after the repository is public.
 
 Current partial evidence:
 
@@ -175,7 +176,7 @@ Manual platform checks:
 
 Record OS/version, package artifact paths, launch results, and any
 platform-specific notes in `CHECKLIST.md` and `COMPLETION_AUDIT.md`, then close
-issue #4.
+the related tracking issue if one exists.
 
 ## Final Completion Pass
 
@@ -186,10 +187,7 @@ pnpm build
 pnpm verify:mock-api
 pnpm verify:release:mac
 git status --short --branch
-gh pr list --state open
-gh issue list --state open
 ```
 
-Completion requires no open project-blocking issues, no open PRs, clean and
-synced `main`, current audit docs, and real evidence for the actual API,
-release, CI, and native-platform gates.
+Completion requires a clean and synced release branch, current audit docs, and
+real evidence for the actual API, release, CI, and native-platform gates.
