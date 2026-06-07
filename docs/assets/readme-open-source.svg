@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="520" viewBox="0 0 1440 520" role="img" aria-label="Image2Tools open source readiness">
+  <rect width="1440" height="520" rx="28" fill="#102f3f"/>
+  <circle cx="1230" cy="92" r="150" fill="#1f7a67" opacity="0.32"/>
+  <circle cx="250" cy="420" r="190" fill="#f1c86b" opacity="0.16"/>
+  <text x="92" y="98" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="800" fill="#fffdf8">MIT open-source readiness</text>
+  <text x="92" y="136" font-family="Inter, Arial, sans-serif" font-size="18" fill="#d9ebe6">The source project is suitable for MIT publication after the current audit gates are kept clean.</text>
+  <rect x="92" y="190" width="370" height="210" rx="20" fill="#fffdf8"/>
+  <text x="126" y="244" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="800" fill="#1f6f61">License</text>
+  <text x="126" y="286" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">LICENSE contains MIT text.</text>
+  <text x="126" y="318" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">package.json declares MIT.</text>
+  <text x="126" y="350" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">Copyright is aligned to project</text>
+  <text x="126" y="382" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">sponsors and contributors.</text>
+  <rect x="535" y="190" width="370" height="210" rx="20" fill="#fffdf8"/>
+  <text x="569" y="244" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="800" fill="#1f6f61">Dependencies</text>
+  <text x="569" y="286" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">Runtime packages report MIT/ISC.</text>
+  <text x="569" y="318" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">Development packages are common</text>
+  <text x="569" y="350" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">permissive licenses for tooling.</text>
+  <text x="569" y="382" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">No copyleft runtime blocker found.</text>
+  <rect x="978" y="190" width="370" height="210" rx="20" fill="#fffdf8"/>
+  <text x="1012" y="244" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="800" fill="#1f6f61">Security</text>
+  <text x="1012" y="286" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">Secret scans only found fixtures,</text>
+  <text x="1012" y="318" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">environment variable names, and</text>
+  <text x="1012" y="350" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">expected Authorization code paths.</text>
+  <text x="1012" y="382" font-family="Inter, Arial, sans-serif" font-size="17" fill="#332f2a">Release signing remains external.</text>
+</svg>

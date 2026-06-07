@@ -39,7 +39,17 @@ export interface ValidationResult {
 export function normalizeBaseURL(value: unknown): string {
   if (typeof value !== "string") return DEFAULT_BASE_URL;
   const trimmed = value.trim().replace(/\/+$/, "");
-  return trimmed || DEFAULT_BASE_URL;
+  if (!trimmed) return DEFAULT_BASE_URL;
+
+  try {
+    const url = new URL(trimmed);
+    url.pathname = url.pathname.replace(/\/{2,}/g, "/").replace(/\/+$/, "");
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return trimmed;
+  }
 }
 
 export function redactSecret(value: unknown): string {

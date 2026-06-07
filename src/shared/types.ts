@@ -120,6 +120,7 @@ export interface ConnectionTestResult {
 }
 
 export interface AppSnapshot {
+  appVersion: string;
   config: ProviderConfig;
   history: GenerationJob[];
   draft?: WorkspaceDraft;
@@ -144,6 +145,34 @@ export interface WorkspaceDraft extends WorkspaceDraftInput {
   updatedAt: string;
 }
 
+export type UpdatePlatform = "darwin" | "win32" | "linux" | "all";
+
+export interface UpdateManifestAsset {
+  platform: UpdatePlatform;
+  arch?: string;
+  url: string;
+  fileName?: string;
+  sha256: string;
+}
+
+export interface UpdateCheckResult {
+  status: "not-configured" | "current" | "available" | "error";
+  currentVersion: string;
+  latestVersion?: string;
+  updateAvailable: boolean;
+  checkedAt: string;
+  notes?: string;
+  pubDate?: string;
+  asset?: UpdateManifestAsset;
+  message?: string;
+}
+
+export interface UpdateInstallResult {
+  version: string;
+  filePath: string;
+  message: string;
+}
+
 export interface AppBridge {
   getSnapshot: () => Promise<AppSnapshot>;
   saveConfig: (input: ProviderConfigInput) => Promise<ProviderConfig>;
@@ -156,6 +185,8 @@ export interface AppBridge {
   runJob: (request: RunJobRequest) => Promise<GenerationJob>;
   downloadAsset: (request: DownloadRequest) => Promise<string | null>;
   openAssetFolder: (assetPath: string) => Promise<void>;
+  checkForUpdates: () => Promise<UpdateCheckResult>;
+  downloadAndInstallUpdate: () => Promise<UpdateInstallResult>;
   deleteJob: (jobId: string) => Promise<GenerationJob[]>;
   clearHistory: () => Promise<GenerationJob[]>;
   onJobEvent: (callback: (event: JobProgressEvent) => void) => () => void;

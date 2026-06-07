@@ -94,7 +94,7 @@ describe("asset ownership checks", () => {
         {
           id: "input",
           name: "source.png",
-          path: "/Users/alive/source.png",
+          path: path.join(os.tmpdir(), "source.png"),
           mimeType: "image/png",
           sizeBytes: 1
         }

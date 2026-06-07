@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { GenerationJob, ImageAsset, ImageParams, InputAsset, JobProgressEvent, UsageDetails } from "../../shared/types.js";
 import {
+  dataUrlToBase64,
   extensionForFormat,
   mimeTypeForFormat,
   shouldSendCompression,
@@ -11,13 +12,15 @@ import {
 } from "../../shared/validation.js";
 
 export interface ImagesResponse {
-  data?: Array<{ b64_json?: string; revised_prompt?: string }>;
+  data?: Array<{ b64_json?: string; url?: string; revised_prompt?: string }>;
   usage?: UsageDetails;
 }
 
 export interface ImageStreamEvent {
   type?: string;
   b64_json?: string;
+  url?: string;
+  data?: Array<{ b64_json?: string; url?: string }>;
   partial_image_index?: number;
   usage?: UsageDetails;
   error?: {
@@ -160,8 +163,9 @@ async function runEdit(
     form.append(key, String(value));
   }
 
+  const imageFieldName = job.inputAssets.length === 1 ? "image" : "image[]";
   for (const asset of job.inputAssets) {
-    form.append("image[]", await assetToBlob(asset), asset.name);
+    form.append(imageFieldName, await assetToBlob(asset), asset.name);
   }
 
   if (job.maskAsset) {
@@ -201,16 +205,33 @@ async function handleImagesResponse(
   }
 
   if (job.params.stream) {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      return handleJsonImagesResponse(response, job, runtime);
+    }
     return handleStreamResponse(response, job, eventPrefix, runtime);
   }
 
-  const payload = (await response.json()) as ImagesResponse;
-  const outputs: ImageAsset[] = [];
-  for (const [index, item] of (payload.data ?? []).entries()) {
-    if (item.b64_json) {
-      outputs.push(await saveBase64Image(job.id, item.b64_json, job.params, "result", index, runtime));
-    }
+  return handleJsonImagesResponse(response, job, runtime);
+}
+
+async function handleJsonImagesResponse(
+  response: Response,
+  job: GenerationJob,
+  runtime: OpenAIImageRuntime
+): Promise<GenerationJob> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType && !contentType.includes("application/json")) {
+    throw new Error(await readUnexpectedImageResponse(response, "JSON 图片结果"));
   }
+
+  let payload: ImagesResponse;
+  try {
+    payload = (await response.json()) as ImagesResponse;
+  } catch {
+    throw new Error("OpenAI API 返回的图片结果不是有效 JSON。请检查 Base URL 是否指向 OpenAI 兼容的 /v1 接口。");
+  }
+  const outputs = await saveImageItems(job, payload.data ?? [], "result", runtime);
 
   if (outputs.length === 0) {
     throw new Error("OpenAI API 没有返回可保存的图片。");
@@ -235,7 +256,7 @@ async function readApiError(response: Response): Promise<string> {
     if (contentType.includes("application/json")) {
       const payload = (await response.json()) as ApiErrorPayload;
       const message = payload.error?.message ?? payload.error?.code ?? payload.error?.type;
-      return message ? `OpenAI API 请求失败：${message}${requestSuffix}` : fallback;
+      return message ? `OpenAI API 请求失败：${redactLikelySecrets(message)}${requestSuffix}` : fallback;
     }
 
     const text = await response.text();
@@ -243,6 +264,13 @@ async function readApiError(response: Response): Promise<string> {
   } catch {
     return fallback;
   }
+}
+
+async function readUnexpectedImageResponse(response: Response, expected: string): Promise<string> {
+  const contentType = response.headers.get("content-type") ?? "unknown";
+  const text = redactLikelySecrets((await response.text()).trim()).slice(0, 240);
+  const suffix = text ? ` 响应开头：${text}` : "";
+  return `OpenAI API 返回了非预期响应，期望 ${expected}，实际 Content-Type: ${contentType}.${suffix}`;
 }
 
 function redactLikelySecrets(value: string): string {
@@ -266,16 +294,17 @@ async function handleStreamResponse(
 
   await parseSSE(response.body, async (event) => {
     if (event.error?.message) {
-      throw new Error(`OpenAI API 请求失败：${event.error.message}`);
+      throw new Error(`OpenAI API 请求失败：${redactLikelySecrets(event.error.message)}`);
     }
-    if (!event.b64_json) return;
 
     const type = event.type ?? "";
     const isPartial = type === `${eventPrefix}.partial_image` || type.endsWith(".partial_image");
     const sourceType = isPartial ? "partial" : "result";
     const index = isPartial ? event.partial_image_index ?? partialIndex++ : resultIndex++;
-    const image = await saveBase64Image(job.id, event.b64_json, job.params, sourceType, index, runtime);
-    outputs.push(image);
+    const items = event.data?.length ? event.data : [{ b64_json: event.b64_json, url: event.url }];
+    const images = await saveImageItems(job, items, sourceType, runtime, index);
+    if (images.length === 0) return;
+    outputs.push(...images);
 
     if (event.usage) {
       usage = event.usage;
@@ -286,7 +315,7 @@ async function handleStreamResponse(
         jobId: job.id,
         type: "partial",
         partialIndex: index,
-        image
+        image: images[0]
       });
     }
   });
@@ -326,6 +355,38 @@ export async function parseSSE(body: ReadableStream<Uint8Array>, onEvent: (event
   if (buffer.trim()) {
     await processSSEBlock(buffer, onEvent);
   }
+}
+
+async function saveImageItems(
+  job: GenerationJob,
+  items: Array<{ b64_json?: string; url?: string }>,
+  sourceType: "result" | "partial",
+  runtime: OpenAIImageRuntime,
+  firstIndex = 0
+): Promise<ImageAsset[]> {
+  const outputs: ImageAsset[] = [];
+  for (const [offset, item] of items.entries()) {
+    const b64Json = await imageItemToBase64(item);
+    if (b64Json) {
+      outputs.push(await saveBase64Image(job.id, b64Json, job.params, sourceType, firstIndex + offset, runtime));
+    }
+  }
+  return outputs;
+}
+
+async function imageItemToBase64(item: { b64_json?: string; url?: string }): Promise<string | null> {
+  if (item.b64_json) return item.b64_json;
+  if (!item.url) return null;
+  if (item.url.startsWith("data:image/")) {
+    return dataUrlToBase64(item.url);
+  }
+
+  const response = await fetch(item.url);
+  if (!response.ok) {
+    throw new Error(`OpenAI API 返回了图片 URL，但下载失败：HTTP ${response.status}。`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return buffer.toString("base64");
 }
 
 async function processSSEBlock(block: string, onEvent: (event: ImageStreamEvent) => Promise<void>): Promise<void> {

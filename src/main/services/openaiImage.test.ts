@@ -115,7 +115,7 @@ describe("OpenAI image service", () => {
     await expect(readFile(result.outputs[1].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
-  it("calls image edits with image[] and mask multipart fields", async () => {
+  it("calls image edits with image and mask multipart fields", async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
     const sourcePath = path.join(tmpDir, "source.png");
     const maskPath = path.join(tmpDir, "mask.png");
@@ -144,8 +144,39 @@ describe("OpenAI image service", () => {
 
     expect(form?.get("model")).toBe("gpt-image-2");
     expect(form?.get("prompt")).toBe("Make a clean product render");
-    expect(form?.getAll("image[]")).toHaveLength(1);
+    expect(form?.getAll("image")).toHaveLength(1);
+    expect(form?.getAll("image[]")).toHaveLength(0);
     expect(form?.get("mask")).toBeInstanceOf(File);
+  });
+
+  it("uses image[] multipart fields for multi-image edits", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
+    const sourceAPath = path.join(tmpDir, "source-a.png");
+    const sourceBPath = path.join(tmpDir, "source-b.png");
+    await writeFile(sourceAPath, Buffer.from(tinyPngBase64, "base64"));
+    await writeFile(sourceBPath, Buffer.from(tinyPngBase64, "base64"));
+    const sourceA: InputAsset = { id: "source-a", name: "source-a.png", path: sourceAPath, mimeType: "image/png", sizeBytes: 1 };
+    const sourceB: InputAsset = { id: "source-b", name: "source-b.png", path: sourceBPath, mimeType: "image/png", sizeBytes: 1 };
+    let form: FormData | undefined;
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      form = init?.body as FormData;
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [sourceA, sourceB],
+        params: params({ stream: false })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(form?.getAll("image")).toHaveLength(0);
+    expect(form?.getAll("image[]")).toHaveLength(2);
   });
 
   it("passes advanced gpt-image-2 parameters through multipart edit requests", async () => {
@@ -235,6 +266,59 @@ describe("OpenAI image service", () => {
     expect(result.usage?.total_tokens).toBe(5);
   });
 
+  it("accepts JSON image payloads when streaming was requested", async () => {
+    const fetchImpl = (async () =>
+      Response.json(
+        { data: [{ b64_json: tinyPngBase64 }], usage: { total_tokens: 4 } },
+        { headers: { "content-type": "application/json" } }
+      )) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job({ params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.outputs.map((asset) => asset.sourceType)).toEqual(["result"]);
+    expect(result.usage?.total_tokens).toBe(4);
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("parses nested streaming data image payloads", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode(`event: image_edit.completed\ndata: {"type":"image_edit.completed","data":[{"b64_json":"${tinyPngBase64}"}]}\n\n`));
+        controller.close();
+      }
+    });
+    const fetchImpl = (async () => new Response(stream, { headers: { "content-type": "text/event-stream" } })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job({ mode: "edit", inputAssets: [await sourceAsset()], params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.outputs.map((asset) => asset.sourceType)).toEqual(["result"]);
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("saves data URL image payloads", async () => {
+    const fetchImpl = (async () => Response.json({ data: [{ url: `data:image/png;base64,${tinyPngBase64}` }] })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("reports non-json image responses clearly", async () => {
+    const fetchImpl = (async () => new Response("<!doctype html><title>Not found</title>", {
+      headers: { "content-type": "text/html" }
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime)).rejects.toThrow("非预期响应");
+  });
+
   it("handles direct SSE parsing and invalid JSON errors", async () => {
     const received: string[] = [];
     const stream = new ReadableStream<Uint8Array>({
@@ -258,4 +342,33 @@ describe("OpenAI image service", () => {
 
     await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime)).rejects.toThrow("sk-...redacted");
   });
+
+  it("redacts API keys from JSON and streaming API errors", async () => {
+    const jsonFetch = (async () =>
+      Response.json({ error: { message: "failed for sk-abcdefghijklmnopqrstuvwxyz" } }, { status: 401 })) as typeof fetch;
+    const { runtime: jsonRuntime } = await createRuntime(jsonFetch);
+
+    await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", jsonRuntime)).rejects.toThrow("sk-...redacted");
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode('data: {"error":{"message":"failed for sk-abcdefghijklmnopqrstuvwxyz"}}\n\n'));
+        controller.close();
+      }
+    });
+    const streamFetch = (async () => new Response(stream, { headers: { "content-type": "text/event-stream" } })) as typeof fetch;
+    const { runtime: streamRuntime } = await createRuntime(streamFetch);
+
+    await expect(runOpenAIImageJob(job({ params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", streamRuntime)).rejects.toThrow("sk-...redacted");
+  });
 });
+
+async function sourceAsset(): Promise<InputAsset> {
+  if (!tmpDir) {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
+  }
+  const sourcePath = path.join(tmpDir, "source.png");
+  await writeFile(sourcePath, Buffer.from(tinyPngBase64, "base64"));
+  return { id: "source", name: "source.png", path: sourcePath, mimeType: "image/png", sizeBytes: 1 };
+}

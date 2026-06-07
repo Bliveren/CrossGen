@@ -91,27 +91,21 @@
 - [x] 增加 Linux AppImage / Xvfb 自动安装烟测脚本
 - [x] 修复 macOS 打包运行时文件遗漏，并确认 dmg 安装后主窗口可出现
 
-## CTO / 多分支治理
+## 开源治理
 
 - [x] 建立 `main` 基线提交
-- [x] 配置提交身份 `Bliveren <aliveren_89@foxmail.com>`
-- [x] 配置远程 `origin`
-- [x] 推送 `main` 到 private GitHub 远程
-- [x] 子任务使用独立 worktree 与独立分支
-- [x] 子任务完成后由 CTO 审核再合并
+- [x] 使用 feature branch / pull request / review 工作流
 - [x] 合并后清理无用 worktree 与本地分支
+- [x] 添加 MIT 许可证
+- [x] 添加开源安全检查文档
 
 ## 当前未完成 / 待外部条件
 
-GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
-
 统一外部验收步骤见 [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md)。
 
-- [x] 配置远程 `origin` 并推送当前 `main`
-- [ ] 用真实 API Key 做一次实际生成、编辑、局部重绘手工验收（GitHub issue #1）
+- [ ] 用真实 API Key 做一次实际生成、编辑、局部重绘手工验收
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
 - [x] 完成 macOS 临时目录卸载与重装 smoke test
-- [x] 发布 ad-hoc signed、未公证 macOS arm64 试用包到 private GitHub pre-release
 - [x] 增加 GitHub Actions CI（build、mock verifier、macOS / Windows / Linux package）
 - [x] 增加受成本保护的真实 API 验收脚本
 - [x] 增加受额外成本确认保护的真实 streaming 生成/编辑验收路径
@@ -120,14 +114,13 @@ GitHub milestone: https://github.com/Bliveren/image2tools/milestone/1
 - [x] 在 Ubuntu ARM64 Docker 环境补充 Linux build、mock verifier、AppImage 打包、AppImage 解包与 Xvfb 启动烟测证据
 - [x] 增加 `pnpm verify:release:windows` 并接入 Windows CI package gate
 - [x] 将 Windows release verifier 扩展到 silent install / launch / uninstall 烟测
+- [x] 增加显式 `pnpm package:win` Windows 打包命令
 - [x] 增加 `pnpm verify:release:linux` 并接入 Linux CI package gate
 - [x] 将 Linux release verifier 扩展到可选直接 AppImage 启动，原生验收可通过环境变量强制要求 FUSE
-- [ ] 解除 GitHub Actions billing/spending limit 阻塞并取得绿色 CI（GitHub issue #5）
-- [ ] 补充签名、公证与正式分发元数据（GitHub issue #3）
-- [ ] 非 macOS 平台安装验证（GitHub issue #4；Windows 与原生 Linux 桌面 shell 行为仍待验证）
-- [x] 已评估 `stash@{0}` 中未合并的 renderer 实验；当前 `main` 已覆盖其核心能力并包含更新的草稿恢复、mask 校验和打包配置
-- [x] 已将 `stash@{0}` 非破坏性归档到 `origin/archive/abandoned-renderer-stash`
-- [x] 本地 `stash@{0}` 已在确认远程归档后删除（GitHub issue #2）
+- [ ] 取得绿色 CI
+- [ ] 补充签名、公证与正式分发元数据
+- [ ] 非 macOS 平台安装验证；Windows 与原生 Linux 桌面 shell 行为仍待验证
+- [x] 增加中英文界面切换
 
 ## 建议优先级
 
