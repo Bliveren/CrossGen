@@ -8,7 +8,6 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const releaseDir = path.resolve("release");
 const productName = "Image2Tools";
-const processName = "Image2Tools";
 const appExecutableName = `${productName}.exe`;
 const installerPattern = /^Image2Tools-.*-win-.*\.exe$/;
 const installerTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_INSTALL_TIMEOUT_MS ?? 120000);
@@ -111,12 +110,23 @@ async function assertPeExecutable(filePath, label) {
 }
 
 async function runPowerShell(script, env = {}) {
-  return run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
-    env: {
-      ...process.env,
-      ...env
+  try {
+    return await run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
+      env: {
+        ...process.env,
+        ...env
+      }
+    });
+  } catch (error) {
+    const lines = [error instanceof Error ? error.message : String(error)];
+    if (error && typeof error === "object") {
+      const stdout = "stdout" in error ? String(error.stdout ?? "").trim() : "";
+      const stderr = "stderr" in error ? String(error.stderr ?? "").trim() : "";
+      if (stdout) lines.push(`stdout:\n${stdout}`);
+      if (stderr) lines.push(`stderr:\n${stderr}`);
     }
-  });
+    throw new Error(lines.join("\n"));
+  }
 }
 
 function parseJsonObject(raw) {
@@ -226,17 +236,28 @@ async function findUninstallerFromEntry(entry, installedExecutable) {
 
 async function findPidsByPath(executablePath, requireWindow = false) {
   const script = `
-$ErrorActionPreference = "Stop"
-$target = [System.IO.Path]::GetFullPath($env:IMAGE2TOOLS_EXE_PATH)
-$requireWindow = $env:IMAGE2TOOLS_REQUIRE_WINDOW -eq "1"
-Get-Process -Name "${processName}" -ErrorAction SilentlyContinue | Where-Object {
-  try {
-    $candidate = [System.IO.Path]::GetFullPath($_.Path)
-    ($candidate -eq $target) -and ((-not $requireWindow) -or ($_.MainWindowHandle -ne 0))
-  } catch {
-    $false
+$ErrorActionPreference = "Continue"
+try {
+  $target = [System.IO.Path]::GetFullPath($env:IMAGE2TOOLS_EXE_PATH)
+  $requireWindow = $env:IMAGE2TOOLS_REQUIRE_WINDOW -eq "1"
+  $processes = @(Get-CimInstance Win32_Process -Filter "Name = '${appExecutableName}'" -ErrorAction SilentlyContinue)
+  foreach ($candidateProcess in $processes) {
+    try {
+      if (-not $candidateProcess.ExecutablePath) { continue }
+      $candidatePath = [System.IO.Path]::GetFullPath($candidateProcess.ExecutablePath)
+      if (-not [System.StringComparer]::OrdinalIgnoreCase.Equals($candidatePath, $target)) { continue }
+      if ($requireWindow) {
+        $windowProcess = Get-Process -Id $candidateProcess.ProcessId -ErrorAction SilentlyContinue
+        if (-not $windowProcess -or $windowProcess.MainWindowHandle -eq 0) { continue }
+      }
+      [Console]::Out.WriteLine($candidateProcess.ProcessId)
+    } catch {
+      continue
+    }
   }
-} | ForEach-Object { $_.Id }
+} catch {
+}
+exit 0
 `;
   const { stdout } = await runPowerShell(script, {
     IMAGE2TOOLS_EXE_PATH: executablePath,
@@ -249,7 +270,13 @@ Get-Process -Name "${processName}" -ErrorAction SilentlyContinue | Where-Object 
 }
 
 async function stopProcessTree(executablePath) {
-  const pids = await findPidsByPath(executablePath);
+  let pids = [];
+  try {
+    pids = await findPidsByPath(executablePath);
+  } catch (error) {
+    console.log(`Skipping stale ${productName} process cleanup because process lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+    return;
+  }
   for (const pid of pids) {
     try {
       await run("taskkill.exe", ["/PID", String(pid), "/T", "/F"]);

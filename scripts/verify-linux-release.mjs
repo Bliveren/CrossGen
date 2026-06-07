@@ -184,7 +184,19 @@ async function verifyDirectAppImageLaunch(appImagePath) {
     return;
   }
   await run("chmod", ["+x", appImagePath]);
-  await launchWithXvfb(appImagePath, "Direct AppImage app");
+  try {
+    await launchWithXvfb(appImagePath, "Direct AppImage app");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const fuseRuntimeMissing =
+      message.includes("libfuse.so.2") ||
+      (message.includes("AppImages require FUSE") && message.includes("--appimage-extract"));
+    if (fuseRuntimeMissing && !requireDirectAppImage) {
+      console.log("Direct AppImage launch reported missing FUSE/libfuse runtime support. Skipping direct launch and continuing with extracted AppImage verification; set IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 to make this mandatory.");
+      return;
+    }
+    throw error;
+  }
 }
 
 async function verifyAppImageExtraction(appImagePath) {
