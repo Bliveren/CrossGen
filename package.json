@@ -8,6 +8,7 @@
     "updateManifestUrl": "https://bliveren.github.io/image2tools/updates/latest.json"
   },
   "type": "module",
+  "packageManager": "pnpm@10.25.0",
   "main": "dist/main/main.js",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -16,11 +17,11 @@
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
     "mock:openai": "node scripts/mock-openai-image-api.mjs",
-    "package": "pnpm build && electron-builder",
-    "package:dir": "pnpm build && electron-builder --dir",
-    "package:mac": "pnpm build && electron-builder --mac -c.mac.notarize=false",
-    "package:mac:signed": "pnpm verify:signing-ready && pnpm build && electron-builder --mac -c.mac.identity=\"$CSC_NAME\" -c.mac.notarize=true",
-    "package:win": "pnpm build && electron-builder --win",
+    "package": "pnpm build && node scripts/electron-builder-pnpm.mjs",
+    "package:dir": "pnpm build && node scripts/electron-builder-pnpm.mjs --dir",
+    "package:mac": "pnpm build && node scripts/electron-builder-pnpm.mjs --mac -c.mac.notarize=false",
+    "package:mac:signed": "pnpm verify:signing-ready && pnpm build && node scripts/electron-builder-pnpm.mjs --mac -c.mac.identity=\"$CSC_NAME\" -c.mac.notarize=true",
+    "package:win": "pnpm build && node scripts/electron-builder-pnpm.mjs --win",
     "preview": "vite preview --host 127.0.0.1",
     "start": "pnpm build:main && electron .",
     "test": "vitest run",
@@ -62,6 +63,14 @@
       "target": [
         "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Image2Tools",
+      "artifactName": "Image2Tools-Setup.${ext}"
     },
     "linux": {
       "category": "Graphics",

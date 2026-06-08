@@ -3,13 +3,15 @@ import { execFile, spawn } from "node:child_process";
 import { open, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { createFindPidsByPathScript } from "../dist/shared/windowsVerifierScripts.js";
 
 const execFileAsync = promisify(execFile);
 const releaseDir = path.resolve("release");
 const productName = "Image2Tools";
 const appExecutableName = `${productName}.exe`;
-const installerPattern = /^Image2Tools-.*-win-.*\.exe$/;
+const installerPattern = /^Image2Tools(?:-Setup|-.*-win-.*)\.exe$/;
 const installerTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_INSTALL_TIMEOUT_MS ?? 120000);
 const smokeTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_SMOKE_TIMEOUT_MS ?? 12000);
 const windowTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_WINDOW_TIMEOUT_MS ?? 15000);
@@ -235,30 +237,7 @@ async function findUninstallerFromEntry(entry, installedExecutable) {
 }
 
 async function findPidsByPath(executablePath, requireWindow = false) {
-  const script = `
-$ErrorActionPreference = "Continue"
-try {
-  $target = [System.IO.Path]::GetFullPath($env:IMAGE2TOOLS_EXE_PATH)
-  $requireWindow = $env:IMAGE2TOOLS_REQUIRE_WINDOW -eq "1"
-  $processes = @(Get-CimInstance Win32_Process -Filter "Name = '${appExecutableName}'" -ErrorAction SilentlyContinue)
-  foreach ($candidateProcess in $processes) {
-    try {
-      if (-not $candidateProcess.ExecutablePath) { continue }
-      $candidatePath = [System.IO.Path]::GetFullPath($candidateProcess.ExecutablePath)
-      if (-not [System.StringComparer]::OrdinalIgnoreCase.Equals($candidatePath, $target)) { continue }
-      if ($requireWindow) {
-        $windowProcess = Get-Process -Id $candidateProcess.ProcessId -ErrorAction SilentlyContinue
-        if (-not $windowProcess -or $windowProcess.MainWindowHandle -eq 0) { continue }
-      }
-      [Console]::Out.WriteLine($candidateProcess.ProcessId)
-    } catch {
-      continue
-    }
-  }
-} catch {
-}
-exit 0
-`;
+  const script = createFindPidsByPathScript();
   const { stdout } = await runPowerShell(script, {
     IMAGE2TOOLS_EXE_PATH: executablePath,
     IMAGE2TOOLS_REQUIRE_WINDOW: requireWindow ? "1" : "0"
@@ -456,7 +435,9 @@ async function main() {
   console.log("Windows release verification passed.");
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}
