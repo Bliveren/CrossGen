@@ -522,15 +522,22 @@ label {
 
 .compact-grid {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
   gap: 8px 12px;
   color: #6f655a;
   font-size: 12px;
 }
 
+.compact-grid span,
+.compact-grid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .compact-grid strong {
   color: #221f1c;
   font-weight: 700;
+  text-align: right;
 }
 
 .advanced-controls {
