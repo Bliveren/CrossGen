@@ -15,22 +15,22 @@ Target release: `v0.2.0`
 
 ## Phase 1 - `v0.2.0` 类型契约与数据迁移
 
-- [ ] 新增 `ProviderKind`
-- [ ] 新增 `FocusedLaunchId`
-- [ ] 新增 `FocusedModelDefinition`
-- [ ] 新增 `ImageModelCapabilities`
-- [ ] 新增 `DiscoveredModel`
-- [ ] 将 `ProviderConfig` 扩展为支持 provider kind、discovered models、active launch/model
-- [ ] 将 `ImageParams` 改造为 `OpenAIImageParams | GeminiImageParams | GeneralImageParams`
-- [ ] 将 `GenerationJob` 增加 provider/model 字段
-- [ ] 将 `WorkspaceDraft` 增加 active launch/model 字段
-- [ ] 新增 `src/shared/modelCatalog.ts`
-- [ ] 将 `gpt-image-2` 常量从通用 validation 中迁移到 OpenAI-specific validation
-- [ ] 新增 state v2 结构
-- [ ] 实现 v1 -> v2 state migration
-- [ ] 为 v1 config migration 写测试
-- [ ] 为 v1 history migration 写测试
-- [ ] 确认旧 state backup 逻辑仍正常
+- [x] 新增 `ProviderKind`
+- [x] 新增 `FocusedLaunchId`
+- [x] 新增 `FocusedModelDefinition`
+- [x] 新增 `ImageModelCapabilities`
+- [x] 新增 `DiscoveredModel`
+- [x] 将 `ProviderConfig` 扩展为支持 provider kind、discovered models、active launch/model
+- [x] 将 `ImageParams` 改造为 `OpenAIImageParams | GeminiImageParams | GeneralImageParams`
+- [x] 将 `GenerationJob` 增加 provider/model 字段
+- [x] 将 `WorkspaceDraft` 增加 active launch/model 字段
+- [x] 新增 `src/shared/modelCatalog.ts`
+- [x] 将 `gpt-image-2` 常量从通用 validation 中迁移到 OpenAI-specific validation
+- [x] 新增 state v2 结构
+- [x] 实现 v1 -> v2 state migration
+- [x] 为 v1 config migration 写测试
+- [x] 为 v1 history migration 写测试
+- [x] 确认旧 state backup 逻辑仍正常
 
 ## Phase 2 - `v0.2.0` 模型探测与启动模型区
 
@@ -95,8 +95,8 @@ Target release: `v0.2.0`
 - [ ] 局部引导编辑文案说明非 exact mask
 - [ ] 为 Gemini request builder 写单元测试
 - [ ] 为 Gemini response parser 写单元测试
-- [ ] 新增 mock Gemini Image API
-- [ ] 新增 Gemini mock verifier
+- [x] 新增 mock Gemini Image API
+- [x] 新增 Gemini mock verifier
 
 ## Phase 5 - `v0.2.0` General 模式
 
@@ -110,34 +110,34 @@ Target release: `v0.2.0`
 
 ## Phase 6 - `v0.2.0` 历史任务体验
 
-- [ ] 历史任务条目增加 model chip
-- [ ] 历史任务条目显示 provider kind
-- [ ] 历史任务条目保留 mode/status/time
-- [ ] 默认只显示 6 条历史
-- [ ] 超过 6 条时显示展开按钮
-- [ ] 展开后显示收起按钮
-- [ ] 展开后历史列表内部滚动
-- [ ] 搜索历史时显示匹配数量
-- [ ] 搜索历史时仍支持 6 条折叠规则
+- [x] 历史任务条目增加 model chip
+- [x] 历史任务条目显示 provider kind
+- [x] 历史任务条目保留 mode/status/time
+- [x] 默认只显示 6 条历史
+- [x] 超过 6 条时显示展开按钮
+- [x] 展开后显示收起按钮
+- [x] 展开后历史列表内部滚动
+- [x] 搜索历史时显示匹配数量
+- [x] 搜索历史时仍支持 6 条折叠规则
 - [ ] 复用历史任务时恢复对应 provider/model/params
-- [ ] 删除历史任务继续只删除 owned output files
-- [ ] 清空历史仍清理所有 owned outputs
+- [x] 删除历史任务继续只删除 owned output files
+- [x] 清空历史仍清理所有 owned outputs
 
 ## Phase 7 - `v0.2.0` 测试与验收
 
-- [ ] `pnpm typecheck` 通过
-- [ ] `pnpm test` 通过
-- [ ] `pnpm build` 通过
-- [ ] `pnpm verify:mock-api` 通过
-- [ ] 新增 `pnpm verify:mock-gemini-api`
-- [ ] OpenAI mock 生成通过
-- [ ] OpenAI mock 编辑通过
-- [ ] OpenAI mock inpaint 通过
-- [ ] Gemini mock 生成通过
-- [ ] Gemini mock 参考图编辑通过
+- [x] `pnpm typecheck` 通过
+- [x] `pnpm test` 通过
+- [x] `pnpm build` 通过
+- [x] `pnpm verify:mock-api` 通过
+- [x] 新增 `pnpm verify:mock-gemini-api`
+- [x] OpenAI mock 生成通过
+- [x] OpenAI mock 编辑通过
+- [x] OpenAI mock inpaint 通过
+- [x] Gemini mock 生成通过
+- [x] Gemini mock 参考图编辑通过
 - [ ] 模型 discovery mock 通过
-- [ ] state v1 -> v2 migration tests 通过
-- [ ] renderer i18n shape tests 通过
+- [x] state v1 -> v2 migration tests 通过
+- [x] renderer i18n shape tests 通过
 - [ ] 手工确认无 Key 时启动模型按钮置灰
 - [ ] 手工确认 OpenAI Key 仅启用 GPT Image 2
 - [ ] 手工确认 Gemini Key 仅启用 Nano Banana 3
