@@ -60,6 +60,7 @@ interface ValidationCopy {
   maskEmpty: string;
   maskNeedsAlpha: string;
   maskLooksValid: string;
+  regionGuideReady: string;
 }
 
 export interface UiCopy {
@@ -84,6 +85,8 @@ export interface UiCopy {
   launchUnavailableProvider: (provider: string) => string;
   launchUnavailableModel: (model: string) => string;
   launchRuntimeUnavailable: (model: string) => string;
+  selectLaunchToRun: (model: string) => string;
+  generalRuntimeUnsupported: string;
   generalFallback: string;
   savedLocally: string;
   pasteApiKey: string;
@@ -96,6 +99,8 @@ export interface UiCopy {
   hide: string;
   show: string;
   size: string;
+  aspectRatio: string;
+  resolution: string;
   quality: string;
   format: string;
   custom: string;
@@ -106,6 +111,8 @@ export interface UiCopy {
   count: string;
   streamPartialPreview: string;
   partialImages: string;
+  thinking: string;
+  searchGrounding: string;
   moderation: string;
   timeoutSeconds: string;
   sizeValid: string;
@@ -133,6 +140,7 @@ export interface UiCopy {
   reference: string;
   mask: string;
   maskDescription: string;
+  guidedRegionDescription: string;
   clearPaintedMask: string;
   sourceForMask: string;
   addSourceForMask: string;
@@ -195,6 +203,8 @@ export const translations: Record<Language, UiCopy> = {
     launchUnavailableProvider: (provider: string) => `Switch to ${provider}.`,
     launchUnavailableModel: (model: string) => `${model} was not discovered.`,
     launchRuntimeUnavailable: (model: string) => `${model} runtime is not connected yet.`,
+    selectLaunchToRun: (model: string) => `Select ${model} before running.`,
+    generalRuntimeUnsupported: "General models are not runnable in this build.",
     generalFallback: "Discovered fallback",
     savedLocally: "Saved locally",
     pasteApiKey: "Paste API key",
@@ -207,6 +217,8 @@ export const translations: Record<Language, UiCopy> = {
     hide: "Hide",
     show: "Show",
     size: "Size",
+    aspectRatio: "Aspect ratio",
+    resolution: "Resolution",
     quality: "Quality",
     format: "Format",
     custom: "custom",
@@ -217,6 +229,8 @@ export const translations: Record<Language, UiCopy> = {
     count: "Count",
     streamPartialPreview: "Stream partial preview",
     partialImages: "Partial images",
+    thinking: "Thinking",
+    searchGrounding: "Search grounding",
     moderation: "Moderation",
     timeoutSeconds: "Timeout seconds",
     sizeValid: "Size is valid for GPT Image 2.",
@@ -244,6 +258,7 @@ export const translations: Record<Language, UiCopy> = {
     reference: "Reference",
     mask: "Mask",
     maskDescription: "Paint the area to replace. With multiple references, the mask applies to the first image.",
+    guidedRegionDescription: "Use the painted or uploaded region as guidance for the first image.",
     clearPaintedMask: "Clear painted mask",
     sourceForMask: "Source for mask",
     addSourceForMask: "Add a source image to paint a mask.",
@@ -334,7 +349,8 @@ export const translations: Record<Language, UiCopy> = {
       cannotInspectMaskAlpha: "Cannot inspect mask alpha.",
       maskEmpty: "Mask is empty.",
       maskNeedsAlpha: "Mask needs an alpha channel with transparent areas.",
-      maskLooksValid: "Mask format, size, and alpha look valid."
+      maskLooksValid: "Mask format, size, and alpha look valid.",
+      regionGuideReady: "Region guide selected."
     }
   },
   zh: {
@@ -359,6 +375,8 @@ export const translations: Record<Language, UiCopy> = {
     launchUnavailableProvider: (provider: string) => `切换到 ${provider}。`,
     launchUnavailableModel: (model: string) => `未探测到 ${model}。`,
     launchRuntimeUnavailable: (model: string) => `${model} 运行时尚未接入。`,
+    selectLaunchToRun: (model: string) => `运行前请选择 ${model}。`,
+    generalRuntimeUnsupported: "当前版本暂不支持运行 General 模型。",
     generalFallback: "探测到的兜底模型",
     savedLocally: "已本地保存",
     pasteApiKey: "粘贴 API Key",
@@ -371,6 +389,8 @@ export const translations: Record<Language, UiCopy> = {
     hide: "收起",
     show: "展开",
     size: "尺寸",
+    aspectRatio: "画面比例",
+    resolution: "分辨率",
     quality: "质量",
     format: "格式",
     custom: "自定义",
@@ -381,6 +401,8 @@ export const translations: Record<Language, UiCopy> = {
     count: "数量",
     streamPartialPreview: "流式局部预览",
     partialImages: "局部预览数",
+    thinking: "Thinking",
+    searchGrounding: "联网搜索 grounding",
     moderation: "内容审核",
     timeoutSeconds: "超时秒数",
     sizeValid: "尺寸符合 GPT Image 2 要求。",
@@ -408,6 +430,7 @@ export const translations: Record<Language, UiCopy> = {
     reference: "参考图",
     mask: "蒙版",
     maskDescription: "涂抹需要替换的区域。多张参考图时，蒙版应用到第一张图片。",
+    guidedRegionDescription: "将涂抹或上传的区域作为第一张图片的修改引导。",
     clearPaintedMask: "清除已绘制蒙版",
     sourceForMask: "蒙版源图",
     addSourceForMask: "添加源图后可绘制蒙版。",
@@ -498,7 +521,8 @@ export const translations: Record<Language, UiCopy> = {
       cannotInspectMaskAlpha: "无法检查蒙版透明通道。",
       maskEmpty: "蒙版为空。",
       maskNeedsAlpha: "蒙版需要带透明区域的 alpha 通道。",
-      maskLooksValid: "蒙版格式、尺寸和透明通道有效。"
+      maskLooksValid: "蒙版格式、尺寸和透明通道有效。",
+      regionGuideReady: "已选择区域引导。"
     }
   }
 };

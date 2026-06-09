@@ -28,23 +28,33 @@ import {
 import {
   DEFAULT_BASE_URL,
   DEFAULT_GEMINI_BASE_URL,
+  DEFAULT_GENERAL_IMAGE_PARAMS,
+  DEFAULT_GEMINI_IMAGE_PARAMS,
   DEFAULT_IMAGE_PARAMS,
+  GEMINI_ASPECT_RATIO_OPTIONS,
+  GEMINI_RESOLUTION_OPTIONS,
   MAX_GPT_IMAGE_INPUTS,
   maskMimeTypeForSource,
   mimeTypeFromDataUrl,
   validateMaskMimeType,
   validateMaskSourceFormat,
   getValidationError,
+  isGeminiImageParams,
   isOpenAIImageParams,
   validateGptImage2Size
 } from "../shared/validation";
 import type {
   AppSnapshot,
   FocusedLaunchId,
+  GeneralImageParams,
   GenerationJob,
+  GeminiAspectRatio,
+  GeminiImageParams,
+  GeminiResolution,
   ImageAsset,
   ImageBackground,
   ImageFormat,
+  ImageParams,
   ImageQuality,
   InputAsset,
   ModerationMode,
@@ -111,6 +121,10 @@ interface LaunchButtonState {
   available: boolean;
   reason: string;
 }
+
+type OpenAIParamPatch = Partial<Omit<OpenAIImageParams, "providerKind" | "launchId">>;
+type GeminiParamPatch = Partial<Omit<GeminiImageParams, "providerKind" | "launchId">>;
+type GeneralParamPatch = Partial<Omit<GeneralImageParams, "providerKind" | "launchId">>;
 
 const fallbackConfig: ProviderConfig = {
   id: "default",
@@ -231,14 +245,117 @@ function providerForLaunch(launchId: FocusedLaunchId, fallback: ProviderKind): P
   return definition.providerKind;
 }
 
-function createLaunchParams(launchId: FocusedLaunchId, modelId: string, current: OpenAIImageParams): OpenAIImageParams {
-  if (launchId !== GPT_IMAGE_2_LAUNCH_ID) return current;
+function isGeneralImageParams(params: ImageParams): params is GeneralImageParams {
+  return params.launchId === GENERAL_LAUNCH_ID;
+}
+
+function createOpenAIParams(modelId: string, current: ImageParams, config?: ProviderConfig): OpenAIImageParams {
+  const base = isOpenAIImageParams(current) ? current : DEFAULT_IMAGE_PARAMS;
   return {
-    ...current,
+    ...DEFAULT_IMAGE_PARAMS,
+    ...base,
     providerKind: "openai",
     launchId: GPT_IMAGE_2_LAUNCH_ID,
-    model: modelId || GPT_IMAGE_2_MODEL_ID
+    model: modelId || GPT_IMAGE_2_MODEL_ID,
+    size: config?.defaultSize ?? base.size,
+    quality: config?.defaultQuality ?? base.quality,
+    timeoutMs: config?.timeoutMs ?? base.timeoutMs
   };
+}
+
+function createGeminiParams(modelId: string, current: ImageParams, config?: ProviderConfig): GeminiImageParams {
+  const base = isGeminiImageParams(current) ? current : DEFAULT_GEMINI_IMAGE_PARAMS;
+  return {
+    ...DEFAULT_GEMINI_IMAGE_PARAMS,
+    ...base,
+    providerKind: "gemini",
+    launchId: NANO_BANANA_3_LAUNCH_ID,
+    model: modelId || NANO_BANANA_3_MODEL_ID,
+    timeoutMs: config?.timeoutMs ?? base.timeoutMs
+  };
+}
+
+function createGeneralParams(providerKind: ProviderKind, modelId: string, current: ImageParams, config?: ProviderConfig): GeneralImageParams {
+  const base = isGeneralImageParams(current) ? current : DEFAULT_GENERAL_IMAGE_PARAMS;
+  return {
+    ...DEFAULT_GENERAL_IMAGE_PARAMS,
+    ...base,
+    providerKind,
+    launchId: GENERAL_LAUNCH_ID,
+    model: modelId || base.model || config?.activeModelId || config?.defaultModel || "",
+    timeoutMs: config?.timeoutMs ?? base.timeoutMs
+  };
+}
+
+function createLaunchParams(launchId: FocusedLaunchId, modelId: string, current: ImageParams, providerKind: ProviderKind, config?: ProviderConfig): ImageParams {
+  if (launchId === NANO_BANANA_3_LAUNCH_ID) {
+    return createGeminiParams(modelId, current, config);
+  }
+  if (launchId === GENERAL_LAUNCH_ID) {
+    return createGeneralParams(providerKind, modelId, current, config);
+  }
+  return createOpenAIParams(modelId, current, config);
+}
+
+function createParamsForConfig(config: ProviderConfig, current: ImageParams): ImageParams {
+  if (config.activeLaunchId === NANO_BANANA_3_LAUNCH_ID) {
+    return createGeminiParams(config.activeModelId || config.defaultModel || NANO_BANANA_3_MODEL_ID, current, config);
+  }
+  if (config.activeLaunchId === GENERAL_LAUNCH_ID) {
+    return createGeneralParams(config.kind, config.activeModelId || config.defaultModel, current, config);
+  }
+  return createOpenAIParams(config.activeModelId || config.defaultModel || GPT_IMAGE_2_MODEL_ID, current, config);
+}
+
+function defaultModelForConfigSave(kind: ProviderKind, params: ImageParams, config: ProviderConfig): string {
+  if (kind === "openai") {
+    return isOpenAIImageParams(params) ? params.model : GPT_IMAGE_2_MODEL_ID;
+  }
+  if (kind === "gemini") {
+    return isGeminiImageParams(params) ? params.model : NANO_BANANA_3_MODEL_ID;
+  }
+  if (isGeneralImageParams(params)) return params.model;
+  if (kind === config.kind && config.defaultModel) return config.defaultModel;
+  return defaultModelForProvider(kind);
+}
+
+function defaultSizeForConfigSave(params: ImageParams, config: ProviderConfig): string {
+  return isOpenAIImageParams(params) ? params.size : config.defaultSize || DEFAULT_IMAGE_PARAMS.size;
+}
+
+function defaultQualityForConfigSave(params: ImageParams, config: ProviderConfig): ImageQuality {
+  return isOpenAIImageParams(params) ? params.quality : config.defaultQuality || DEFAULT_IMAGE_PARAMS.quality;
+}
+
+function runtimeSelectionError(params: ImageParams, config: ProviderConfig, copy: UiCopy): string | null {
+  if (isOpenAIImageParams(params)) {
+    return config.kind === "openai" && config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ? null : copy.selectLaunchToRun("GPT Image 2");
+  }
+  if (isGeminiImageParams(params)) {
+    return config.kind === "gemini" && config.activeLaunchId === NANO_BANANA_3_LAUNCH_ID ? null : copy.selectLaunchToRun("Nano Banana 3");
+  }
+  return copy.generalRuntimeUnsupported;
+}
+
+function patchConfigActiveLaunch(config: ProviderConfig, job: GenerationJob): ProviderConfig {
+  return {
+    ...config,
+    activeLaunchId: job.launchId,
+    activeModelId: job.modelId,
+    defaultModel: job.modelId || config.defaultModel,
+    timeoutMs: job.params.timeoutMs
+  };
+}
+
+function paramsNotice(params: ImageParams, restoredText: string, copy: UiCopy): string {
+  if (isGeneralImageParams(params)) return `${restoredText} ${copy.generalRuntimeUnsupported}`;
+  return restoredText;
+}
+
+function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: string) => void) {
+  if (isOpenAIImageParams(params) && !sizePresets.includes(params.size)) {
+    setCustomSize(params.size);
+  }
 }
 
 function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButtonState[] {
@@ -394,7 +511,7 @@ export function App() {
   const [snapshot, setSnapshot] = useState<AppSnapshot>(fallbackSnapshot);
   const [mode, setMode] = useState<WorkMode>("generate");
   const [prompt, setPrompt] = useState("A clean product photo of a matte black travel mug on a brushed steel counter");
-  const [params, setParams] = useState<OpenAIImageParams>(DEFAULT_IMAGE_PARAMS);
+  const [params, setParams] = useState<ImageParams>(DEFAULT_IMAGE_PARAMS);
   const [apiKey, setApiKey] = useState("");
   const [providerKind, setProviderKind] = useState<ProviderKind>("openai");
   const [baseURL, setBaseURL] = useState(DEFAULT_BASE_URL);
@@ -442,12 +559,15 @@ export function App() {
   const activeImage = getBestResult(activeJob) ?? partialImages[partialImages.length - 1];
   const activeImageSource = assetSource(activeImage);
   const activeJobError = getJobError(activeJob);
-  const sizeSelectValue = sizePresets.includes(params.size) ? params.size : "custom";
+  const openAIParams = isOpenAIImageParams(params) ? params : null;
+  const geminiParams = isGeminiImageParams(params) ? params : null;
+  const generalParams = isGeneralImageParams(params) ? params : null;
+  const usesExactMask = Boolean(openAIParams);
+  const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
   const previewZoomPercent = Math.round(previewZoom * 100);
   const apiKeyPlaceholder = snapshot.config.apiKeyPreview ?? (snapshot.config.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
   const launchButtons = useMemo(() => getLaunchButtonStates(snapshot.config, copy), [copy, snapshot.config]);
   const activeLaunchDisplay = launchButtons.find((button) => button.launchId === snapshot.config.activeLaunchId)?.displayName ?? modelLabelFromId(snapshot.config.activeModelId);
-  const activeLaunchRuntimeReady = snapshot.config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID;
   const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
   const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
 
@@ -467,15 +587,15 @@ export function App() {
   const modeError = useMemo(() => {
     if (mode === "edit" && inputAssets.length === 0) return copy.validation.addReference;
     if (mode === "inpaint" && inputAssets.length === 0) return copy.validation.addSource;
-    if (mode !== "generate" && inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
+    if (openAIParams && mode !== "generate" && inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
       return copy.validation.maxInputs(MAX_GPT_IMAGE_INPUTS);
     }
     if (mode === "inpaint" && !maskPreview) return copy.validation.paintOrUploadMask;
-    if (mode === "inpaint" && maskCheck && !maskCheck.ok) return maskCheck.message;
+    if (usesExactMask && mode === "inpaint" && maskCheck && !maskCheck.ok) return maskCheck.message;
     return null;
-  }, [copy, inputAssets.length, maskCheck, maskPreview, mode]);
+  }, [copy, inputAssets.length, maskCheck, maskPreview, mode, openAIParams, usesExactMask]);
 
-  const launchRuntimeError = activeLaunchRuntimeReady ? null : copy.launchRuntimeUnavailable(activeLaunchDisplay);
+  const launchRuntimeError = runtimeSelectionError(params, snapshot.config, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, prompt), copy) ?? modeError;
   const canRun = !validationError && !isRunning;
 
@@ -549,8 +669,8 @@ export function App() {
     const timer = window.setTimeout(() => {
       bridge
         .saveDraft({
-          activeLaunchId: snapshot.config.activeLaunchId,
-          activeModelId: snapshot.config.activeModelId,
+          activeLaunchId: params.launchId,
+          activeModelId: params.model,
           mode,
           prompt,
           params,
@@ -564,7 +684,7 @@ export function App() {
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [bridge, brushSize, hasRestoredDraft, hasUserChangedDraft, inputAssets, maskAsset, maskDataUrl, mode, params, prompt, snapshot.config.activeLaunchId, snapshot.config.activeModelId]);
+  }, [bridge, brushSize, hasRestoredDraft, hasUserChangedDraft, inputAssets, maskAsset, maskDataUrl, mode, params, prompt]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -592,6 +712,10 @@ export function App() {
       setMaskCheck(null);
       return;
     }
+    if (!usesExactMask) {
+      setMaskCheck({ ok: true, message: copy.validation.regionGuideReady });
+      return;
+    }
 
     let cancelled = false;
     inspectMask(source, mask, copy, maskAsset?.mimeType ?? mimeTypeFromDataUrl(mask) ?? "image/png", inputAssets[0]?.mimeType)
@@ -605,7 +729,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [copy, inputAssets, maskAsset?.mimeType, maskPreview, mode, sourcePreview]);
+  }, [copy, inputAssets, maskAsset?.mimeType, maskPreview, mode, sourcePreview, usesExactMask]);
 
   async function refreshSnapshot() {
     if (!bridge) return;
@@ -615,15 +739,9 @@ export function App() {
       setSnapshot(next);
       setProviderKind(next.config.kind);
       setBaseURL(next.config.baseURL);
-      setParams((current) => ({
-        ...current,
-        model: next.config.defaultModel,
-        size: next.config.defaultSize,
-        quality: next.config.defaultQuality,
-        timeoutMs: next.config.timeoutMs
-      }));
+      syncParamsToConfig(next.config);
       if (!hasRestoredDraft) {
-        restoreDraft(next.draft);
+        restoreDraft(next.draft, next.config);
       }
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
@@ -632,18 +750,21 @@ export function App() {
     }
   }
 
-  function restoreDraft(draft?: WorkspaceDraft) {
+  function restoreDraft(draft?: WorkspaceDraft, config = snapshot.config) {
     setHasRestoredDraft(true);
     if (!draft) return;
     setMode(draft.mode);
     setPrompt(draft.prompt);
-    setParams(isOpenAIImageParams(draft.params) ? draft.params : DEFAULT_IMAGE_PARAMS);
+    setParams(draft.params);
+    updateCustomSizeFromParams(draft.params, setCustomSize);
+    setProviderKind(draft.params.providerKind);
+    setBaseURL(defaultBaseURLForProvider(draft.params.providerKind, config.baseURL));
     setInputAssets(draft.inputAssets);
     setMaskAsset(draft.maskAsset ?? null);
     setMaskDataUrl(draft.maskDataUrl ?? null);
     setBrushSize(draft.brushSize);
     setDraftUpdatedAt(draft.updatedAt);
-    setNotice({ kind: "info", text: copy.notices.draftRestored(formatDate(draft.updatedAt)) });
+    setNotice({ kind: "info", text: paramsNotice(draft.params, copy.notices.draftRestored(formatDate(draft.updatedAt)), copy) });
   }
 
   async function clearDraft() {
@@ -658,9 +779,34 @@ export function App() {
     }
   }
 
-  function updateParams(patch: Partial<OpenAIImageParams>) {
+  function updateOpenAIParams(patch: OpenAIParamPatch) {
     markDraftChanged();
-    setParams((current) => ({ ...current, ...patch }));
+    setParams((current) => ({
+      ...(isOpenAIImageParams(current) ? current : createOpenAIParams("", current, snapshot.config)),
+      ...patch,
+      providerKind: "openai",
+      launchId: GPT_IMAGE_2_LAUNCH_ID
+    }));
+  }
+
+  function updateGeminiParams(patch: GeminiParamPatch) {
+    markDraftChanged();
+    setParams((current) => ({
+      ...(isGeminiImageParams(current) ? current : createGeminiParams("", current, snapshot.config)),
+      ...patch,
+      providerKind: "gemini",
+      launchId: NANO_BANANA_3_LAUNCH_ID
+    }));
+  }
+
+  function updateGeneralParams(patch: GeneralParamPatch) {
+    markDraftChanged();
+    setParams((current) => ({
+      ...(isGeneralImageParams(current) ? current : createGeneralParams(providerKind, "", current, snapshot.config)),
+      ...patch,
+      providerKind,
+      launchId: GENERAL_LAUNCH_ID
+    }));
   }
 
   function markDraftChanged() {
@@ -675,6 +821,14 @@ export function App() {
     setBaseURL(config.baseURL);
   }
 
+  function syncParamsToConfig(config: ProviderConfig) {
+    setParams((current) => {
+      const nextParams = createParamsForConfig(config, current);
+      updateCustomSizeFromParams(nextParams, setCustomSize);
+      return nextParams;
+    });
+  }
+
   async function saveConfig() {
     if (!bridge) {
       setNotice({ kind: "error", text: copy.notices.bridgeSaveConfig });
@@ -687,14 +841,15 @@ export function App() {
         kind: providerKind,
         apiKey: apiKey.trim() ? apiKey : undefined,
         baseURL,
-        defaultModel: params.model,
-        defaultSize: params.size,
-        defaultQuality: params.quality,
+        defaultModel: defaultModelForConfigSave(providerKind, params, snapshot.config),
+        defaultSize: defaultSizeForConfigSave(params, snapshot.config),
+        defaultQuality: defaultQualityForConfigSave(params, snapshot.config),
         timeoutMs: params.timeoutMs,
         activeLaunchId: providerChanged ? undefined : snapshot.config.activeLaunchId,
         activeModelId: providerChanged ? undefined : snapshot.config.activeModelId
       });
       applyConfig(config);
+      syncParamsToConfig(config);
       setApiKey("");
       setNotice({
         kind: config.lastModelDiscoveryError ? "error" : "success",
@@ -732,18 +887,20 @@ export function App() {
 
   async function launchModel(button: LaunchButtonState) {
     if (!bridge || !button.available) return;
-    const launchProvider = providerForLaunch(button.launchId, providerKind);
-    const nextParams = createLaunchParams(button.launchId, button.modelId, params);
+    const launchProvider = providerForLaunch(button.launchId, snapshot.config.kind);
+    const launchConfig = snapshot.config.kind === launchProvider ? snapshot.config : undefined;
+    const nextParams = createLaunchParams(button.launchId, button.modelId, params, launchProvider, launchConfig);
     setParams(nextParams);
+    updateCustomSizeFromParams(nextParams, setCustomSize);
     markDraftChanged();
     setIsSavingConfig(true);
     try {
       const config = await bridge.saveConfig({
         kind: launchProvider,
         baseURL: defaultBaseURLForProvider(launchProvider, baseURL),
-        defaultModel: button.launchId === GPT_IMAGE_2_LAUNCH_ID ? nextParams.model : button.modelId,
-        defaultSize: nextParams.size,
-        defaultQuality: nextParams.quality,
+        defaultModel: defaultModelForConfigSave(launchProvider, nextParams, snapshot.config),
+        defaultSize: defaultSizeForConfigSave(nextParams, snapshot.config),
+        defaultQuality: defaultQualityForConfigSave(nextParams, snapshot.config),
         timeoutMs: nextParams.timeoutMs,
         activeLaunchId: button.launchId,
         activeModelId: button.modelId
@@ -840,9 +997,9 @@ export function App() {
     if (assets.length > 0) {
       markDraftChanged();
       const next = dedupeAssets([...inputAssets, ...assets]);
-      const cappedNext = next.slice(0, MAX_GPT_IMAGE_INPUTS);
+      const cappedNext = openAIParams ? next.slice(0, MAX_GPT_IMAGE_INPUTS) : next;
       const addedCount = Math.max(0, cappedNext.length - inputAssets.length);
-      const capped = next.length > MAX_GPT_IMAGE_INPUTS;
+      const capped = Boolean(openAIParams && next.length > MAX_GPT_IMAGE_INPUTS);
       setInputAssets(cappedNext);
       if (mode === "generate") setMode("edit");
       setNotice({
@@ -972,13 +1129,19 @@ export function App() {
     flashButton(`reuse:${job.id}`);
     setMode(job.mode);
     setPrompt(job.prompt);
-    setParams(isOpenAIImageParams(job.params) ? job.params : DEFAULT_IMAGE_PARAMS);
+    setParams(job.params);
+    updateCustomSizeFromParams(job.params, setCustomSize);
+    setProviderKind(job.providerKind);
+    setBaseURL(defaultBaseURLForProvider(job.providerKind, baseURL));
+    if (job.providerKind === snapshot.config.kind) {
+      setSnapshot((current) => ({ ...current, config: patchConfigActiveLaunch(current.config, job) }));
+    }
     setInputAssets(job.inputAssets);
     setMaskAsset(job.maskAsset ?? null);
     setMaskDataUrl(null);
     setActiveJob(job);
     setHasUserChangedDraft(true);
-    setNotice({ kind: "info", text: copy.notices.jobLoaded });
+    setNotice({ kind: "info", text: paramsNotice(job.params, copy.notices.jobLoaded, copy) });
   }
 
   function removeInputAsset(assetId: string) {
@@ -1106,7 +1269,225 @@ export function App() {
     setMaskDataUrl(null);
   }
 
-  const sizeValidation = validateGptImage2Size(params.size);
+  const sizeValidation = openAIParams ? validateGptImage2Size(openAIParams.size) : null;
+  const maskDescription = geminiParams ? copy.guidedRegionDescription : copy.maskDescription;
+  const parameterSummary = openAIParams ? (
+    <>
+      <span>{copy.size}</span>
+      <strong>{openAIParams.size}</strong>
+      <span>{copy.quality}</span>
+      <strong>{openAIParams.quality}</strong>
+      <span>{copy.format}</span>
+      <strong>{openAIParams.outputFormat.toUpperCase()}</strong>
+    </>
+  ) : geminiParams ? (
+    <>
+      <span>{copy.aspectRatio}</span>
+      <strong>{geminiParams.aspectRatio}</strong>
+      <span>{copy.resolution}</span>
+      <strong>{geminiParams.resolution}</strong>
+      <span>{copy.count}</span>
+      <strong>{geminiParams.outputCount}</strong>
+    </>
+  ) : (
+    <>
+      <span>{copy.model}</span>
+      <strong>{generalParams?.model || copy.generalFallback}</strong>
+      <span>{copy.count}</span>
+      <strong>{generalParams?.outputCount ?? 1}</strong>
+      <span>{copy.timeoutSeconds}</span>
+      <strong>{Math.round((generalParams?.timeoutMs ?? params.timeoutMs) / 1000)}</strong>
+    </>
+  );
+  const advancedControls = openAIParams ? (
+    <div className="advanced-controls">
+      <label>
+        {copy.size}
+        <select
+          value={sizeSelectValue}
+          onChange={(event) => {
+            const value = event.target.value;
+            updateOpenAIParams({ size: value === "custom" ? customSize : value });
+          }}
+        >
+          {sizePresets.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+          <option value="custom">{copy.custom}</option>
+        </select>
+      </label>
+      {sizeSelectValue === "custom" && (
+        <label>
+          {copy.customSize}
+          <input
+            value={customSize}
+            onChange={(event) => {
+              setCustomSize(event.target.value);
+              updateOpenAIParams({ size: event.target.value });
+            }}
+            placeholder="2048x1152"
+          />
+        </label>
+      )}
+      <label>
+        {copy.quality}
+        <select value={openAIParams.quality} onChange={(event) => updateOpenAIParams({ quality: event.target.value as ImageQuality })}>
+          {qualityOptions.map((quality) => (
+            <option key={quality} value={quality}>
+              {quality}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {copy.format}
+        <select value={openAIParams.outputFormat} onChange={(event) => updateOpenAIParams({ outputFormat: event.target.value as ImageFormat })}>
+          {formatOptions.map((format) => (
+            <option key={format} value={format}>
+              {format}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {copy.compression}
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={openAIParams.outputCompression}
+          disabled={openAIParams.outputFormat === "png"}
+          onChange={(event) => updateOpenAIParams({ outputCompression: Number(event.target.value) })}
+        />
+        <span className="range-value">{openAIParams.outputFormat === "png" ? copy.pngIgnoresCompression : `${openAIParams.outputCompression}%`}</span>
+      </label>
+      <label>
+        {copy.background}
+        <select value={openAIParams.background} onChange={(event) => updateOpenAIParams({ background: event.target.value as ImageBackground })}>
+          {backgroundOptions.map((background) => (
+            <option key={background} value={background}>
+              {background}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {copy.count}
+        <input
+          type="number"
+          min="1"
+          max="10"
+          value={openAIParams.n}
+          onChange={(event) => updateOpenAIParams({ n: clamp(Number(event.target.value), 1, 10) })}
+        />
+      </label>
+      <label className="checkbox-row">
+        <input type="checkbox" checked={openAIParams.stream} onChange={(event) => updateOpenAIParams({ stream: event.target.checked })} />
+        {copy.streamPartialPreview}
+      </label>
+      <label>
+        {copy.partialImages}
+        <input
+          type="number"
+          min="0"
+          max="3"
+          disabled={!openAIParams.stream}
+          value={openAIParams.partialImages}
+          onChange={(event) => updateOpenAIParams({ partialImages: clamp(Number(event.target.value), 0, 3) })}
+        />
+      </label>
+      <label>
+        {copy.moderation}
+        <select value={openAIParams.moderation} onChange={(event) => updateOpenAIParams({ moderation: event.target.value as ModerationMode })}>
+          {moderationOptions.map((moderation) => (
+            <option key={moderation} value={moderation}>
+              {moderation}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {copy.timeoutSeconds}
+        <input
+          type="number"
+          min="30"
+          max="600"
+          value={Math.round(openAIParams.timeoutMs / 1000)}
+          onChange={(event) => updateOpenAIParams({ timeoutMs: clamp(Number(event.target.value), 30, 600) * 1000 })}
+        />
+      </label>
+      {sizeValidation && (
+        <p className={sizeValidation.ok ? "inline-check ok" : "inline-check error"}>
+          {sizeValidation.ok ? copy.sizeValid : localizeValidationMessage(sizeValidation.message, copy)}
+        </p>
+      )}
+    </div>
+  ) : geminiParams ? (
+    <div className="advanced-controls">
+      <label>
+        {copy.aspectRatio}
+        <select value={geminiParams.aspectRatio} onChange={(event) => updateGeminiParams({ aspectRatio: event.target.value as GeminiAspectRatio })}>
+          {GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => (
+            <option key={aspectRatio} value={aspectRatio}>
+              {aspectRatio}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {copy.resolution}
+        <select value={geminiParams.resolution} onChange={(event) => updateGeminiParams({ resolution: event.target.value as GeminiResolution })}>
+          {GEMINI_RESOLUTION_OPTIONS.map((resolution) => (
+            <option key={resolution} value={resolution}>
+              {resolution}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {copy.count}
+        <input type="number" min="1" max="1" value={geminiParams.outputCount} onChange={() => updateGeminiParams({ outputCount: 1 })} />
+      </label>
+      <label className="checkbox-row">
+        <input type="checkbox" checked={geminiParams.thinking} onChange={(event) => updateGeminiParams({ thinking: event.target.checked })} />
+        {copy.thinking}
+      </label>
+      <label className="checkbox-row">
+        <input type="checkbox" checked={geminiParams.searchGrounding} onChange={(event) => updateGeminiParams({ searchGrounding: event.target.checked })} />
+        {copy.searchGrounding}
+      </label>
+      <label>
+        {copy.timeoutSeconds}
+        <input
+          type="number"
+          min="30"
+          max="600"
+          value={Math.round(geminiParams.timeoutMs / 1000)}
+          onChange={(event) => updateGeminiParams({ timeoutMs: clamp(Number(event.target.value), 30, 600) * 1000 })}
+        />
+      </label>
+    </div>
+  ) : (
+    <div className="advanced-controls">
+      <p className="inline-check error">{copy.generalRuntimeUnsupported}</p>
+      <label>
+        {copy.count}
+        <input type="number" min="1" max="1" value={generalParams?.outputCount ?? 1} onChange={() => updateGeneralParams({ outputCount: 1 })} />
+      </label>
+      <label>
+        {copy.timeoutSeconds}
+        <input
+          type="number"
+          min="30"
+          max="600"
+          value={Math.round((generalParams?.timeoutMs ?? params.timeoutMs) / 1000)}
+          onChange={(event) => updateGeneralParams({ timeoutMs: clamp(Number(event.target.value), 30, 600) * 1000 })}
+        />
+      </label>
+    </div>
+  );
 
   return (
     <main
@@ -1261,138 +1642,10 @@ export function App() {
           </button>
 
           <div className="compact-grid">
-            <span>{copy.size}</span>
-            <strong>{params.size}</strong>
-            <span>{copy.quality}</span>
-            <strong>{params.quality}</strong>
-            <span>{copy.format}</span>
-            <strong>{params.outputFormat.toUpperCase()}</strong>
+            {parameterSummary}
           </div>
 
-          {showAdvanced && (
-            <div className="advanced-controls">
-              <label>
-                {copy.size}
-                <select
-                  value={sizeSelectValue}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    updateParams({ size: value === "custom" ? customSize : value });
-                  }}
-                >
-                  {sizePresets.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                  <option value="custom">{copy.custom}</option>
-                </select>
-              </label>
-              {sizeSelectValue === "custom" && (
-                <label>
-                  {copy.customSize}
-                  <input
-                    value={customSize}
-                    onChange={(event) => {
-                      setCustomSize(event.target.value);
-                      updateParams({ size: event.target.value });
-                    }}
-                    placeholder="2048x1152"
-                  />
-                </label>
-              )}
-              <label>
-                {copy.quality}
-                <select value={params.quality} onChange={(event) => updateParams({ quality: event.target.value as ImageQuality })}>
-                  {qualityOptions.map((quality) => (
-                    <option key={quality} value={quality}>
-                      {quality}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {copy.format}
-                <select value={params.outputFormat} onChange={(event) => updateParams({ outputFormat: event.target.value as ImageFormat })}>
-                  {formatOptions.map((format) => (
-                    <option key={format} value={format}>
-                      {format}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {copy.compression}
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={params.outputCompression}
-                  disabled={params.outputFormat === "png"}
-                  onChange={(event) => updateParams({ outputCompression: Number(event.target.value) })}
-                />
-                <span className="range-value">{params.outputFormat === "png" ? copy.pngIgnoresCompression : `${params.outputCompression}%`}</span>
-              </label>
-              <label>
-                {copy.background}
-                <select value={params.background} onChange={(event) => updateParams({ background: event.target.value as ImageBackground })}>
-                  {backgroundOptions.map((background) => (
-                    <option key={background} value={background}>
-                      {background}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {copy.count}
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={params.n}
-                  onChange={(event) => updateParams({ n: clamp(Number(event.target.value), 1, 10) })}
-                />
-              </label>
-              <label className="checkbox-row">
-                <input type="checkbox" checked={params.stream} onChange={(event) => updateParams({ stream: event.target.checked })} />
-                {copy.streamPartialPreview}
-              </label>
-              <label>
-                {copy.partialImages}
-                <input
-                  type="number"
-                  min="0"
-                  max="3"
-                  disabled={!params.stream}
-                  value={params.partialImages}
-                  onChange={(event) => updateParams({ partialImages: clamp(Number(event.target.value), 0, 3) })}
-                />
-              </label>
-              <label>
-                {copy.moderation}
-                <select value={params.moderation} onChange={(event) => updateParams({ moderation: event.target.value as ModerationMode })}>
-                  {moderationOptions.map((moderation) => (
-                    <option key={moderation} value={moderation}>
-                      {moderation}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {copy.timeoutSeconds}
-                <input
-                  type="number"
-                  min="30"
-                  max="600"
-                  value={Math.round(params.timeoutMs / 1000)}
-                  onChange={(event) => updateParams({ timeoutMs: clamp(Number(event.target.value), 30, 600) * 1000 })}
-                />
-              </label>
-              <p className={sizeValidation.ok ? "inline-check ok" : "inline-check error"}>
-                {sizeValidation.ok ? copy.sizeValid : localizeValidationMessage(sizeValidation.message, copy)}
-              </p>
-            </div>
-          )}
+          {showAdvanced && advancedControls}
         </section>
 
         <section className="tool-section draft-section">
@@ -1600,7 +1853,7 @@ export function App() {
                 <div className="mask-header">
                   <div>
                     <h3>{copy.mask}</h3>
-                    <p>{copy.maskDescription}</p>
+                    <p>{maskDescription}</p>
                   </div>
                   <div className="brush-controls">
                     <Eraser size={16} />
