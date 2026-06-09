@@ -196,8 +196,10 @@ pnpm package:mac:signed
 pnpm verify:release:mac
 ```
 
-After success, update `docs/updates/latest.json` with the signed asset URL,
-sha256, and `sizeBytes` metadata, then update `CHECKLIST.md`, `TODO.md`, and
+After success, use `pnpm update:manifest-asset -- --file <signed-artifact>
+--platform darwin --arch <arch> --url <release-asset-url>` to generate the
+signed asset URL, sha256, and `sizeBytes` metadata for
+`docs/updates/latest.json`, then update `CHECKLIST.md`, `TODO.md`, and
 `COMPLETION_AUDIT.md`. Close the related tracking issue if one exists.
 
 ## 5. Windows And Linux Native Validation

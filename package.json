@@ -35,7 +35,8 @@
     "verify:release:windows": "node scripts/verify-windows-release.mjs",
     "verify:real-api": "node scripts/verify-real-api.mjs",
     "verify:real-gemini-api": "node scripts/verify-real-gemini-api.mjs",
-    "verify:signing-ready": "node scripts/verify-signing-readiness.mjs"
+    "verify:signing-ready": "node scripts/verify-signing-readiness.mjs",
+    "update:manifest-asset": "node scripts/update-manifest-asset.mjs"
   },
   "build": {
     "appId": "com.bliveren.image2tools",
