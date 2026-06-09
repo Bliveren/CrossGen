@@ -1,15 +1,22 @@
 # Image2Tools Completion Audit
 
-Date: 2026-05-19
+Date: 2026-06-09
 Branch: `main`
+Target release: `v0.2.0`
 
 ## Objective Restated
 
-Deliver a simple Electron desktop tool for `gpt-image-2` that lets users save an
-Image API key and Base URL, configure common parameters, generate images, edit
-images, perform mask-based inpainting, download outputs, reuse local history,
-package the app for desktop platforms, and publish the code under the MIT
-license without leaking secrets or private local artifacts.
+Deliver Image2Tools as a local-first Electron desktop workspace for image
+generation and editing across:
+
+- GPT Image 2 through the OpenAI Image API.
+- Nano Banana 3 through Gemini `gemini-3.1-flash-image`.
+- General fallback workflows for discovered non-focused image models.
+
+The app must support provider setup, model discovery, model-specific launch
+flows, generation/editing/region workflows where supported, local history,
+downloads, bilingual UI, mock verification, desktop packaging, and release
+governance without leaking secrets or private local artifacts.
 
 ## Evidence Checklist
 
@@ -17,66 +24,75 @@ license without leaking secrets or private local artifacts.
 | --- | --- | --- |
 | Desktop app foundation | `package.json`, `src/main/main.ts`, `src/preload/preload.ts`, `src/renderer/App.tsx`; `pnpm build` passes | Done |
 | MIT licensing | `LICENSE` contains MIT text; `package.json` declares `MIT`; README links to `LICENSE` | Done |
-| API key entry, local save, and clear | Provider form in renderer; encrypted storage and `config:clearApiKey` via Electron `safeStorage` in `src/main/main.ts`; runtime API key validation in `src/shared/validation.ts` | Done |
-| Secret handling and open-source scan | `.gitignore` excludes env files, logs, build outputs, release outputs, and real API artifacts; `SECURITY.md` and `OPEN_SOURCE_AUDIT.md` document accepted and blocking scan hits | Done |
-| Base URL entry and connection test | Renderer config form; `/models` connection test via `handleTestConnection`; Base URL normalization in shared validation | Done |
-| Parameter config | Size, quality, format, compression, count, stream, partial images, moderation, and timeout controls | Done |
-| `gpt-image-2` defaults and limits | `DEFAULT_IMAGE_PARAMS`, size validation, 16 image cap, enum validation, finite integer validation, no transparent background option, and no `input_fidelity` exposure | Done |
-| Text-to-image generation | `/images/generations` implementation and tests in `src/main/services/openaiImage.ts` / `.test.ts` | Implemented; real API manual run still depends on user credentials |
-| Image edit and inpaint | `/images/edits`, multipart image upload, mask support, renderer mode switching, mask/source validation, and service tests | Implemented; real API manual run still depends on user credentials |
-| Streaming partial previews | SSE parsing and partial event handling in main + renderer, covered by tests | Done |
-| Local preview and file serving | Generated outputs are saved under Electron `userData`; renderer previews use a restricted `image2tools-asset://` protocol that only serves managed app image files | Done |
+| Multi-provider configuration | Renderer provider selector, provider-specific defaults, saved key preview, encrypted storage, and `config:clearApiKey` through Electron `safeStorage` | Done |
+| Model discovery | `src/main/services/modelDiscovery.ts`, OpenAI `/models`, Gemini `/models?key=...`, `config:discoverModels` IPC, model discovery UI states, and mock discovery verifier | Done |
+| Capability catalog and launch models | `src/shared/modelCatalog.ts` defines GPT Image 2, Nano Banana 3, and General launch capabilities; launcher buttons reflect local support and discovered remote models | Done |
+| State migration | v1 config, history, and draft migration to provider/model-aware v2 shape is covered by state migration tests | Done |
+| GPT Image 2 runtime | `openaiImageAdapter` preserves generation, edit, exact-mask inpaint, streaming partials, validation, result saving, and redacted errors | Implemented; real OpenAI acceptance pending |
+| Nano Banana 3 runtime | `geminiImageAdapter` supports Gemini `generateContent`, inline image inputs, image/text part parsing, Gemini controls, guided-region semantics, and redacted errors | Implemented; real Gemini acceptance pending |
+| General runtime | General mode keeps a minimal UI and provider-specific fallback: Gemini prompt/reference paths plus OpenAI-compatible prompt-only fallback for OpenAI and Custom | Done |
+| History and reuse | History shows provider/model chips, collapses after 6 items, searches model fields, restores matching provider/model/params, and preserves owned-file deletion rules | Done |
+| Local preview and file safety | Generated outputs are saved under Electron `userData`; restricted `image2tools-asset://` serving and IPC checks prevent arbitrary local file exposure | Done |
 | Download and file operations | Download/open/delete IPC paths reject assets outside the app image store or current history | Done |
-| History and reuse | JSON history, search, reuse, copy prompt, open folder, delete, and clear | Done |
-| Recovery | Atomic state writes with backup, interrupted job recovery, workspace draft autosave/restore | Done |
-| English/Chinese UI | Renderer includes a Language / 语言 switch backed by `localStorage`; text is centralized in `src/renderer/i18n.ts`; `src/renderer/i18n.test.ts` verifies copy shape, saved preference, navigator fallback, and validation-message localization | Done |
-| Local no-key integration path | `pnpm mock:openai` and `pnpm verify:mock-api` cover models, generation, edit, inpaint, streaming, and multipart request inspection | Done |
-| Windows packaging | `package.json` has `package:win`; electron-builder has an NSIS Windows target; `.github/workflows/ci.yml` includes a Windows package job; `scripts/verify-windows-release.mjs` validates installer metadata and unpacked app launch in CI package-smoke mode, and defaults to full silent install / installed app launch / silent uninstall for native release validation | Configured; native Windows execution required for final binary acceptance |
-| macOS packaging | `package:mac`, mac icon, DMG/ZIP targets, and macOS release verifier are present | Configured |
-| Linux packaging | AppImage target and Linux verifier are present | Configured |
-| External release evidence | `docs/release/evidence.json` records real API, signing, native platform, and update-manifest gates; `pnpm verify:release-evidence` validates schema and redaction while `--require-complete` blocks publishing until all required gates pass | Configured; external evidence still pending |
-| Tests | `pnpm build`, targeted Vitest, `pnpm verify:mock-api`, dependency license scan, and `git diff --check` pass on the current worktree | Done |
+| Recovery | Atomic state writes with backup, interrupted job recovery, and workspace draft autosave/restore are covered | Done |
+| English/Chinese UI | Renderer language switch and i18n shape tests cover English and Simplified Chinese copy | Done |
+| Mock verification | `pnpm verify:mock-api`, `pnpm verify:mock-gemini-api`, and `pnpm verify:mock-model-discovery` cover no-cost OpenAI, Gemini, and discovery paths | Done |
+| Release package metadata | Package version, description, copyright, app id, artifact names, and staged update manifest metadata align with `v0.2.0` | Done |
+| Update manifest safety | `src/shared/updateManifest.ts`, installer byte verification, update manifest tests, and `pnpm update:manifest-asset` require URL/hash/size metadata | Done; formal signed asset metadata pending |
+| Release evidence governance | `docs/release/evidence.json` records required external gates; `pnpm verify:release-evidence` validates schema, redaction, and guarded checklist alignment | Done; required gates still pending |
+| macOS packaging | `package:mac`, DMG/ZIP targets, ad-hoc preview build path, signed packaging command, signing-readiness script, and mac release verifier are present | Configured; Developer ID signed/notarized evidence pending |
+| Windows packaging | `package:win`, NSIS target, CI package-smoke mode, and full native installer verifier are present | Configured; native Windows shell evidence pending |
+| Linux packaging | AppImage target, CI verifier, extracted app Xvfb launch, and direct AppImage requirement flag are present | Configured; native Linux desktop evidence pending |
+| GitHub Actions | CI includes build/mock verification plus macOS, Windows, and Linux package jobs; recent PR gates have been green before merge | Done |
+| Secret handling and open-source scan | `.gitignore`, `SECURITY.md`, and `OPEN_SOURCE_AUDIT.md` document secret handling, ignored outputs, and scan expectations | Done; re-run before publication |
 
 ## Current Verification Commands
 
-The current worktree was verified with:
+Current local verification for the latest implementation rounds:
 
 ```bash
-pnpm vitest run src/main/services/openaiImage.test.ts src/shared/validation.test.ts
-pnpm vitest run src/renderer/i18n.test.ts
-pnpm verify:mock-api
 pnpm build
+pnpm verify:mock-api
+pnpm verify:mock-gemini-api
+pnpm verify:mock-model-discovery
+pnpm verify:release-evidence
+node scripts/verify-release-evidence.mjs --require-complete
 git diff --check
-pnpm licenses list --prod
-rg -n "sk-[A-Za-z0-9_-]{8,}|Bearer |Authorization|apiKey|encryptedApiKey|secret|password|token|private|/Users/|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}|github\\.com/.+/milestone|release/tag|origin/archive" -g '!node_modules' -g '!dist*' -g '!release' -g '!pnpm-lock.yaml'
-find . -maxdepth 3 \( -name '.env*' -o -name '*.pem' -o -name '*.p12' -o -name '*.key' -o -name '*state*.json' -o -name '*secret*' \) -not -path './node_modules/*' -print
-git ls-files | rg '(^|/)(dist|dist-renderer|release|real-api-artifacts|node_modules)/|\.env|\.pem|\.p12|state\.json|\.DS_Store' || true
 ```
 
-`pnpm build` includes TypeScript checks, all Vitest tests, renderer build, and
-main-process build. The current suite is 5 test files / 37 tests. Production
-dependencies report only ISC/MIT licenses. The file scans produced no sensitive file or tracked output
-matches; the content scan only found documented acceptable hits listed in
-`OPEN_SOURCE_AUDIT.md`. A separate project-specific scan for known internal
-identifiers, old draft release names, and account-specific URLs also produced no
-blocking hits.
+`pnpm build` currently runs TypeScript checks, all Vitest tests, renderer build,
+and Electron main build. As of this audit refresh, the Vitest suite reports 20
+test files / 112 tests.
+
+`pnpm verify:release-evidence` passes with 0/6 required external gates passed,
+which is expected until real API, signed/notarized, native platform, and formal
+update-manifest evidence exists. `--require-complete` intentionally fails while
+those gates are pending.
 
 ## Remaining External Gates
 
-- Real API acceptance requires a user-provided key and explicit cost
-  confirmation through `pnpm verify:real-api`; evidence must be recorded in
-  `docs/release/evidence.json`.
-- Windows installer verification must be run on Windows with:
+The remaining work requires credentials, external platforms, or release
+artifacts that are not available in this local shell. Do not mark the related
+checklist items complete without redacted evidence in
+`docs/release/evidence.json` and a passing `pnpm verify:release-evidence`.
 
-  ```powershell
-  pnpm package:win
-  pnpm verify:release:windows
-  ```
-
-- Signed and notarized macOS distribution requires external Developer ID and
-  Apple notarization credentials supplied through local env vars or CI secrets.
-- Final publication should run
-  `pnpm verify:release-evidence -- --require-complete` after all external
-  evidence is recorded.
-- Public release artifacts should be generated after rerunning the
-  pre-publication scan documented in `SECURITY.md`.
+- Real OpenAI GPT Image 2 acceptance:
+  `pnpm verify:real-api` with a real key and explicit cost approval, plus
+  app-level history/download checks.
+- Real Gemini / Nano Banana 3 acceptance:
+  `pnpm verify:real-gemini-api` with a real key and explicit cost approval,
+  plus app-level discovery, history, restore, and download checks.
+- Signed and notarized macOS distribution:
+  `pnpm verify:signing-ready`, `pnpm package:mac:signed`, and
+  `pnpm verify:release:mac` with Developer ID and Apple notarization
+  credentials.
+- Native Windows release validation:
+  `pnpm package:win` and default full `pnpm verify:release:windows` on a native
+  Windows shell.
+- Native Linux desktop validation:
+  `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 pnpm verify:release:linux` on a
+  native Linux desktop shell, plus download/open-folder checks.
+- Formal update manifest assets:
+  signed or externally validated release artifacts uploaded to HTTPS URLs, with
+  `docs/updates/latest.json` populated by `pnpm update:manifest-asset` and
+  verified URL, `sha256`, and `sizeBytes` evidence.
