@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -8,10 +8,11 @@ import { describe, expect, it } from "vitest";
 
 const scriptPath = path.resolve("scripts/verify-release-evidence.mjs");
 const execFileAsync = promisify(execFile);
+const checklistFiles = ["TODO.md", "CHECKLIST.md", "MULTI_MODEL_CHECKLIST.md"];
 
-async function run(args) {
+async function run(args, options = {}) {
   try {
-    const result = await execFileAsync("node", [scriptPath, ...args]);
+    const result = await execFileAsync("node", [scriptPath, ...args], options);
     return { exitCode: 0, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     if (error && typeof error === "object" && "code" in error) {
@@ -108,4 +109,40 @@ describe("release evidence verifier", () => {
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it("rejects checklist completion before matching evidence passes", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "image2tools-release-evidence-"));
+    try {
+      await copyChecklistFixture(tempRoot);
+      await copyFile(path.resolve("package.json"), path.join(tempRoot, "package.json"));
+      const scriptsDir = path.join(tempRoot, "scripts");
+      await mkdir(scriptsDir, { recursive: true });
+      await copyFile(scriptPath, path.join(scriptsDir, "verify-release-evidence.mjs"));
+
+      const docsReleaseDir = path.join(tempRoot, "docs", "release");
+      await mkdir(docsReleaseDir, { recursive: true });
+      await copyFile(path.resolve("docs/release/evidence.json"), path.join(docsReleaseDir, "evidence.json"));
+
+      const checklistPath = path.join(tempRoot, "MULTI_MODEL_CHECKLIST.md");
+      const checklist = await readFile(checklistPath, "utf8");
+      await writeFile(
+        checklistPath,
+        checklist.replace("- [ ] OpenAI Key 可发现 `gpt-image-2`", "- [x] OpenAI Key 可发现 `gpt-image-2`")
+      );
+
+      const result = await run([], { cwd: tempRoot });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("OpenAI Key 可发现 `gpt-image-2`");
+      expect(result.stderr).toContain("real-openai-api");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
+
+async function copyChecklistFixture(tempRoot) {
+  for (const file of checklistFiles) {
+    await copyFile(path.resolve(file), path.join(tempRoot, file));
+  }
+}
