@@ -36,8 +36,8 @@ describe("image provider adapter registry", () => {
       getImageProviderAdapterForRequest(
         request({
           ...DEFAULT_GENERAL_IMAGE_PARAMS,
-          providerKind: "openai",
-          model: "dall-e-3"
+          providerKind: "gemini",
+          model: "gemini-3-pro-image"
         })
       )
     ).toBe(generalImageAdapter);

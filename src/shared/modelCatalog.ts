@@ -100,8 +100,8 @@ export function getModelDisplayName(launchId: FocusedLaunchId, modelId: string):
   return definition.launchId === GENERAL_LAUNCH_ID ? modelId || definition.displayName : definition.displayName;
 }
 
-export function isGeneralFallbackProvider(providerKind: ProviderKind): providerKind is "openai" | "gemini" {
-  return providerKind === "openai" || providerKind === "gemini";
+export function isGeneralFallbackProvider(providerKind: ProviderKind): providerKind is "gemini" {
+  return providerKind === "gemini";
 }
 
 export function isFocusedImageModelId(providerKind: ProviderKind, modelId: string): boolean {
@@ -121,6 +121,7 @@ export function isPotentialGeneralImageModel(model: DiscoveredModel): boolean {
 }
 
 export function getGeneralImageModelCandidate(discoveredModels: DiscoveredModel[], providerKind: ProviderKind): DiscoveredModel | undefined {
+  if (!isGeneralFallbackProvider(providerKind)) return undefined;
   return discoveredModels.find((model) => model.providerKind === providerKind && isPotentialGeneralImageModel(model));
 }
 

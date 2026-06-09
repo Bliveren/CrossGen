@@ -372,10 +372,10 @@ function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButt
     } else if (!hasDiscovery) {
       reason = copy.launchUnavailableNoDiscovery;
     } else if (definition.launchId === GENERAL_LAUNCH_ID) {
-      if (!modelId) {
-        reason = copy.launchUnavailableNoImageModels;
-      } else if (!isGeneralFallbackProvider(config.kind)) {
+      if (!isGeneralFallbackProvider(config.kind)) {
         reason = copy.generalRuntimeUnsupported;
+      } else if (!modelId) {
+        reason = copy.launchUnavailableNoImageModels;
       } else {
         available = true;
         reason = copy.launchAvailable;
@@ -1013,7 +1013,7 @@ export function App() {
     if (assets.length > 0) {
       markDraftChanged();
       const next = dedupeAssets([...inputAssets, ...assets]);
-      const usesOpenAIInputCap = Boolean(openAIParams || generalParams?.providerKind === "openai");
+      const usesOpenAIInputCap = Boolean(openAIParams);
       const cappedNext = usesOpenAIInputCap ? next.slice(0, MAX_GPT_IMAGE_INPUTS) : next;
       const addedCount = Math.max(0, cappedNext.length - inputAssets.length);
       const capped = Boolean(usesOpenAIInputCap && next.length > MAX_GPT_IMAGE_INPUTS);

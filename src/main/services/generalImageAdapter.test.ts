@@ -18,7 +18,7 @@ afterEach(async () => {
   }
 });
 
-function job(providerKind: ProviderKind = "openai", model = "dall-e-3", patch: Partial<GenerationJob> = {}): GenerationJob {
+function job(providerKind: ProviderKind = "gemini", model = "gemini-3-pro-image", patch: Partial<GenerationJob> = {}): GenerationJob {
   const now = new Date(0).toISOString();
   return {
     id: "job_general_test",
@@ -44,7 +44,7 @@ function job(providerKind: ProviderKind = "openai", model = "dall-e-3", patch: P
   };
 }
 
-function config(providerKind: ProviderKind = "openai", model = "dall-e-3", patch: Partial<StoredProviderConfig> = {}): StoredProviderConfig {
+function config(providerKind: ProviderKind = "gemini", model = "gemini-3-pro-image", patch: Partial<StoredProviderConfig> = {}): StoredProviderConfig {
   const now = new Date(0).toISOString();
   return {
     id: providerKind,
@@ -94,31 +94,6 @@ describe("General image adapter", () => {
     });
   });
 
-  it("runs OpenAI-compatible General generation with minimal non-streaming params", async () => {
-    let requestUrl = "";
-    let requestBody: Record<string, unknown> = {};
-    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
-      requestUrl = String(url);
-      requestBody = JSON.parse(String(init?.body));
-      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
-    }) as typeof fetch;
-    const { runtime } = await createRuntime(fetchImpl);
-
-    const result = await runGeneralImageJob(job("openai", "dall-e-3"), "sk-test-key", config("openai", "dall-e-3"), runtime);
-
-    expect(requestUrl).toBe("https://api.test/v1/images/generations");
-    expect(requestBody).toMatchObject({
-      model: "dall-e-3",
-      prompt: "Make a clean product render",
-      stream: false
-    });
-    expect(requestBody).not.toHaveProperty("partial_images");
-    expect(result.launchId).toBe("general");
-    expect(result.modelId).toBe("dall-e-3");
-    expect(result.params).toMatchObject({ launchId: "general", providerKind: "openai", model: "dall-e-3" });
-    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
-  });
-
   it("runs Gemini General generation through generateContent with default image options", async () => {
     let requestUrl = "";
     let requestBody: Record<string, unknown> = {};
@@ -137,7 +112,7 @@ describe("General image adapter", () => {
     }) as typeof fetch;
     const { runtime } = await createRuntime(fetchImpl);
 
-    const result = await runGeneralImageJob(job("gemini", "gemini-3-pro-image"), "mock-gemini-key", config("gemini", "gemini-3-pro-image"), runtime);
+    const result = await runGeneralImageJob(job(), "mock-gemini-key", config(), runtime);
 
     expect(requestUrl).toBe("https://api.test/v1beta/models/gemini-3-pro-image:generateContent");
     expect(requestBody).toMatchObject({
@@ -152,6 +127,15 @@ describe("General image adapter", () => {
     });
     expect(result.launchId).toBe("general");
     expect(result.params).toMatchObject({ launchId: "general", providerKind: "gemini", model: "gemini-3-pro-image" });
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("rejects OpenAI General fallback instead of routing DALL-E through GPT Image params", async () => {
+    const { runtime } = await createRuntime((async () => Response.json({})) as typeof fetch);
+
+    await expect(runGeneralImageJob(job("openai", "dall-e-3"), "sk-test-key", config("openai", "dall-e-3"), runtime)).rejects.toThrow(
+      unsupportedGeneralProviderMessage("openai")
+    );
   });
 
   it("rejects unsupported General provider fallback", async () => {

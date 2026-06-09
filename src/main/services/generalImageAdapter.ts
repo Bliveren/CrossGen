@@ -3,20 +3,17 @@ import type {
   DiscoveredModel,
   GeminiImageParams,
   GenerationJob,
-  OpenAIImageParams,
   ProviderKind,
   RunJobRequest
 } from "../../shared/types.js";
 import {
   DEFAULT_GEMINI_IMAGE_PARAMS,
-  DEFAULT_IMAGE_PARAMS,
   isGeneralImageParams,
   validateGeneralRunJobRequest
 } from "../../shared/validation.js";
 import { isGeneralFallbackProvider } from "../../shared/modelCatalog.js";
-import type { ImageJobRuntime, ImageProviderAdapter, ImageProviderRuntime } from "./imageProviderAdapter.js";
+import type { ImageJobRuntime, ImageProviderAdapter } from "./imageProviderAdapter.js";
 import { runGeminiImageJob } from "./geminiImageAdapter.js";
-import { runOpenAIImageJob } from "./openaiImageAdapter.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 
 export const generalImageAdapter: ImageProviderAdapter = {
@@ -54,39 +51,17 @@ export async function runGeneralImageJob(
     throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
   }
 
-  if (job.params.providerKind === "gemini") {
-    const providerJob = {
-      ...job,
-      params: toGeminiFallbackParams(job)
-    };
-    const result = await runGeminiImageJob(providerJob, apiKey, config.baseURL, runtime);
-    return restoreGeneralJobIdentity(job, result);
-  }
-
   const providerJob = {
     ...job,
-    params: toOpenAIFallbackParams(job)
+    params: toGeminiFallbackParams(job)
   };
-  const result = await runOpenAIImageJob(providerJob, apiKey, config.baseURL, runtime);
+  const result = await runGeminiImageJob(providerJob, apiKey, config.baseURL, runtime);
   return restoreGeneralJobIdentity(job, result);
 }
 
 export function unsupportedGeneralProviderMessage(providerKind: ProviderKind): string {
   const provider = providerKind === "gemini" ? "Gemini" : providerKind === "openai" ? "OpenAI" : "Custom";
   return `${provider} provider 暂未接入 General 运行时。`;
-}
-
-function toOpenAIFallbackParams(job: GenerationJob): OpenAIImageParams {
-  return {
-    ...DEFAULT_IMAGE_PARAMS,
-    providerKind: "openai",
-    launchId: "gpt-image-2",
-    model: job.params.model,
-    stream: false,
-    partialImages: 0,
-    n: 1,
-    timeoutMs: job.params.timeoutMs
-  };
 }
 
 function toGeminiFallbackParams(job: GenerationJob): GeminiImageParams {

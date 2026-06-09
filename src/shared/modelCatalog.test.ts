@@ -63,7 +63,7 @@ describe("focused model catalog", () => {
     expect(getModelDisplayName(GENERAL_LAUNCH_ID, "image-model-x")).toBe("image-model-x");
   });
 
-  it("selects only non-focused image-like models for General fallback", () => {
+  it("selects only safe non-focused image-like models for General fallback", () => {
     const openAIModels = [
       { id: "gpt-image-2", providerKind: "openai" as const },
       { id: "gpt-4.1", providerKind: "openai" as const },
@@ -74,7 +74,7 @@ describe("focused model catalog", () => {
       { id: "gemini-3-pro-image", providerKind: "gemini" as const, displayName: "Gemini image model" }
     ];
 
-    expect(getGeneralImageModelCandidate(openAIModels, "openai")?.id).toBe("dall-e-3");
+    expect(getGeneralImageModelCandidate(openAIModels, "openai")).toBeUndefined();
     expect(getGeneralImageModelCandidate(geminiModels, "gemini")?.id).toBe("gemini-3-pro-image");
     expect(getGeneralImageModelCandidate([{ id: "gpt-4.1", providerKind: "openai" }], "openai")).toBeUndefined();
   });

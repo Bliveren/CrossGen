@@ -345,9 +345,8 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
     return { ok: false, message: "默认尺寸格式无效。" };
   }
   const kind = isOneOf(input.kind, PROVIDER_KIND_OPTIONS) ? input.kind : undefined;
-  const activeLaunchId = isOneOf(input.activeLaunchId, FOCUSED_LAUNCH_OPTIONS) ? input.activeLaunchId : undefined;
   const defaultModel = input.defaultModel.trim();
-  if ((kind === undefined || kind === "openai") && activeLaunchId !== GENERAL_LAUNCH_ID && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
+  if ((kind === undefined || kind === "openai") && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
     return { ok: false, message: `默认模型仅支持 ${DEFAULT_IMAGE_PARAMS.model}。` };
   }
   const defaultSize = input.defaultSize.trim();
@@ -545,9 +544,6 @@ export function validateGeneralRunJobRequest(request: unknown): ValidationResult
   }
 
   const inputPaths = request.inputPaths as string[];
-  if (request.params.providerKind === "openai" && inputPaths.length > MAX_GPT_IMAGE_INPUTS) {
-    return { ok: false, message: `GPT Image 2 输入图片不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
-  }
   if (request.mode === "inpaint") {
     return { ok: false, message: "General 首期不支持局部重绘。" };
   }

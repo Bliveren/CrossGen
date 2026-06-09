@@ -93,7 +93,7 @@ describe("gpt-image-2 validation", () => {
     expect(getValidationError(DEFAULT_IMAGE_PARAMS, "")).toContain("prompt");
     expect(getValidationError(DEFAULT_IMAGE_PARAMS, "Make a compact icon set")).toBeNull();
     expect(getValidationError(DEFAULT_GEMINI_IMAGE_PARAMS, "Make a compact icon set")).toBeNull();
-    expect(getValidationError({ ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "openai", model: "dall-e-3" }, "Make a compact icon set")).toBeNull();
+    expect(getValidationError({ ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "openai", model: "dall-e-3" }, "Make a compact icon set")).toContain("当前 provider");
     expect(getValidationError(DEFAULT_GENERAL_IMAGE_PARAMS, "Make a compact icon set")).toContain("当前 provider");
   });
 
@@ -116,7 +116,7 @@ describe("gpt-image-2 validation", () => {
 
     expect(validateProviderConfigInput(valid).ok).toBe(true);
     expect(validateProviderConfigInput({ ...valid, kind: "openai", activeLaunchId: "gpt-image-2", activeModelId: "gpt-image-2" }).ok).toBe(true);
-    expect(validateProviderConfigInput({ ...valid, kind: "openai", defaultModel: "dall-e-3", activeLaunchId: "general", activeModelId: "dall-e-3" }).ok).toBe(true);
+    expect(validateProviderConfigInput({ ...valid, kind: "openai", defaultModel: "dall-e-3", activeLaunchId: "general", activeModelId: "dall-e-3" }).ok).toBe(false);
     expect(validateProviderConfigInput({ ...valid, kind: "gemini", defaultModel: "gemini-3.1-flash-image", activeLaunchId: "nano-banana-3" }).ok).toBe(true);
     expect(validateProviderConfigInput({ ...valid, kind: "custom", defaultModel: "image-model-x", activeLaunchId: "general" }).ok).toBe(true);
     expect(validateProviderConfigInput(null as never).ok).toBe(false);
@@ -190,16 +190,19 @@ describe("gpt-image-2 validation", () => {
       ok: false,
       message: "当前 provider 暂未接入 General 运行时。"
     });
-    expect(validateRunJobRequest({ ...job, params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "openai", model: "dall-e-3" } }).ok).toBe(true);
+    expect(validateRunJobRequest({ ...job, params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "openai", model: "dall-e-3" } })).toMatchObject({
+      ok: false,
+      message: "当前 provider 暂未接入 General 运行时。"
+    });
     expect(validateRunJobRequest({ ...job, params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "gemini", model: "gemini-3-pro-image" } }).ok).toBe(true);
-    expect(validateGeneralRunJobRequest({ ...job, params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "openai", model: "dall-e-3" }, mode: "edit" })).toMatchObject({
+    expect(validateGeneralRunJobRequest({ ...job, params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "gemini", model: "gemini-3-pro-image" }, mode: "edit" })).toMatchObject({
       ok: false,
       message: "基础参考图编辑至少需要一张参考图。"
     });
     expect(
       validateGeneralRunJobRequest({
         ...job,
-        params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "openai", model: "dall-e-3" },
+        params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "gemini", model: "gemini-3-pro-image" },
         mode: "inpaint",
         inputPaths: ["/tmp/a.png"],
         maskPath: "/tmp/mask.png"
@@ -208,11 +211,11 @@ describe("gpt-image-2 validation", () => {
     expect(
       validateGeneralRunJobRequest({
         ...job,
-        params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "openai", model: "dall-e-3" },
+        params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "gemini", model: "gemini-3-pro-image" },
         mode: "edit",
         inputPaths: Array.from({ length: MAX_GPT_IMAGE_INPUTS + 1 }, (_, index) => `/tmp/${index}.png`)
       }).ok
-    ).toBe(false);
+    ).toBe(true);
     expect(
       validateRunJobRequest({
         ...job,
