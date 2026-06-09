@@ -87,6 +87,7 @@
 - [x] 本机未压缩 app 可启动
 - [x] macOS dmg/zip 可生成
 - [x] macOS ad-hoc signed、未公证本地预览包可生成
+- [x] `v0.2.0` 多模型发布包版本、描述、版权和更新 manifest 元数据已补齐
 - [x] dmg 可挂载、复制 app 并启动
 - [x] macOS 临时目录卸载与重装 smoke test 正常
 - [x] macOS dmg 安装 smoke test 可通过 `pnpm verify:release:mac` 自动复跑
@@ -103,6 +104,7 @@
 - [x] 真实 streaming 验收需要额外成本确认
 - [ ] Gemini / Nano Banana 3 真实 API 验收完成（已有受成本保护 verifier，仍需真实 Key 跑通并记录证据）
 - [x] 签名/公证 readiness 脚本不会暴露 secret 且不会尝试签名
+- [x] macOS release verifier 不再写死旧版本 dmg 文件名
 - [x] 配置迁移到当前 state v1 正常
 - [x] 长时间生成不会轻易超时
 
@@ -132,6 +134,7 @@
 - [x] release verifier 命令与平台限制已记录
 - [x] 文档未声明未验证的 Nano Banana 真实输出质量或 exact-mask 能力
 - [ ] 真实 OpenAI / Gemini 外部验收完成
+- [ ] 正式更新 manifest 已补充分发资产 URL、hash 和 size
 - [x] General 任意 provider fallback 完成
 
 ## 10. GPT Image 2 API 检查

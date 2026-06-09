@@ -117,6 +117,7 @@
 - [x] 增加受额外成本确认保护的真实 streaming 生成/编辑验收路径
 - [x] 增加 macOS 签名/公证 readiness 检查脚本
 - [x] 增加显式 Developer ID signed macOS 打包命令，默认 ad-hoc signed 试用包不受影响
+- [x] 补齐 `v0.2.0` 多模型发布包版本、描述、版权和更新 manifest 元数据
 - [x] 在 Ubuntu ARM64 Docker 环境补充 Linux build、mock verifier、AppImage 打包、AppImage 解包与 Xvfb 启动烟测证据
 - [x] 增加 `pnpm verify:release:windows` 并接入 Windows CI package gate
 - [x] 将 Windows release verifier 扩展到 silent install / launch / uninstall 烟测
@@ -124,7 +125,7 @@
 - [x] 增加 `pnpm verify:release:linux` 并接入 Linux CI package gate
 - [x] 将 Linux release verifier 扩展到可选直接 AppImage 启动，原生验收可通过环境变量强制要求 FUSE
 - [x] 取得绿色 CI
-- [ ] 补充签名、公证与正式分发元数据
+- [ ] 完成签名、公证并补充正式分发资产 URL / hash / size 证据
 - [ ] 非 macOS 平台安装验证；Windows 与原生 Linux 桌面 shell 行为仍待验证
 - [x] 增加中英文界面切换
 

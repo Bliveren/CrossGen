@@ -1,7 +1,7 @@
 {
   "name": "image2tools",
-  "version": "0.1.0",
-  "description": "A simple GPT Image 2 desktop tool for generation, edits, inpainting, downloads, and local history.",
+  "version": "0.2.0",
+  "description": "A multi-model desktop image workspace for GPT Image 2, Nano Banana 3, and compatible image providers.",
   "author": "Nowo, Corgnitor, and Image2Tools contributors",
   "license": "MIT",
   "image2tools": {
@@ -40,6 +40,7 @@
   "build": {
     "appId": "com.bliveren.image2tools",
     "productName": "Image2Tools",
+    "copyright": "Copyright (c) 2026 Nowo, Corgnitor, and Image2Tools contributors",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release"

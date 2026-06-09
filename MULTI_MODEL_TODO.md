@@ -155,5 +155,6 @@ Target release: `v0.2.0`
 - [x] 更新 SECURITY.md 增加 Gemini Key 处理说明
 - [x] 更新 mock API 文档
 - [x] 更新 release verifier 说明
+- [x] 补齐 `v0.2.0` 发布包版本、描述、版权和更新 manifest 元数据
 - [x] 重新跑开源 secret scan
 - [x] 确认文档没有写死未验证的 Nano Banana 能力

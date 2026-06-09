@@ -6,6 +6,7 @@ Target release: `v0.2.0`
 
 - [x] 多生图模型支持被确认为 `v0.2.0` 核心版本目标
 - [x] `v0.2.0` release notes 覆盖 GPT Image 2、Nano Banana 3、General 支持
+- [x] `v0.2.0` package metadata 和更新 manifest 已对齐多模型发布目标
 - [x] `v0.2.0` 发布前完成多模型 mock 验证
 - [ ] `v0.2.0` 发布前完成至少一轮真实 OpenAI / Gemini API 外部验收
 

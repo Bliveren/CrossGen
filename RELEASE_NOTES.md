@@ -1,6 +1,6 @@
 # Image2Tools v0.2.0 Release Notes Draft
 
-Status: draft until real API acceptance, CI, signing/notarization, and native platform release gates are complete.
+Status: draft until real API acceptance, signed/notarized distribution assets, and native platform release gates are complete.
 
 ## Highlights
 
@@ -44,3 +44,7 @@ pnpm verify:release:linux
 ```
 
 Re-run the secret scan in [SECURITY.md](./SECURITY.md) after every release-note or packaging metadata update.
+
+The staged app package metadata is `0.2.0`. Do not publish `docs/updates/latest.json`
+with downloadable assets until the signed/notarized artifacts have verified URL,
+hash, and size metadata.
