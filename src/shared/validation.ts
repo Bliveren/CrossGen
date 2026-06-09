@@ -328,8 +328,9 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
   if (typeof input.defaultSize !== "string") {
     return { ok: false, message: "默认尺寸格式无效。" };
   }
+  const kind = isOneOf(input.kind, PROVIDER_KIND_OPTIONS) ? input.kind : undefined;
   const defaultModel = input.defaultModel.trim();
-  if (defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
+  if ((kind === undefined || kind === "openai") && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
     return { ok: false, message: `默认模型仅支持 ${DEFAULT_IMAGE_PARAMS.model}。` };
   }
   const defaultSize = input.defaultSize.trim();

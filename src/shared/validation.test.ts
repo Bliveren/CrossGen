@@ -113,6 +113,8 @@ describe("gpt-image-2 validation", () => {
 
     expect(validateProviderConfigInput(valid).ok).toBe(true);
     expect(validateProviderConfigInput({ ...valid, kind: "openai", activeLaunchId: "gpt-image-2", activeModelId: "gpt-image-2" }).ok).toBe(true);
+    expect(validateProviderConfigInput({ ...valid, kind: "gemini", defaultModel: "gemini-3.1-flash-image", activeLaunchId: "nano-banana-3" }).ok).toBe(true);
+    expect(validateProviderConfigInput({ ...valid, kind: "custom", defaultModel: "image-model-x", activeLaunchId: "general" }).ok).toBe(true);
     expect(validateProviderConfigInput(null as never).ok).toBe(false);
     expect(validateProviderConfigInput({ ...valid, kind: "anthropic" } as never).ok).toBe(false);
     expect(validateProviderConfigInput({ ...valid, baseURL: null } as never).ok).toBe(false);

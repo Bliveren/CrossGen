@@ -34,15 +34,19 @@ import {
   DEFAULT_IMAGE_PARAMS,
   dataUrlToBase64,
   getValidationError,
-  normalizeBaseURL,
   validateApiKey,
   validateProviderConfigInput,
   validateRunJobRequest,
   validateWorkspaceDraftInput
 } from "../shared/validation.js";
-import { getModelDisplayName, GPT_IMAGE_2_LAUNCH_ID } from "../shared/modelCatalog.js";
+import {
+  GPT_IMAGE_2_LAUNCH_ID,
+  getModelDisplayName
+} from "../shared/modelCatalog.js";
 import { fetchWithTimeout } from "./services/openaiImage.js";
 import { getImageProviderAdapter, getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
+import { discoverModels, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
+import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
 import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePaths, normalizeManagedAssetPath } from "./services/assetOwnership.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
@@ -303,9 +307,13 @@ function maskApiKeyPreview(apiKey: string): string {
 
 async function getApiKeyOrThrow(): Promise<string> {
   const state = await readState();
-  const apiKey = decryptApiKey(state.config);
+  return getApiKeyForConfigOrThrow(state.config);
+}
+
+function getApiKeyForConfigOrThrow(config: StoredProviderConfig): string {
+  const apiKey = decryptApiKey(config);
   if (!apiKey) {
-    throw new Error("缺少 API Key。请先保存 OpenAI API Key。");
+    throw new Error(`缺少 API Key。请先保存 ${providerDisplayName(config.kind)} API Key。`);
   }
   const validation = validateApiKey(apiKey);
   if (!validation.ok) {
@@ -586,20 +594,7 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
     throw new Error(configValidation.message ?? "配置参数无效。");
   }
   const now = new Date().toISOString();
-  const activeLaunchId = input.activeLaunchId ?? state.config.activeLaunchId ?? GPT_IMAGE_2_LAUNCH_ID;
-  const activeModelId = input.activeModelId?.trim() || input.defaultModel.trim() || DEFAULT_IMAGE_PARAMS.model;
-  const nextConfig: StoredProviderConfig = {
-    ...state.config,
-    kind: input.kind ?? state.config.kind,
-    baseURL: normalizeBaseURL(input.baseURL),
-    defaultModel: input.defaultModel.trim() || DEFAULT_IMAGE_PARAMS.model,
-    defaultSize: input.defaultSize.trim() || DEFAULT_IMAGE_PARAMS.size,
-    defaultQuality: input.defaultQuality,
-    timeoutMs: input.timeoutMs,
-    activeLaunchId,
-    activeModelId,
-    updatedAt: now
-  };
+  let nextConfig = buildProviderConfigForSave(state.config, input, now);
 
   if (input.apiKey !== undefined && input.apiKey.trim()) {
     const validation = validateApiKey(input.apiKey);
@@ -607,6 +602,10 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
       throw new Error(validation.message ?? "API Key 无效。");
     }
     Object.assign(nextConfig, encryptApiKey(input.apiKey));
+  }
+
+  if (input.apiKey !== undefined && input.apiKey.trim()) {
+    nextConfig = await refreshModelDiscovery(nextConfig);
   }
 
   await writeState({ ...state, config: nextConfig });
@@ -619,6 +618,9 @@ async function handleClearApiKey(): Promise<ProviderConfig> {
     ...state.config,
     encryptedApiKey: undefined,
     encryption: "none",
+    discoveredModels: [],
+    lastModelDiscoveryAt: undefined,
+    lastModelDiscoveryError: undefined,
     updatedAt: new Date().toISOString()
   };
   await writeState({ ...state, config: nextConfig });
@@ -648,18 +650,55 @@ async function handleClearDraft(): Promise<void> {
   await writeState({ ...state, draft: undefined });
 }
 
+async function refreshModelDiscovery(config: StoredProviderConfig): Promise<StoredProviderConfig> {
+  const apiKey = getApiKeyForConfigOrThrow(config);
+  try {
+    const adapter = getImageProviderAdapter(config.kind);
+    const models = adapter
+      ? await adapter.discoverModels(config, apiKey, { fetch })
+      : (await discoverModels(config.kind, config.baseURL, apiKey, Math.min(config.timeoutMs, 30000), { fetch })).models;
+    return {
+      ...config,
+      discoveredModels: models,
+      lastModelDiscoveryAt: new Date().toISOString(),
+      lastModelDiscoveryError: undefined,
+      updatedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    return {
+      ...config,
+      discoveredModels: [],
+      lastModelDiscoveryAt: new Date().toISOString(),
+      lastModelDiscoveryError: sanitizeModelDiscoveryError(error, apiKey),
+      updatedAt: new Date().toISOString()
+    };
+  }
+}
+
+async function handleDiscoverModels(): Promise<ProviderConfig> {
+  const state = await readState();
+  const nextConfig = await refreshModelDiscovery(state.config);
+  await writeState({ ...state, config: nextConfig });
+  return toPublicConfig(nextConfig);
+}
+
 async function handleTestConnection(): Promise<ConnectionTestResult> {
   try {
     const state = await readState();
-    const apiKey = await getApiKeyOrThrow();
-    const adapter = getImageProviderAdapter(state.config.kind);
-    if (!adapter) {
+    const nextConfig = await refreshModelDiscovery(state.config);
+    await writeState({ ...state, config: nextConfig });
+    if (nextConfig.lastModelDiscoveryError) {
       return {
         ok: false,
-        message: unsupportedImageProviderMessage()
+        message: nextConfig.lastModelDiscoveryError
       };
     }
-    return adapter.testConnection(state.config, apiKey, { fetch });
+
+    return {
+      ok: true,
+      message: "连接成功。",
+      status: 200
+    };
   } catch (error) {
     return {
       ok: false,
@@ -713,6 +752,9 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   }
 
   const state = await readState();
+  if (normalizedRequest.params.providerKind !== state.config.kind) {
+    throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
+  }
   const apiKey = await getApiKeyOrThrow();
   const { inputs, mask } = await resolveRequestInputs(normalizedRequest);
   const startedAt = Date.now();
@@ -917,6 +959,7 @@ function pathsOwnedByJob(job: GenerationJob): string[] {
 function registerIpcHandlers(): void {
   ipcMain.handle("app:getSnapshot", handleGetSnapshot);
   ipcMain.handle("config:save", handleSaveConfig);
+  ipcMain.handle("config:discoverModels", handleDiscoverModels);
   ipcMain.handle("config:clearApiKey", handleClearApiKey);
   ipcMain.handle("config:testConnection", handleTestConnection);
   ipcMain.handle("draft:save", handleSaveDraft);

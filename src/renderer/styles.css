@@ -350,6 +350,7 @@ label {
 }
 
 .config-status,
+.model-discovery-status,
 .inline-check,
 .mask-status {
   display: flex;
@@ -357,6 +358,92 @@ label {
   gap: 7px;
   color: #5d554c;
   font-size: 12px;
+}
+
+.model-discovery-status {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.model-discovery-status strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #2d2924;
+  font-weight: 650;
+  text-align: right;
+}
+
+.model-discovery-status[data-kind="error"] strong {
+  color: #a33a32;
+}
+
+.discover-button {
+  width: 100%;
+}
+
+.launch-strip {
+  display: grid;
+  gap: 7px;
+  border-top: 1px solid #ded7c9;
+  padding-top: 10px;
+}
+
+.launch-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #5d554c;
+  font-size: 12px;
+}
+
+.launch-strip-header strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #221f1c;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launch-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  min-height: 48px;
+  width: 100%;
+  gap: 2px;
+  border: 1px solid #d6d0c3;
+  background: #fffdf8;
+  color: #2d2924;
+  text-align: left;
+}
+
+.launch-button span,
+.launch-button small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launch-button span {
+  font-weight: 700;
+}
+
+.launch-button small {
+  color: #786e62;
+  font-size: 11px;
+}
+
+.launch-button.active {
+  border-color: rgba(31, 111, 97, 0.62);
+  background: #e7f2ee;
+  color: #1f6f61;
+}
+
+.launch-button.active small {
+  color: #2d6e60;
 }
 
 .dot {
