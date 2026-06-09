@@ -120,6 +120,7 @@
 - [x] 补齐 `v0.2.0` 多模型发布包版本、描述、版权和更新 manifest 元数据
 - [x] 更新 manifest schema 和安装器下载校验要求 `sha256` 与 `sizeBytes`
 - [x] 增加 update manifest 资产条目生成脚本，降低正式分发元数据手工出错风险
+- [x] 增加外部发布证据 ledger 与 `pnpm verify:release-evidence`，统一记录真实 API、签名、公证、原生平台和正式 manifest 证据
 - [x] 在 Ubuntu ARM64 Docker 环境补充 Linux build、mock verifier、AppImage 打包、AppImage 解包与 Xvfb 启动烟测证据
 - [x] 增加 `pnpm verify:release:windows` 并接入 Windows CI package gate
 - [x] 将 Windows release verifier 扩展到 silent install / launch / uninstall 烟测

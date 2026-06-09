@@ -34,6 +34,7 @@ license without leaking secrets or private local artifacts.
 | Windows packaging | `package.json` has `package:win`; electron-builder has an NSIS Windows target; `.github/workflows/ci.yml` includes a Windows package job; `scripts/verify-windows-release.mjs` validates installer metadata and unpacked app launch in CI package-smoke mode, and defaults to full silent install / installed app launch / silent uninstall for native release validation | Configured; native Windows execution required for final binary acceptance |
 | macOS packaging | `package:mac`, mac icon, DMG/ZIP targets, and macOS release verifier are present | Configured |
 | Linux packaging | AppImage target and Linux verifier are present | Configured |
+| External release evidence | `docs/release/evidence.json` records real API, signing, native platform, and update-manifest gates; `pnpm verify:release-evidence` validates schema and redaction while `--require-complete` blocks publishing until all required gates pass | Configured; external evidence still pending |
 | Tests | `pnpm build`, targeted Vitest, `pnpm verify:mock-api`, dependency license scan, and `git diff --check` pass on the current worktree | Done |
 
 ## Current Verification Commands
@@ -63,7 +64,8 @@ blocking hits.
 ## Remaining External Gates
 
 - Real API acceptance requires a user-provided key and explicit cost
-  confirmation through `pnpm verify:real-api`.
+  confirmation through `pnpm verify:real-api`; evidence must be recorded in
+  `docs/release/evidence.json`.
 - Windows installer verification must be run on Windows with:
 
   ```powershell
@@ -73,5 +75,8 @@ blocking hits.
 
 - Signed and notarized macOS distribution requires external Developer ID and
   Apple notarization credentials supplied through local env vars or CI secrets.
+- Final publication should run
+  `pnpm verify:release-evidence -- --require-complete` after all external
+  evidence is recorded.
 - Public release artifacts should be generated after rerunning the
   pre-publication scan documented in `SECURITY.md`.

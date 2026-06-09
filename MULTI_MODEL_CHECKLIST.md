@@ -9,6 +9,7 @@ Target release: `v0.2.0`
 - [x] `v0.2.0` package metadata 和更新 manifest 已对齐多模型发布目标
 - [x] `v0.2.0` 更新 manifest schema 会要求并校验资产 `sha256` 与 `sizeBytes`
 - [x] `v0.2.0` update manifest 资产条目可由脚本从本地 artifact 生成
+- [x] `v0.2.0` 外部发布证据有统一 ledger 和 validator
 - [x] `v0.2.0` 发布前完成多模型 mock 验证
 - [ ] `v0.2.0` 发布前完成至少一轮真实 OpenAI / Gemini API 外部验收
 

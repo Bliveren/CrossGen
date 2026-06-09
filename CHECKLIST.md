@@ -90,6 +90,7 @@
 - [x] `v0.2.0` 多模型发布包版本、描述、版权和更新 manifest 元数据已补齐
 - [x] 更新 manifest 资产 schema 会要求并校验 `sha256` 与 `sizeBytes`
 - [x] update manifest 资产条目生成脚本会从本地 artifact 计算 `sha256` 与 `sizeBytes`
+- [x] 外部发布证据 ledger 可校验 schema、脱敏和最终完成状态
 - [x] dmg 可挂载、复制 app 并启动
 - [x] macOS 临时目录卸载与重装 smoke test 正常
 - [x] macOS dmg 安装 smoke test 可通过 `pnpm verify:release:mac` 自动复跑

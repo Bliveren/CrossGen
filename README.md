@@ -118,11 +118,14 @@ pnpm package:win
 pnpm verify:release:mac
 pnpm verify:release:windows
 pnpm verify:release:linux
+pnpm verify:release-evidence
 ```
 
 `pnpm build` runs type checks, Vitest, the renderer build, and the Electron main build. `pnpm verify:mock-api` exercises the mock OpenAI Image API path. `pnpm verify:mock-gemini-api` exercises Gemini `generateContent`, guided-region requests, request recording, and Gemini-style error paths. `pnpm verify:mock-model-discovery` checks OpenAI/Gemini discovery fixtures, missing focused-model cases, General Gemini candidate detection, and Gemini discovery auth errors. `pnpm package:dir` creates an unpacked app for local inspection. `pnpm package:mac` creates local ad-hoc macOS packages; use `pnpm package:mac:signed` only when Developer ID and notarization environment variables are configured.
 
 `pnpm verify:release:windows` defaults to full native Windows verification, including the NSIS silent install, installed-app launch, and silent uninstall cycle. Hosted GitHub workflows use `IMAGE2TOOLS_WINDOWS_VERIFY_MODE=package-smoke` to keep installer PE checks and unpacked-app launch smoke coverage without depending on the hosted runner's installer policy.
+
+`pnpm verify:release-evidence` validates the external-gate ledger in [`docs/release/evidence.json`](./docs/release/evidence.json). Use `pnpm verify:release-evidence -- --require-complete` before publishing to require every real API, signing, native platform, and update-manifest gate to have passed evidence.
 
 ## Mock API
 
@@ -186,6 +189,8 @@ IMAGE2TOOLS_GEMINI_API_KEY=... IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 pnpm ve
 ```
 
 Gemini / Nano Banana 3 real API acceptance still needs the app-level history and download checks documented in [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md) before it can be marked complete.
+
+Record real API, signing, native platform, and formal update-manifest evidence in [`docs/release/evidence.json`](./docs/release/evidence.json). The ledger must stay redacted and pass `pnpm verify:release-evidence` before checklist items are marked complete.
 
 ## Icon
 
@@ -348,11 +353,14 @@ pnpm package:win
 pnpm verify:release:mac
 pnpm verify:release:windows
 pnpm verify:release:linux
+pnpm verify:release-evidence
 ```
 
 `pnpm build` 会执行类型检查、Vitest、renderer 构建和 Electron main 构建。`pnpm verify:mock-api` 覆盖 mock OpenAI Image API 链路。`pnpm verify:mock-gemini-api` 覆盖 Gemini `generateContent`、引导式区域请求、请求记录和 Gemini 风格错误路径。`pnpm verify:mock-model-discovery` 覆盖 OpenAI/Gemini 探测 fixture、缺少重点模型时的状态、General Gemini 候选模型识别和 Gemini 探测鉴权错误。`pnpm package:dir` 生成未压缩应用目录，适合本地检查。`pnpm package:mac` 生成本地 ad-hoc macOS 包；具备 Developer ID 和公证环境变量后再使用 `pnpm package:mac:signed`。
 
 `pnpm verify:release:windows` 默认执行完整原生 Windows 验证，包括 NSIS 静默安装、已安装应用启动和静默卸载。Hosted GitHub workflow 使用 `IMAGE2TOOLS_WINDOWS_VERIFY_MODE=package-smoke` 保留安装包 PE 检查和未压缩应用启动烟测，同时避开托管 runner 的安装器策略差异。
+
+`pnpm verify:release-evidence` 校验 [`docs/release/evidence.json`](./docs/release/evidence.json) 中的外部验收证据。发布前使用 `pnpm verify:release-evidence -- --require-complete` 强制要求真实 API、签名、原生平台和更新 manifest 证据全部通过。
 
 ## Mock API 验证
 
@@ -416,6 +424,8 @@ IMAGE2TOOLS_GEMINI_API_KEY=... IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 pnpm ve
 ```
 
 Gemini / Nano Banana 3 真实 API 验收仍需完成 [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md) 中的应用内历史与下载检查后，才能标记为完成。
+
+真实 API、签名、原生平台和正式更新 manifest 证据统一记录在 [`docs/release/evidence.json`](./docs/release/evidence.json)。证据必须脱敏并通过 `pnpm verify:release-evidence` 后，才能把 checklist 项改为完成。
 
 ## 图标
 
