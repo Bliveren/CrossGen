@@ -15,6 +15,7 @@ const installerPattern = /^Image2Tools(?:-Setup|-.*-win-.*)\.exe$/;
 const installerTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_INSTALL_TIMEOUT_MS ?? 120000);
 const smokeTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_SMOKE_TIMEOUT_MS ?? 12000);
 const windowTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_WINDOW_TIMEOUT_MS ?? 15000);
+const defaultSilentInstallArgs = ["/S", "/currentuser"];
 
 function assertWindows() {
   if (process.platform !== "win32") {
@@ -394,8 +395,9 @@ async function cleanupExistingInstall() {
 
 async function runSilentInstallCycle(installerPath) {
   await cleanupExistingInstall();
-  console.log(`Running silent Windows installer: ${installerPath}`);
-  await run(installerPath, ["/S"], { timeout: installerTimeoutMs });
+  const installArgs = silentInstallArgs();
+  console.log(`Running silent Windows installer: ${installerPath} ${installArgs.join(" ")}`);
+  await run(installerPath, installArgs, { timeout: installerTimeoutMs });
 
   let installedExecutable = "";
   let uninstaller = "";
@@ -420,6 +422,13 @@ async function runSilentInstallCycle(installerPath) {
     }
   }
   console.log("Silent Windows install/uninstall cycle passed.");
+}
+
+function silentInstallArgs() {
+  const raw = process.env.IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS;
+  if (!raw?.trim()) return defaultSilentInstallArgs;
+  const parsed = raw.split(/\s+/).map((item) => item.trim()).filter(Boolean);
+  return parsed.length > 0 ? parsed : defaultSilentInstallArgs;
 }
 
 async function main() {
