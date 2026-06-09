@@ -167,6 +167,9 @@ The mark combines an image canvas, edit wand, and streaming/output lines to matc
 ## Documentation
 
 - [PLAN.md](./PLAN.md): roadmap, scope, and phase goals
+- [MULTI_MODEL_PLAN.md](./MULTI_MODEL_PLAN.md): multi image-model architecture and rollout plan
+- [MULTI_MODEL_TODO.md](./MULTI_MODEL_TODO.md): executable task list for GPT Image 2, Nano Banana 3, and General support
+- [MULTI_MODEL_CHECKLIST.md](./MULTI_MODEL_CHECKLIST.md): acceptance checklist for multi-model support
 - [ARCHITECTURE.md](./ARCHITECTURE.md): architecture, data flow, and module split
 - [TODO.md](./TODO.md): executable task list
 - [CHECKLIST.md](./CHECKLIST.md): development and release checklist
@@ -356,6 +359,9 @@ IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST=1
 ## 文档索引
 
 - [PLAN.md](./PLAN.md): 总体开发计划、阶段目标、范围边界
+- [MULTI_MODEL_PLAN.md](./MULTI_MODEL_PLAN.md): 多生图模型架构与阶段推进计划
+- [MULTI_MODEL_TODO.md](./MULTI_MODEL_TODO.md): GPT Image 2、Nano Banana 3、General 支持的可执行任务清单
+- [MULTI_MODEL_CHECKLIST.md](./MULTI_MODEL_CHECKLIST.md): 多模型支持验收检查清单
 - [ARCHITECTURE.md](./ARCHITECTURE.md): 技术架构、数据流、模块拆分
 - [TODO.md](./TODO.md): 可直接执行的任务清单
 - [CHECKLIST.md](./CHECKLIST.md): 开发与发布检查清单
