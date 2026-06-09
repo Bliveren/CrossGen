@@ -41,7 +41,8 @@ import {
   validateWorkspaceDraftInput
 } from "../shared/validation.js";
 import { getModelDisplayName, GPT_IMAGE_2_LAUNCH_ID } from "../shared/modelCatalog.js";
-import { asOpenAIImageJob, buildEndpoint, fetchWithTimeout, runOpenAIImageJob } from "./services/openaiImage.js";
+import { fetchWithTimeout } from "./services/openaiImage.js";
+import { getImageProviderAdapter, getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePaths, normalizeManagedAssetPath } from "./services/assetOwnership.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
@@ -63,14 +64,6 @@ protocol.registerSchemesAsPrivileged([
     }
   }
 ]);
-
-interface ApiErrorPayload {
-  error?: {
-    message?: string;
-    type?: string;
-    code?: string;
-  };
-}
 
 interface UpdateManifest {
   version?: unknown;
@@ -319,26 +312,6 @@ async function getApiKeyOrThrow(): Promise<string> {
     throw new Error(validation.message ?? "API Key 无效。");
   }
   return apiKey;
-}
-
-async function readApiError(response: Response): Promise<string> {
-  const requestId = response.headers.get("x-request-id");
-  const requestSuffix = requestId ? ` Request ID: ${requestId}` : "";
-  const fallback = `OpenAI API 请求失败：HTTP ${response.status}.${requestSuffix}`;
-
-  try {
-    const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json")) {
-      const payload = (await response.json()) as ApiErrorPayload;
-      const message = payload.error?.message ?? payload.error?.code ?? payload.error?.type;
-      return message ? `OpenAI API 请求失败：${redactLikelySecrets(message)}${requestSuffix}` : fallback;
-    }
-
-    const text = await response.text();
-    return text.trim() ? `OpenAI API 请求失败：${redactLikelySecrets(text.trim())}${requestSuffix}` : fallback;
-  } catch {
-    return fallback;
-  }
 }
 
 function normalizeError(error: unknown): string {
@@ -679,35 +652,14 @@ async function handleTestConnection(): Promise<ConnectionTestResult> {
   try {
     const state = await readState();
     const apiKey = await getApiKeyOrThrow();
-    const response = await fetchWithTimeout(
-      fetch,
-      buildEndpoint(state.config.baseURL, "/models"),
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          Accept: "application/json"
-        }
-      },
-      Math.min(state.config.timeoutMs, 30000)
-    );
-
-    const requestId = response.headers.get("x-request-id") ?? undefined;
-    if (!response.ok) {
+    const adapter = getImageProviderAdapter(state.config.kind);
+    if (!adapter) {
       return {
         ok: false,
-        message: await readApiError(response),
-        status: response.status,
-        requestId
+        message: unsupportedImageProviderMessage()
       };
     }
-
-    return {
-      ok: true,
-      message: "连接成功。",
-      status: response.status,
-      requestId
-    };
+    return adapter.testConnection(state.config, apiKey, { fetch });
   } catch (error) {
     return {
       ok: false,
@@ -751,6 +703,14 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   if (validationError) {
     throw new Error(validationError);
   }
+  const adapter = getImageProviderAdapterForRequest(normalizedRequest);
+  if (!adapter) {
+    throw new Error(unsupportedImageProviderMessage());
+  }
+  const adapterValidation = adapter.validateJob(normalizedRequest);
+  if (!adapterValidation.ok) {
+    throw new Error(adapterValidation.message ?? "任务请求无效。");
+  }
 
   const state = await readState();
   const apiKey = await getApiKeyOrThrow();
@@ -768,7 +728,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   sendJobEvent({ jobId: job.id, type: "started" });
 
   try {
-    job = await runOpenAIImageJob(asOpenAIImageJob(job), apiKey, state.config.baseURL, {
+    job = await adapter.runJob(job, apiKey, state.config, {
       fetch,
       imagesDir: getImagesDir(),
       ensureDir,
