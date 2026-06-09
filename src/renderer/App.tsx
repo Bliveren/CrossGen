@@ -1879,6 +1879,12 @@ export function App() {
                     </button>
                   )}
                 </div>
+                {(geminiParams || (generalParams && generalFallbackSupportsReferenceImages(generalParams.providerKind))) && (
+                  <p className="inline-check reference-rights-reminder">
+                    <AlertTriangle size={14} />
+                    <span>{copy.uploadRightsReminder}</span>
+                  </p>
+                )}
 
                 <div className="reference-grid">
                   {inputAssets.length === 0 ? (

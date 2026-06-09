@@ -142,6 +142,7 @@ export interface UiCopy {
   running: string;
   copy: string;
   addReferences: string;
+  uploadRightsReminder: string;
   uploadMask: string;
   clear: string;
   noReferences: string;
@@ -263,6 +264,7 @@ export const translations: Record<Language, UiCopy> = {
     running: "Running",
     copy: "Copy",
     addReferences: "Add references",
+    uploadRightsReminder: "Only upload images you have permission to use; selected references are sent to the active image provider.",
     uploadMask: "Upload mask",
     clear: "Clear",
     noReferences: "No reference images selected.",
@@ -444,6 +446,7 @@ export const translations: Record<Language, UiCopy> = {
     running: "运行中",
     copy: "复制",
     addReferences: "添加参考图",
+    uploadRightsReminder: "仅上传你有权使用的图片；已选择的参考图会发送给当前图片服务商。",
     uploadMask: "上传蒙版",
     clear: "清除",
     noReferences: "未选择参考图。",
