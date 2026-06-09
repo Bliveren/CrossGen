@@ -11,31 +11,31 @@ Target release: `v0.2.0`
 
 ## 1. 产品检查
 
-- [ ] 服务配置区支持选择 provider
-- [ ] OpenAI provider 默认 Base URL 正确
-- [ ] Gemini provider 默认 Base URL 正确
-- [ ] API Key 保存后可自动发现模型
-- [ ] 模型发现失败有明确提示
-- [ ] 模型发现成功后显示可用模型数量或状态
-- [ ] 启动模型区位于服务配置区下方
-- [ ] `GPT Image 2` 启动按钮可按需启用/置灰
-- [ ] `Nano Banana 3` 启动按钮可按需启用/置灰
+- [x] 服务配置区支持选择 provider
+- [x] OpenAI provider 默认 Base URL 正确
+- [x] Gemini provider 默认 Base URL 正确
+- [x] API Key 保存后可自动发现模型
+- [x] 模型发现失败有明确提示
+- [x] 模型发现成功后显示可用模型数量或状态
+- [x] 启动模型区位于服务配置区下方
+- [x] `GPT Image 2` 启动按钮可按需启用/置灰
+- [x] `Nano Banana 3` 启动按钮可按需启用/置灰
 - [ ] `General` 启动按钮可按需启用/置灰
-- [ ] 不可用按钮有用户能理解的原因
+- [x] 不可用按钮有用户能理解的原因
 - [ ] 点击启动模型后主工作区切换到对应模型界面
-- [ ] 当前启动模型在 UI 中有清晰状态
+- [x] 当前启动模型在 UI 中有清晰状态
 
 ## 2. Provider 与模型探测检查
 
-- [ ] OpenAI `/models` 探测成功时能识别 `gpt-image-2`
-- [ ] OpenAI `/models` 不含 `gpt-image-2` 时按钮置灰
-- [ ] Gemini `/models` 探测成功时能识别 `gemini-3.1-flash-image`
-- [ ] Gemini `/models` 不含目标模型时按钮置灰
+- [x] OpenAI `/models` 探测成功时能识别 `gpt-image-2`
+- [x] OpenAI `/models` 不含 `gpt-image-2` 时按钮置灰
+- [x] Gemini `/models` 探测成功时能识别 `gemini-3.1-flash-image`
+- [x] Gemini `/models` 不含目标模型时按钮置灰
 - [ ] General 能识别非重点但可用的图片模型
-- [ ] 探测请求不会把 API Key 写入日志
-- [ ] 探测错误会脱敏
-- [ ] 切换 provider 不会误用另一个 provider 的 Key
-- [ ] 清除 Key 后清空对应 provider 的可用模型状态
+- [x] 探测请求不会把 API Key 写入日志
+- [x] 探测错误会脱敏
+- [x] 切换 provider 不会误用另一个 provider 的 Key
+- [x] 清除 Key 后清空对应 provider 的可用模型状态
 
 ## 3. 数据迁移检查
 
@@ -66,16 +66,16 @@ Target release: `v0.2.0`
 
 ## 5. Nano Banana 3 检查
 
-- [ ] 启动按钮映射到 `gemini-3.1-flash-image`
+- [x] 启动按钮映射到 `gemini-3.1-flash-image`
 - [ ] UI 显示 Nano Banana 3 专属参数
 - [ ] UI 不显示 OpenAI-only 参数
-- [ ] 文生图请求使用 Gemini `generateContent`
-- [ ] 参考图编辑请求包含 image `inlineData`
-- [ ] 响应 image parts 能保存到本地
-- [ ] 响应 text parts 能保存为 job metadata
+- [x] 文生图请求使用 Gemini `generateContent`
+- [x] 参考图编辑请求包含 image `inlineData`
+- [x] 响应 image parts 能保存到本地
+- [x] 响应 text parts 能保存为 job metadata
 - [ ] 生成结果能显示在中间画布
 - [ ] 生成结果能下载
-- [ ] 失败错误提示清晰且脱敏
+- [x] 失败错误提示清晰且脱敏
 - [ ] Thinking 开关只在模型支持时显示
 - [ ] Search grounding 开关只在模型支持时显示
 - [ ] Resolution 控件符合 Nano Banana 3 能力
@@ -140,10 +140,10 @@ Target release: `v0.2.0`
 - [x] `pnpm verify:mock-api`
 - [x] `pnpm verify:mock-gemini-api`
 - [x] state migration tests
-- [ ] provider discovery tests
+- [x] provider discovery tests
 - [x] model catalog tests
 - [x] OpenAI adapter tests
-- [ ] Gemini adapter tests
+- [x] Gemini adapter tests
 - [x] renderer i18n tests
 - [x] package config tests
 
