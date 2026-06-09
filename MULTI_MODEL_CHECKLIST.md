@@ -39,16 +39,16 @@ Target release: `v0.2.0`
 
 ## 3. 数据迁移检查
 
-- [ ] v1 state 可以读取
-- [ ] v1 config 迁移为 OpenAI provider
-- [ ] v1 encrypted API Key 仍可解密
-- [ ] v1 history 补齐 `providerKind`
-- [ ] v1 history 补齐 `launchId`
-- [ ] v1 history 补齐 `modelId`
-- [ ] v1 history 补齐 `modelDisplayName`
-- [ ] v1 draft 迁移后可恢复
-- [ ] 迁移失败时仍可 fallback 到 backup
-- [ ] state 写入仍保留备份机制
+- [x] v1 state 可以读取
+- [x] v1 config 迁移为 OpenAI provider
+- [x] v1 encrypted API Key 仍可解密
+- [x] v1 history 补齐 `providerKind`
+- [x] v1 history 补齐 `launchId`
+- [x] v1 history 补齐 `modelId`
+- [x] v1 history 补齐 `modelDisplayName`
+- [x] v1 draft 迁移后可恢复
+- [x] 迁移失败时仍可 fallback 到 backup
+- [x] state 写入仍保留备份机制
 
 ## 4. GPT Image 2 回归检查
 
@@ -62,7 +62,7 @@ Target release: `v0.2.0`
 - [ ] `background` 不显示 transparent
 - [ ] `input_fidelity` 不暴露给 `gpt-image-2`
 - [ ] 下载、打开目录、删除历史仍安全
-- [ ] mock OpenAI verifier 通过
+- [x] mock OpenAI verifier 通过
 
 ## 5. Nano Banana 3 检查
 
@@ -81,7 +81,7 @@ Target release: `v0.2.0`
 - [ ] Resolution 控件符合 Nano Banana 3 能力
 - [ ] Aspect ratio 控件符合 Nano Banana 3 能力
 - [ ] 局部引导编辑文案不承诺 exact mask
-- [ ] mock Gemini verifier 通过
+- [x] mock Gemini verifier 通过
 
 ## 6. General 模式检查
 
@@ -93,19 +93,19 @@ Target release: `v0.2.0`
 
 ## 7. 历史任务检查
 
-- [ ] 每条历史显示模型 chip
-- [ ] 模型 chip 显示 `GPT Image 2`
+- [x] 每条历史显示模型 chip
+- [x] 模型 chip 显示 `GPT Image 2`
 - [ ] 模型 chip 显示 `Nano Banana 3`
 - [ ] General 历史显示真实 model id 或 `General`
-- [ ] 默认只展示 6 条历史
-- [ ] 超过 6 条出现展开入口
-- [ ] 展开后出现收起入口
-- [ ] 展开后右侧历史区域内部滚动
-- [ ] 展开历史不会拉长窗口整体高度
-- [ ] 搜索历史时模型字段可参与搜索
+- [x] 默认只展示 6 条历史
+- [x] 超过 6 条出现展开入口
+- [x] 展开后出现收起入口
+- [x] 展开后右侧历史区域内部滚动
+- [x] 展开历史不会拉长窗口整体高度
+- [x] 搜索历史时模型字段可参与搜索
 - [ ] 复用历史任务能恢复对应模型参数
-- [ ] 删除单条历史仍只删除该 job owned files
-- [ ] 清空历史仍清理 owned generated files
+- [x] 删除单条历史仍只删除该 job owned files
+- [x] 清空历史仍清理 owned generated files
 
 ## 8. UI 与交互检查
 
@@ -134,18 +134,18 @@ Target release: `v0.2.0`
 
 ## 10. 自动化检查
 
-- [ ] `pnpm typecheck`
-- [ ] `pnpm test`
-- [ ] `pnpm build`
-- [ ] `pnpm verify:mock-api`
-- [ ] `pnpm verify:mock-gemini-api`
-- [ ] state migration tests
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] `pnpm build`
+- [x] `pnpm verify:mock-api`
+- [x] `pnpm verify:mock-gemini-api`
+- [x] state migration tests
 - [ ] provider discovery tests
-- [ ] model catalog tests
+- [x] model catalog tests
 - [ ] OpenAI adapter tests
 - [ ] Gemini adapter tests
-- [ ] renderer i18n tests
-- [ ] package config tests
+- [x] renderer i18n tests
+- [x] package config tests
 
 ## 11. 真实 API 验收
 
@@ -171,6 +171,6 @@ Target release: `v0.2.0`
 - [ ] OPEN_SOURCE_AUDIT 更新多 provider 风险
 - [ ] secret scan 无真实 OpenAI Key
 - [ ] secret scan 无真实 Gemini Key
-- [ ] macOS package smoke test 不回退
-- [ ] Windows package smoke test 不回退
-- [ ] Linux package smoke test 不回退
+- [x] macOS package smoke test 不回退
+- [x] Windows package smoke test 不回退
+- [x] Linux package smoke test 不回退

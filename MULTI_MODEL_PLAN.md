@@ -4,6 +4,13 @@ Last updated: 2026-06-09
 
 Target release: `v0.2.0`
 
+## 0. Progress Log
+
+- 2026-06-09: Phase 1 contracts/state migration merged to `main` via PR #73.
+- 2026-06-09: Gemini mock image API and verifier merged to `main` via PR #72.
+- 2026-06-09: History model/provider chips, collapsed list, internal scrolling, and match-count search merged to `main` via PR #74.
+- 2026-06-09: Hosted Windows package CI was split into package-smoke mode while full native install verification remains available by default, unblocking PR package gates via PR #75.
+
 ## 1. 目标
 
 将 Image2Tools 从当前的 `gpt-image-2` 单模型工作台升级为多生图模型工作台，作为 `v0.2.0` 的核心版本目标。
