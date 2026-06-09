@@ -43,7 +43,7 @@
 
 ## What Is Image2Tools
 
-Image2Tools is a focused desktop client for image-generation workflows. The current main branch supports GPT Image 2 through the OpenAI Image API, the app's Nano Banana 3 launch target through Gemini `gemini-3.1-flash-image`, and a minimal General launch mode for non-focused Gemini image models discovered by the app.
+Image2Tools is a focused desktop client for image-generation workflows. The current main branch supports GPT Image 2 through the OpenAI Image API, the app's Nano Banana 3 launch target through Gemini `gemini-3.1-flash-image`, and a minimal General launch mode for discovered non-focused image models.
 
 The app is built for non-developers, individual creators, product teams, and internal AI workflow builders who need a simple desktop tool instead of a cloud workspace or account system. The multi-model UI separates provider configuration, model discovery, launch-model selection, model-specific parameters, local history, and release verification so new providers can be added without weakening the existing GPT Image 2 path.
 
@@ -51,11 +51,11 @@ The app is built for non-developers, individual creators, product teams, and int
 
 | Area | Capability |
 | --- | --- |
-| Provider setup | OpenAI and Gemini provider selection, per-provider Base URL defaults, saved key preview, and model discovery. |
+| Provider setup | OpenAI, Gemini, and OpenAI-compatible Custom provider selection, per-provider Base URL defaults, saved key preview, and model discovery. |
 | Launch models | GPT Image 2, Nano Banana 3, and General launch buttons with availability reasons from discovered models. |
 | GPT Image 2 | Text-to-image, single/multi-image editing, exact-mask inpainting, streaming partial previews, and validated OpenAI Image API parameters. |
 | Nano Banana 3 | Gemini `generateContent` image generation, reference-image editing, guided-region editing, aspect ratio, resolution, Thinking, and Search grounding controls. |
-| General | Minimal Gemini-only fallback for discovered non-focused image models; prompt and reference images only, with no broad any-provider claim. |
+| General | Minimal fallback for discovered non-focused image models: Gemini supports prompt and reference images, while OpenAI and Custom use a prompt-only OpenAI-compatible generation contract. |
 | Local history | Generated assets are saved in Electron user data with provider/model chips and can be reused, opened, or downloaded. |
 | Workspace recovery | Draft prompt, parameters, references, masks, and brush size are autosaved. |
 | Bilingual UI | In-app language switch supports English and Simplified Chinese through localStorage. |
@@ -267,7 +267,7 @@ Image2Tools is released under the [MIT License](./LICENSE).
 
 ## 项目定位
 
-Image2Tools 是一个聚焦图片生成工作流的桌面客户端。当前 main 分支支持通过 OpenAI Image API 使用 GPT Image 2，通过 Gemini `gemini-3.1-flash-image` 使用应用内的 Nano Banana 3 启动入口，并为应用探测到的非重点 Gemini 图片模型提供最小 General 兜底模式。
+Image2Tools 是一个聚焦图片生成工作流的桌面客户端。当前 main 分支支持通过 OpenAI Image API 使用 GPT Image 2，通过 Gemini `gemini-3.1-flash-image` 使用应用内的 Nano Banana 3 启动入口，并为应用探测到的非重点图片模型提供最小 General 兜底模式。
 
 适合非开发人员、个人创作者、产品团队、AI 应用工程团队和需要轻量图像工作台的内部工具场景。多模型界面把服务商配置、模型探测、启动模型选择、模型专属参数、本地历史和发布验证拆开，便于后续扩展新 provider，同时不影响现有 GPT Image 2 链路。
 
@@ -275,11 +275,11 @@ Image2Tools 是一个聚焦图片生成工作流的桌面客户端。当前 main
 
 | 模块 | 能力 |
 | --- | --- |
-| 服务配置 | OpenAI 与 Gemini 服务商选择、默认 Base URL、Key 脱敏预览和模型探测。 |
+| 服务配置 | OpenAI、Gemini 与 OpenAI 兼容 Custom 服务商选择、默认 Base URL、Key 脱敏预览和模型探测。 |
 | 启动模型 | GPT Image 2、Nano Banana 3、General 启动按钮，并根据探测结果显示可用性原因。 |
 | GPT Image 2 | 文生图、单图/多图编辑、精确 mask 局部重绘、流式局部预览和 OpenAI Image API 参数校验。 |
 | Nano Banana 3 | Gemini `generateContent` 图片生成、参考图编辑、引导式区域编辑、画面比例、分辨率、Thinking 和 Search grounding 控件。 |
-| General | 当前仅针对探测到的非重点 Gemini 图片模型提供最小兜底；只承诺 prompt 与参考图，不声明任意 provider 通用能力。 |
+| General | 针对探测到的非重点图片模型提供最小兜底；Gemini 支持 prompt 与参考图，OpenAI 和 Custom 使用 OpenAI 兼容的纯提示词生成契约。 |
 | 本地历史 | 输出资产保存在 Electron user data，历史条目显示 provider/model，可下载、打开目录、复用 prompt。 |
 | 草稿恢复 | 自动保存 prompt、参数、参考图、mask 和画笔大小。 |
 | 双语界面 | 应用内支持 English / 简体中文切换，语言选择保存在 localStorage。 |

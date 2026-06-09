@@ -2,9 +2,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { GenerationJob, JobProgressEvent, ProviderKind } from "../../shared/types";
-import { DEFAULT_GENERAL_IMAGE_PARAMS, DEFAULT_IMAGE_PARAMS, DEFAULT_GEMINI_IMAGE_PARAMS } from "../../shared/validation";
-import { generalImageAdapter, runGeneralImageJob, unsupportedGeneralProviderMessage } from "./generalImageAdapter";
+import type { GeneralImageParams, GenerationJob, JobProgressEvent, ProviderKind } from "../../shared/types";
+import { DEFAULT_GENERAL_IMAGE_PARAMS, DEFAULT_IMAGE_PARAMS, DEFAULT_GEMINI_IMAGE_PARAMS, GENERAL_PROMPT_ONLY_MESSAGE } from "../../shared/validation";
+import { buildOpenAICompatibleGeneralRequestBody, generalImageAdapter, runGeneralImageJob } from "./generalImageAdapter";
 import type { StoredProviderConfig } from "./stateMigration";
 
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
@@ -88,9 +88,19 @@ describe("General image adapter", () => {
       ok: false,
       message: "General 首期不支持局部重绘。"
     });
-    expect(generalImageAdapter.validateJob({ mode: "generate", prompt: "Prompt", inputPaths: [], params: job("custom", "image-model-x").params })).toMatchObject({
+    expect(generalImageAdapter.validateJob({ mode: "generate", prompt: "Prompt", inputPaths: [], params: job("openai", "dall-e-3").params }).ok).toBe(true);
+    expect(generalImageAdapter.validateJob({ mode: "generate", prompt: "Prompt", inputPaths: [], params: job("custom", "flux-pro").params }).ok).toBe(true);
+    expect(generalImageAdapter.validateJob({ mode: "edit", prompt: "Prompt", inputPaths: ["/tmp/a.png"], params: job("openai", "dall-e-3").params })).toMatchObject({
       ok: false,
-      message: "当前 provider 暂未接入 General 运行时。"
+      message: GENERAL_PROMPT_ONLY_MESSAGE
+    });
+  });
+
+  it("builds minimal OpenAI-compatible General request bodies", () => {
+    expect(buildOpenAICompatibleGeneralRequestBody(job("openai", "dall-e-3").params as GeneralImageParams, "Prompt")).toEqual({
+      model: "dall-e-3",
+      prompt: "Prompt",
+      n: 1
     });
   });
 
@@ -130,19 +140,112 @@ describe("General image adapter", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
-  it("rejects OpenAI General fallback instead of routing DALL-E through GPT Image params", async () => {
-    const { runtime } = await createRuntime((async () => Response.json({})) as typeof fetch);
+  it("runs OpenAI-compatible General generation without GPT Image 2-specific fields", async () => {
+    let requestUrl = "";
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requestUrl = String(url);
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({
+        data: [{ b64_json: tinyPngBase64 }],
+        usage: { total_tokens: 5 }
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
 
-    await expect(runGeneralImageJob(job("openai", "dall-e-3"), "sk-test-key", config("openai", "dall-e-3"), runtime)).rejects.toThrow(
-      unsupportedGeneralProviderMessage("openai")
+    const result = await runGeneralImageJob(job("openai", "dall-e-3"), "sk-test-key", config("openai", "dall-e-3"), runtime);
+
+    expect(requestUrl).toBe("https://api.test/v1/images/generations");
+    expect(requestBody).toEqual({
+      model: "dall-e-3",
+      prompt: "Make a clean product render",
+      n: 1
+    });
+    expect(requestBody).not.toHaveProperty("size");
+    expect(requestBody).not.toHaveProperty("quality");
+    expect(requestBody).not.toHaveProperty("output_format");
+    expect(requestBody).not.toHaveProperty("moderation");
+    expect(result.launchId).toBe("general");
+    expect(result.params).toMatchObject({ launchId: "general", providerKind: "openai", model: "dall-e-3" });
+    expect(result.providerMetadata).toMatchObject({
+      generalFallbackContract: "openai-compatible-minimal",
+      generalFallbackProvider: "openai",
+      generalFallbackModel: "dall-e-3"
+    });
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("runs Custom General generation through the same OpenAI-compatible minimal contract", async () => {
+    let requestUrl = "";
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requestUrl = String(url);
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({
+        data: [{ b64_json: tinyPngBase64 }]
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runGeneralImageJob(job("custom", "flux-pro"), "custom-key", config("custom", "flux-pro"), runtime);
+
+    expect(requestUrl).toBe("https://api.test/v1/images/generations");
+    expect(requestBody).toEqual({
+      model: "flux-pro",
+      prompt: "Make a clean product render",
+      n: 1
+    });
+    expect(result.providerMetadata).toMatchObject({
+      generalFallbackContract: "openai-compatible-minimal",
+      generalFallbackProvider: "custom",
+      generalFallbackModel: "flux-pro"
+    });
+  });
+
+  it("redacts custom API keys from OpenAI-compatible General errors", async () => {
+    const fetchImpl = (async () =>
+      Response.json(
+        {
+          error: {
+            message: "custom-secret-token-123456789 was rejected"
+          }
+        },
+        { status: 401 }
+      )) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runGeneralImageJob(job("custom", "flux-pro"), "custom-secret-token-123456789", config("custom", "flux-pro"), runtime)).rejects.toThrow(
+      "[redacted-api-key] was rejected"
+    );
+    await expect(runGeneralImageJob(job("custom", "flux-pro"), "custom-secret-token-123456789", config("custom", "flux-pro"), runtime)).rejects.not.toThrow(
+      "custom-secret-token-123456789"
     );
   });
 
-  it("rejects unsupported General provider fallback", async () => {
-    const { runtime } = await createRuntime((async () => Response.json({})) as typeof fetch);
+  it("rejects OpenAI-compatible General reference edits before making a request", async () => {
+    const fetchImpl = (async () => {
+      throw new Error("fetch should not be called");
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
 
-    await expect(runGeneralImageJob(job("custom", "image-model-x"), "custom-key", config("custom", "image-model-x"), runtime)).rejects.toThrow(
-      unsupportedGeneralProviderMessage("custom")
-    );
+    await expect(
+      runGeneralImageJob(
+        job("openai", "dall-e-3", {
+          mode: "edit",
+          inputAssets: [
+            {
+              id: "input_1",
+              name: "source.png",
+              path: "/tmp/source.png",
+              mimeType: "image/png",
+              sizeBytes: 1
+            }
+          ]
+        }),
+        "sk-test-key",
+        config("openai", "dall-e-3"),
+        runtime
+      )
+    ).rejects.toThrow(GENERAL_PROMPT_ONLY_MESSAGE);
   });
 });

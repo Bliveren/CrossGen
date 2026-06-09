@@ -49,7 +49,7 @@ Target release: `v0.2.0`
 - [x] `GPT Image 2` 按钮根据 OpenAI discovery 启用
 - [x] `Nano Banana 3` 按钮根据 Gemini discovery 启用
 - [x] `General` 按钮根据 Gemini 非重点图片候选模型启用
-- [ ] `General` 按钮根据任意可用图片模型启用
+- [x] `General` 按钮根据任意可用图片模型启用
 - [x] 点击启动模型更新 active launch/model
 - [x] 不可用按钮显示不可用原因
 - [x] i18n 补齐中英文文案
@@ -105,7 +105,7 @@ Target release: `v0.2.0`
 - [x] General UI 只显示 prompt、基础输入和运行按钮
 - [x] General 模式显示“高级能力未适配”的提示
 - [x] General 模式接入 Gemini provider-specific fallback
-- [ ] General 模式接入任意 provider fallback
+- [x] General 模式接入任意 provider fallback（Gemini 支持参考图；OpenAI / Custom 使用 prompt-only OpenAI 兼容最小契约）
 - [x] General 模式失败时给出清晰模型不兼容提示
 - [x] General 历史任务正常记录 provider/model
 - [x] General 不显示 mask、streaming、format 等未确认能力
@@ -141,8 +141,8 @@ Target release: `v0.2.0`
 - [x] state v1 -> v2 migration tests 通过
 - [x] renderer i18n shape tests 通过
 - [ ] 手工确认无 Key 时启动模型按钮置灰
-- [ ] 手工确认 OpenAI Key 仅启用 GPT Image 2
-- [ ] 手工确认 Gemini Key 仅启用 Nano Banana 3
+- [ ] 手工确认 OpenAI Key 启用 GPT Image 2，且有非重点图片候选时启用 General prompt-only
+- [ ] 手工确认 Gemini Key 启用 Nano Banana 3，且有非重点图片候选时启用 General 参考图兜底
 - [ ] 手工确认历史折叠不会拉长窗口
 
 ## Phase 8 - `v0.2.0` 文档与发布

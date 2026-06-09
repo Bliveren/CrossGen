@@ -32,7 +32,7 @@ Target release: `v0.2.0`
 - [x] Gemini `/models` 探测成功时能识别 `gemini-3.1-flash-image`
 - [x] Gemini `/models` 不含目标模型时按钮置灰
 - [x] General 能识别 Gemini 非重点图片模型
-- [ ] General 能识别任意 provider 的非重点可用图片模型
+- [x] General 能识别任意 provider 的非重点可用图片模型
 - [x] 探测请求不会把 API Key 写入日志
 - [x] 探测错误会脱敏
 - [x] 切换 provider 不会误用另一个 provider 的 Key

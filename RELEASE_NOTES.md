@@ -7,7 +7,7 @@ Status: draft until real API acceptance, CI, signing/notarization, and native pl
 - Multi-model workspace for GPT Image 2, Nano Banana 3, and General launch flows.
 - OpenAI provider path keeps GPT Image 2 generation, editing, exact-mask inpainting, streaming partial previews, downloads, and history.
 - Gemini provider path adds the app's Nano Banana 3 launch target, currently mapped to `gemini-3.1-flash-image`, with `generateContent` image generation, reference-image editing, guided-region editing, and Gemini-specific controls.
-- General launch mode is currently a minimal Gemini-only fallback for discovered non-focused Gemini image models. It does not claim broad any-provider support.
+- General launch mode is a minimal fallback for discovered non-focused image models. Gemini General supports prompt and reference images; OpenAI and Custom General use a prompt-only OpenAI-compatible `/images/generations` contract.
 - History entries now retain provider/model context so reused prompts restore the matching launch model and parameters.
 
 ## Verification Gates

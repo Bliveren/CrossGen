@@ -73,6 +73,7 @@ import {
   GPT_IMAGE_2_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
+  generalFallbackSupportsReferenceImages,
   getGeneralImageModelCandidate,
   isGeneralFallbackProvider
 } from "../shared/modelCatalog";
@@ -335,6 +336,11 @@ function runtimeSelectionError(params: ImageParams, config: ProviderConfig, copy
   return null;
 }
 
+function generalRuntimeNotice(providerKind: ProviderKind, copy: UiCopy): string {
+  if (!isGeneralFallbackProvider(providerKind)) return copy.generalRuntimeUnsupported;
+  return generalFallbackSupportsReferenceImages(providerKind) ? copy.generalReferenceRuntime : copy.generalPromptOnlyRuntime;
+}
+
 function patchConfigActiveLaunch(config: ProviderConfig, job: GenerationJob): ProviderConfig {
   return {
     ...config,
@@ -567,6 +573,9 @@ export function App() {
   const geminiParams = isGeminiImageParams(params) ? params : null;
   const generalParams = isGeneralImageParams(params) ? params : null;
   const isGeneralMode = Boolean(generalParams);
+  const generalAllowsReferences = generalParams ? generalFallbackSupportsReferenceImages(generalParams.providerKind) : false;
+  const showReferenceTools = !generalParams || generalAllowsReferences;
+  const generalModeNotice = generalParams ? generalRuntimeNotice(generalParams.providerKind, copy) : copy.generalRuntimeUnsupported;
   const usesExactMask = Boolean(openAIParams);
   const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
   const previewZoomPercent = Math.round(previewZoom * 100);
@@ -590,7 +599,10 @@ export function App() {
   const isSearchingHistory = historySearch.trim().length > 0;
 
   const modeError = useMemo(() => {
-    if (generalParams && mode === "inpaint") return copy.generalRuntimeUnsupported;
+    if (generalParams && mode === "inpaint") return copy.validation.generalNoInpaint;
+    if (generalParams && !generalFallbackSupportsReferenceImages(generalParams.providerKind) && inputAssets.length > 0) {
+      return copy.validation.generalPromptOnly;
+    }
     if (mode === "edit" && inputAssets.length === 0) return copy.validation.addReference;
     if (mode === "inpaint" && inputAssets.length === 0) return copy.validation.addSource;
     if (openAIParams && mode !== "generate" && inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
@@ -668,6 +680,19 @@ export function App() {
 
   useEffect(() => {
     if (!generalParams) return;
+    if (!generalFallbackSupportsReferenceImages(generalParams.providerKind)) {
+      if (mode !== "generate") {
+        setMode("generate");
+      }
+      if (inputAssets.length > 0) {
+        setInputAssets([]);
+      }
+      if (maskAsset || maskDataUrl) {
+        setMaskAsset(null);
+        setMaskDataUrl(null);
+      }
+      return;
+    }
     if (mode === "inpaint") {
       setMode(inputAssets.length > 0 ? "edit" : "generate");
     }
@@ -903,7 +928,12 @@ export function App() {
     const nextParams = createLaunchParams(button.launchId, button.modelId, params, launchProvider, launchConfig);
     setParams(nextParams);
     if (isGeneralImageParams(nextParams)) {
-      if (mode === "inpaint") setMode(inputAssets.length > 0 ? "edit" : "generate");
+      if (generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
+        if (mode === "inpaint") setMode(inputAssets.length > 0 ? "edit" : "generate");
+      } else {
+        setMode("generate");
+        setInputAssets([]);
+      }
       setMaskAsset(null);
       setMaskDataUrl(null);
     }
@@ -1005,6 +1035,10 @@ export function App() {
   }
 
   async function selectImages() {
+    if (generalParams && !generalAllowsReferences) {
+      setNotice({ kind: "error", text: copy.generalPromptOnlyRuntime });
+      return;
+    }
     if (!bridge) {
       setNotice({ kind: "error", text: copy.notices.bridgeSelectImages });
       return;
@@ -1028,7 +1062,7 @@ export function App() {
 
   async function selectMask() {
     if (isGeneralMode) {
-      setNotice({ kind: "error", text: copy.generalRuntimeUnsupported });
+      setNotice({ kind: "error", text: copy.validation.generalNoMask });
       return;
     }
     if (!bridge) {
@@ -1058,7 +1092,7 @@ export function App() {
     setIsRunning(true);
     setPartialImages([]);
     setActiveJob(null);
-    const requestMode: WorkMode = generalParams ? (inputAssets.length > 0 ? "edit" : "generate") : mode;
+    const requestMode: WorkMode = generalParams ? (generalAllowsReferences && inputAssets.length > 0 ? "edit" : "generate") : mode;
     setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[requestMode].action) });
 
     try {
@@ -1492,7 +1526,7 @@ export function App() {
     </div>
   ) : (
     <div className="advanced-controls">
-      <p className="inline-check">{isGeneralFallbackProvider(generalParams?.providerKind ?? snapshot.config.kind) ? copy.generalLimitedRuntime : copy.generalRuntimeUnsupported}</p>
+      <p className="inline-check">{generalModeNotice}</p>
     </div>
   );
 
@@ -1694,7 +1728,7 @@ export function App() {
           {isGeneralMode ? (
             <div className="general-mode-status">
               <Wand2 size={16} />
-              <span>{isGeneralFallbackProvider(generalParams?.providerKind ?? snapshot.config.kind) ? copy.generalLimitedRuntime : copy.generalRuntimeUnsupported}</span>
+              <span>{generalModeNotice}</span>
             </div>
           ) : (
             <div className="mode-tabs" role="tablist" aria-label={copy.parameters}>
@@ -1818,51 +1852,55 @@ export function App() {
               {validationError && <p className="inline-check error">{validationError}</p>}
             </div>
 
-            <div className="asset-tools">
-              <button type="button" className="secondary" onClick={selectImages}>
-                <ImagePlus size={16} />
-                {copy.addReferences}
-              </button>
-              {!isGeneralMode && (
-                <button type="button" className="secondary" onClick={selectMask}>
-                  <Paintbrush size={16} />
-                  {copy.uploadMask}
-                </button>
-              )}
-              {inputAssets.length > 0 && (
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => {
-                    markDraftChanged();
-                    setInputAssets([]);
-                  }}
-                >
-                  <X size={16} />
-                  {copy.clear}
-                </button>
-              )}
-            </div>
-
-            <div className="reference-grid">
-              {inputAssets.length === 0 ? (
-                <div className="empty-inline">{copy.noReferences}</div>
-              ) : (
-                inputAssets.map((asset, index) => (
-                  <div key={asset.id} className="asset-tile">
-                    {assetSource(asset) && <img src={assetSource(asset)} alt={asset.name} />}
-                    <button type="button" className="tile-remove" onClick={() => removeInputAsset(asset.id)} title={copy.delete}>
-                      <X size={14} />
+            {showReferenceTools && (
+              <>
+                <div className="asset-tools">
+                  <button type="button" className="secondary" onClick={selectImages}>
+                    <ImagePlus size={16} />
+                    {copy.addReferences}
+                  </button>
+                  {!isGeneralMode && (
+                    <button type="button" className="secondary" onClick={selectMask}>
+                      <Paintbrush size={16} />
+                      {copy.uploadMask}
                     </button>
-                    <div>
-                      <strong>{index === 0 ? copy.source : `${copy.reference} ${index + 1}`}</strong>
-                      <span>{asset.name}</span>
-                      <small>{formatBytes(asset.sizeBytes)}</small>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+                  )}
+                  {inputAssets.length > 0 && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        markDraftChanged();
+                        setInputAssets([]);
+                      }}
+                    >
+                      <X size={16} />
+                      {copy.clear}
+                    </button>
+                  )}
+                </div>
+
+                <div className="reference-grid">
+                  {inputAssets.length === 0 ? (
+                    <div className="empty-inline">{copy.noReferences}</div>
+                  ) : (
+                    inputAssets.map((asset, index) => (
+                      <div key={asset.id} className="asset-tile">
+                        {assetSource(asset) && <img src={assetSource(asset)} alt={asset.name} />}
+                        <button type="button" className="tile-remove" onClick={() => removeInputAsset(asset.id)} title={copy.delete}>
+                          <X size={14} />
+                        </button>
+                        <div>
+                          <strong>{index === 0 ? copy.source : `${copy.reference} ${index + 1}`}</strong>
+                          <span>{asset.name}</span>
+                          <small>{formatBytes(asset.sizeBytes)}</small>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
 
             {mode === "inpaint" && !isGeneralMode && (
               <div className="mask-editor">

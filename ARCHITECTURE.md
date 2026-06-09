@@ -74,9 +74,9 @@ Provider registry：
 
 - `openaiImageAdapter` 负责 `providerKind: "openai"`。
 - `geminiImageAdapter` 负责 `providerKind: "gemini"`。
-- `generalImageAdapter` 只在 `launchId: "general"` 时作为包装层参与运行，并且当前只允许 Gemini fallback。
+- `generalImageAdapter` 只在 `launchId: "general"` 时作为包装层参与运行。Gemini General 使用 `generateContent` 参考图兜底；OpenAI / Custom General 使用最小 OpenAI-compatible `/images/generations` prompt-only 契约。
 
-`custom` 目前是配置入口和未来扩展点，不是可运行的图片 provider。General 在 main 上不是任意 provider 通用适配层；`src/shared/modelCatalog.ts` 的 `isGeneralFallbackProvider` 当前只允许 Gemini。
+`custom` 当前只按 OpenAI-compatible 图片 provider 处理，只有 General prompt-only 生成路径可运行；它不是完整自定义 provider SDK。General 不承诺 mask、streaming、format、moderation、thinking、search grounding 或参考图能力的跨 provider 等价支持。
 
 ## 5. 模型目录与发现策略
 
@@ -86,7 +86,7 @@ Provider registry：
 | --- | --- | --- | --- |
 | GPT Image 2 | OpenAI | `gpt-image-2` | 生成、编辑、exact-mask inpaint、streaming partials、OpenAI 输出格式参数 |
 | Nano Banana 3 | Gemini | `gemini-3.1-flash-image` | 生成、参考图编辑、guided-region editing、Gemini aspect ratio/resolution/Thinking/Search grounding |
-| General | Gemini fallback only | 探测到的非重点 Gemini image model | 最小 prompt/reference flow，不承诺 mask、streaming、任意 provider 或高级参数 |
+| General | Gemini / OpenAI / Custom fallback | 探测到的非重点 image model | Gemini prompt/reference flow；OpenAI / Custom prompt-only OpenAI-compatible flow；不承诺 mask、streaming 或高级参数 |
 
 模型发现路径：
 
@@ -211,11 +211,13 @@ Gemini / Nano Banana 3:
 
 ### General 参数约束
 
-- providerKind 当前必须是 `gemini`
+- providerKind 当前可为 `gemini`、`openai` 或 `custom`
 - launchId: `general`
-- model: 真实探测到的 Gemini 图片模型 ID
+- model: 真实探测到的非重点图片模型 ID
 - outputCount: 当前固定为 `1`
 - timeout: `30000` 到 `600000` 毫秒
+- Gemini General 支持 prompt 和参考图
+- OpenAI / Custom General 只发送 `{ model, prompt, n: 1 }` 到 OpenAI-compatible `/images/generations`
 - 不暴露 mask、streaming、format、compression、moderation、thinking、search grounding 等未适配能力
 
 ## 10. 数据模型
@@ -336,4 +338,4 @@ src/
 - 任务队列
 - 多 provider 切换
 - Responses API 会话式编辑
-- General 扩展到任意 provider 的能力映射与安全降级
+- General 扩展到更多 provider SDK 的能力映射与安全降级
