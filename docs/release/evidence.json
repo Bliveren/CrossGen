@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "releaseVersion": "0.2.0",
+  "lastUpdated": "2026-06-09T00:00:00.000Z",
+  "gates": [
+    {
+      "id": "real-openai-api",
+      "title": "Real OpenAI GPT Image 2 API acceptance",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Model discovery confirms gpt-image-2 is available to the tested key.",
+        "Text-to-image generation succeeds with real OpenAI Image API output.",
+        "Reference-image editing succeeds with real OpenAI Image API output.",
+        "Mask-based inpaint succeeds with real OpenAI Image API output.",
+        "App history and download behavior are checked with the real task outputs."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending real OpenAI key and explicit cost approval."
+      }
+    },
+    {
+      "id": "real-gemini-api",
+      "title": "Real Gemini / Nano Banana 3 API acceptance",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Model discovery confirms gemini-3.1-flash-image is available to the tested key.",
+        "Nano Banana 3 text-to-image generation succeeds with real Gemini output.",
+        "Reference-image editing succeeds with real Gemini output.",
+        "Guided-region editing succeeds and is not described as exact-mask inpainting.",
+        "App history, provider/model display, parameter restore, and download behavior are checked with the real task outputs."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending real Gemini key and explicit cost approval."
+      }
+    },
+    {
+      "id": "macos-signed-notarized",
+      "title": "Signed and notarized macOS release package",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Developer ID signing readiness passes without exposing secret values.",
+        "package:mac:signed produces signed and notarized macOS artifacts.",
+        "macOS release verification passes against the signed artifact.",
+        "The artifact intended for distribution is the same artifact used for update manifest metadata."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending Developer ID identity and Apple notarization credentials."
+      }
+    },
+    {
+      "id": "windows-native-release",
+      "title": "Native Windows release package validation",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Windows package verifier runs in full native install mode.",
+        "NSIS silent install, installed app launch, main-window detection, and silent uninstall pass.",
+        "Packaged app can configure mock OpenAI and Gemini endpoints.",
+        "Download and open-folder behavior are checked on native Windows."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending native Windows shell validation."
+      }
+    },
+    {
+      "id": "linux-native-release",
+      "title": "Native Linux desktop AppImage validation",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Linux release verifier runs on a native desktop shell.",
+        "Direct AppImage execution is mandatory with IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1.",
+        "Packaged app can configure mock OpenAI and Gemini endpoints.",
+        "Download and open-folder behavior are checked on native Linux."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending native Linux desktop validation with direct AppImage execution."
+      }
+    },
+    {
+      "id": "update-manifest-assets",
+      "title": "Formal update manifest distribution assets",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Distribution artifacts are uploaded to a public HTTPS release URL.",
+        "docs/updates/latest.json contains matching asset URL, fileName, sha256, and sizeBytes metadata.",
+        "Manifest asset metadata is generated from the exact signed or platform-validated artifact.",
+        "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending signed and externally validated release artifacts."
+      }
+    }
+  ]
+}

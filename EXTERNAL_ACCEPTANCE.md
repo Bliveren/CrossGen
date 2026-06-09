@@ -61,6 +61,7 @@ Expected coverage:
 - optional streaming generation and edit partial/final events
 
 Artifacts are written to ignored `real-api-artifacts/`. After success, update
+`docs/release/evidence.json`, run `pnpm verify:release-evidence`, update
 `CHECKLIST.md`, `TODO.md`, and `COMPLETION_AUDIT.md`, then close the related
 tracking issue if one exists.
 
@@ -133,10 +134,11 @@ Expected results:
   non-focused Gemini image model if available to confirm the prompt/reference
   path; OpenAI-compatible General remains prompt-only.
 
-After success, update `MULTI_MODEL_CHECKLIST.md`, `CHECKLIST.md`, `TODO.md`,
-and `COMPLETION_AUDIT.md` with OS/version, app commit, provider/model IDs, and
-redacted evidence. Do not commit real generated artifacts unless they are
-approved public assets.
+After success, update `docs/release/evidence.json`,
+`MULTI_MODEL_CHECKLIST.md`, `CHECKLIST.md`, `TODO.md`, and
+`COMPLETION_AUDIT.md` with OS/version, app commit, provider/model IDs, and
+redacted evidence. Run `pnpm verify:release-evidence` before committing. Do not
+commit real generated artifacts unless they are approved public assets.
 
 ## 3. GitHub Actions Billing Gate
 
@@ -199,8 +201,10 @@ pnpm verify:release:mac
 After success, use `pnpm update:manifest-asset -- --file <signed-artifact>
 --platform darwin --arch <arch> --url <release-asset-url>` to generate the
 signed asset URL, sha256, and `sizeBytes` metadata for
-`docs/updates/latest.json`, then update `CHECKLIST.md`, `TODO.md`, and
-`COMPLETION_AUDIT.md`. Close the related tracking issue if one exists.
+`docs/updates/latest.json`, then update `docs/release/evidence.json`,
+`CHECKLIST.md`, `TODO.md`, and `COMPLETION_AUDIT.md`. Run
+`pnpm verify:release-evidence` before committing. Close the related tracking
+issue if one exists.
 
 ## 5. Windows And Linux Native Validation
 
@@ -260,8 +264,9 @@ Manual platform checks:
 - open-folder behavior works for that OS
 
 Record OS/version, package artifact paths, launch results, and any
-platform-specific notes in `CHECKLIST.md` and `COMPLETION_AUDIT.md`, then close
-the related tracking issue if one exists.
+platform-specific notes in `docs/release/evidence.json`, `CHECKLIST.md`, and
+`COMPLETION_AUDIT.md`, then run `pnpm verify:release-evidence` and close the
+related tracking issue if one exists.
 
 ## Final Completion Pass
 
@@ -273,6 +278,7 @@ pnpm verify:mock-api
 pnpm verify:mock-gemini-api
 pnpm verify:mock-model-discovery
 pnpm verify:release:mac
+pnpm verify:release-evidence -- --require-complete
 git status --short --branch
 ```
 
