@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RunJobRequest } from "../../shared/types";
 import { DEFAULT_GEMINI_IMAGE_PARAMS, DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
 import { getImageProviderAdapter, getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./imageProviderAdapters";
+import { geminiImageAdapter } from "./geminiImageAdapter";
 import { openaiImageAdapter } from "./openaiImageAdapter";
 
 function request(params: RunJobRequest["params"] = DEFAULT_IMAGE_PARAMS): RunJobRequest {
@@ -19,10 +20,13 @@ describe("image provider adapter registry", () => {
     expect(getImageProviderAdapterForRequest(request())).toBe(openaiImageAdapter);
   });
 
-  it("leaves Gemini and Custom unsupported until adapters are registered", () => {
-    expect(getImageProviderAdapter("gemini")).toBeUndefined();
+  it("dispatches Gemini requests to the Gemini adapter", () => {
+    expect(getImageProviderAdapter("gemini")).toBe(geminiImageAdapter);
+    expect(getImageProviderAdapterForRequest(request(DEFAULT_GEMINI_IMAGE_PARAMS))).toBe(geminiImageAdapter);
+  });
+
+  it("leaves Custom unsupported until an adapter is registered", () => {
     expect(getImageProviderAdapter("custom")).toBeUndefined();
-    expect(getImageProviderAdapterForRequest(request(DEFAULT_GEMINI_IMAGE_PARAMS))).toBeUndefined();
     expect(unsupportedImageProviderMessage()).toBe("当前版本尚未接入该模型运行时。");
   });
 });

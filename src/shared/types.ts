@@ -171,6 +171,7 @@ export interface GenerationJob {
   updatedAt: string;
   outputs: ImageAsset[];
   usage?: UsageDetails;
+  providerMetadata?: Record<string, unknown>;
 }
 
 export interface RunJobRequest {

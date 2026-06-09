@@ -169,6 +169,17 @@ export function isOpenAIImageParams(params: unknown): params is OpenAIImageParam
   );
 }
 
+export function isGeminiImageParams(params: unknown): params is GeminiImageParams {
+  return (
+    isRecord(params) &&
+    params.providerKind === "gemini" &&
+    params.launchId === NANO_BANANA_3_LAUNCH_ID &&
+    typeof params.model === "string" &&
+    typeof params.aspectRatio === "string" &&
+    typeof params.resolution === "string"
+  );
+}
+
 function paramsProviderKind(params: Record<string, unknown>): ProviderKind | undefined {
   return isOneOf(params.providerKind, PROVIDER_KIND_OPTIONS) ? params.providerKind : undefined;
 }
@@ -382,6 +393,13 @@ function hasOpenAIParamsShape(params: unknown): boolean {
   return (providerKind === undefined || providerKind === "openai") && (launchId === undefined || launchId === GPT_IMAGE_2_LAUNCH_ID);
 }
 
+function hasGeminiParamsShape(params: unknown): boolean {
+  if (!isRecord(params)) return false;
+  const providerKind = paramsProviderKind(params);
+  const launchId = paramsLaunchId(params);
+  return providerKind === "gemini" || launchId === NANO_BANANA_3_LAUNCH_ID;
+}
+
 function validateRunJobRequestBase(request: unknown): ValidationResult {
   if (!isRecord(request)) {
     return { ok: false, message: "任务请求格式无效。" };
@@ -444,6 +462,46 @@ export function validateOpenAIRunJobRequest(request: unknown): ValidationResult 
   return validateOpenAIImageParams(request.params);
 }
 
+export function validateGeminiRunJobRequest(request: unknown): ValidationResult {
+  const base = validateRunJobRequestBase(request);
+  if (!base.ok) return base;
+  if (!isRecord(request)) {
+    return { ok: false, message: "任务请求格式无效。" };
+  }
+  const inputPaths = request.inputPaths as string[];
+  if (request.mode === "generate" && inputPaths.length > 0) {
+    return { ok: false, message: "文生图不应携带输入图片。" };
+  }
+  if ((request.mode === "edit" || request.mode === "inpaint") && inputPaths.length === 0) {
+    return { ok: false, message: request.mode === "inpaint" ? "局部重绘至少需要一张源图。" : "图像编辑至少需要一张源图。" };
+  }
+  if (request.maskPath !== undefined && typeof request.maskPath !== "string") {
+    return { ok: false, message: "Mask 路径无效。" };
+  }
+  if (typeof request.maskPath === "string" && request.maskPath && !/\.(png|webp)$/i.test(request.maskPath)) {
+    return { ok: false, message: "Mask 必须是 PNG 或 WebP。" };
+  }
+  if (request.maskDataUrl !== undefined && typeof request.maskDataUrl !== "string") {
+    return { ok: false, message: "Mask 数据无效。" };
+  }
+  if (typeof request.maskDataUrl === "string" && request.maskDataUrl) {
+    const maskMimeType = mimeTypeFromDataUrl(request.maskDataUrl);
+    if (!maskMimeType) {
+      return { ok: false, message: "Mask 数据必须是 PNG 或 WebP data URL。" };
+    }
+    const maskType = validateMaskMimeType(maskMimeType);
+    if (!maskType.ok) return maskType;
+  }
+  const hasMask = Boolean(request.maskPath || request.maskDataUrl);
+  if (request.mode !== "inpaint" && hasMask) {
+    return { ok: false, message: "只有局部重绘可以携带 mask。" };
+  }
+  if (request.mode === "inpaint" && !hasMask) {
+    return { ok: false, message: "局部重绘需要提供 mask。" };
+  }
+  return validateGeminiImageParams(request.params);
+}
+
 export function validateRunJobRequest(request: unknown): ValidationResult {
   const base = validateRunJobRequestBase(request);
   if (!base.ok) return base;
@@ -453,6 +511,9 @@ export function validateRunJobRequest(request: unknown): ValidationResult {
 
   if (hasOpenAIParamsShape(request.params)) {
     return validateOpenAIRunJobRequest(request);
+  }
+  if (hasGeminiParamsShape(request.params)) {
+    return validateGeminiRunJobRequest(request);
   }
 
   const params = validateImageParams(request.params);
@@ -567,10 +628,15 @@ export function dataUrlToBase64(dataUrl: string): string {
 export function getValidationError(params: ImageParams, prompt: string): string | null {
   const promptResult = validatePrompt(prompt);
   if (!promptResult.ok) return promptResult.message ?? "Prompt 无效。";
-  if (!isOpenAIImageParams(params)) {
-    return "当前版本尚未接入该模型运行时。";
+  if (isOpenAIImageParams(params)) {
+    const paramResult = validateOpenAIImageParams(params);
+    if (!paramResult.ok) return paramResult.message ?? "参数无效。";
+    return null;
   }
-  const paramResult = validateOpenAIImageParams(params);
-  if (!paramResult.ok) return paramResult.message ?? "参数无效。";
-  return null;
+  if (isGeminiImageParams(params)) {
+    const paramResult = validateGeminiImageParams(params);
+    if (!paramResult.ok) return paramResult.message ?? "参数无效。";
+    return null;
+  }
+  return "当前版本尚未接入该模型运行时。";
 }
