@@ -451,13 +451,13 @@ export function validateRunJobRequest(request: unknown): ValidationResult {
     return { ok: false, message: "任务请求格式无效。" };
   }
 
+  if (hasOpenAIParamsShape(request.params)) {
+    return validateOpenAIRunJobRequest(request);
+  }
+
   const params = validateImageParams(request.params);
   if (!params.ok) return params;
-
-  if (!hasOpenAIParamsShape(request.params)) {
-    return { ok: false, message: "当前版本尚未接入该模型运行时。" };
-  }
-  return validateOpenAIRunJobRequest(request);
+  return { ok: false, message: "当前版本尚未接入该模型运行时。" };
 }
 
 export function validateWorkspaceDraftInput(input: unknown): ValidationResult {
@@ -567,7 +567,10 @@ export function dataUrlToBase64(dataUrl: string): string {
 export function getValidationError(params: ImageParams, prompt: string): string | null {
   const promptResult = validatePrompt(prompt);
   if (!promptResult.ok) return promptResult.message ?? "Prompt 无效。";
-  const paramResult = validateImageParams(params);
+  if (!isOpenAIImageParams(params)) {
+    return "当前版本尚未接入该模型运行时。";
+  }
+  const paramResult = validateOpenAIImageParams(params);
   if (!paramResult.ok) return paramResult.message ?? "参数无效。";
   return null;
 }

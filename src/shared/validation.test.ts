@@ -90,6 +90,8 @@ describe("gpt-image-2 validation", () => {
     expect(validateApiKey("sk-test-key-that-is-long-enough").ok).toBe(true);
     expect(getValidationError(DEFAULT_IMAGE_PARAMS, "")).toContain("prompt");
     expect(getValidationError(DEFAULT_IMAGE_PARAMS, "Make a compact icon set")).toBeNull();
+    expect(getValidationError(DEFAULT_GEMINI_IMAGE_PARAMS, "Make a compact icon set")).toContain("尚未接入");
+    expect(getValidationError(DEFAULT_GENERAL_IMAGE_PARAMS, "Make a compact icon set")).toContain("尚未接入");
   });
 
   it("rejects malformed prompt, API key, and base URL runtime inputs", () => {
@@ -157,7 +159,14 @@ describe("gpt-image-2 validation", () => {
     expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskDataUrl: "data:image/png;base64,abc" } as never).ok).toBe(true);
     expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskDataUrl: "data:image/jpeg;base64,abc" } as never).ok).toBe(false);
     expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskDataUrl: "not-a-data-url" } as never).ok).toBe(false);
-    expect(validateRunJobRequest({ ...job, params: DEFAULT_GEMINI_IMAGE_PARAMS }).ok).toBe(false);
+    expect(validateRunJobRequest({ ...job, params: DEFAULT_GEMINI_IMAGE_PARAMS })).toMatchObject({
+      ok: false,
+      message: "当前版本尚未接入该模型运行时。"
+    });
+    expect(validateRunJobRequest({ ...job, params: DEFAULT_GENERAL_IMAGE_PARAMS })).toMatchObject({
+      ok: false,
+      message: "当前版本尚未接入该模型运行时。"
+    });
     expect(
       validateRunJobRequest({
         ...job,

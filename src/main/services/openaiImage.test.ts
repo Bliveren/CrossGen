@@ -4,7 +4,8 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { InputAsset, JobProgressEvent, OpenAIImageParams } from "../../shared/types";
 import { DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
-import { baseRequestBody, buildEndpoint, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImage";
+import type { StoredProviderConfig } from "./stateMigration";
+import { baseRequestBody, buildEndpoint, openaiImageAdapter, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImageAdapter";
 
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
 
@@ -42,6 +43,27 @@ function job(patch: Partial<OpenAIImageJob> = {}): OpenAIImageJob {
     createdAt: now,
     updatedAt: now,
     outputs: [],
+    ...patch
+  };
+}
+
+function config(patch: Partial<StoredProviderConfig> = {}): StoredProviderConfig {
+  const now = new Date(0).toISOString();
+  return {
+    id: "default",
+    kind: "openai",
+    name: "OpenAI",
+    baseURL: "https://api.test/v1",
+    enabled: true,
+    defaultModel: DEFAULT_IMAGE_PARAMS.model,
+    defaultSize: DEFAULT_IMAGE_PARAMS.size,
+    defaultQuality: DEFAULT_IMAGE_PARAMS.quality,
+    timeoutMs: DEFAULT_IMAGE_PARAMS.timeoutMs,
+    discoveredModels: [],
+    activeLaunchId: "gpt-image-2",
+    activeModelId: DEFAULT_IMAGE_PARAMS.model,
+    updatedAt: now,
+    encryption: "none",
     ...patch
   };
 }
@@ -103,6 +125,59 @@ describe("OpenAI image service", () => {
     expect(result.status).toBe("succeeded");
     expect(result.outputs[0].fileName).toBe("job_test-result-0.png");
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("runs OpenAI jobs through the provider adapter", async () => {
+    let requestUrl = "";
+    const fetchImpl = (async (url: string | URL | Request) => {
+      requestUrl = String(url);
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await openaiImageAdapter.runJob(job(), "sk-test-key", config(), runtime);
+
+    expect(openaiImageAdapter.kind).toBe("openai");
+    expect(requestUrl).toBe("https://api.test/v1/images/generations");
+    expect(result.status).toBe("succeeded");
+  });
+
+  it("tests OpenAI connections through the provider adapter", async () => {
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://api.test/v1/models");
+      expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer sk-test-key");
+      return Response.json({ data: [{ id: "gpt-image-2" }] }, { headers: { "x-request-id": "req_test" } });
+    }) as typeof fetch;
+
+    const result = await openaiImageAdapter.testConnection(config(), "sk-test-key", { fetch: fetchImpl });
+
+    expect(result).toEqual({
+      ok: true,
+      message: "连接成功。",
+      status: 200,
+      requestId: "req_test"
+    });
+  });
+
+  it("discovers OpenAI models through the provider adapter", async () => {
+    const fetchImpl = (async () => Response.json({ data: [{ id: "gpt-image-2" }, { id: "text-only" }, { object: "missing-id" }] })) as typeof fetch;
+
+    const models = await openaiImageAdapter.discoverModels(config(), "sk-test-key", { fetch: fetchImpl });
+
+    expect(models).toEqual([
+      {
+        id: "gpt-image-2",
+        providerKind: "openai",
+        displayName: "gpt-image-2",
+        raw: { id: "gpt-image-2" }
+      },
+      {
+        id: "text-only",
+        providerKind: "openai",
+        displayName: "text-only",
+        raw: { id: "text-only" }
+      }
+    ]);
   });
 
   it("saves all generated images when n returns multiple results", async () => {
