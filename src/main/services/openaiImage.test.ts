@@ -2,9 +2,9 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { GenerationJob, ImageParams, InputAsset, JobProgressEvent } from "../../shared/types";
+import type { InputAsset, JobProgressEvent, OpenAIImageParams } from "../../shared/types";
 import { DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
-import { baseRequestBody, buildEndpoint, parseSSE, runOpenAIImageJob } from "./openaiImage";
+import { baseRequestBody, buildEndpoint, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImage";
 
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
 
@@ -17,7 +17,7 @@ afterEach(async () => {
   }
 });
 
-function params(patch: Partial<ImageParams> = {}): ImageParams {
+function params(patch: Partial<OpenAIImageParams> = {}): OpenAIImageParams {
   return {
     ...DEFAULT_IMAGE_PARAMS,
     timeoutMs: 30000,
@@ -25,10 +25,15 @@ function params(patch: Partial<ImageParams> = {}): ImageParams {
   };
 }
 
-function job(patch: Partial<GenerationJob> = {}): GenerationJob {
+function job(patch: Partial<OpenAIImageJob> = {}): OpenAIImageJob {
   const now = new Date(0).toISOString();
   return {
     id: "job_test",
+    providerKind: "openai",
+    providerId: "default",
+    launchId: "gpt-image-2",
+    modelId: "gpt-image-2",
+    modelDisplayName: "GPT Image 2",
     mode: "generate",
     prompt: "Make a clean product render",
     inputAssets: [],

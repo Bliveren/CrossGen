@@ -1,10 +1,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { GenerationJob, ImageAsset, ImageParams, InputAsset, JobProgressEvent, UsageDetails } from "../../shared/types.js";
+import type { GenerationJob, ImageAsset, InputAsset, JobProgressEvent, OpenAIImageParams, UsageDetails } from "../../shared/types.js";
 import {
   dataUrlToBase64,
   extensionForFormat,
+  isOpenAIImageParams,
   mimeTypeForFormat,
   shouldSendCompression,
   validateMaskMimeType,
@@ -45,11 +46,20 @@ export interface OpenAIImageRuntime {
   sendJobEvent: (event: JobProgressEvent) => void;
 }
 
+export type OpenAIImageJob = GenerationJob & { params: OpenAIImageParams };
+
 export function buildEndpoint(baseURL: string, endpoint: "/images/generations" | "/images/edits" | "/models"): string {
   return `${baseURL.trim().replace(/\/+$/, "")}${endpoint}`;
 }
 
-export function baseRequestBody(params: ImageParams, prompt: string): Record<string, string | number | boolean> {
+export function asOpenAIImageJob(job: GenerationJob): OpenAIImageJob {
+  if (!isOpenAIImageParams(job.params)) {
+    throw new Error("当前版本尚未接入该模型运行时。");
+  }
+  return job as OpenAIImageJob;
+}
+
+export function baseRequestBody(params: OpenAIImageParams, prompt: string): Record<string, string | number | boolean> {
   const body: Record<string, string | number | boolean> = {
     model: params.model,
     prompt,
@@ -100,7 +110,7 @@ export async function fetchWithTimeout(
 }
 
 export async function runOpenAIImageJob(
-  job: GenerationJob,
+  job: OpenAIImageJob,
   apiKey: string,
   baseURL: string,
   runtime: OpenAIImageRuntime
@@ -112,7 +122,7 @@ export async function runOpenAIImageJob(
 }
 
 async function runGeneration(
-  job: GenerationJob,
+  job: OpenAIImageJob,
   apiKey: string,
   baseURL: string,
   runtime: OpenAIImageRuntime
@@ -136,7 +146,7 @@ async function runGeneration(
 }
 
 async function runEdit(
-  job: GenerationJob,
+  job: OpenAIImageJob,
   apiKey: string,
   baseURL: string,
   runtime: OpenAIImageRuntime
@@ -196,7 +206,7 @@ async function assetToBlob(asset: InputAsset): Promise<Blob> {
 
 async function handleImagesResponse(
   response: Response,
-  job: GenerationJob,
+  job: OpenAIImageJob,
   eventPrefix: "image_generation" | "image_edit",
   runtime: OpenAIImageRuntime
 ): Promise<GenerationJob> {
@@ -217,7 +227,7 @@ async function handleImagesResponse(
 
 async function handleJsonImagesResponse(
   response: Response,
-  job: GenerationJob,
+  job: OpenAIImageJob,
   runtime: OpenAIImageRuntime
 ): Promise<GenerationJob> {
   const contentType = response.headers.get("content-type") ?? "";
@@ -279,7 +289,7 @@ function redactLikelySecrets(value: string): string {
 
 async function handleStreamResponse(
   response: Response,
-  job: GenerationJob,
+  job: OpenAIImageJob,
   eventPrefix: "image_generation" | "image_edit",
   runtime: OpenAIImageRuntime
 ): Promise<GenerationJob> {
@@ -358,7 +368,7 @@ export async function parseSSE(body: ReadableStream<Uint8Array>, onEvent: (event
 }
 
 async function saveImageItems(
-  job: GenerationJob,
+  job: OpenAIImageJob,
   items: Array<{ b64_json?: string; url?: string }>,
   sourceType: "result" | "partial",
   runtime: OpenAIImageRuntime,
@@ -417,7 +427,7 @@ async function processSSEBlock(block: string, onEvent: (event: ImageStreamEvent)
 async function saveBase64Image(
   jobId: string,
   b64Json: string,
-  params: ImageParams,
+  params: OpenAIImageParams,
   sourceType: "result" | "partial",
   index: number,
   runtime: OpenAIImageRuntime
