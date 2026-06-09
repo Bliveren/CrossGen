@@ -68,10 +68,6 @@ tracking issue if one exists.
 
 Use a public tracking issue after the repository is public.
 
-Main currently has `pnpm verify:mock-gemini-api`, but no automated paid Gemini
-real API verifier. Treat Gemini real acceptance as a manual external gate until
-one is added.
-
 Prerequisites:
 
 - Real Gemini API key with access to `gemini-3.1-flash-image`
@@ -87,7 +83,27 @@ pnpm verify:mock-gemini-api
 pnpm verify:mock-model-discovery
 ```
 
-Then run the app against the real Gemini endpoint:
+Then run the cost-gated real Gemini verifier:
+
+```bash
+IMAGE2TOOLS_GEMINI_API_KEY=... \
+IMAGE2TOOLS_GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta \
+IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 \
+pnpm verify:real-gemini-api
+```
+
+Expected verifier coverage:
+
+- `models` discovery includes `gemini-3.1-flash-image`
+- text-to-image generation returns at least one inline image part
+- reference-image editing sends a PNG reference image and returns image output
+- guided-region editing sends a source image plus region-guide image and returns
+  image output
+- Gemini text parts, if returned, are saved as local artifact metadata
+
+Artifacts are written to ignored `real-api-artifacts/gemini/`.
+
+After the verifier passes, run the app against the real Gemini endpoint:
 
 ```bash
 pnpm dev:electron
@@ -113,8 +129,9 @@ Expected results:
 - Any Gemini text parts are stored as provider metadata.
 - Errors shown in the UI do not include raw Gemini API keys, `key=...` query
   values, or `x-goog-api-key` values.
-- General remains Gemini-only: use a discovered non-focused Gemini image model
-  if available, and do not mark broad any-provider General support complete.
+- General uses provider-specific fallback behavior: use a discovered
+  non-focused Gemini image model if available to confirm the prompt/reference
+  path; OpenAI-compatible General remains prompt-only.
 
 After success, update `MULTI_MODEL_CHECKLIST.md`, `CHECKLIST.md`, `TODO.md`,
 and `COMPLETION_AUDIT.md` with OS/version, app commit, provider/model IDs, and

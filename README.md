@@ -165,7 +165,7 @@ pnpm verify:mock-model-discovery
 
 ## Real API Acceptance
 
-`pnpm verify:real-api` is intentionally cost-gated and currently covers the OpenAI GPT Image 2 path. It only sends real image requests when an API key is present and cost acceptance is explicit:
+`pnpm verify:real-api` is intentionally cost-gated and covers the OpenAI GPT Image 2 path. It only sends real image requests when an API key is present and cost acceptance is explicit:
 
 ```bash
 IMAGE2TOOLS_API_KEY=sk-... IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 pnpm verify:real-api
@@ -179,7 +179,13 @@ IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST=1
 
 Generated acceptance artifacts are written to `real-api-artifacts/`, which is ignored by git.
 
-Gemini / Nano Banana 3 real API acceptance is documented in [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md). Main currently has mock Gemini automation, but no automated real Gemini verifier; run the external manual flow before marking Gemini real acceptance complete.
+`pnpm verify:real-gemini-api` is also cost-gated and covers Gemini / Nano Banana 3 discovery, text-to-image generation, reference editing, and guided-region editing:
+
+```bash
+IMAGE2TOOLS_GEMINI_API_KEY=... IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 pnpm verify:real-gemini-api
+```
+
+Gemini / Nano Banana 3 real API acceptance still needs the app-level history and download checks documented in [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md) before it can be marked complete.
 
 ## Icon
 
@@ -389,7 +395,7 @@ pnpm verify:mock-model-discovery
 
 ## 真实 API 验收
 
-`pnpm verify:real-api` 默认不会产生真实图片请求，且当前覆盖 OpenAI GPT Image 2 链路。必须设置 API Key 且显式确认成本后才会运行：
+`pnpm verify:real-api` 默认不会产生真实图片请求，覆盖 OpenAI GPT Image 2 链路。必须设置 API Key 且显式确认成本后才会运行：
 
 ```bash
 IMAGE2TOOLS_API_KEY=sk-... IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 pnpm verify:real-api
@@ -403,7 +409,13 @@ IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST=1
 
 验收输出会写入被 git 忽略的 `real-api-artifacts/`。
 
-Gemini / Nano Banana 3 真实 API 验收流程见 [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md)。当前 main 已有 Gemini mock 自动化，但尚无自动化真实 Gemini verifier；在完成外部手工流程前，不应把 Gemini 真实验收标记为完成。
+`pnpm verify:real-gemini-api` 同样受成本确认保护，覆盖 Gemini / Nano Banana 3 模型探测、文生图、参考图编辑和局部引导编辑：
+
+```bash
+IMAGE2TOOLS_GEMINI_API_KEY=... IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 pnpm verify:real-gemini-api
+```
+
+Gemini / Nano Banana 3 真实 API 验收仍需完成 [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md) 中的应用内历史与下载检查后，才能标记为完成。
 
 ## 图标
 

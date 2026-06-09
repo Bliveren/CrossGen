@@ -160,7 +160,7 @@ Target release: `v0.2.0`
 - [ ] Gemini Key 可完成一次 Nano Banana 3 参考图编辑
 - [ ] Gemini Key 可完成一次 Nano Banana 3 局部引导编辑
 - [ ] 历史中能区分 OpenAI 与 Gemini 任务
-- [ ] 真实 API 验收仍受成本确认环境变量保护
+- [x] 真实 API 验收仍受成本确认环境变量保护
 
 ## 12. 发布前检查
 

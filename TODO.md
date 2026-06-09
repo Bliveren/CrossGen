@@ -109,7 +109,7 @@
 - [x] 增加 Gemini Key handling、Gemini 错误脱敏和上传图片权利提醒到安全文档
 - [x] 明确 General provider-specific fallback 边界：Gemini 支持 prompt/reference，OpenAI / Custom 为 prompt-only OpenAI 兼容契约
 - [ ] 用真实 Gemini Key 完成 Nano Banana 3 生成、参考图编辑、局部引导编辑和下载/历史验收
-- [ ] 为 Gemini 真实 API 验收增加自动化 verifier，或继续按外部手工流程记录证据
+- [x] 为 Gemini 真实 API 验收增加自动化 verifier，或继续按外部手工流程记录证据
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
 - [x] 完成 macOS 临时目录卸载与重装 smoke test
 - [x] 增加 GitHub Actions CI（build、mock verifier、macOS / Windows / Linux package）

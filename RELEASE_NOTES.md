@@ -27,7 +27,13 @@ OpenAI real API acceptance is cost-gated through:
 IMAGE2TOOLS_API_KEY=sk-... IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 pnpm verify:real-api
 ```
 
-Gemini / Nano Banana 3 real API acceptance is still an external manual gate on main. Follow [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md) and do not mark Gemini real acceptance complete until discovery, generation, reference editing, guided-region editing, and history/download checks pass with a real Gemini key.
+Gemini / Nano Banana 3 real API acceptance is cost-gated through:
+
+```bash
+IMAGE2TOOLS_GEMINI_API_KEY=... IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 pnpm verify:real-gemini-api
+```
+
+The verifier covers discovery, generation, reference editing, and guided-region editing. Do not mark Gemini real acceptance complete until the verifier and app-level history/download checks pass with a real Gemini key.
 
 Release package verification remains platform-specific:
 
