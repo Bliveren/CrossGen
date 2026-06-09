@@ -137,7 +137,7 @@ Target release: `v0.2.0`
 - [x] OpenAI mock inpaint 通过
 - [x] Gemini mock 生成通过
 - [x] Gemini mock 参考图编辑通过
-- [ ] 模型 discovery mock 通过
+- [x] 模型 discovery mock 通过
 - [x] state v1 -> v2 migration tests 通过
 - [x] renderer i18n shape tests 通过
 - [ ] 手工确认无 Key 时启动模型按钮置灰

@@ -4,7 +4,16 @@ import http from "node:http";
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
+const modelIds = parseModelIds(process.env.MOCK_OPENAI_MODELS, ["gpt-image-2"]);
 const recentRequests = [];
+
+function parseModelIds(value, fallback) {
+  const ids = String(value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return ids.length > 0 ? ids : fallback;
+}
 
 function sendJson(response, status, payload) {
   response.writeHead(status, {
@@ -107,7 +116,7 @@ const server = http.createServer(async (request, response) => {
     const url = new URL(request.url, `http://${request.headers.host ?? `${host}:${port}`}`);
 
     if (request.method === "GET" && url.pathname === "/v1/models") {
-      sendJson(response, 200, { data: [{ id: "gpt-image-2", object: "model" }] });
+      sendJson(response, 200, { data: modelIds.map((id) => ({ id, object: "model" })) });
       return;
     }
 
