@@ -7,6 +7,7 @@ import {
   NANO_BANANA_3_MODEL_ID,
   getFocusedModelDefinition,
   getFocusedModelsForProvider,
+  getGeneralImageModelCandidate,
   getModelDisplayName
 } from "./modelCatalog";
 
@@ -60,5 +61,21 @@ describe("focused model catalog", () => {
       GENERAL_LAUNCH_ID
     ]);
     expect(getModelDisplayName(GENERAL_LAUNCH_ID, "image-model-x")).toBe("image-model-x");
+  });
+
+  it("selects only safe non-focused image-like models for General fallback", () => {
+    const openAIModels = [
+      { id: "gpt-image-2", providerKind: "openai" as const },
+      { id: "gpt-4.1", providerKind: "openai" as const },
+      { id: "dall-e-3", providerKind: "openai" as const }
+    ];
+    const geminiModels = [
+      { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" as const },
+      { id: "gemini-3-pro-image", providerKind: "gemini" as const, displayName: "Gemini image model" }
+    ];
+
+    expect(getGeneralImageModelCandidate(openAIModels, "openai")).toBeUndefined();
+    expect(getGeneralImageModelCandidate(geminiModels, "gemini")?.id).toBe("gemini-3-pro-image");
+    expect(getGeneralImageModelCandidate([{ id: "gpt-4.1", providerKind: "openai" }], "openai")).toBeUndefined();
   });
 });

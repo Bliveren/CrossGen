@@ -40,6 +40,7 @@ import {
   validateMaskSourceFormat,
   getValidationError,
   isGeminiImageParams,
+  isGeneralImageParams,
   isOpenAIImageParams,
   validateGptImage2Size
 } from "../shared/validation";
@@ -71,7 +72,9 @@ import {
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
-  NANO_BANANA_3_MODEL_ID
+  NANO_BANANA_3_MODEL_ID,
+  getGeneralImageModelCandidate,
+  isGeneralFallbackProvider
 } from "../shared/modelCatalog";
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 
@@ -124,7 +127,6 @@ interface LaunchButtonState {
 
 type OpenAIParamPatch = Partial<Omit<OpenAIImageParams, "providerKind" | "launchId">>;
 type GeminiParamPatch = Partial<Omit<GeminiImageParams, "providerKind" | "launchId">>;
-type GeneralParamPatch = Partial<Omit<GeneralImageParams, "providerKind" | "launchId">>;
 
 const fallbackConfig: ProviderConfig = {
   id: "default",
@@ -235,18 +237,10 @@ function defaultLaunchForProvider(kind: ProviderKind): FocusedLaunchId {
   return GPT_IMAGE_2_LAUNCH_ID;
 }
 
-function generalModelId(config: ProviderConfig): string {
-  return config.discoveredModels[0]?.id ?? config.activeModelId ?? config.defaultModel;
-}
-
 function providerForLaunch(launchId: FocusedLaunchId, fallback: ProviderKind): ProviderKind {
   const definition = FOCUSED_MODEL_CATALOG.find((item) => item.launchId === launchId);
   if (!definition || definition.launchId === GENERAL_LAUNCH_ID) return fallback;
   return definition.providerKind;
-}
-
-function isGeneralImageParams(params: ImageParams): params is GeneralImageParams {
-  return params.launchId === GENERAL_LAUNCH_ID;
 }
 
 function createOpenAIParams(modelId: string, current: ImageParams, config?: ProviderConfig): OpenAIImageParams {
@@ -308,13 +302,13 @@ function createParamsForConfig(config: ProviderConfig, current: ImageParams): Im
 }
 
 function defaultModelForConfigSave(kind: ProviderKind, params: ImageParams, config: ProviderConfig): string {
+  if (isGeneralImageParams(params)) return params.model;
   if (kind === "openai") {
     return isOpenAIImageParams(params) ? params.model : GPT_IMAGE_2_MODEL_ID;
   }
   if (kind === "gemini") {
     return isGeminiImageParams(params) ? params.model : NANO_BANANA_3_MODEL_ID;
   }
-  if (isGeneralImageParams(params)) return params.model;
   if (kind === config.kind && config.defaultModel) return config.defaultModel;
   return defaultModelForProvider(kind);
 }
@@ -334,7 +328,11 @@ function runtimeSelectionError(params: ImageParams, config: ProviderConfig, copy
   if (isGeminiImageParams(params)) {
     return config.kind === "gemini" && config.activeLaunchId === NANO_BANANA_3_LAUNCH_ID ? null : copy.selectLaunchToRun("Nano Banana 3");
   }
-  return copy.generalRuntimeUnsupported;
+  if (!isGeneralImageParams(params)) return copy.generalRuntimeUnsupported;
+  if (config.kind !== params.providerKind || config.activeLaunchId !== GENERAL_LAUNCH_ID) return copy.selectLaunchToRun("General");
+  if (!isGeneralFallbackProvider(params.providerKind)) return copy.generalRuntimeUnsupported;
+  if (!params.model.trim()) return copy.launchUnavailableNoImageModels;
+  return null;
 }
 
 function patchConfigActiveLaunch(config: ProviderConfig, job: GenerationJob): ProviderConfig {
@@ -348,7 +346,7 @@ function patchConfigActiveLaunch(config: ProviderConfig, job: GenerationJob): Pr
 }
 
 function paramsNotice(params: ImageParams, restoredText: string, copy: UiCopy): string {
-  if (isGeneralImageParams(params)) return `${restoredText} ${copy.generalRuntimeUnsupported}`;
+  if (isGeneralImageParams(params) && !isGeneralFallbackProvider(params.providerKind)) return `${restoredText} ${copy.generalRuntimeUnsupported}`;
   return restoredText;
 }
 
@@ -361,9 +359,9 @@ function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: 
 function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButtonState[] {
   const discoveredIds = new Set(config.discoveredModels.map((model) => model.id));
   const hasDiscovery = config.discoveredModels.length > 0;
-  const generalId = generalModelId(config);
+  const generalCandidate = getGeneralImageModelCandidate(config.discoveredModels, config.kind);
   return FOCUSED_MODEL_CATALOG.map((definition) => {
-    const modelId = definition.launchId === GENERAL_LAUNCH_ID ? generalId : definition.defaultModelId;
+    const modelId = definition.launchId === GENERAL_LAUNCH_ID ? generalCandidate?.id ?? "" : definition.defaultModelId;
     let available = false;
     let reason = "";
 
@@ -374,8 +372,14 @@ function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButt
     } else if (!hasDiscovery) {
       reason = copy.launchUnavailableNoDiscovery;
     } else if (definition.launchId === GENERAL_LAUNCH_ID) {
-      available = Boolean(modelId);
-      reason = available ? copy.launchAvailable : copy.launchUnavailableNoImageModels;
+      if (!isGeneralFallbackProvider(config.kind)) {
+        reason = copy.generalRuntimeUnsupported;
+      } else if (!modelId) {
+        reason = copy.launchUnavailableNoImageModels;
+      } else {
+        available = true;
+        reason = copy.launchAvailable;
+      }
     } else if (config.kind !== definition.providerKind) {
       reason = copy.launchUnavailableProvider(providerLabelFromKind(definition.providerKind));
     } else if (definition.modelIds.some((id) => discoveredIds.has(id))) {
@@ -562,6 +566,7 @@ export function App() {
   const openAIParams = isOpenAIImageParams(params) ? params : null;
   const geminiParams = isGeminiImageParams(params) ? params : null;
   const generalParams = isGeneralImageParams(params) ? params : null;
+  const isGeneralMode = Boolean(generalParams);
   const usesExactMask = Boolean(openAIParams);
   const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
   const previewZoomPercent = Math.round(previewZoom * 100);
@@ -585,6 +590,7 @@ export function App() {
   const isSearchingHistory = historySearch.trim().length > 0;
 
   const modeError = useMemo(() => {
+    if (generalParams && mode === "inpaint") return copy.generalRuntimeUnsupported;
     if (mode === "edit" && inputAssets.length === 0) return copy.validation.addReference;
     if (mode === "inpaint" && inputAssets.length === 0) return copy.validation.addSource;
     if (openAIParams && mode !== "generate" && inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
@@ -593,7 +599,7 @@ export function App() {
     if (mode === "inpaint" && !maskPreview) return copy.validation.paintOrUploadMask;
     if (usesExactMask && mode === "inpaint" && maskCheck && !maskCheck.ok) return maskCheck.message;
     return null;
-  }, [copy, inputAssets.length, maskCheck, maskPreview, mode, openAIParams, usesExactMask]);
+  }, [copy, generalParams, inputAssets.length, maskCheck, maskPreview, mode, openAIParams, usesExactMask]);
 
   const launchRuntimeError = runtimeSelectionError(params, snapshot.config, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, prompt), copy) ?? modeError;
@@ -659,6 +665,20 @@ export function App() {
   useEffect(() => {
     setPreviewZoom(1);
   }, [activeImageSource]);
+
+  useEffect(() => {
+    if (!generalParams) return;
+    if (mode === "inpaint") {
+      setMode(inputAssets.length > 0 ? "edit" : "generate");
+    }
+    if (mode === "edit" && inputAssets.length === 0) {
+      setMode("generate");
+    }
+    if (maskAsset || maskDataUrl) {
+      setMaskAsset(null);
+      setMaskDataUrl(null);
+    }
+  }, [generalParams, inputAssets.length, maskAsset, maskDataUrl, mode]);
 
   useEffect(() => {
     void refreshSnapshot();
@@ -753,15 +773,16 @@ export function App() {
   function restoreDraft(draft?: WorkspaceDraft, config = snapshot.config) {
     setHasRestoredDraft(true);
     if (!draft) return;
-    setMode(draft.mode);
+    const draftMode = isGeneralImageParams(draft.params) && draft.mode === "inpaint" ? (draft.inputAssets.length > 0 ? "edit" : "generate") : draft.mode;
+    setMode(draftMode);
     setPrompt(draft.prompt);
     setParams(draft.params);
     updateCustomSizeFromParams(draft.params, setCustomSize);
     setProviderKind(draft.params.providerKind);
     setBaseURL(defaultBaseURLForProvider(draft.params.providerKind, config.baseURL));
     setInputAssets(draft.inputAssets);
-    setMaskAsset(draft.maskAsset ?? null);
-    setMaskDataUrl(draft.maskDataUrl ?? null);
+    setMaskAsset(isGeneralImageParams(draft.params) ? null : draft.maskAsset ?? null);
+    setMaskDataUrl(isGeneralImageParams(draft.params) ? null : draft.maskDataUrl ?? null);
     setBrushSize(draft.brushSize);
     setDraftUpdatedAt(draft.updatedAt);
     setNotice({ kind: "info", text: paramsNotice(draft.params, copy.notices.draftRestored(formatDate(draft.updatedAt)), copy) });
@@ -796,16 +817,6 @@ export function App() {
       ...patch,
       providerKind: "gemini",
       launchId: NANO_BANANA_3_LAUNCH_ID
-    }));
-  }
-
-  function updateGeneralParams(patch: GeneralParamPatch) {
-    markDraftChanged();
-    setParams((current) => ({
-      ...(isGeneralImageParams(current) ? current : createGeneralParams(providerKind, "", current, snapshot.config)),
-      ...patch,
-      providerKind,
-      launchId: GENERAL_LAUNCH_ID
     }));
   }
 
@@ -891,6 +902,11 @@ export function App() {
     const launchConfig = snapshot.config.kind === launchProvider ? snapshot.config : undefined;
     const nextParams = createLaunchParams(button.launchId, button.modelId, params, launchProvider, launchConfig);
     setParams(nextParams);
+    if (isGeneralImageParams(nextParams)) {
+      if (mode === "inpaint") setMode(inputAssets.length > 0 ? "edit" : "generate");
+      setMaskAsset(null);
+      setMaskDataUrl(null);
+    }
     updateCustomSizeFromParams(nextParams, setCustomSize);
     markDraftChanged();
     setIsSavingConfig(true);
@@ -997,9 +1013,10 @@ export function App() {
     if (assets.length > 0) {
       markDraftChanged();
       const next = dedupeAssets([...inputAssets, ...assets]);
-      const cappedNext = openAIParams ? next.slice(0, MAX_GPT_IMAGE_INPUTS) : next;
+      const usesOpenAIInputCap = Boolean(openAIParams);
+      const cappedNext = usesOpenAIInputCap ? next.slice(0, MAX_GPT_IMAGE_INPUTS) : next;
       const addedCount = Math.max(0, cappedNext.length - inputAssets.length);
-      const capped = Boolean(openAIParams && next.length > MAX_GPT_IMAGE_INPUTS);
+      const capped = Boolean(usesOpenAIInputCap && next.length > MAX_GPT_IMAGE_INPUTS);
       setInputAssets(cappedNext);
       if (mode === "generate") setMode("edit");
       setNotice({
@@ -1010,6 +1027,10 @@ export function App() {
   }
 
   async function selectMask() {
+    if (isGeneralMode) {
+      setNotice({ kind: "error", text: copy.generalRuntimeUnsupported });
+      return;
+    }
     if (!bridge) {
       setNotice({ kind: "error", text: copy.notices.bridgeSelectMask });
       return;
@@ -1037,15 +1058,16 @@ export function App() {
     setIsRunning(true);
     setPartialImages([]);
     setActiveJob(null);
-    setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[mode].action) });
+    const requestMode: WorkMode = generalParams ? (inputAssets.length > 0 ? "edit" : "generate") : mode;
+    setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[requestMode].action) });
 
     try {
       const job = await bridge.runJob({
-        mode,
+        mode: requestMode,
         prompt,
-        inputPaths: mode === "generate" ? [] : inputAssets.map((asset) => asset.path),
-        maskPath: mode === "inpaint" && !maskDataUrl ? maskAsset?.path : undefined,
-        maskDataUrl: mode === "inpaint" && maskDataUrl ? maskDataUrl : undefined,
+        inputPaths: requestMode === "generate" ? [] : inputAssets.map((asset) => asset.path),
+        maskPath: requestMode === "inpaint" && !maskDataUrl ? maskAsset?.path : undefined,
+        maskDataUrl: requestMode === "inpaint" && maskDataUrl ? maskDataUrl : undefined,
         params
       });
       setActiveJob(job);
@@ -1053,7 +1075,7 @@ export function App() {
         ...current,
         history: [job, ...current.history.filter((item) => item.id !== job.id)]
       }));
-      setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? copy.notices.actionFinished(modeLabels[mode].action) });
+      setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? copy.notices.actionFinished(modeLabels[requestMode].action) });
       if (job.status === "succeeded") {
         await bridge.clearDraft();
         setDraftUpdatedAt(null);
@@ -1127,7 +1149,8 @@ export function App() {
 
   function reuseJob(job: GenerationJob) {
     flashButton(`reuse:${job.id}`);
-    setMode(job.mode);
+    const nextMode = isGeneralImageParams(job.params) && job.mode === "inpaint" ? (job.inputAssets.length > 0 ? "edit" : "generate") : job.mode;
+    setMode(nextMode);
     setPrompt(job.prompt);
     setParams(job.params);
     updateCustomSizeFromParams(job.params, setCustomSize);
@@ -1137,7 +1160,7 @@ export function App() {
       setSnapshot((current) => ({ ...current, config: patchConfigActiveLaunch(current.config, job) }));
     }
     setInputAssets(job.inputAssets);
-    setMaskAsset(job.maskAsset ?? null);
+    setMaskAsset(isGeneralImageParams(job.params) ? null : job.maskAsset ?? null);
     setMaskDataUrl(null);
     setActiveJob(job);
     setHasUserChangedDraft(true);
@@ -1293,10 +1316,8 @@ export function App() {
     <>
       <span>{copy.model}</span>
       <strong>{generalParams?.model || copy.generalFallback}</strong>
-      <span>{copy.count}</span>
-      <strong>{generalParams?.outputCount ?? 1}</strong>
-      <span>{copy.timeoutSeconds}</span>
-      <strong>{Math.round((generalParams?.timeoutMs ?? params.timeoutMs) / 1000)}</strong>
+      <span>{copy.provider}</span>
+      <strong>{providerLabelFromKind(generalParams?.providerKind ?? snapshot.config.kind)}</strong>
     </>
   );
   const advancedControls = openAIParams ? (
@@ -1471,21 +1492,7 @@ export function App() {
     </div>
   ) : (
     <div className="advanced-controls">
-      <p className="inline-check error">{copy.generalRuntimeUnsupported}</p>
-      <label>
-        {copy.count}
-        <input type="number" min="1" max="1" value={generalParams?.outputCount ?? 1} onChange={() => updateGeneralParams({ outputCount: 1 })} />
-      </label>
-      <label>
-        {copy.timeoutSeconds}
-        <input
-          type="number"
-          min="30"
-          max="600"
-          value={Math.round((generalParams?.timeoutMs ?? params.timeoutMs) / 1000)}
-          onChange={(event) => updateGeneralParams({ timeoutMs: clamp(Number(event.target.value), 30, 600) * 1000 })}
-        />
-      </label>
+      <p className="inline-check">{isGeneralFallbackProvider(generalParams?.providerKind ?? snapshot.config.kind) ? copy.generalLimitedRuntime : copy.generalRuntimeUnsupported}</p>
     </div>
   );
 
@@ -1684,25 +1691,32 @@ export function App() {
 
       <section className="workspace">
         <div className="workspace-topbar">
-          <div className="mode-tabs" role="tablist" aria-label={copy.parameters}>
-            {(Object.keys(modeLabels) as WorkMode[]).map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={mode === item ? "mode-tab active" : "mode-tab"}
-                onClick={() => {
-                  markDraftChanged();
-                  setMode(item);
-                }}
-              >
-                {item === "generate" && <Wand2 size={16} />}
-                {item === "edit" && <ImagePlus size={16} />}
-                {item === "inpaint" && <Brush size={16} />}
-                <span>{modeLabels[item].title}</span>
-                <small>{modeLabels[item].hint}</small>
-              </button>
-            ))}
-          </div>
+          {isGeneralMode ? (
+            <div className="general-mode-status">
+              <Wand2 size={16} />
+              <span>{isGeneralFallbackProvider(generalParams?.providerKind ?? snapshot.config.kind) ? copy.generalLimitedRuntime : copy.generalRuntimeUnsupported}</span>
+            </div>
+          ) : (
+            <div className="mode-tabs" role="tablist" aria-label={copy.parameters}>
+              {(Object.keys(modeLabels) as WorkMode[]).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={mode === item ? "mode-tab active" : "mode-tab"}
+                  onClick={() => {
+                    markDraftChanged();
+                    setMode(item);
+                  }}
+                >
+                  {item === "generate" && <Wand2 size={16} />}
+                  {item === "edit" && <ImagePlus size={16} />}
+                  {item === "inpaint" && <Brush size={16} />}
+                  <span>{modeLabels[item].title}</span>
+                  <small>{modeLabels[item].hint}</small>
+                </button>
+              ))}
+            </div>
+          )}
           <button type="button" className="ghost" onClick={refreshSnapshot} disabled={isLoadingSnapshot}>
             {isLoadingSnapshot ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
             {copy.sync}
@@ -1809,10 +1823,12 @@ export function App() {
                 <ImagePlus size={16} />
                 {copy.addReferences}
               </button>
-              <button type="button" className="secondary" onClick={selectMask}>
-                <Paintbrush size={16} />
-                {copy.uploadMask}
-              </button>
+              {!isGeneralMode && (
+                <button type="button" className="secondary" onClick={selectMask}>
+                  <Paintbrush size={16} />
+                  {copy.uploadMask}
+                </button>
+              )}
               {inputAssets.length > 0 && (
                 <button
                   type="button"
@@ -1848,7 +1864,7 @@ export function App() {
               )}
             </div>
 
-            {mode === "inpaint" && (
+            {mode === "inpaint" && !isGeneralMode && (
               <div className="mask-editor">
                 <div className="mask-header">
                   <div>

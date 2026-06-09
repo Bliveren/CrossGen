@@ -12,7 +12,14 @@ import type {
   OpenAIImageParams,
   ProviderKind
 } from "./types.js";
-import { GENERAL_LAUNCH_ID, GPT_IMAGE_2_LAUNCH_ID, GPT_IMAGE_2_MODEL_ID, NANO_BANANA_3_LAUNCH_ID, NANO_BANANA_3_MODEL_ID } from "./modelCatalog.js";
+import {
+  GENERAL_LAUNCH_ID,
+  GPT_IMAGE_2_LAUNCH_ID,
+  GPT_IMAGE_2_MODEL_ID,
+  NANO_BANANA_3_LAUNCH_ID,
+  NANO_BANANA_3_MODEL_ID,
+  isGeneralFallbackProvider
+} from "./modelCatalog.js";
 
 export const GPT_IMAGE_2_MODEL = GPT_IMAGE_2_MODEL_ID;
 
@@ -180,6 +187,15 @@ export function isGeminiImageParams(params: unknown): params is GeminiImageParam
   );
 }
 
+export function isGeneralImageParams(params: unknown): params is GeneralImageParams {
+  return (
+    isRecord(params) &&
+    isOneOf(params.providerKind, PROVIDER_KIND_OPTIONS) &&
+    params.launchId === GENERAL_LAUNCH_ID &&
+    typeof params.model === "string"
+  );
+}
+
 function paramsProviderKind(params: Record<string, unknown>): ProviderKind | undefined {
   return isOneOf(params.providerKind, PROVIDER_KIND_OPTIONS) ? params.providerKind : undefined;
 }
@@ -303,11 +319,11 @@ export function validateImageParams(params: unknown): ValidationResult {
   const providerKind = paramsProviderKind(params);
   const launchId = paramsLaunchId(params);
 
-  if (providerKind === "gemini" || launchId === NANO_BANANA_3_LAUNCH_ID) {
-    return validateGeminiImageParams(params);
-  }
   if (launchId === GENERAL_LAUNCH_ID) {
     return validateGeneralImageParams(params);
+  }
+  if (providerKind === "gemini" || launchId === NANO_BANANA_3_LAUNCH_ID) {
+    return validateGeminiImageParams(params);
   }
   return validateOpenAIImageParams(params);
 }
@@ -398,7 +414,12 @@ function hasGeminiParamsShape(params: unknown): boolean {
   if (!isRecord(params)) return false;
   const providerKind = paramsProviderKind(params);
   const launchId = paramsLaunchId(params);
-  return providerKind === "gemini" || launchId === NANO_BANANA_3_LAUNCH_ID;
+  return launchId === NANO_BANANA_3_LAUNCH_ID || (providerKind === "gemini" && launchId !== GENERAL_LAUNCH_ID);
+}
+
+function hasGeneralParamsShape(params: unknown): boolean {
+  if (!isRecord(params)) return false;
+  return paramsLaunchId(params) === GENERAL_LAUNCH_ID;
 }
 
 function validateRunJobRequestBase(request: unknown): ValidationResult {
@@ -503,6 +524,41 @@ export function validateGeminiRunJobRequest(request: unknown): ValidationResult 
   return validateGeminiImageParams(request.params);
 }
 
+export function validateGeneralRunJobRequest(request: unknown): ValidationResult {
+  const base = validateRunJobRequestBase(request);
+  if (!base.ok) return base;
+  if (!isRecord(request)) {
+    return { ok: false, message: "任务请求格式无效。" };
+  }
+
+  const params = validateGeneralImageParams(request.params);
+  if (!params.ok) return params;
+  if (!isGeneralImageParams(request.params)) {
+    return { ok: false, message: "General 图片参数无效。" };
+  }
+  if (!isGeneralFallbackProvider(request.params.providerKind)) {
+    return { ok: false, message: "当前 provider 暂未接入 General 运行时。" };
+  }
+  if (!request.params.model.trim()) {
+    return { ok: false, message: "请选择可用的图片模型。" };
+  }
+
+  const inputPaths = request.inputPaths as string[];
+  if (request.mode === "inpaint") {
+    return { ok: false, message: "General 首期不支持局部重绘。" };
+  }
+  if (request.maskPath || request.maskDataUrl) {
+    return { ok: false, message: "General 首期不支持 mask 参数。" };
+  }
+  if (request.mode === "generate" && inputPaths.length > 0) {
+    return { ok: false, message: "文生图不应携带输入图片。" };
+  }
+  if (request.mode === "edit" && inputPaths.length === 0) {
+    return { ok: false, message: "基础参考图编辑至少需要一张参考图。" };
+  }
+  return { ok: true };
+}
+
 export function validateRunJobRequest(request: unknown): ValidationResult {
   const base = validateRunJobRequestBase(request);
   if (!base.ok) return base;
@@ -515,6 +571,9 @@ export function validateRunJobRequest(request: unknown): ValidationResult {
   }
   if (hasGeminiParamsShape(request.params)) {
     return validateGeminiRunJobRequest(request);
+  }
+  if (hasGeneralParamsShape(request.params)) {
+    return validateGeneralRunJobRequest(request);
   }
 
   const params = validateImageParams(request.params);
@@ -637,6 +696,13 @@ export function getValidationError(params: ImageParams, prompt: string): string 
   if (isGeminiImageParams(params)) {
     const paramResult = validateGeminiImageParams(params);
     if (!paramResult.ok) return paramResult.message ?? "参数无效。";
+    return null;
+  }
+  if (isGeneralImageParams(params)) {
+    const paramResult = validateGeneralImageParams(params);
+    if (!paramResult.ok) return paramResult.message ?? "参数无效。";
+    if (!isGeneralFallbackProvider(params.providerKind)) return "当前 provider 暂未接入 General 运行时。";
+    if (!params.model.trim()) return "请选择可用的图片模型。";
     return null;
   }
   return "当前版本尚未接入该模型运行时。";

@@ -1,5 +1,7 @@
 import type { ProviderKind, RunJobRequest } from "../../shared/types.js";
+import { GENERAL_LAUNCH_ID } from "../../shared/modelCatalog.js";
 import type { ImageProviderAdapter } from "./imageProviderAdapter.js";
+import { generalImageAdapter } from "./generalImageAdapter.js";
 import { geminiImageAdapter } from "./geminiImageAdapter.js";
 import { openaiImageAdapter } from "./openaiImageAdapter.js";
 
@@ -13,6 +15,7 @@ export function getImageProviderAdapter(kind: ProviderKind): ImageProviderAdapte
 }
 
 export function getImageProviderAdapterForRequest(request: RunJobRequest): ImageProviderAdapter | undefined {
+  if (request.params.launchId === GENERAL_LAUNCH_ID) return generalImageAdapter;
   return getImageProviderAdapter(request.params.providerKind);
 }
 
