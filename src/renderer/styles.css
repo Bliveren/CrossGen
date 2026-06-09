@@ -564,6 +564,16 @@ label {
   color: #a33a32;
 }
 
+.reference-rights-reminder {
+  align-items: flex-start;
+  color: #7a5b20;
+}
+
+.reference-rights-reminder svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
 .job-error-panel {
   display: grid;
   place-items: center;

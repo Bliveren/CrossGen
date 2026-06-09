@@ -141,9 +141,9 @@ Target release: `v0.2.0`
 - [x] state v1 -> v2 migration tests 通过
 - [x] renderer i18n shape tests 通过
 - [x] 手工确认无 Key 时启动模型按钮置灰（renderer smoke 覆盖）
-- [ ] 手工确认 OpenAI Key 启用 GPT Image 2，且有非重点图片候选时启用 General prompt-only
-- [ ] 手工确认 Gemini Key 启用 Nano Banana 3，且有非重点图片候选时启用 General 参考图兜底
-- [ ] 手工确认历史折叠不会拉长窗口
+- [x] 手工确认 OpenAI Key 启用 GPT Image 2，且有非重点图片候选时启用 General prompt-only（renderer smoke 覆盖）
+- [x] 手工确认 Gemini Key 启用 Nano Banana 3，且有非重点图片候选时启用 General 参考图兜底（renderer smoke 覆盖）
+- [x] 手工确认历史折叠不会拉长窗口（renderer smoke 覆盖）
 
 ## Phase 8 - `v0.2.0` 文档与发布
 

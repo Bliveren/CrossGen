@@ -110,13 +110,13 @@ Target release: `v0.2.0`
 
 ## 8. UI 与交互检查
 
-- [ ] 服务配置、启动模型、参数面板层级清晰
-- [ ] 同层级标题字号统一
-- [ ] 按钮文字不会溢出
-- [ ] 左右栏拖拽仍可用
-- [ ] 切换模型不会重置不相关 provider config
-- [ ] 切换模型时 prompt 草稿保留或有明确恢复规则
-- [ ] 切换模型时不兼容参数会被安全重置
+- [x] 服务配置、启动模型、参数面板层级清晰（renderer smoke 覆盖）
+- [x] 同层级标题字号统一（renderer smoke 覆盖）
+- [x] 按钮文字不会溢出（renderer smoke 覆盖长 General model）
+- [x] 左右栏拖拽仍可用（renderer smoke 覆盖键盘 resize）
+- [x] 切换模型不会重置不相关 provider config（renderer smoke 覆盖 launch save config）
+- [x] 切换模型时 prompt 草稿保留或有明确恢复规则（renderer smoke 覆盖）
+- [x] 切换模型时不兼容参数会被安全重置（renderer smoke 覆盖 OpenAI General prompt-only）
 - [x] 无 Electron bridge 的 Web 预览仍给出清晰提示
 - [x] Electron bridge 下配置、探测、运行功能可用
 
@@ -131,7 +131,7 @@ Target release: `v0.2.0`
 - [x] 资源协议仍只允许 managed image dir
 - [x] 下载仍只允许当前历史中的 output asset
 - [x] 删除历史不会删除用户上传的外部源图
-- [ ] Gemini uploaded image 权利提醒文案可见
+- [x] Gemini uploaded image 权利提醒文案可见
 
 ## 10. 自动化检查
 

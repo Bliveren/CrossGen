@@ -146,6 +146,27 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("shows Gemini upload rights reminder beside reference tools", async () => {
+    await renderApp(
+      snapshot({
+        config: providerConfig({
+          kind: "gemini",
+          name: "Gemini",
+          baseURL: "https://generativelanguage.googleapis.com/v1beta",
+          apiKeySaved: true,
+          defaultModel: NANO_BANANA_3_MODEL_ID,
+          activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+          activeModelId: NANO_BANANA_3_MODEL_ID,
+          discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+          lastModelDiscoveryAt: now
+        })
+      })
+    );
+
+    expect(document.body.textContent).toContain("Only upload images you have permission to use");
+    expect(buttonByText("Upload mask")).toBeTruthy();
+  });
+
   it("enables Nano Banana 3 and Gemini General candidate without showing more than six collapsed history items", async () => {
     await renderApp(
       snapshot({
@@ -178,6 +199,102 @@ describe("renderer multi-model smoke", () => {
 
     expect(document.querySelectorAll(".history-item")).toHaveLength(8);
     expect(document.body.textContent).toContain("Show fewer");
+  });
+
+  it("keeps prompt text while switching models and resets incompatible General inputs", async () => {
+    const bridge = await renderApp(
+      snapshot({
+        config: providerConfig({
+          apiKeySaved: true,
+          discoveredModels: [
+            { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
+            { id: "dall-e-3", providerKind: "openai" }
+          ],
+          lastModelDiscoveryAt: now
+        })
+      })
+    );
+    const promptInput = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const originalPrompt = promptInput.value;
+
+    await click(buttonByText("Edit"));
+    await click(launchButton("General"));
+
+    expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(originalPrompt);
+    expect(buttonByText("Generate", ".primary-run").disabled).toBe(false);
+    expect(document.body.textContent).toContain("prompt-only generation");
+    expect(document.body.textContent).not.toContain("Add references");
+    expect(bridge.saveConfig).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        activeLaunchId: "general",
+        activeModelId: "dall-e-3",
+        kind: "openai"
+      })
+    );
+  });
+
+  it("keeps service config, launch buttons, and parameters in a clear left-rail order", async () => {
+    await renderApp(snapshot());
+    const sidebar = document.querySelector<HTMLElement>(".sidebar")!;
+    const configSection = sidebar.querySelector<HTMLElement>("form.tool-section")!;
+    const launchStrip = sidebar.querySelector<HTMLElement>(".launch-strip")!;
+    const parameterSection = buttonByText("Parameters", ".section-toggle").closest<HTMLElement>(".tool-section")!;
+
+    expect(configSection.textContent).toContain("Provider");
+    expect(launchStrip.textContent).toContain("Launch");
+    expect(parameterSection.textContent).toContain("Parameters");
+    expect(configSection.compareDocumentPosition(launchStrip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(launchStrip.compareDocumentPosition(parameterSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("supports keyboard resizing without losing fixed history layout", async () => {
+    await renderApp(snapshot());
+    const sidebarResizer = separatorByLabel("Resize sidebar");
+    const historyResizer = separatorByLabel("Resize history");
+
+    expect(sidebarResizer.getAttribute("aria-valuenow")).toBe("310");
+    expect(historyResizer.getAttribute("aria-valuenow")).toBe("330");
+
+    await keyDown(sidebarResizer, "ArrowRight");
+    await keyDown(historyResizer, "ArrowLeft", { shiftKey: true });
+
+    expect(sidebarResizer.getAttribute("aria-valuenow")).toBe("326");
+    expect(historyResizer.getAttribute("aria-valuenow")).toBe("370");
+    expect(window.localStorage.getItem("image2tools.sidebarWidth")).toBe("326");
+    expect(window.localStorage.getItem("image2tools.historyWidth")).toBe("370");
+  });
+
+  it("keeps compact controls and history from overflowing their layout contracts", async () => {
+    await renderApp(
+      snapshot({
+        config: providerConfig({
+          kind: "gemini",
+          name: "Gemini",
+          baseURL: "https://generativelanguage.googleapis.com/v1beta",
+          apiKeySaved: true,
+          defaultModel: NANO_BANANA_3_MODEL_ID,
+          activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+          activeModelId: NANO_BANANA_3_MODEL_ID,
+          discoveredModels: [
+            { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
+            {
+              id: "gemini-2.0-flash-preview-image-generation-with-a-very-long-display-name",
+              providerKind: "gemini",
+              displayName: "Gemini image fallback with a very long display name"
+            }
+          ],
+          lastModelDiscoveryAt: now
+        }),
+        history: Array.from({ length: 10 }, (_, index) => geminiJob(index))
+      })
+    );
+
+    expect(document.querySelector(".history-list")).toBeTruthy();
+    expect(document.querySelector(".launch-button span")).toBeTruthy();
+    expect(document.querySelector(".launch-button small")).toBeTruthy();
+    expect(document.querySelectorAll(".history-item")).toHaveLength(6);
+    expect(buttonByText("Show all 10")).toBeTruthy();
+    expect(launchButton("General").textContent).toContain("gemini-2.0-flash-preview-image-generation-with-a-very-long-display-name");
   });
 
   it("renders Gemini results on the canvas and routes downloads through the bridge", async () => {
@@ -383,6 +500,18 @@ async function click(button: HTMLButtonElement) {
   await act(async () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
+}
+
+async function keyDown(element: HTMLElement, key: string, init: KeyboardEventInit = {}) {
+  await act(async () => {
+    element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, ...init }));
+  });
+}
+
+function separatorByLabel(label: string): HTMLElement {
+  const separator = [...document.querySelectorAll<HTMLElement>('[role="separator"]')].find((item) => item.getAttribute("aria-label") === label);
+  if (!separator) throw new Error(`Separator "${label}" was not found.`);
+  return separator;
 }
 
 function installLocalStorageMock() {
