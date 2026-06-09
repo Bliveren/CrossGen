@@ -104,6 +104,12 @@
 统一外部验收步骤见 [EXTERNAL_ACCEPTANCE.md](./EXTERNAL_ACCEPTANCE.md)。
 
 - [ ] 用真实 API Key 做一次实际生成、编辑、局部重绘手工验收
+- [x] 建立多模型文档与发布说明草稿：README、ARCHITECTURE、SECURITY、EXTERNAL_ACCEPTANCE、RELEASE_NOTES 覆盖 GPT Image 2、Nano Banana 3、General 当前边界
+- [x] 增加 Gemini mock API 文档与 `pnpm verify:mock-gemini-api` 验证说明
+- [x] 增加 Gemini Key handling、Gemini 错误脱敏和上传图片权利提醒到安全文档
+- [x] 明确 General 当前仍是 Gemini-only minimal fallback，未声明任意 provider 通用能力
+- [ ] 用真实 Gemini Key 完成 Nano Banana 3 生成、参考图编辑、局部引导编辑和下载/历史验收
+- [ ] 为 Gemini 真实 API 验收增加自动化 verifier，或继续按外部手工流程记录证据
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
 - [x] 完成 macOS 临时目录卸载与重装 smoke test
 - [x] 增加 GitHub Actions CI（build、mock verifier、macOS / Windows / Linux package）

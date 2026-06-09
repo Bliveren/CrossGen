@@ -5,8 +5,8 @@ Target release: `v0.2.0`
 ## 0. 版本目标检查
 
 - [x] 多生图模型支持被确认为 `v0.2.0` 核心版本目标
-- [ ] `v0.2.0` release notes 覆盖 GPT Image 2、Nano Banana 3、General 支持
-- [ ] `v0.2.0` 发布前完成多模型 mock 验证
+- [x] `v0.2.0` release notes 覆盖 GPT Image 2、Nano Banana 3、General 支持
+- [x] `v0.2.0` 发布前完成多模型 mock 验证
 - [ ] `v0.2.0` 发布前完成至少一轮真实 OpenAI / Gemini API 外部验收
 
 ## 1. 产品检查
@@ -122,15 +122,15 @@ Target release: `v0.2.0`
 
 ## 9. 安全检查
 
-- [ ] OpenAI API Key 不进入 renderer 明文状态以外的日志
-- [ ] Gemini API Key 不进入 renderer 明文状态以外的日志
-- [ ] 已保存 Key 只显示脱敏预览
-- [ ] 错误信息脱敏 `sk-...`
-- [ ] 错误信息脱敏 Google API key 样式
-- [ ] 本地 state 不提交到仓库
-- [ ] 资源协议仍只允许 managed image dir
-- [ ] 下载仍只允许当前历史中的 output asset
-- [ ] 删除历史不会删除用户上传的外部源图
+- [x] OpenAI API Key 不进入 renderer 明文状态以外的日志
+- [x] Gemini API Key 不进入 renderer 明文状态以外的日志
+- [x] 已保存 Key 只显示脱敏预览
+- [x] 错误信息脱敏 `sk-...`
+- [x] 错误信息脱敏 Google API key 样式
+- [x] 本地 state 不提交到仓库
+- [x] 资源协议仍只允许 managed image dir
+- [x] 下载仍只允许当前历史中的 output asset
+- [x] 删除历史不会删除用户上传的外部源图
 - [ ] Gemini uploaded image 权利提醒文案可见
 
 ## 10. 自动化检查
@@ -140,6 +140,7 @@ Target release: `v0.2.0`
 - [x] `pnpm build`
 - [x] `pnpm verify:mock-api`
 - [x] `pnpm verify:mock-gemini-api`
+- [x] `pnpm verify:mock-model-discovery`
 - [x] state migration tests
 - [x] provider discovery tests
 - [x] model catalog tests
@@ -163,15 +164,15 @@ Target release: `v0.2.0`
 
 ## 12. 发布前检查
 
-- [ ] README 更新多模型定位
-- [ ] ARCHITECTURE 更新 provider adapter 架构
-- [ ] TODO 更新多模型阶段状态
-- [ ] CHECKLIST 更新多模型验收项
-- [ ] SECURITY 更新 Gemini Key 说明
-- [ ] EXTERNAL_ACCEPTANCE 更新 Gemini 真实 API 验收
-- [ ] OPEN_SOURCE_AUDIT 更新多 provider 风险
-- [ ] secret scan 无真实 OpenAI Key
-- [ ] secret scan 无真实 Gemini Key
+- [x] README 更新多模型定位
+- [x] ARCHITECTURE 更新 provider adapter 架构
+- [x] TODO 更新多模型阶段状态
+- [x] CHECKLIST 更新多模型验收项
+- [x] SECURITY 更新 Gemini Key 说明
+- [x] EXTERNAL_ACCEPTANCE 更新 Gemini 真实 API 验收
+- [x] OPEN_SOURCE_AUDIT 更新多 provider 风险
+- [x] secret scan 无真实 OpenAI Key
+- [x] secret scan 无真实 Gemini Key
 - [x] macOS package smoke test 不回退
 - [x] Windows package smoke test 不回退
 - [x] Linux package smoke test 不回退
