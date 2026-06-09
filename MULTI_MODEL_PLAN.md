@@ -15,6 +15,9 @@ Target release: `v0.2.0`
 - 2026-06-09: Model discovery service/UI, provider selector, launch-button state, automatic save/test discovery refresh, and provider discovery tests merged to `main` via PR #79.
 - 2026-06-09: Nano Banana 3 renderer parameter UI, Gemini launch run path, guided-region copy, General unsupported state, and history reuse restore merged to `main` via PR #82.
 - 2026-06-09: General minimal Gemini fallback, Gemini-only image-model candidate selection, unsupported OpenAI/Custom General rejection, and General UI/runtime validation merged to `main` via PR #84.
+- 2026-06-09: General provider-aware fallback for Gemini prompt/reference and OpenAI-compatible prompt-only OpenAI/Custom providers merged to `main` via PR #89.
+- 2026-06-09: Mock model discovery verifier, renderer multi-model smoke coverage, multi-model release/security docs, real Gemini verifier, release metadata, update manifest hash/size enforcement, and manifest asset helper merged through PRs #86-#97.
+- 2026-06-09: Release evidence ledger, checklist/evidence alignment guard, and refreshed completion audit merged through PRs #98-#100.
 
 ## 1. 目标
 
@@ -37,20 +40,25 @@ Target release: `v0.2.0`
 当前 main 分支已经实现：
 
 - Electron + React + Vite 桌面应用
-- OpenAI `gpt-image-2` 生成、编辑、局部重绘
+- OpenAI `gpt-image-2` 生成、编辑、精确 mask 局部重绘和 streaming partial preview
+- Gemini `gemini-3.1-flash-image` / Nano Banana 3 `generateContent` 生成、参考图编辑、局部引导编辑、image/text part 解析和参数面板
+- General fallback：Gemini 支持 prompt/reference；OpenAI 和 Custom 使用 prompt-only OpenAI-compatible generation 契约
+- OpenAI/Gemini/Custom provider selector、provider-specific 默认 Base URL、模型 discovery 和启动模型按钮状态
+- provider/model-aware state v2、历史 model/provider chip、历史折叠、搜索计数和参数复用恢复
 - OpenAI Image API streaming partial previews
 - 本地历史、下载、草稿恢复
 - API Key 本地保存与脱敏预览
 - 左右栏可拖拽布局
 - mock OpenAI Image API 验证脚本
-- 跨平台打包配置和 release verifier
+- mock Gemini Image API、mock model discovery verifier、受成本保护的真实 OpenAI/Gemini verifier
+- 跨平台打包配置、release verifier、release evidence ledger、update manifest hash/size 校验和资产条目生成脚本
 
-当前关键约束：
+当前剩余关键约束：
 
-- `ImageParams`、`validateImageParams`、`openaiImage.ts` 强绑定 `gpt-image-2`
-- `ProviderConfig` 默认假设 OpenAI-like provider
-- 历史任务未把 provider/model 作为一等字段展示
-- mask 编辑语义目前是 OpenAI Image API 的精确 mask 参数语义
+- 真实 OpenAI / Gemini API 验收仍需要外部 Key、模型权限和显式成本确认。
+- 签名/公证和正式更新 manifest 资产 URL/hash/size 仍需要真实分发 artifacts。
+- Windows 原生安装验证和 Linux 原生桌面直接 AppImage 验证仍需要对应平台环境。
+- Nano Banana 局部编辑仍是“局部引导编辑”，不能描述为 OpenAI 等价 exact mask inpaint。
 
 ## 3. 官方能力判断
 
@@ -108,7 +116,7 @@ Gemini 图片能力侧重点：
 - 支持输入 prompt
 - 支持基础参考图上传，前提是 provider adapter 可处理
 - 不承诺高级参数、mask、streaming、批量生成
-- 截至 PR #84，仅 Gemini provider 的非重点图片候选模型接入最小 fallback；OpenAI、Custom 和其他 provider 暂不通过 General 运行，避免伪适配。
+- 截至 PR #89，Gemini provider 支持 prompt/reference fallback；OpenAI 和 Custom 支持 prompt-only OpenAI-compatible `/images/generations` fallback。
 
 ## 4. 核心设计
 
@@ -129,6 +137,7 @@ General 模式首期范围：
 - 只展示 prompt、基础参考图输入、运行按钮和“不承诺高级能力”的提示
 - 不显示 mask、streaming、output format、compression、moderation、thinking、search grounding 等未适配能力
 - 不承诺编辑、精确局部重绘、多轮会话或批量生成
+- Gemini General 可使用基础参考图；OpenAI / Custom General 是 prompt-only OpenAI-compatible 契约
 - 运行失败时必须提示当前 provider/model 未适配或不兼容
 - 历史任务必须记录真实 provider/model 信息
 
@@ -358,9 +367,9 @@ const visibleHistory = historyExpanded ? filteredHistory : filteredHistory.slice
 | Phase 1 | `v0.2.0` 契约与迁移 | Provider/model 类型、catalog、state v2 迁移 | 旧历史与配置无损读取 |
 | Phase 2 | `v0.2.0` 模型探测与启动区 | OpenAI/Gemini discovery、启动模型按钮 | 按钮状态能随 Key 和模型列表变化 |
 | Phase 3 | `v0.2.0` GPT Image 2 adapter 化 | 保留当前全部 OpenAI 能力 | 现有测试、mock verifier、真实验收路径不回退 |
-| Phase 4 | `v0.2.0` Nano Banana 3 adapter | Gemini generateContent、图片输入编辑、参数面板 | 可用 Gemini Key 生成和编辑图片 |
+| Phase 4 | `v0.2.0` Nano Banana 3 adapter | Gemini generateContent、图片输入编辑、参数面板 | mock Gemini 生成、参考图编辑、局部引导编辑通过；真实 Key 验收待外部条件 |
 | Phase 5 | `v0.2.0` General 与历史体验 | General 模式、历史 model chip、6 条折叠 | 历史不拉长窗口且模型可追溯 |
-| Phase 6 | `v0.2.0` 文档、测试、发布验收 | README、mock Gemini API、release 验证 | `pnpm build` 与 mock 验证通过 |
+| Phase 6 | `v0.2.0` 文档、测试、发布验收 | README、mock Gemini API、release 验证、release evidence | `pnpm build` 与 mock 验证通过；真实 API、签名/公证、原生平台和正式 manifest 资产证据待外部条件 |
 
 ## 6. Ownership 建议
 
@@ -396,9 +405,10 @@ const visibleHistory = historyExpanded ? filteredHistory : filteredHistory.slice
 | Nano Banana mask 语义与 OpenAI 不同 | 用户误解局部编辑精度 | UI 命名为“局部引导编辑”，不承诺精确 mask |
 | state v2 迁移破坏旧历史 | 用户历史丢失 | 写迁移测试，保留 v1 读取路径和备份 |
 | 参数 union 增加复杂度 | 类型和 UI 分支混乱 | adapter 层拥有 provider-specific validation |
-| General 过度承诺 | 体验不稳定 | 首期只做 Gemini-only minimal fallback，其他 provider 明确拒绝 |
+| General 过度承诺 | 体验不稳定 | 首期限制为 Gemini prompt/reference fallback 与 OpenAI/Custom prompt-only OpenAI-compatible fallback；不显示高级能力 |
 | Gemini 输出 text+image 混合 | 历史和结果解析复杂 | image parts 保存为 outputs，text parts 保存为 metadata |
 | API Key 多 provider 管理 | 配置区复杂 | 首期一次只激活一个 provider，后续再做多 provider 列表 |
+| 外部验收证据误标完成 | 发布风险 | `docs/release/evidence.json` + `pnpm verify:release-evidence` 校验 schema、脱敏和 checklist/evidence 对齐 |
 
 ## 8. 官方参考
 
