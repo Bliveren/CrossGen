@@ -48,6 +48,7 @@ Target release: `v0.2.0`
 - [x] 新增启动模型按钮区
 - [x] `GPT Image 2` 按钮根据 OpenAI discovery 启用
 - [x] `Nano Banana 3` 按钮根据 Gemini discovery 启用
+- [x] `General` 按钮根据 Gemini 非重点图片候选模型启用
 - [ ] `General` 按钮根据任意可用图片模型启用
 - [x] 点击启动模型更新 active launch/model
 - [x] 不可用按钮显示不可用原因
@@ -100,13 +101,14 @@ Target release: `v0.2.0`
 
 ## Phase 5 - `v0.2.0` General 模式
 
-- [ ] 定义 General launch 的最小能力
-- [ ] General UI 只显示 prompt、基础输入和运行按钮
-- [ ] General 模式显示“高级能力未适配”的提示
-- [ ] General 模式接入 provider-specific fallback
-- [ ] General 模式失败时给出清晰模型不兼容提示
-- [ ] General 历史任务正常记录 provider/model
-- [ ] General 不显示 mask、streaming、format 等未确认能力
+- [x] 定义 General launch 的最小能力
+- [x] General UI 只显示 prompt、基础输入和运行按钮
+- [x] General 模式显示“高级能力未适配”的提示
+- [x] General 模式接入 Gemini provider-specific fallback
+- [ ] General 模式接入任意 provider fallback
+- [x] General 模式失败时给出清晰模型不兼容提示
+- [x] General 历史任务正常记录 provider/model
+- [x] General 不显示 mask、streaming、format 等未确认能力
 
 ## Phase 6 - `v0.2.0` 历史任务体验
 

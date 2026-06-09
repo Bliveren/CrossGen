@@ -14,6 +14,7 @@ Target release: `v0.2.0`
 - 2026-06-09: Gemini image adapter runtime, `generateContent` request/response handling, inline image saving, validation, and adapter tests merged to `main` via PR #80.
 - 2026-06-09: Model discovery service/UI, provider selector, launch-button state, automatic save/test discovery refresh, and provider discovery tests merged to `main` via PR #79.
 - 2026-06-09: Nano Banana 3 renderer parameter UI, Gemini launch run path, guided-region copy, General unsupported state, and history reuse restore merged to `main` via PR #82.
+- 2026-06-09: General minimal Gemini fallback, Gemini-only image-model candidate selection, unsupported OpenAI/Custom General rejection, and General UI/runtime validation merged to `main` via PR #84.
 
 ## 1. 目标
 
@@ -107,6 +108,7 @@ Gemini 图片能力侧重点：
 - 支持输入 prompt
 - 支持基础参考图上传，前提是 provider adapter 可处理
 - 不承诺高级参数、mask、streaming、批量生成
+- 截至 PR #84，仅 Gemini provider 的非重点图片候选模型接入最小 fallback；OpenAI、Custom 和其他 provider 暂不通过 General 运行，避免伪适配。
 
 ## 4. 核心设计
 
@@ -394,7 +396,7 @@ const visibleHistory = historyExpanded ? filteredHistory : filteredHistory.slice
 | Nano Banana mask 语义与 OpenAI 不同 | 用户误解局部编辑精度 | UI 命名为“局部引导编辑”，不承诺精确 mask |
 | state v2 迁移破坏旧历史 | 用户历史丢失 | 写迁移测试，保留 v1 读取路径和备份 |
 | 参数 union 增加复杂度 | 类型和 UI 分支混乱 | adapter 层拥有 provider-specific validation |
-| General 过度承诺 | 体验不稳定 | 首期只做 minimal generation |
+| General 过度承诺 | 体验不稳定 | 首期只做 Gemini-only minimal fallback，其他 provider 明确拒绝 |
 | Gemini 输出 text+image 混合 | 历史和结果解析复杂 | image parts 保存为 outputs，text parts 保存为 metadata |
 | API Key 多 provider 管理 | 配置区复杂 | 首期一次只激活一个 provider，后续再做多 provider 列表 |
 
