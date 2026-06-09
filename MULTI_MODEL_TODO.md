@@ -55,20 +55,20 @@ Target release: `v0.2.0`
 
 ## Phase 3 - `v0.2.0` GPT Image 2 adapter 化
 
-- [ ] 新增 `ImageProviderAdapter` 接口
-- [ ] 将当前 OpenAI 请求逻辑迁入 `openaiImageAdapter`
-- [ ] 保留 `/images/generations` 文生图请求行为
-- [ ] 保留 `/images/edits` 编辑请求行为
-- [ ] 保留 mask 参数与校验行为
-- [ ] 保留 streaming partial images 行为
-- [ ] 保留 partial/result output 保存行为
-- [ ] 保留 API error 脱敏行为
-- [ ] 更新 `validateRunJobRequest` 支持 OpenAI params union
-- [ ] 更新 `getValidationError` 分发到 OpenAI validation
-- [ ] 更新 OpenAI service tests
-- [ ] 更新 mock OpenAI verify script
-- [ ] 确保 `pnpm verify:mock-api` 仍通过
-- [ ] 确保 GPT Image 2 UI 与当前体验基本一致
+- [x] 新增 `ImageProviderAdapter` 接口
+- [x] 将当前 OpenAI 请求逻辑迁入 `openaiImageAdapter`
+- [x] 保留 `/images/generations` 文生图请求行为
+- [x] 保留 `/images/edits` 编辑请求行为
+- [x] 保留 mask 参数与校验行为
+- [x] 保留 streaming partial images 行为
+- [x] 保留 partial/result output 保存行为
+- [x] 保留 API error 脱敏行为
+- [x] 更新 `validateRunJobRequest` 支持 OpenAI params union
+- [x] 更新 `getValidationError` 分发到 OpenAI validation
+- [x] 更新 OpenAI service tests
+- [x] 更新 mock OpenAI verify script
+- [x] 确保 `pnpm verify:mock-api` 仍通过
+- [x] 确保 GPT Image 2 UI 与当前体验基本一致
 
 ## Phase 4 - `v0.2.0` Nano Banana 3 adapter 与 UI
 
