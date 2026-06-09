@@ -20,7 +20,12 @@
         "commit": null,
         "environment": null,
         "commands": [],
-        "references": [],
+        "references": [
+          {
+            "label": "Real OpenAI GPT Image 2 external acceptance tracker",
+            "url": "https://github.com/Bliveren/image2tools/issues/1"
+          }
+        ],
         "artifacts": [],
         "summary": "Pending real OpenAI key and explicit cost approval."
       }
@@ -42,7 +47,12 @@
         "commit": null,
         "environment": null,
         "commands": [],
-        "references": [],
+        "references": [
+          {
+            "label": "Real Gemini / Nano Banana 3 external acceptance tracker",
+            "url": "https://github.com/Bliveren/image2tools/issues/102"
+          }
+        ],
         "artifacts": [],
         "summary": "Pending real Gemini key and explicit cost approval."
       }
@@ -63,7 +73,12 @@
         "commit": null,
         "environment": null,
         "commands": [],
-        "references": [],
+        "references": [
+          {
+            "label": "Signed and notarized macOS distribution tracker",
+            "url": "https://github.com/Bliveren/image2tools/issues/3"
+          }
+        ],
         "artifacts": [],
         "summary": "Pending Developer ID identity and Apple notarization credentials."
       }
@@ -84,7 +99,12 @@
         "commit": null,
         "environment": null,
         "commands": [],
-        "references": [],
+        "references": [
+          {
+            "label": "Native Windows release validation tracker",
+            "url": "https://github.com/Bliveren/image2tools/issues/4"
+          }
+        ],
         "artifacts": [],
         "summary": "Pending native Windows shell validation."
       }
@@ -105,7 +125,12 @@
         "commit": null,
         "environment": null,
         "commands": [],
-        "references": [],
+        "references": [
+          {
+            "label": "Native Linux desktop AppImage validation tracker",
+            "url": "https://github.com/Bliveren/image2tools/issues/4"
+          }
+        ],
         "artifacts": [],
         "summary": "Pending native Linux desktop validation with direct AppImage execution."
       }
@@ -126,7 +151,12 @@
         "commit": null,
         "environment": null,
         "commands": [],
-        "references": [],
+        "references": [
+          {
+            "label": "Formal update manifest distribution asset tracker",
+            "url": "https://github.com/Bliveren/image2tools/issues/103"
+          }
+        ],
         "artifacts": [],
         "summary": "Pending signed and externally validated release artifacts."
       }
