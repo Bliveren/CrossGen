@@ -205,6 +205,7 @@ function toPublicConfig(config: StoredConfig): ProviderConfig {
     id: config.id,
     name: config.name,
     apiKeySaved: Boolean(config.encryptedApiKey),
+    apiKeyPreview: getSavedApiKeyPreview(config),
     baseURL: config.baseURL,
     enabled: config.enabled,
     defaultModel: config.defaultModel,
@@ -338,6 +339,23 @@ function decryptApiKey(config: StoredConfig): string | null {
   }
 
   return null;
+}
+
+function getSavedApiKeyPreview(config: StoredConfig): string | undefined {
+  if (!config.encryptedApiKey) return undefined;
+
+  try {
+    const apiKey = decryptApiKey(config);
+    return apiKey ? maskApiKeyPreview(apiKey) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function maskApiKeyPreview(apiKey: string): string {
+  const trimmed = apiKey.trim();
+  if (trimmed.length <= 8) return "********";
+  return `${trimmed.slice(0, 4)}${"*".repeat(12)}${trimmed.slice(-4)}`;
 }
 
 async function getApiKeyOrThrow(): Promise<string> {

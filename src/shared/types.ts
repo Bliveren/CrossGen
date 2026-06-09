@@ -14,6 +14,7 @@ export interface ProviderConfig {
   id: string;
   name: string;
   apiKeySaved: boolean;
+  apiKeyPreview?: string;
   baseURL: string;
   enabled: boolean;
   defaultModel: string;

@@ -71,11 +71,20 @@ const moderationOptions: ModerationMode[] = ["auto", "low"];
 const MIN_PREVIEW_ZOOM = 0.25;
 const MAX_PREVIEW_ZOOM = 4;
 const PREVIEW_ZOOM_STEP = 0.25;
+const DEFAULT_SIDEBAR_WIDTH = 310;
+const DEFAULT_HISTORY_WIDTH = 330;
+const MIN_SIDEBAR_WIDTH = 260;
+const MAX_SIDEBAR_WIDTH = 430;
+const MIN_HISTORY_WIDTH = 280;
+const MAX_HISTORY_WIDTH = 460;
+const MIN_WORKSPACE_WIDTH = 620;
+const RESIZER_WIDTH = 12;
 
 const fallbackConfig: ProviderConfig = {
   id: "default",
   name: "OpenAI",
   apiKeySaved: false,
+  apiKeyPreview: undefined,
   baseURL: DEFAULT_BASE_URL,
   enabled: true,
   defaultModel: DEFAULT_IMAGE_PARAMS.model,
@@ -140,6 +149,12 @@ function formatDate(value: string): string {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function readStoredWidth(key: string, fallback: number, min: number, max: number): number {
+  const stored = window.localStorage.getItem(key);
+  const parsed = stored ? Number(stored) : fallback;
+  return Number.isFinite(parsed) ? clamp(parsed, min, max) : fallback;
 }
 
 async function loadImage(dataUrl: string, copy: UiCopy): Promise<HTMLImageElement> {
@@ -246,6 +261,9 @@ export function App() {
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [buttonFeedback, setButtonFeedback] = useState<Record<string, number>>({});
+  const [sidebarWidth, setSidebarWidth] = useState(() => readStoredWidth("image2tools.sidebarWidth", DEFAULT_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH));
+  const [historyWidth, setHistoryWidth] = useState(() => readStoredWidth("image2tools.historyWidth", DEFAULT_HISTORY_WIDTH, MIN_HISTORY_WIDTH, MAX_HISTORY_WIDTH));
+  const [resizingColumn, setResizingColumn] = useState<"sidebar" | "history" | null>(null);
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
@@ -259,6 +277,9 @@ export function App() {
   const activeJobError = getJobError(activeJob);
   const sizeSelectValue = sizePresets.includes(params.size) ? params.size : "custom";
   const previewZoomPercent = Math.round(previewZoom * 100);
+  const apiKeyPlaceholder = snapshot.config.apiKeyPreview ?? (snapshot.config.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
+  const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+  const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
 
   const filteredHistory = useMemo(() => {
     const query = historySearch.trim().toLowerCase();
@@ -286,6 +307,41 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("image2tools.language", language);
   }, [language]);
+
+  useEffect(() => {
+    window.localStorage.setItem("image2tools.sidebarWidth", String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem("image2tools.historyWidth", String(historyWidth));
+  }, [historyWidth]);
+
+  useEffect(() => {
+    if (!resizingColumn) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (resizingColumn === "sidebar") {
+        const nextMax = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+        setSidebarWidth(clamp(event.clientX, MIN_SIDEBAR_WIDTH, nextMax));
+      } else {
+        const nextMax = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+        setHistoryWidth(clamp(window.innerWidth - event.clientX, MIN_HISTORY_WIDTH, nextMax));
+      }
+    };
+    const stopResizing = () => setResizingColumn(null);
+
+    document.body.classList.add("is-resizing-columns");
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+
+    return () => {
+      document.body.classList.remove("is-resizing-columns");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+    };
+  }, [historyWidth, resizingColumn, sidebarWidth]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -710,6 +766,26 @@ export function App() {
     setPreviewZoom((current) => clamp(Math.round((current + delta) * 100) / 100, MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM));
   }
 
+  function nudgeColumn(column: "sidebar" | "history", delta: number) {
+    if (column === "sidebar") {
+      setSidebarWidth((current) => clamp(current + delta, MIN_SIDEBAR_WIDTH, maxSidebarWidth));
+    } else {
+      setHistoryWidth((current) => clamp(current + delta, MIN_HISTORY_WIDTH, maxHistoryWidth));
+    }
+  }
+
+  function resizeHandleKeyDown(column: "sidebar" | "history", event: React.KeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? 40 : 16;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      nudgeColumn(column, column === "sidebar" ? -step : step);
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      nudgeColumn(column, column === "sidebar" ? step : -step);
+    }
+  }
+
   function handleSourceImageLoad() {
     resizeMaskCanvas();
   }
@@ -792,12 +868,22 @@ export function App() {
   const sizeValidation = validateGptImage2Size(params.size);
 
   return (
-    <main className="app-shell">
+    <main
+      className="app-shell"
+      style={
+        {
+          "--sidebar-width": `${sidebarWidth}px`,
+          "--history-width": `${historyWidth}px`
+        } as React.CSSProperties
+      }
+    >
       <aside className="sidebar">
         <header className="brand-block">
-          <p className="eyebrow">Image2Tools</p>
-          <h1>GPT Image 2</h1>
-          <p className="muted">{copy.tagline}</p>
+          <img className="brand-icon" src="/favicon.svg" alt="" />
+          <div>
+            <h1>Image2Tools</h1>
+            <p className="muted">{copy.tagline}</p>
+          </div>
         </header>
 
         <section className="language-switcher" aria-label={copy.language}>
@@ -858,7 +944,7 @@ export function App() {
               autoComplete="off"
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
-              placeholder={snapshot.config.apiKeySaved ? copy.savedLocally : copy.pasteApiKey}
+              placeholder={apiKeyPlaceholder}
             />
           </label>
           <label>
@@ -1044,6 +1130,22 @@ export function App() {
           <span>{notice.text}</span>
         </section>
       </aside>
+
+      <div
+        className="column-resizer"
+        role="separator"
+        aria-label="Resize sidebar"
+        aria-orientation="vertical"
+        aria-valuemin={MIN_SIDEBAR_WIDTH}
+        aria-valuemax={maxSidebarWidth}
+        aria-valuenow={sidebarWidth}
+        tabIndex={0}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setResizingColumn("sidebar");
+        }}
+        onKeyDown={(event) => resizeHandleKeyDown("sidebar", event)}
+      />
 
       <section className="workspace">
         <div className="workspace-topbar">
@@ -1265,6 +1367,22 @@ export function App() {
           </section>
         </div>
       </section>
+
+      <div
+        className="column-resizer"
+        role="separator"
+        aria-label="Resize history"
+        aria-orientation="vertical"
+        aria-valuemin={MIN_HISTORY_WIDTH}
+        aria-valuemax={maxHistoryWidth}
+        aria-valuenow={historyWidth}
+        tabIndex={0}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setResizingColumn("history");
+        }}
+        onKeyDown={(event) => resizeHandleKeyDown("history", event)}
+      />
 
       <aside className="history">
         <header className="history-header">
