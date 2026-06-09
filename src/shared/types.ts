@@ -259,6 +259,7 @@ export interface UpdateInstallResult {
 export interface AppBridge {
   getSnapshot: () => Promise<AppSnapshot>;
   saveConfig: (input: ProviderConfigInput) => Promise<ProviderConfig>;
+  discoverModels: () => Promise<ProviderConfig>;
   clearApiKey: () => Promise<ProviderConfig>;
   testConnection: () => Promise<ConnectionTestResult>;
   saveDraft: (input: WorkspaceDraftInput) => Promise<WorkspaceDraft>;

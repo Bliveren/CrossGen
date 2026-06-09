@@ -35,6 +35,8 @@ interface NoticeCopy {
   promptCopied: string;
   clipboardUnavailable: string;
   jobLoaded: string;
+  modelsDiscovered: (count: number) => string;
+  launchSelected: (model: string) => string;
 }
 
 interface ValidationCopy {
@@ -66,8 +68,23 @@ export interface UiCopy {
   chinese: string;
   tagline: string;
   provider: string;
+  providerLabel: string;
   apiKey: string;
   baseURL: string;
+  discoveryStatus: string;
+  discoveryNotRun: string;
+  discoveryLastRun: (date: string, count: number) => string;
+  discoverModels: string;
+  discoveringModels: string;
+  launchModels: string;
+  launchAvailable: string;
+  launchUnavailableNoKey: string;
+  launchUnavailableNoDiscovery: string;
+  launchUnavailableNoImageModels: string;
+  launchUnavailableProvider: (provider: string) => string;
+  launchUnavailableModel: (model: string) => string;
+  launchRuntimeUnavailable: (model: string) => string;
+  generalFallback: string;
   savedLocally: string;
   pasteApiKey: string;
   save: string;
@@ -162,8 +179,23 @@ export const translations: Record<Language, UiCopy> = {
     chinese: "中文",
     tagline: "Generate, edit, inpaint, download.",
     provider: "Provider",
+    providerLabel: "Provider",
     apiKey: "API Key",
     baseURL: "Base URL",
+    discoveryStatus: "Model discovery",
+    discoveryNotRun: "Not run",
+    discoveryLastRun: (date: string, count: number) => `${date} · ${count} model${count === 1 ? "" : "s"}`,
+    discoverModels: "Discover models",
+    discoveringModels: "Discovering",
+    launchModels: "Launch",
+    launchAvailable: "Available",
+    launchUnavailableNoKey: "Save an API key first.",
+    launchUnavailableNoDiscovery: "Run model discovery first.",
+    launchUnavailableNoImageModels: "No image models discovered.",
+    launchUnavailableProvider: (provider: string) => `Switch to ${provider}.`,
+    launchUnavailableModel: (model: string) => `${model} was not discovered.`,
+    launchRuntimeUnavailable: (model: string) => `${model} runtime is not connected yet.`,
+    generalFallback: "Discovered fallback",
     savedLocally: "Saved locally",
     pasteApiKey: "Paste API key",
     save: "Save",
@@ -278,7 +310,9 @@ export const translations: Record<Language, UiCopy> = {
       historyCleared: "History cleared.",
       promptCopied: "Prompt copied.",
       clipboardUnavailable: "Clipboard is unavailable.",
-      jobLoaded: "Job loaded into workspace."
+      jobLoaded: "Job loaded into workspace.",
+      modelsDiscovered: (count: number) => `${count} model${count === 1 ? "" : "s"} discovered.`,
+      launchSelected: (model: string) => `${model} selected.`
     },
     validation: {
       promptInvalid: "Prompt is invalid.",
@@ -309,8 +343,23 @@ export const translations: Record<Language, UiCopy> = {
     chinese: "中文",
     tagline: "生成、编辑、局部重绘、下载。",
     provider: "服务配置",
+    providerLabel: "服务商",
     apiKey: "API Key",
     baseURL: "Base URL",
+    discoveryStatus: "模型探测",
+    discoveryNotRun: "未探测",
+    discoveryLastRun: (date: string, count: number) => `${date} · ${count} 个模型`,
+    discoverModels: "探测模型",
+    discoveringModels: "探测中",
+    launchModels: "启动模型",
+    launchAvailable: "可用",
+    launchUnavailableNoKey: "请先保存 API Key。",
+    launchUnavailableNoDiscovery: "请先探测模型。",
+    launchUnavailableNoImageModels: "未探测到图片模型。",
+    launchUnavailableProvider: (provider: string) => `切换到 ${provider}。`,
+    launchUnavailableModel: (model: string) => `未探测到 ${model}。`,
+    launchRuntimeUnavailable: (model: string) => `${model} 运行时尚未接入。`,
+    generalFallback: "探测到的兜底模型",
     savedLocally: "已本地保存",
     pasteApiKey: "粘贴 API Key",
     save: "保存",
@@ -425,7 +474,9 @@ export const translations: Record<Language, UiCopy> = {
       historyCleared: "历史已清空。",
       promptCopied: "提示词已复制。",
       clipboardUnavailable: "剪贴板不可用。",
-      jobLoaded: "任务已载入工作区。"
+      jobLoaded: "任务已载入工作区。",
+      modelsDiscovered: (count: number) => `已探测到 ${count} 个模型。`,
+      launchSelected: (model: string) => `已选择 ${model}。`
     },
     validation: {
       promptInvalid: "Prompt 格式无效。",
