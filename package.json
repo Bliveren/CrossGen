@@ -28,6 +28,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
     "verify:mock-gemini-api": "node scripts/verify-mock-gemini-api.mjs",
+    "verify:mock-model-discovery": "node scripts/verify-mock-model-discovery.mjs",
     "verify:mock-api": "node scripts/verify-mock-api.mjs",
     "verify:release:linux": "node scripts/verify-linux-release.mjs",
     "verify:release:mac": "node scripts/verify-mac-release.mjs",

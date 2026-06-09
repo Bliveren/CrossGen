@@ -41,6 +41,12 @@ jobs:
       - name: Verify mock API
         run: pnpm verify:mock-api
 
+      - name: Verify mock Gemini API
+        run: pnpm verify:mock-gemini-api
+
+      - name: Verify mock model discovery
+        run: pnpm verify:mock-model-discovery
+
   mac-package:
     name: macOS package
     runs-on: macos-latest

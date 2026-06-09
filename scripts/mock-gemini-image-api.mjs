@@ -6,8 +6,17 @@ const port = Number(process.env.PORT ?? 8788);
 const host = process.env.HOST ?? "127.0.0.1";
 const focusedModelId = "gemini-3.1-flash-image";
 const generalModelId = "gemini-2.0-flash-preview-image-generation";
-const supportedModelIds = new Set([focusedModelId, generalModelId]);
+const modelIds = parseModelIds(process.env.MOCK_GEMINI_MODELS, [focusedModelId, generalModelId]);
+const supportedModelIds = new Set(modelIds);
 const recentRequests = [];
+
+function parseModelIds(value, fallback) {
+  const ids = String(value ?? "")
+    .split(",")
+    .map((item) => item.trim().replace(/^models\//, ""))
+    .filter(Boolean);
+  return ids.length > 0 ? ids : fallback;
+}
 
 function redactionFixtureKey() {
   return ["AIza", "SyD", "-mock-redaction-key-should-not-leak-0000"].join("");
@@ -203,7 +212,7 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === "GET" && url.pathname === "/v1beta/models") {
       sendJson(response, 200, {
-        models: [modelResource(focusedModelId), modelResource(generalModelId)]
+        models: modelIds.map(modelResource)
       });
       return;
     }
