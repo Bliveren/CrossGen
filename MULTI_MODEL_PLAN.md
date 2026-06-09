@@ -11,6 +11,8 @@ Target release: `v0.2.0`
 - 2026-06-09: History model/provider chips, collapsed list, internal scrolling, and match-count search merged to `main` via PR #74.
 - 2026-06-09: Hosted Windows package CI was split into package-smoke mode while full native install verification remains available by default, unblocking PR package gates via PR #75.
 - 2026-06-09: OpenAI provider adapter extraction and GPT Image 2 regression coverage merged to `main` via PR #77.
+- 2026-06-09: Gemini image adapter runtime, `generateContent` request/response handling, inline image saving, validation, and adapter tests merged to `main` via PR #80.
+- 2026-06-09: Model discovery service/UI, provider selector, launch-button state, automatic save/test discovery refresh, and provider discovery tests merged to `main` via PR #79.
 
 ## 1. 目标
 

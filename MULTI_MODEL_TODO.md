@@ -34,24 +34,24 @@ Target release: `v0.2.0`
 
 ## Phase 2 - `v0.2.0` 模型探测与启动模型区
 
-- [ ] 新增 `src/main/services/modelDiscovery.ts`
-- [ ] 实现 OpenAI `GET /models` 探测
-- [ ] 实现 Gemini `GET /models?key=...` 探测
-- [ ] 将模型探测结果存入 provider config
-- [ ] 新增 `config:discoverModels` IPC
-- [ ] 保存 API Key 后自动触发 discovery
-- [ ] 连接测试时同步刷新 discovery
-- [ ] 服务配置区增加 provider selector
-- [ ] 服务配置区根据 provider 切换默认 Base URL
-- [ ] 服务配置区显示最近模型探测时间
-- [ ] 服务配置区显示模型探测失败原因
-- [ ] 新增启动模型按钮区
-- [ ] `GPT Image 2` 按钮根据 OpenAI discovery 启用
-- [ ] `Nano Banana 3` 按钮根据 Gemini discovery 启用
+- [x] 新增 `src/main/services/modelDiscovery.ts`
+- [x] 实现 OpenAI `GET /models` 探测
+- [x] 实现 Gemini `GET /models?key=...` 探测
+- [x] 将模型探测结果存入 provider config
+- [x] 新增 `config:discoverModels` IPC
+- [x] 保存 API Key 后自动触发 discovery
+- [x] 连接测试时同步刷新 discovery
+- [x] 服务配置区增加 provider selector
+- [x] 服务配置区根据 provider 切换默认 Base URL
+- [x] 服务配置区显示最近模型探测时间
+- [x] 服务配置区显示模型探测失败原因
+- [x] 新增启动模型按钮区
+- [x] `GPT Image 2` 按钮根据 OpenAI discovery 启用
+- [x] `Nano Banana 3` 按钮根据 Gemini discovery 启用
 - [ ] `General` 按钮根据任意可用图片模型启用
-- [ ] 点击启动模型更新 active launch/model
-- [ ] 不可用按钮显示不可用原因
-- [ ] i18n 补齐中英文文案
+- [x] 点击启动模型更新 active launch/model
+- [x] 不可用按钮显示不可用原因
+- [x] i18n 补齐中英文文案
 
 ## Phase 3 - `v0.2.0` GPT Image 2 adapter 化
 
@@ -72,18 +72,18 @@ Target release: `v0.2.0`
 
 ## Phase 4 - `v0.2.0` Nano Banana 3 adapter 与 UI
 
-- [ ] 新增 `src/main/services/geminiImage.ts`
-- [ ] 实现 Gemini endpoint builder
-- [ ] 实现 Gemini request body builder
-- [ ] 实现 text-to-image `generateContent`
-- [ ] 实现 text-and-image-to-image `generateContent`
-- [ ] 支持上传图片转 `inlineData`
-- [ ] 解析 Gemini response image parts
-- [ ] 保存 Gemini image parts 为 `ImageAsset`
-- [ ] 保存 Gemini text parts 为 job metadata
-- [ ] 实现 Gemini timeout 和错误归类
-- [ ] 实现 Gemini API Key 错误脱敏
-- [ ] 实现 `GeminiImageParams` validation
+- [x] 新增 `src/main/services/geminiImageAdapter.ts`
+- [x] 实现 Gemini endpoint builder
+- [x] 实现 Gemini request body builder
+- [x] 实现 text-to-image `generateContent`
+- [x] 实现 text-and-image-to-image `generateContent`
+- [x] 支持上传图片转 `inlineData`
+- [x] 解析 Gemini response image parts
+- [x] 保存 Gemini image parts 为 `ImageAsset`
+- [x] 保存 Gemini text parts 为 job metadata
+- [x] 实现 Gemini timeout 和错误处理
+- [x] 实现 Gemini API Key 错误脱敏
+- [x] 实现 `GeminiImageParams` validation
 - [ ] Nano Banana UI 增加 aspect ratio 控件
 - [ ] Nano Banana UI 增加 resolution 控件
 - [ ] Nano Banana UI 增加 Thinking 开关
@@ -93,8 +93,8 @@ Target release: `v0.2.0`
 - [ ] Nano Banana 模式支持参考图编辑
 - [ ] Nano Banana 模式支持局部引导编辑
 - [ ] 局部引导编辑文案说明非 exact mask
-- [ ] 为 Gemini request builder 写单元测试
-- [ ] 为 Gemini response parser 写单元测试
+- [x] 为 Gemini request builder 写单元测试
+- [x] 为 Gemini response parser 写单元测试
 - [x] 新增 mock Gemini Image API
 - [x] 新增 Gemini mock verifier
 
