@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const dmgPath = path.resolve("release/Image2Tools-0.1.0-mac-arm64.dmg");
+const releaseDir = path.resolve("release");
+const dmgPattern = /^Image2Tools-.*-mac-.*\.dmg$/;
 const appName = "Image2Tools.app";
 const processName = "Image2Tools";
 const appExecutable = "Contents/MacOS/Image2Tools";
@@ -23,6 +24,17 @@ async function run(command, args, options = {}) {
   });
 }
 
+async function findDmg() {
+  const entries = await readdir(releaseDir, { withFileTypes: true });
+  const candidates = entries
+    .filter((entry) => entry.isFile() && dmgPattern.test(entry.name))
+    .map((entry) => path.join(releaseDir, entry.name));
+  if (candidates.length !== 1) {
+    throw new Error(`Expected one Image2Tools macOS dmg, found ${candidates.length}: ${candidates.join(", ") || "none"}`);
+  }
+  return candidates[0];
+}
+
 function parseMountPoint(output) {
   const line = output
     .split("\n")
@@ -38,7 +50,7 @@ function parseMountPoint(output) {
   return mountPoint;
 }
 
-async function attachDmg() {
+async function attachDmg(dmgPath) {
   const { stdout } = await run("hdiutil", ["attach", "-nobrowse", "-readonly", dmgPath]);
   return parseMountPoint(stdout);
 }
@@ -198,7 +210,8 @@ async function main() {
   const tempRoot = await mkdtemp(path.join("/tmp", "Image2Tools-release-test-"));
   let mountPoint;
   try {
-    mountPoint = await attachDmg();
+    const dmgPath = await findDmg();
+    mountPoint = await attachDmg(dmgPath);
     await runInstallCycle(mountPoint, tempRoot, 1);
     await runInstallCycle(mountPoint, tempRoot, 2);
     console.log("macOS release verification passed.");
