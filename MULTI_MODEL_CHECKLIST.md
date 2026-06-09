@@ -74,8 +74,8 @@ Target release: `v0.2.0`
 - [x] 参考图编辑请求包含 image `inlineData`
 - [x] 响应 image parts 能保存到本地
 - [x] 响应 text parts 能保存为 job metadata
-- [ ] 生成结果能显示在中间画布
-- [ ] 生成结果能下载
+- [x] 生成结果能显示在中间画布
+- [x] 生成结果能下载
 - [x] 失败错误提示清晰且脱敏
 - [x] Thinking 开关只在模型支持时显示
 - [x] Search grounding 开关只在模型支持时显示
@@ -96,7 +96,7 @@ Target release: `v0.2.0`
 
 - [x] 每条历史显示模型 chip
 - [x] 模型 chip 显示 `GPT Image 2`
-- [ ] 模型 chip 显示 `Nano Banana 3`
+- [x] 模型 chip 显示 `Nano Banana 3`
 - [x] General 历史显示真实 model id 或 `General`
 - [x] 默认只展示 6 条历史
 - [x] 超过 6 条出现展开入口
@@ -117,8 +117,8 @@ Target release: `v0.2.0`
 - [ ] 切换模型不会重置不相关 provider config
 - [ ] 切换模型时 prompt 草稿保留或有明确恢复规则
 - [ ] 切换模型时不兼容参数会被安全重置
-- [ ] 无 Electron bridge 的 Web 预览仍给出清晰提示
-- [ ] Electron bridge 下配置、探测、运行功能可用
+- [x] 无 Electron bridge 的 Web 预览仍给出清晰提示
+- [x] Electron bridge 下配置、探测、运行功能可用
 
 ## 9. 安全检查
 
