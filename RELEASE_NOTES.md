@@ -47,4 +47,4 @@ Re-run the secret scan in [SECURITY.md](./SECURITY.md) after every release-note 
 
 The staged app package metadata is `0.2.0`. Do not publish `docs/updates/latest.json`
 with downloadable assets until the signed/notarized artifacts have verified URL,
-hash, and size metadata.
+hash, and `sizeBytes` metadata.

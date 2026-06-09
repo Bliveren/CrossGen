@@ -88,6 +88,7 @@
 - [x] macOS dmg/zip 可生成
 - [x] macOS ad-hoc signed、未公证本地预览包可生成
 - [x] `v0.2.0` 多模型发布包版本、描述、版权和更新 manifest 元数据已补齐
+- [x] 更新 manifest 资产 schema 会要求并校验 `sha256` 与 `sizeBytes`
 - [x] dmg 可挂载、复制 app 并启动
 - [x] macOS 临时目录卸载与重装 smoke test 正常
 - [x] macOS dmg 安装 smoke test 可通过 `pnpm verify:release:mac` 自动复跑

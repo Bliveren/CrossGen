@@ -236,6 +236,7 @@ export interface UpdateManifestAsset {
   url: string;
   fileName?: string;
   sha256: string;
+  sizeBytes: number;
 }
 
 export interface UpdateCheckResult {

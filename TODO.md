@@ -118,6 +118,7 @@
 - [x] 增加 macOS 签名/公证 readiness 检查脚本
 - [x] 增加显式 Developer ID signed macOS 打包命令，默认 ad-hoc signed 试用包不受影响
 - [x] 补齐 `v0.2.0` 多模型发布包版本、描述、版权和更新 manifest 元数据
+- [x] 更新 manifest schema 和安装器下载校验要求 `sha256` 与 `sizeBytes`
 - [x] 在 Ubuntu ARM64 Docker 环境补充 Linux build、mock verifier、AppImage 打包、AppImage 解包与 Xvfb 启动烟测证据
 - [x] 增加 `pnpm verify:release:windows` 并接入 Windows CI package gate
 - [x] 将 Windows release verifier 扩展到 silent install / launch / uninstall 烟测
