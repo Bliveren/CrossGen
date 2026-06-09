@@ -887,7 +887,7 @@ export function App() {
 
   async function launchModel(button: LaunchButtonState) {
     if (!bridge || !button.available) return;
-    const launchProvider = providerForLaunch(button.launchId, providerKind);
+    const launchProvider = providerForLaunch(button.launchId, snapshot.config.kind);
     const launchConfig = snapshot.config.kind === launchProvider ? snapshot.config : undefined;
     const nextParams = createLaunchParams(button.launchId, button.modelId, params, launchProvider, launchConfig);
     setParams(nextParams);
