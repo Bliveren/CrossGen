@@ -1,4 +1,4 @@
-import type { FocusedLaunchId, FocusedModelDefinition, ProviderKind } from "./types.js";
+import type { DiscoveredModel, FocusedLaunchId, FocusedModelDefinition, ProviderKind } from "./types.js";
 
 export const GPT_IMAGE_2_LAUNCH_ID = "gpt-image-2" as const;
 export const GPT_IMAGE_2_MODEL_ID = "gpt-image-2" as const;
@@ -6,6 +6,17 @@ export const NANO_BANANA_3_LAUNCH_ID = "nano-banana-3" as const;
 export const NANO_BANANA_3_MODEL_ID = "gemini-3.1-flash-image" as const;
 export const GENERAL_LAUNCH_ID = "general" as const;
 export const GENERAL_MODEL_ID = "general" as const;
+
+const GENERAL_IMAGE_MODEL_MARKERS = [
+  "image",
+  "imagen",
+  "dall-e",
+  "dalle",
+  "stable-diffusion",
+  "sdxl",
+  "flux",
+  "recraft"
+] as const;
 
 export const FOCUSED_MODEL_CATALOG = [
   {
@@ -87,4 +98,32 @@ export function getModelDisplayName(launchId: FocusedLaunchId, modelId: string):
   const definition = getFocusedModelDefinition(launchId);
   if (!definition) return modelId;
   return definition.launchId === GENERAL_LAUNCH_ID ? modelId || definition.displayName : definition.displayName;
+}
+
+export function isGeneralFallbackProvider(providerKind: ProviderKind): providerKind is "openai" | "gemini" {
+  return providerKind === "openai" || providerKind === "gemini";
+}
+
+export function isFocusedImageModelId(providerKind: ProviderKind, modelId: string): boolean {
+  const normalizedId = normalizeModelId(modelId);
+  return FOCUSED_MODEL_CATALOG.some(
+    (definition) =>
+      definition.launchId !== GENERAL_LAUNCH_ID &&
+      definition.providerKind === providerKind &&
+      definition.modelIds.some((id) => normalizeModelId(id) === normalizedId)
+  );
+}
+
+export function isPotentialGeneralImageModel(model: DiscoveredModel): boolean {
+  if (isFocusedImageModelId(model.providerKind, model.id)) return false;
+  const haystack = normalizeModelId([model.id, model.displayName].filter(Boolean).join(" "));
+  return GENERAL_IMAGE_MODEL_MARKERS.some((marker) => haystack.includes(marker));
+}
+
+export function getGeneralImageModelCandidate(discoveredModels: DiscoveredModel[], providerKind: ProviderKind): DiscoveredModel | undefined {
+  return discoveredModels.find((model) => model.providerKind === providerKind && isPotentialGeneralImageModel(model));
+}
+
+function normalizeModelId(value: string): string {
+  return value.trim().toLowerCase().replace(/^models\//, "");
 }

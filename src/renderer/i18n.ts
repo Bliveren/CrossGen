@@ -53,6 +53,11 @@ interface ValidationCopy {
   addSource: string;
   maxInputs: (max: number) => string;
   paintOrUploadMask: string;
+  generalProviderUnsupported: string;
+  generalSelectImageModel: string;
+  generalNoInpaint: string;
+  generalNoMask: string;
+  generalReferenceRequired: string;
   cannotReadImage: string;
   maskFormatInvalid: string;
   maskSizeMismatch: string;
@@ -87,6 +92,7 @@ export interface UiCopy {
   launchRuntimeUnavailable: (model: string) => string;
   selectLaunchToRun: (model: string) => string;
   generalRuntimeUnsupported: string;
+  generalLimitedRuntime: string;
   generalFallback: string;
   savedLocally: string;
   pasteApiKey: string;
@@ -204,7 +210,8 @@ export const translations: Record<Language, UiCopy> = {
     launchUnavailableModel: (model: string) => `${model} was not discovered.`,
     launchRuntimeUnavailable: (model: string) => `${model} runtime is not connected yet.`,
     selectLaunchToRun: (model: string) => `Select ${model} before running.`,
-    generalRuntimeUnsupported: "General models are not runnable in this build.",
+    generalRuntimeUnsupported: "General is runnable only through OpenAI or Gemini fallback adapters.",
+    generalLimitedRuntime: "General uses a minimal fallback: prompt and reference images only.",
     generalFallback: "Discovered fallback",
     savedLocally: "Saved locally",
     pasteApiKey: "Paste API key",
@@ -343,6 +350,11 @@ export const translations: Record<Language, UiCopy> = {
       addSource: "Add a source image before inpainting.",
       maxInputs: (max: number) => `GPT Image 2 supports up to ${max} input images.`,
       paintOrUploadMask: "Paint or upload a mask before inpainting.",
+      generalProviderUnsupported: "The current provider does not have a General runtime.",
+      generalSelectImageModel: "Select an available image model.",
+      generalNoInpaint: "General does not support inpainting in this version.",
+      generalNoMask: "General does not support mask parameters in this version.",
+      generalReferenceRequired: "Basic reference editing needs at least one reference image.",
       cannotReadImage: "Cannot read image.",
       maskFormatInvalid: "Mask format is invalid.",
       maskSizeMismatch: "Mask size must match the first source image.",
@@ -376,7 +388,8 @@ export const translations: Record<Language, UiCopy> = {
     launchUnavailableModel: (model: string) => `未探测到 ${model}。`,
     launchRuntimeUnavailable: (model: string) => `${model} 运行时尚未接入。`,
     selectLaunchToRun: (model: string) => `运行前请选择 ${model}。`,
-    generalRuntimeUnsupported: "当前版本暂不支持运行 General 模型。",
+    generalRuntimeUnsupported: "General 仅可通过 OpenAI 或 Gemini 兜底运行时运行。",
+    generalLimitedRuntime: "General 使用最小兜底能力：仅提示词和参考图。",
     generalFallback: "探测到的兜底模型",
     savedLocally: "已本地保存",
     pasteApiKey: "粘贴 API Key",
@@ -515,6 +528,11 @@ export const translations: Record<Language, UiCopy> = {
       addSource: "局部重绘前请先添加源图。",
       maxInputs: (max: number) => `GPT Image 2 最多支持 ${max} 张输入图片。`,
       paintOrUploadMask: "局部重绘前请绘制或上传蒙版。",
+      generalProviderUnsupported: "当前 provider 暂未接入 General 运行时。",
+      generalSelectImageModel: "请选择可用的图片模型。",
+      generalNoInpaint: "General 首期不支持局部重绘。",
+      generalNoMask: "General 首期不支持 mask 参数。",
+      generalReferenceRequired: "基础参考图编辑至少需要一张参考图。",
       cannotReadImage: "无法读取图片。",
       maskFormatInvalid: "蒙版格式无效。",
       maskSizeMismatch: "蒙版尺寸必须与第一张源图一致。",
@@ -537,6 +555,11 @@ const validationMessageMap: Record<string, keyof UiCopy["validation"]> = {
   "GPT Image 2 最长边不能超过 3840px。": "sizeLongest",
   "GPT Image 2 长短边比例不能超过 3:1。": "sizeRatio",
   "GPT Image 2 总像素需在 655,360 到 8,294,400 之间。": "sizePixels",
+  "当前 provider 暂未接入 General 运行时。": "generalProviderUnsupported",
+  "请选择可用的图片模型。": "generalSelectImageModel",
+  "General 首期不支持局部重绘。": "generalNoInpaint",
+  "General 首期不支持 mask 参数。": "generalNoMask",
+  "基础参考图编辑至少需要一张参考图。": "generalReferenceRequired",
   "Paint or upload a mask before inpaint.": "paintOrUploadMask",
   "Mask format is invalid.": "maskFormatInvalid",
   "Mask must be PNG or WebP with alpha.": "maskFormatInvalid",
