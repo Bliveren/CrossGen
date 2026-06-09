@@ -101,7 +101,9 @@ h3 {
 .app-shell {
   display: grid;
   grid-template-columns: var(--sidebar-width, 310px) 12px minmax(560px, 1fr) 12px var(--history-width, 330px);
+  height: 100vh;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar,
@@ -115,10 +117,16 @@ h3 {
   overflow-y: auto;
 }
 
+.history {
+  overflow-y: hidden;
+}
+
 .workspace {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   padding: 22px;
 }
 
@@ -813,8 +821,41 @@ label {
   padding-left: 32px;
 }
 
+.history-list-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  color: #786e62;
+  font-size: 12px;
+}
+
+.history-list-status > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-expand-button {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 9px;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.history-expand-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .history-list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 10px;
   min-height: 0;
@@ -870,6 +911,46 @@ label {
 .history-meta span,
 .history-copy small {
   color: #786e62;
+}
+
+.history-meta strong,
+.history-meta span,
+.history-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.history-chip {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d9d1c2;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: #f5efe4;
+  color: #4d453d;
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-chip {
+  border-color: rgba(31, 111, 97, 0.25);
+  background: #e7f2ee;
+  color: #1f6f61;
+}
+
+.provider-chip {
+  color: #6f655a;
 }
 
 .history-copy p {

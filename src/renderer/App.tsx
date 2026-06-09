@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Brush,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   Clipboard,
   Download,
@@ -80,6 +82,16 @@ const MIN_HISTORY_WIDTH = 280;
 const MAX_HISTORY_WIDTH = 460;
 const MIN_WORKSPACE_WIDTH = 620;
 const RESIZER_WIDTH = 12;
+const HISTORY_COLLAPSED_LIMIT = 6;
+const DEFAULT_HISTORY_MODEL_DISPLAY = "GPT Image 2";
+
+interface HistoryModelDetails {
+  modelDisplayName: string;
+  modelTitle: string;
+  providerDisplayName?: string;
+  providerTitle?: string;
+  searchText: string;
+}
 
 const fallbackConfig: ProviderConfig = {
   id: "default",
@@ -150,6 +162,59 @@ function formatDate(value: string): string {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function stringFromRuntime(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function runtimeRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function modelLabelFromId(value: string): string {
+  if (value === "gpt-image-2") return DEFAULT_HISTORY_MODEL_DISPLAY;
+  return value;
+}
+
+function providerLabelFromKind(value: string): string {
+  if (value === "openai") return "OpenAI";
+  if (value === "gemini") return "Gemini";
+  if (value === "custom") return "Custom";
+  return value;
+}
+
+function getHistoryModelDetails(job: GenerationJob): HistoryModelDetails {
+  const jobRecord = runtimeRecord(job);
+  const paramsRecord = runtimeRecord(job.params);
+  const modelDisplayName = stringFromRuntime(jobRecord.modelDisplayName);
+  const paramsModel = stringFromRuntime(paramsRecord.model);
+  const modelId = stringFromRuntime(jobRecord.modelId);
+  const launchId = stringFromRuntime(jobRecord.launchId) ?? stringFromRuntime(jobRecord.activeLaunchId) ?? stringFromRuntime(paramsRecord.launchId);
+  const providerKind = stringFromRuntime(jobRecord.providerKind) ?? stringFromRuntime(paramsRecord.providerKind);
+  const rawModelDisplay = modelDisplayName ?? paramsModel ?? DEFAULT_HISTORY_MODEL_DISPLAY;
+  const displayModel = modelLabelFromId(rawModelDisplay);
+  const providerDisplayName = providerKind ? providerLabelFromKind(providerKind) : undefined;
+  const searchText = [
+    displayModel,
+    rawModelDisplay,
+    modelDisplayName,
+    paramsModel,
+    modelId,
+    launchId,
+    providerKind,
+    providerDisplayName
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return {
+    modelDisplayName: displayModel,
+    modelTitle: modelId && modelId !== rawModelDisplay ? `${displayModel} (${modelId})` : displayModel,
+    providerDisplayName,
+    providerTitle: providerKind && providerDisplayName !== providerKind ? `${providerDisplayName} (${providerKind})` : providerDisplayName,
+    searchText
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -256,6 +321,7 @@ export function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [brushSize, setBrushSize] = useState(72);
   const [isPainting, setIsPainting] = useState(false);
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
@@ -290,10 +356,14 @@ export function App() {
     const query = historySearch.trim().toLowerCase();
     if (!query) return snapshot.history;
     return snapshot.history.filter((job) => {
-      const haystack = `${job.prompt} ${job.mode} ${job.status} ${job.error ?? ""} ${job.createdAt}`.toLowerCase();
+      const modelDetails = getHistoryModelDetails(job);
+      const haystack = `${job.prompt} ${job.mode} ${job.status} ${job.error ?? ""} ${job.createdAt} ${modelDetails.searchText}`.toLowerCase();
       return haystack.includes(query);
     });
   }, [historySearch, snapshot.history]);
+  const hasHistoryOverflow = filteredHistory.length > HISTORY_COLLAPSED_LIMIT;
+  const visibleHistory = isHistoryExpanded ? filteredHistory : filteredHistory.slice(0, HISTORY_COLLAPSED_LIMIT);
+  const isSearchingHistory = historySearch.trim().length > 0;
 
   const modeError = useMemo(() => {
     if (mode === "edit" && inputAssets.length === 0) return copy.validation.addReference;
@@ -1405,14 +1475,27 @@ export function App() {
           <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder={copy.searchPrompt} />
         </label>
 
+        {(isSearchingHistory || hasHistoryOverflow) && (
+          <div className="history-list-status">
+            {isSearchingHistory && <span>{copy.historyMatchCount(filteredHistory.length)}</span>}
+            {hasHistoryOverflow && (
+              <button type="button" className="history-expand-button ghost" onClick={() => setIsHistoryExpanded((current) => !current)}>
+                {isHistoryExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                <span>{isHistoryExpanded ? copy.collapseHistory : copy.showAllHistory(filteredHistory.length)}</span>
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="history-list">
           {filteredHistory.length === 0 ? (
             <div className="history-empty">{copy.noJobsYet}</div>
           ) : (
-            filteredHistory.map((job) => {
+            visibleHistory.map((job) => {
               const result = getBestResult(job);
               const jobError = getJobError(job);
-              const paramsSummary = isOpenAIImageParams(job.params) ? `${job.params.size} · ${job.params.quality}` : job.modelDisplayName;
+              const modelDetails = getHistoryModelDetails(job);
+              const paramsSummary = isOpenAIImageParams(job.params) ? `${job.params.size} · ${job.params.quality}` : modelDetails.modelDisplayName;
               return (
                 <article key={job.id} className={activeJob?.id === job.id ? "history-item active" : "history-item"}>
                   <button
@@ -1428,6 +1511,16 @@ export function App() {
                     <div className="history-meta">
                       <strong>{modeLabels[job.mode].title}</strong>
                       <span>{formatDate(job.createdAt)}</span>
+                    </div>
+                    <div className="history-chip-row" aria-label={copy.model}>
+                      <span className="history-chip model-chip" title={modelDetails.modelTitle}>
+                        {modelDetails.modelDisplayName}
+                      </span>
+                      {modelDetails.providerDisplayName && (
+                        <span className="history-chip provider-chip" title={modelDetails.providerTitle ?? modelDetails.providerDisplayName}>
+                          {modelDetails.providerDisplayName}
+                        </span>
+                      )}
                     </div>
                     <p>{job.prompt}</p>
                     <small>

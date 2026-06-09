@@ -120,10 +120,14 @@ export interface UiCopy {
   sourceForMask: string;
   addSourceForMask: string;
   checkingMask: string;
+  model: string;
   history: string;
   recentJobs: string;
   clearHistory: string;
   searchPrompt: string;
+  historyMatchCount: (count: number) => string;
+  showAllHistory: (count: number) => string;
+  collapseHistory: string;
   noJobsYet: string;
   openJob: string;
   historyResult: string;
@@ -212,10 +216,14 @@ export const translations: Record<Language, UiCopy> = {
     sourceForMask: "Source for mask",
     addSourceForMask: "Add a source image to paint a mask.",
     checkingMask: "Checking mask...",
+    model: "Model",
     history: "History",
     recentJobs: "Recent jobs",
     clearHistory: "Clear history",
     searchPrompt: "Search prompt",
+    historyMatchCount: (count: number) => `${count} match${count === 1 ? "" : "es"}`,
+    showAllHistory: (count: number) => `Show all ${count}`,
+    collapseHistory: "Show fewer",
     noJobsYet: "No jobs yet.",
     openJob: "Open job",
     historyResult: "History result",
@@ -355,10 +363,14 @@ export const translations: Record<Language, UiCopy> = {
     sourceForMask: "蒙版源图",
     addSourceForMask: "添加源图后可绘制蒙版。",
     checkingMask: "正在检查蒙版...",
+    model: "模型",
     history: "历史",
     recentJobs: "最近任务",
     clearHistory: "清空历史",
     searchPrompt: "搜索提示词",
+    historyMatchCount: (count: number) => `${count} 条匹配`,
+    showAllHistory: (count: number) => `显示全部 ${count} 条`,
+    collapseHistory: "收起",
     noJobsYet: "暂无任务。",
     openJob: "打开任务",
     historyResult: "历史结果",
