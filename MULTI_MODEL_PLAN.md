@@ -10,6 +10,7 @@ Target release: `v0.2.0`
 - 2026-06-09: Gemini mock image API and verifier merged to `main` via PR #72.
 - 2026-06-09: History model/provider chips, collapsed list, internal scrolling, and match-count search merged to `main` via PR #74.
 - 2026-06-09: Hosted Windows package CI was split into package-smoke mode while full native install verification remains available by default, unblocking PR package gates via PR #75.
+- 2026-06-09: OpenAI provider adapter extraction and GPT Image 2 regression coverage merged to `main` via PR #77.
 
 ## 1. 目标
 

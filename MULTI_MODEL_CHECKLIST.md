@@ -52,16 +52,16 @@ Target release: `v0.2.0`
 
 ## 4. GPT Image 2 回归检查
 
-- [ ] 文生图仍调用 `/v1/images/generations`
-- [ ] 编辑仍调用 `/v1/images/edits`
-- [ ] 局部重绘仍发送 OpenAI mask 参数
-- [ ] 多图编辑仍使用正确 multipart 字段
-- [ ] stream 开启时仍处理 partial image
-- [ ] `partial_images` 仍限制 0..3
-- [ ] 自定义尺寸仍符合 `gpt-image-2` 约束
-- [ ] `background` 不显示 transparent
-- [ ] `input_fidelity` 不暴露给 `gpt-image-2`
-- [ ] 下载、打开目录、删除历史仍安全
+- [x] 文生图仍调用 `/v1/images/generations`
+- [x] 编辑仍调用 `/v1/images/edits`
+- [x] 局部重绘仍发送 OpenAI mask 参数
+- [x] 多图编辑仍使用正确 multipart 字段
+- [x] stream 开启时仍处理 partial image
+- [x] `partial_images` 仍限制 0..3
+- [x] 自定义尺寸仍符合 `gpt-image-2` 约束
+- [x] `background` 不显示 transparent
+- [x] `input_fidelity` 不暴露给 `gpt-image-2`
+- [x] 下载、打开目录、删除历史仍安全
 - [x] mock OpenAI verifier 通过
 
 ## 5. Nano Banana 3 检查
@@ -142,7 +142,7 @@ Target release: `v0.2.0`
 - [x] state migration tests
 - [ ] provider discovery tests
 - [x] model catalog tests
-- [ ] OpenAI adapter tests
+- [x] OpenAI adapter tests
 - [ ] Gemini adapter tests
 - [x] renderer i18n tests
 - [x] package config tests
