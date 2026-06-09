@@ -20,7 +20,7 @@ Target release: `v0.2.0`
 - [x] 启动模型区位于服务配置区下方
 - [x] `GPT Image 2` 启动按钮可按需启用/置灰
 - [x] `Nano Banana 3` 启动按钮可按需启用/置灰
-- [ ] `General` 启动按钮可按需启用/置灰
+- [x] `General` 启动按钮可按需启用/置灰
 - [x] 不可用按钮有用户能理解的原因
 - [x] 点击启动模型后主工作区切换到对应模型界面
 - [x] 当前启动模型在 UI 中有清晰状态
@@ -31,7 +31,8 @@ Target release: `v0.2.0`
 - [x] OpenAI `/models` 不含 `gpt-image-2` 时按钮置灰
 - [x] Gemini `/models` 探测成功时能识别 `gemini-3.1-flash-image`
 - [x] Gemini `/models` 不含目标模型时按钮置灰
-- [ ] General 能识别非重点但可用的图片模型
+- [x] General 能识别 Gemini 非重点图片模型
+- [ ] General 能识别任意 provider 的非重点可用图片模型
 - [x] 探测请求不会把 API Key 写入日志
 - [x] 探测错误会脱敏
 - [x] 切换 provider 不会误用另一个 provider 的 Key
@@ -85,18 +86,18 @@ Target release: `v0.2.0`
 
 ## 6. General 模式检查
 
-- [ ] General 只在存在可尝试图片模型时启用
-- [ ] General UI 不显示未确认高级能力
-- [ ] General 运行失败时提示模型未适配或 provider 不兼容
-- [ ] General 历史任务记录真实 model id
-- [ ] General 不影响重点模型按钮状态
+- [x] General 只在存在可尝试图片模型时启用
+- [x] General UI 不显示未确认高级能力
+- [x] General 运行失败时提示模型未适配或 provider 不兼容
+- [x] General 历史任务记录真实 model id
+- [x] General 不影响重点模型按钮状态
 
 ## 7. 历史任务检查
 
 - [x] 每条历史显示模型 chip
 - [x] 模型 chip 显示 `GPT Image 2`
 - [ ] 模型 chip 显示 `Nano Banana 3`
-- [ ] General 历史显示真实 model id 或 `General`
+- [x] General 历史显示真实 model id 或 `General`
 - [x] 默认只展示 6 条历史
 - [x] 超过 6 条出现展开入口
 - [x] 展开后出现收起入口
