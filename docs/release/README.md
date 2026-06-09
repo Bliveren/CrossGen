@@ -11,6 +11,9 @@ Validate the ledger after every evidence update:
 pnpm verify:release-evidence
 ```
 
+The verifier also checks guarded checklist and TODO items. External acceptance
+items must stay unchecked until their matching evidence gate is marked `passed`.
+
 Before publishing a release, require every required gate to be passed:
 
 ```bash
