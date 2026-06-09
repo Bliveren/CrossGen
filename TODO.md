@@ -107,7 +107,7 @@
 - [x] 建立多模型文档与发布说明草稿：README、ARCHITECTURE、SECURITY、EXTERNAL_ACCEPTANCE、RELEASE_NOTES 覆盖 GPT Image 2、Nano Banana 3、General 当前边界
 - [x] 增加 Gemini mock API 文档与 `pnpm verify:mock-gemini-api` 验证说明
 - [x] 增加 Gemini Key handling、Gemini 错误脱敏和上传图片权利提醒到安全文档
-- [x] 明确 General 当前仍是 Gemini-only minimal fallback，未声明任意 provider 通用能力
+- [x] 明确 General provider-specific fallback 边界：Gemini 支持 prompt/reference，OpenAI / Custom 为 prompt-only OpenAI 兼容契约
 - [ ] 用真实 Gemini Key 完成 Nano Banana 3 生成、参考图编辑、局部引导编辑和下载/历史验收
 - [ ] 为 Gemini 真实 API 验收增加自动化 verifier，或继续按外部手工流程记录证据
 - [x] 运行 `pnpm package:dir` 和 `pnpm package:mac` 产出本机试用包
@@ -123,7 +123,7 @@
 - [x] 增加显式 `pnpm package:win` Windows 打包命令
 - [x] 增加 `pnpm verify:release:linux` 并接入 Linux CI package gate
 - [x] 将 Linux release verifier 扩展到可选直接 AppImage 启动，原生验收可通过环境变量强制要求 FUSE
-- [ ] 取得绿色 CI
+- [x] 取得绿色 CI
 - [ ] 补充签名、公证与正式分发元数据
 - [ ] 非 macOS 平台安装验证；Windows 与原生 Linux 桌面 shell 行为仍待验证
 - [x] 增加中英文界面切换

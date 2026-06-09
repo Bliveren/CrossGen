@@ -125,14 +125,14 @@
 ## 9. 多模型 v0.2.0 文档与发布检查
 
 - [x] README 说明多模型定位、GPT Image 2、Nano Banana 3、General 当前范围
-- [x] ARCHITECTURE 说明 provider adapter registry、OpenAI adapter、Gemini adapter、General Gemini-only fallback
+- [x] ARCHITECTURE 说明 provider adapter registry、OpenAI adapter、Gemini adapter、General provider-specific fallback
 - [x] SECURITY 说明 OpenAI/Gemini Key 本地存储、Gemini 错误脱敏和上传图片权利提醒
 - [x] EXTERNAL_ACCEPTANCE 说明 Gemini / Nano Banana 3 真实 API 验收流程
 - [x] mock OpenAI verifier、mock Gemini verifier 和 mock model discovery verifier 命令已记录
 - [x] release verifier 命令与平台限制已记录
 - [x] 文档未声明未验证的 Nano Banana 真实输出质量或 exact-mask 能力
 - [ ] 真实 OpenAI / Gemini 外部验收完成
-- [ ] General 任意 provider fallback 完成
+- [x] General 任意 provider fallback 完成
 
 ## 10. GPT Image 2 API 检查
 
