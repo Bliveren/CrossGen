@@ -156,5 +156,6 @@ Target release: `v0.2.0`
 - [x] 更新 mock API 文档
 - [x] 更新 release verifier 说明
 - [x] 补齐 `v0.2.0` 发布包版本、描述、版权和更新 manifest 元数据
+- [x] 更新 manifest schema 和安装器下载校验要求 `sha256` 与 `sizeBytes`
 - [x] 重新跑开源 secret scan
 - [x] 确认文档没有写死未验证的 Nano Banana 能力

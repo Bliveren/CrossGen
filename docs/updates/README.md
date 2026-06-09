@@ -12,8 +12,9 @@ https://bliveren.github.io/image2tools/updates/latest.json
 For each release:
 
 1. Upload installers to a GitHub Release.
-2. Compute SHA-256 hashes for each installer. Every asset must include a
-   lowercase 64-character `sha256` value before the app will open it.
+2. Compute SHA-256 hashes and byte sizes for each installer. Every asset must
+   include a lowercase 64-character `sha256` value and positive integer
+   `sizeBytes` value before the app will open it.
 3. Update `latest.json` so `version` is greater than the app version and each
    asset URL points to the matching GitHub Release download URL.
 4. Commit and push this directory to `main`.
@@ -26,7 +27,8 @@ Example asset:
   "arch": "x64",
   "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.0/Image2Tools-0.2.0-win-x64.exe",
   "fileName": "Image2Tools-0.2.0-win-x64.exe",
-  "sha256": "64-char-lowercase-sha256"
+  "sha256": "64-char-lowercase-sha256",
+  "sizeBytes": 12345678
 }
 ```
 
