@@ -69,7 +69,7 @@ export const FOCUSED_MODEL_CATALOG = [
       generate: true,
       edit: false,
       inpaint: false,
-      referenceImages: true,
+      referenceImages: false,
       multiTurn: false,
       streamingPartials: false,
       outputText: false,
@@ -100,7 +100,15 @@ export function getModelDisplayName(launchId: FocusedLaunchId, modelId: string):
   return definition.launchId === GENERAL_LAUNCH_ID ? modelId || definition.displayName : definition.displayName;
 }
 
-export function isGeneralFallbackProvider(providerKind: ProviderKind): providerKind is "gemini" {
+export function isGeneralFallbackProvider(providerKind: ProviderKind): boolean {
+  return providerKind === "gemini" || providerKind === "openai" || providerKind === "custom";
+}
+
+export function isOpenAICompatibleGeneralFallbackProvider(providerKind: ProviderKind): providerKind is "openai" | "custom" {
+  return providerKind === "openai" || providerKind === "custom";
+}
+
+export function generalFallbackSupportsReferenceImages(providerKind: ProviderKind): boolean {
   return providerKind === "gemini";
 }
 

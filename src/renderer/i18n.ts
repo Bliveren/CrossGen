@@ -58,6 +58,7 @@ interface ValidationCopy {
   generalNoInpaint: string;
   generalNoMask: string;
   generalReferenceRequired: string;
+  generalPromptOnly: string;
   cannotReadImage: string;
   maskFormatInvalid: string;
   maskSizeMismatch: string;
@@ -93,6 +94,8 @@ export interface UiCopy {
   selectLaunchToRun: (model: string) => string;
   generalRuntimeUnsupported: string;
   generalLimitedRuntime: string;
+  generalReferenceRuntime: string;
+  generalPromptOnlyRuntime: string;
   generalFallback: string;
   savedLocally: string;
   pasteApiKey: string;
@@ -210,8 +213,10 @@ export const translations: Record<Language, UiCopy> = {
     launchUnavailableModel: (model: string) => `${model} was not discovered.`,
     launchRuntimeUnavailable: (model: string) => `${model} runtime is not connected yet.`,
     selectLaunchToRun: (model: string) => `Select ${model} before running.`,
-    generalRuntimeUnsupported: "General is runnable only through the Gemini fallback adapter.",
-    generalLimitedRuntime: "General uses a minimal Gemini fallback: prompt and reference images only.",
+    generalRuntimeUnsupported: "General is not available for this provider.",
+    generalLimitedRuntime: "General uses provider-specific minimal fallback capability.",
+    generalReferenceRuntime: "General uses a minimal Gemini fallback: prompt and reference images only.",
+    generalPromptOnlyRuntime: "General uses a minimal OpenAI-compatible fallback: prompt-only generation.",
     generalFallback: "Discovered fallback",
     savedLocally: "Saved locally",
     pasteApiKey: "Paste API key",
@@ -355,6 +360,7 @@ export const translations: Record<Language, UiCopy> = {
       generalNoInpaint: "General does not support inpainting in this version.",
       generalNoMask: "General does not support mask parameters in this version.",
       generalReferenceRequired: "Basic reference editing needs at least one reference image.",
+      generalPromptOnly: "General OpenAI-compatible fallback only supports prompt-only generation.",
       cannotReadImage: "Cannot read image.",
       maskFormatInvalid: "Mask format is invalid.",
       maskSizeMismatch: "Mask size must match the first source image.",
@@ -388,8 +394,10 @@ export const translations: Record<Language, UiCopy> = {
     launchUnavailableModel: (model: string) => `未探测到 ${model}。`,
     launchRuntimeUnavailable: (model: string) => `${model} 运行时尚未接入。`,
     selectLaunchToRun: (model: string) => `运行前请选择 ${model}。`,
-    generalRuntimeUnsupported: "General 仅可通过 Gemini 兜底运行时运行。",
-    generalLimitedRuntime: "General 使用最小 Gemini 兜底能力：仅提示词和参考图。",
+    generalRuntimeUnsupported: "当前 provider 暂未接入 General 运行时。",
+    generalLimitedRuntime: "General 使用 provider 专属最小兜底能力。",
+    generalReferenceRuntime: "General 使用最小 Gemini 兜底能力：仅提示词和参考图。",
+    generalPromptOnlyRuntime: "General 使用最小 OpenAI 兼容兜底能力：仅纯提示词生成。",
     generalFallback: "探测到的兜底模型",
     savedLocally: "已本地保存",
     pasteApiKey: "粘贴 API Key",
@@ -533,6 +541,7 @@ export const translations: Record<Language, UiCopy> = {
       generalNoInpaint: "General 首期不支持局部重绘。",
       generalNoMask: "General 首期不支持 mask 参数。",
       generalReferenceRequired: "基础参考图编辑至少需要一张参考图。",
+      generalPromptOnly: "General OpenAI 兼容兜底仅支持纯提示词生成。",
       cannotReadImage: "无法读取图片。",
       maskFormatInvalid: "蒙版格式无效。",
       maskSizeMismatch: "蒙版尺寸必须与第一张源图一致。",
@@ -560,6 +569,7 @@ const validationMessageMap: Record<string, keyof UiCopy["validation"]> = {
   "General 首期不支持局部重绘。": "generalNoInpaint",
   "General 首期不支持 mask 参数。": "generalNoMask",
   "基础参考图编辑至少需要一张参考图。": "generalReferenceRequired",
+  "General OpenAI 兼容兜底仅支持纯提示词生成。": "generalPromptOnly",
   "Paint or upload a mask before inpaint.": "paintOrUploadMask",
   "Mask format is invalid.": "maskFormatInvalid",
   "Mask must be PNG or WebP with alpha.": "maskFormatInvalid",

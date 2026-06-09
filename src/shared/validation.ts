@@ -18,6 +18,7 @@ import {
   GPT_IMAGE_2_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
+  generalFallbackSupportsReferenceImages,
   isGeneralFallbackProvider
 } from "./modelCatalog.js";
 
@@ -26,6 +27,7 @@ export const GPT_IMAGE_2_MODEL = GPT_IMAGE_2_MODEL_ID;
 export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 export const MAX_GPT_IMAGE_INPUTS = 16;
+export const GENERAL_PROMPT_ONLY_MESSAGE = "General OpenAI 兼容兜底仅支持纯提示词生成。";
 
 export const DEFAULT_IMAGE_PARAMS: OpenAIImageParams = {
   providerKind: "openai",
@@ -345,8 +347,9 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
     return { ok: false, message: "默认尺寸格式无效。" };
   }
   const kind = isOneOf(input.kind, PROVIDER_KIND_OPTIONS) ? input.kind : undefined;
+  const activeLaunchId = isOneOf(input.activeLaunchId, FOCUSED_LAUNCH_OPTIONS) ? input.activeLaunchId : undefined;
   const defaultModel = input.defaultModel.trim();
-  if ((kind === undefined || kind === "openai") && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
+  if ((kind === undefined || kind === "openai") && activeLaunchId !== GENERAL_LAUNCH_ID && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
     return { ok: false, message: `默认模型仅支持 ${DEFAULT_IMAGE_PARAMS.model}。` };
   }
   const defaultSize = input.defaultSize.trim();
@@ -363,7 +366,7 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
   if (input.apiKey !== undefined && typeof input.apiKey !== "string") {
     return { ok: false, message: "API Key 格式无效。" };
   }
-  if (input.activeLaunchId !== undefined && !isOneOf(input.activeLaunchId, FOCUSED_LAUNCH_OPTIONS)) {
+  if (input.activeLaunchId !== undefined && !activeLaunchId) {
     return { ok: false, message: "启动模型无效。" };
   }
   if (input.activeModelId !== undefined && typeof input.activeModelId !== "string") {
@@ -550,11 +553,17 @@ export function validateGeneralRunJobRequest(request: unknown): ValidationResult
   if (request.maskPath || request.maskDataUrl) {
     return { ok: false, message: "General 首期不支持 mask 参数。" };
   }
-  if (request.mode === "generate" && inputPaths.length > 0) {
-    return { ok: false, message: "文生图不应携带输入图片。" };
+  if (generalFallbackSupportsReferenceImages(request.params.providerKind)) {
+    if (request.mode === "generate" && inputPaths.length > 0) {
+      return { ok: false, message: "文生图不应携带输入图片。" };
+    }
+    if (request.mode === "edit" && inputPaths.length === 0) {
+      return { ok: false, message: "基础参考图编辑至少需要一张参考图。" };
+    }
+    return { ok: true };
   }
-  if (request.mode === "edit" && inputPaths.length === 0) {
-    return { ok: false, message: "基础参考图编辑至少需要一张参考图。" };
+  if (request.mode !== "generate" || inputPaths.length > 0) {
+    return { ok: false, message: GENERAL_PROMPT_ONLY_MESSAGE };
   }
   return { ok: true };
 }

@@ -5,10 +5,12 @@ import {
   GPT_IMAGE_2_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
+  generalFallbackSupportsReferenceImages,
   getFocusedModelDefinition,
   getFocusedModelsForProvider,
   getGeneralImageModelCandidate,
-  getModelDisplayName
+  getModelDisplayName,
+  isGeneralFallbackProvider
 } from "./modelCatalog";
 
 describe("focused model catalog", () => {
@@ -52,6 +54,7 @@ describe("focused model catalog", () => {
         generate: true,
         edit: false,
         inpaint: false,
+        referenceImages: false,
         streamingPartials: false,
         configurableResolution: "none"
       }
@@ -63,7 +66,7 @@ describe("focused model catalog", () => {
     expect(getModelDisplayName(GENERAL_LAUNCH_ID, "image-model-x")).toBe("image-model-x");
   });
 
-  it("selects only safe non-focused image-like models for General fallback", () => {
+  it("selects supported non-focused image-like models for General fallback", () => {
     const openAIModels = [
       { id: "gpt-image-2", providerKind: "openai" as const },
       { id: "gpt-4.1", providerKind: "openai" as const },
@@ -73,9 +76,23 @@ describe("focused model catalog", () => {
       { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" as const },
       { id: "gemini-3-pro-image", providerKind: "gemini" as const, displayName: "Gemini image model" }
     ];
+    const customModels = [
+      { id: "chat-model", providerKind: "custom" as const },
+      { id: "flux-pro", providerKind: "custom" as const, displayName: "Flux image generator" }
+    ];
 
-    expect(getGeneralImageModelCandidate(openAIModels, "openai")).toBeUndefined();
+    expect(getGeneralImageModelCandidate(openAIModels, "openai")?.id).toBe("dall-e-3");
     expect(getGeneralImageModelCandidate(geminiModels, "gemini")?.id).toBe("gemini-3-pro-image");
+    expect(getGeneralImageModelCandidate(customModels, "custom")?.id).toBe("flux-pro");
     expect(getGeneralImageModelCandidate([{ id: "gpt-4.1", providerKind: "openai" }], "openai")).toBeUndefined();
+  });
+
+  it("tracks provider-specific General reference support", () => {
+    expect(isGeneralFallbackProvider("openai")).toBe(true);
+    expect(isGeneralFallbackProvider("gemini")).toBe(true);
+    expect(isGeneralFallbackProvider("custom")).toBe(true);
+    expect(generalFallbackSupportsReferenceImages("gemini")).toBe(true);
+    expect(generalFallbackSupportsReferenceImages("openai")).toBe(false);
+    expect(generalFallbackSupportsReferenceImages("custom")).toBe(false);
   });
 });

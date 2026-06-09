@@ -7,6 +7,7 @@ import type {
   AppSnapshot,
   GenerationJob,
   ImageAsset,
+  RunJobRequest,
   ProviderConfig,
   UpdateCheckResult,
   WorkspaceDraft
@@ -79,7 +80,42 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("GPT Image 2").disabled).toBe(false);
     expect(launchButton("Nano Banana 3").disabled).toBe(true);
     expect(launchButton("General").disabled).toBe(true);
-    expect(launchButton("General").textContent).toContain("Gemini fallback");
+    expect(launchButton("General").textContent).toContain("No image models discovered");
+  });
+
+  it("enables OpenAI General prompt-only fallback for non-focused image models", async () => {
+    const bridge = await renderApp(
+      snapshot({
+        config: providerConfig({
+          apiKeySaved: true,
+          discoveredModels: [
+            { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
+            { id: "dall-e-3", providerKind: "openai" }
+          ],
+          lastModelDiscoveryAt: now
+        })
+      })
+    );
+
+    expect(launchButton("GPT Image 2").disabled).toBe(false);
+    expect(launchButton("General").disabled).toBe(false);
+
+    await click(launchButton("General"));
+    await click(buttonByText("Generate", ".primary-run"));
+
+    expect(document.body.textContent).toContain("prompt-only generation");
+    expect(bridge.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ activeLaunchId: "general", activeModelId: "dall-e-3" }));
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "generate",
+        inputPaths: [],
+        params: expect.objectContaining({
+          providerKind: "openai",
+          launchId: "general",
+          model: "dall-e-3"
+        })
+      })
+    );
   });
 
   it("can discover models, select Nano Banana 3, and run through the Electron bridge", async () => {
@@ -193,6 +229,7 @@ async function renderAppWithoutBridge() {
 }
 
 function createBridge(initialSnapshot: AppSnapshot): AppBridge {
+  let currentSnapshot = initialSnapshot;
   const updateCheckResult: UpdateCheckResult = {
     status: "not-configured",
     currentVersion: "0.1.0",
@@ -202,16 +239,36 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
   };
 
   return {
-    getSnapshot: vi.fn(async () => initialSnapshot),
-    saveConfig: vi.fn(async () => initialSnapshot.config),
-    discoverModels: vi.fn(async () => initialSnapshot.config),
+    getSnapshot: vi.fn(async () => currentSnapshot),
+    saveConfig: vi.fn(async (input) => {
+      const nextConfig: ProviderConfig = {
+        ...currentSnapshot.config,
+        kind: input.kind ?? currentSnapshot.config.kind,
+        baseURL: input.baseURL,
+        defaultModel: input.defaultModel,
+        defaultSize: input.defaultSize,
+        defaultQuality: input.defaultQuality,
+        timeoutMs: input.timeoutMs,
+        activeLaunchId: input.activeLaunchId ?? currentSnapshot.config.activeLaunchId,
+        activeModelId: input.activeModelId ?? currentSnapshot.config.activeModelId,
+        apiKeySaved: currentSnapshot.config.apiKeySaved || Boolean(input.apiKey?.trim()),
+        updatedAt: now
+      };
+      currentSnapshot = { ...currentSnapshot, config: nextConfig };
+      return nextConfig;
+    }),
+    discoverModels: vi.fn(async () => currentSnapshot.config),
     clearApiKey: vi.fn(async () => ({ ...initialSnapshot.config, apiKeySaved: false, discoveredModels: [] })),
     testConnection: vi.fn(async () => ({ ok: true, message: "ok" })),
     saveDraft: vi.fn(async (input) => ({ ...input, activeLaunchId: input.activeLaunchId ?? input.params.launchId, activeModelId: input.activeModelId ?? input.params.model, updatedAt: now }) as WorkspaceDraft),
     clearDraft: vi.fn(async () => undefined),
     selectImages: vi.fn(async () => []),
     selectMask: vi.fn(async () => null),
-    runJob: vi.fn(async () => initialSnapshot.history[0]),
+    runJob: vi.fn(async (request) => {
+      const job = jobFromRequest(request, currentSnapshot.config);
+      currentSnapshot = { ...currentSnapshot, history: [job, ...currentSnapshot.history] };
+      return job;
+    }),
     downloadAsset: vi.fn(async () => "/tmp/downloaded.png"),
     openAssetFolder: vi.fn(async () => undefined),
     checkForUpdates: vi.fn(async () => updateCheckResult),
@@ -219,6 +276,27 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     deleteJob: vi.fn(async () => initialSnapshot.history),
     clearHistory: vi.fn(async () => []),
     onJobEvent: vi.fn(() => () => undefined)
+  };
+}
+
+function jobFromRequest(request: RunJobRequest, config: ProviderConfig): GenerationJob {
+  const modelId = request.params.model;
+  return {
+    id: "job_bridge_result",
+    providerKind: request.params.providerKind,
+    providerId: config.id,
+    launchId: request.params.launchId,
+    modelId,
+    modelDisplayName: modelId,
+    mode: request.mode,
+    prompt: request.prompt,
+    inputAssets: [],
+    maskAsset: undefined,
+    params: request.params,
+    status: "succeeded",
+    createdAt: now,
+    updatedAt: now,
+    outputs: [imageAsset("bridge_result.png", "job_bridge_result")]
   };
 }
 

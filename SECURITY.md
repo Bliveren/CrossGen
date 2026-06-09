@@ -34,9 +34,12 @@ repository and must not be copied into public releases as source artifacts.
   endpoints.
 - Gemini model discovery uses `GET {baseURL}/models?key=...`; Gemini image jobs
   use `x-goog-api-key` with `generateContent`.
+- Custom General fallback treats the configured Base URL as OpenAI-compatible and
+  sends prompt-only image generation requests to `/images/generations`.
 - Renderer DevTools may not show those main-process requests.
 - Error messages are surfaced in the UI, but likely OpenAI-style `sk-...` API
-  keys are redacted before display or persistence.
+  keys and repeated copies of the active configured API key are redacted before
+  display or persistence.
 - Gemini adapter and model-discovery errors redact likely Google API key forms
   such as `AIza...`, query-string `key=...`, and repeated copies of the active
   API key before display or persistence. Do not paste raw provider error logs
