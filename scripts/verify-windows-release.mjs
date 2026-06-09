@@ -5,6 +5,10 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import {
+  resolveWindowsReleaseVerificationMode,
+  shouldRunSilentInstallCycle
+} from "../dist/shared/windowsReleaseVerification.js";
 import { createFindPidsByPathScript } from "../dist/shared/windowsVerifierScripts.js";
 
 const execFileAsync = promisify(execFile);
@@ -436,11 +440,21 @@ async function main() {
 
   const installerPath = await findInstaller();
   const unpackedExecutable = await findUnpackedExecutable();
+  const verificationMode = resolveWindowsReleaseVerificationMode(process.env);
+
+  console.log(`Windows release verification mode: ${verificationMode}`);
 
   await assertPeExecutable(installerPath, "Windows installer");
   await assertPeExecutable(unpackedExecutable, "Unpacked Windows app");
   await launchApp(unpackedExecutable, "Unpacked Windows app");
-  await runSilentInstallCycle(installerPath);
+  if (shouldRunSilentInstallCycle(verificationMode)) {
+    await runSilentInstallCycle(installerPath);
+  } else {
+    console.log(
+      "Skipping silent Windows install/uninstall cycle in package-smoke mode. " +
+      "Run with IMAGE2TOOLS_WINDOWS_VERIFY_MODE=full-install on a native Windows release runner to verify installer installation."
+    );
+  }
   console.log("Windows release verification passed.");
 }
 

@@ -20,7 +20,7 @@ holders.
 | Runtime key storage | Acceptable for desktop app | API keys are saved under Electron user data, encrypted with `safeStorage` when available; state files are not tracked. |
 | Build outputs | Ignored | `.gitignore` excludes `dist/`, `dist-renderer/`, `release/`, `real-api-artifacts/`, logs, and env files. |
 | Private release wording | Removed from public docs | README and acceptance docs now describe local/public packaging rather than private preview assets, private milestones, or numbered private issues. |
-| Windows support | Present | `package.json` has an NSIS Windows target, CI has a Windows packaging job, and `scripts/verify-windows-release.mjs` validates installer, unpacked app launch, silent install, and uninstall. |
+| Windows support | Present | `package.json` has an NSIS Windows target, CI has a Windows packaging job, and `scripts/verify-windows-release.mjs` validates installer metadata and unpacked app launch in CI package-smoke mode while keeping silent install and uninstall mandatory for full native release validation. |
 | Language switching | Present | Renderer includes an English/Chinese language switch stored in `localStorage`. |
 | README presentation | Present | README includes a right-aligned English/Simplified Chinese language menu, local showcase assets, sponsor/company context, development commands, and open-source readiness notes. |
 | Icon assets | Present | `build/icon.svg` is the local source for `build/icon.png`, `build/icon.icns`, `build/icon.ico`, `build/icon.iconset`, and `public/favicon.svg`. |
