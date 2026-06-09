@@ -77,6 +77,9 @@
 - [x] 本地 mock OpenAI Image API 可用于无真实 Key 回归
 - [x] 本地 mock API 自动校验脚本通过
 - [x] mock API 自动校验覆盖关键 Image 2 参数传递与多图局部重绘 multipart 字段
+- [x] 本地 mock Gemini Image API 可用于无真实 Key 回归
+- [x] Gemini mock verifier 覆盖模型探测、Nano Banana 3 文生图、参考图编辑、局部引导编辑、请求记录和 Gemini 风格错误路径
+- [x] mock model discovery verifier 覆盖 OpenAI/Gemini 重点模型探测、缺失重点模型、General Gemini 候选模型和 Gemini 探测鉴权错误
 - [x] packaged app 可通过 UI 保存 mock 配置、连接测试并完成一次 mock 生成
 - [x] 无控制台报错
 - [x] 打包配置已添加
@@ -98,6 +101,7 @@
 - [ ] Linux 原生桌面 AppImage 直接运行、下载、打开文件夹行为验证完成
 - [x] 真实 API 验收脚本默认受成本确认保护
 - [x] 真实 streaming 验收需要额外成本确认
+- [ ] Gemini / Nano Banana 3 真实 API 验收完成（当前只有 mock 自动化和外部手工 runbook）
 - [x] 签名/公证 readiness 脚本不会暴露 secret 且不会尝试签名
 - [x] 配置迁移到当前 state v1 正常
 - [x] 长时间生成不会轻易超时
@@ -118,7 +122,19 @@
 - [x] 无效 Key 时能立即失败
 - [x] 生成历史可恢复
 
-## 9. GPT Image 2 API 检查
+## 9. 多模型 v0.2.0 文档与发布检查
+
+- [x] README 说明多模型定位、GPT Image 2、Nano Banana 3、General 当前范围
+- [x] ARCHITECTURE 说明 provider adapter registry、OpenAI adapter、Gemini adapter、General Gemini-only fallback
+- [x] SECURITY 说明 OpenAI/Gemini Key 本地存储、Gemini 错误脱敏和上传图片权利提醒
+- [x] EXTERNAL_ACCEPTANCE 说明 Gemini / Nano Banana 3 真实 API 验收流程
+- [x] mock OpenAI verifier、mock Gemini verifier 和 mock model discovery verifier 命令已记录
+- [x] release verifier 命令与平台限制已记录
+- [x] 文档未声明未验证的 Nano Banana 真实输出质量或 exact-mask 能力
+- [ ] 真实 OpenAI / Gemini 外部验收完成
+- [ ] General 任意 provider fallback 完成
+
+## 10. GPT Image 2 API 检查
 
 - [x] 默认模型为 `gpt-image-2`
 - [x] 文生图调用 `/v1/images/generations`

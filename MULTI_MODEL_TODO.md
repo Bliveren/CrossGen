@@ -147,13 +147,13 @@ Target release: `v0.2.0`
 
 ## Phase 8 - `v0.2.0` 文档与发布
 
-- [ ] 更新 README 项目定位，从单 `gpt-image-2` 改为多模型工作台
-- [ ] 更新 ARCHITECTURE.md provider adapter 架构
-- [ ] 更新 TODO.md 当前阶段
-- [ ] 更新 CHECKLIST.md 多模型验收项
-- [ ] 更新 EXTERNAL_ACCEPTANCE.md 增加 Gemini 真实 API 验收
-- [ ] 更新 SECURITY.md 增加 Gemini Key 处理说明
-- [ ] 更新 mock API 文档
-- [ ] 更新 release verifier 说明
-- [ ] 重新跑开源 secret scan
-- [ ] 确认文档没有写死未验证的 Nano Banana 能力
+- [x] 更新 README 项目定位，从单 `gpt-image-2` 改为多模型工作台
+- [x] 更新 ARCHITECTURE.md provider adapter 架构
+- [x] 更新 TODO.md 当前阶段
+- [x] 更新 CHECKLIST.md 多模型验收项
+- [x] 更新 EXTERNAL_ACCEPTANCE.md 增加 Gemini 真实 API 验收
+- [x] 更新 SECURITY.md 增加 Gemini Key 处理说明
+- [x] 更新 mock API 文档
+- [x] 更新 release verifier 说明
+- [x] 重新跑开源 secret scan
+- [x] 确认文档没有写死未验证的 Nano Banana 能力

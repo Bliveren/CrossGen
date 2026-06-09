@@ -14,12 +14,14 @@ git pull --ff-only
 pnpm install --frozen-lockfile
 pnpm build
 pnpm verify:mock-api
+pnpm verify:mock-gemini-api
+pnpm verify:mock-model-discovery
 ```
 
 Use public issues, milestones, or project boards only after the repository is
 public. Do not include private account or billing details in public trackers.
 
-## 1. Real Image 2 API Acceptance
+## 1. Real OpenAI GPT Image 2 API Acceptance
 
 Use a public tracking issue after the repository is public.
 
@@ -62,7 +64,64 @@ Artifacts are written to ignored `real-api-artifacts/`. After success, update
 `CHECKLIST.md`, `TODO.md`, and `COMPLETION_AUDIT.md`, then close the related
 tracking issue if one exists.
 
-## 2. GitHub Actions Billing Gate
+## 2. Real Gemini / Nano Banana 3 API Acceptance
+
+Use a public tracking issue after the repository is public.
+
+Main currently has `pnpm verify:mock-gemini-api`, but no automated paid Gemini
+real API verifier. Treat Gemini real acceptance as a manual external gate until
+one is added.
+
+Prerequisites:
+
+- Real Gemini API key with access to `gemini-3.1-flash-image`
+- Base URL, normally `https://generativelanguage.googleapis.com/v1beta`
+- Explicit cost approval for real Gemini image calls
+- Source/reference images that the tester has permission to upload to Gemini
+
+Start with the no-cost mock regression:
+
+```bash
+pnpm build
+pnpm verify:mock-gemini-api
+pnpm verify:mock-model-discovery
+```
+
+Then run the app against the real Gemini endpoint:
+
+```bash
+pnpm dev:electron
+```
+
+In the app:
+
+1. Select provider `Gemini`.
+2. Save the Gemini key and Base URL.
+3. Run model discovery and confirm `gemini-3.1-flash-image` is discovered.
+4. Select `Nano Banana 3`.
+5. Complete one text-to-image generation.
+6. Complete one reference-image edit with a PNG, JPEG, or WebP source image.
+7. Complete one guided-region edit and confirm the UI does not describe it as
+   exact-mask inpainting.
+8. Download at least one Gemini output.
+9. Confirm history shows the Gemini provider/model context and can restore the
+   task parameters.
+
+Expected results:
+
+- Generated image parts render in the output canvas and can be downloaded.
+- Any Gemini text parts are stored as provider metadata.
+- Errors shown in the UI do not include raw Gemini API keys, `key=...` query
+  values, or `x-goog-api-key` values.
+- General remains Gemini-only: use a discovered non-focused Gemini image model
+  if available, and do not mark broad any-provider General support complete.
+
+After success, update `MULTI_MODEL_CHECKLIST.md`, `CHECKLIST.md`, `TODO.md`,
+and `COMPLETION_AUDIT.md` with OS/version, app commit, provider/model IDs, and
+redacted evidence. Do not commit real generated artifacts unless they are
+approved public assets.
+
+## 3. GitHub Actions Billing Gate
 
 Use a public tracking issue after the repository is public.
 
@@ -81,7 +140,7 @@ UI or use a fresh PR/push if rerun is unavailable. Acceptance requires:
 Record the green run URL in `COMPLETION_AUDIT.md` and close the related
 tracking issue when CI can execute normally.
 
-## 3. Signed And Notarized macOS Release
+## 4. Signed And Notarized macOS Release
 
 Use a public tracking issue after the repository is public.
 
@@ -123,7 +182,7 @@ pnpm verify:release:mac
 After success, update release metadata, `CHECKLIST.md`, `TODO.md`, and
 `COMPLETION_AUDIT.md`, then close the related tracking issue if one exists.
 
-## 4. Windows And Linux Native Validation
+## 5. Windows And Linux Native Validation
 
 Use a public tracking issue after the repository is public.
 
@@ -156,6 +215,8 @@ Run on each native platform:
 pnpm install --frozen-lockfile
 pnpm build
 pnpm verify:mock-api
+pnpm verify:mock-gemini-api
+pnpm verify:mock-model-discovery
 pnpm package
 pnpm verify:release:windows  # Windows only
 pnpm verify:release:linux    # Linux only
@@ -171,7 +232,8 @@ Manual platform checks:
 
 - packaged app launches
 - mock API key and base URL can be configured
-- connection test succeeds against `http://127.0.0.1:8787/v1`
+- OpenAI connection test succeeds against `http://127.0.0.1:8787/v1`
+- Gemini connection test succeeds against `http://127.0.0.1:8788/v1beta`
 - generation, edit, multi-image edit, and inpaint paths can be exercised through
   the mock-backed app or equivalent verifier
 - download works
@@ -183,11 +245,13 @@ the related tracking issue if one exists.
 
 ## Final Completion Pass
 
-After all four external blockers are closed:
+After all external blockers are closed:
 
 ```bash
 pnpm build
 pnpm verify:mock-api
+pnpm verify:mock-gemini-api
+pnpm verify:mock-model-discovery
 pnpm verify:release:mac
 git status --short --branch
 ```
