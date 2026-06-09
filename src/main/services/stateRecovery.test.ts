@@ -6,6 +6,11 @@ import { INTERRUPTED_JOB_MESSAGE, recoverInterruptedJobs } from "./stateRecovery
 function job(status: GenerationJob["status"]): GenerationJob {
   return {
     id: `job_${status}`,
+    providerKind: "openai",
+    providerId: "default",
+    launchId: "gpt-image-2",
+    modelId: "gpt-image-2",
+    modelDisplayName: "GPT Image 2",
     mode: "generate",
     prompt: "Recover this job",
     inputAssets: [],

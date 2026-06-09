@@ -1,17 +1,28 @@
 import type {
+  FocusedLaunchId,
+  GeneralImageParams,
+  GeminiAspectRatio,
+  GeminiImageParams,
+  GeminiResolution,
   ImageBackground,
   ImageFormat,
   ImageParams,
   ImageQuality,
-  ModerationMode
+  ModerationMode,
+  OpenAIImageParams,
+  ProviderKind
 } from "./types.js";
+import { GENERAL_LAUNCH_ID, GPT_IMAGE_2_LAUNCH_ID, GPT_IMAGE_2_MODEL_ID, NANO_BANANA_3_LAUNCH_ID, NANO_BANANA_3_MODEL_ID } from "./modelCatalog.js";
 
-export const GPT_IMAGE_2_MODEL = "gpt-image-2";
+export const GPT_IMAGE_2_MODEL = GPT_IMAGE_2_MODEL_ID;
 
 export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
+export const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 export const MAX_GPT_IMAGE_INPUTS = 16;
 
-export const DEFAULT_IMAGE_PARAMS: ImageParams = {
+export const DEFAULT_IMAGE_PARAMS: OpenAIImageParams = {
+  providerKind: "openai",
+  launchId: GPT_IMAGE_2_LAUNCH_ID,
   model: GPT_IMAGE_2_MODEL,
   size: "auto",
   quality: "auto",
@@ -25,10 +36,34 @@ export const DEFAULT_IMAGE_PARAMS: ImageParams = {
   timeoutMs: 240000
 };
 
+export const DEFAULT_GEMINI_IMAGE_PARAMS: GeminiImageParams = {
+  providerKind: "gemini",
+  launchId: NANO_BANANA_3_LAUNCH_ID,
+  model: NANO_BANANA_3_MODEL_ID,
+  aspectRatio: "1:1",
+  resolution: "1K",
+  outputCount: 1,
+  thinking: true,
+  searchGrounding: false,
+  timeoutMs: 240000
+};
+
+export const DEFAULT_GENERAL_IMAGE_PARAMS: GeneralImageParams = {
+  providerKind: "custom",
+  launchId: GENERAL_LAUNCH_ID,
+  model: "",
+  outputCount: 1,
+  timeoutMs: 240000
+};
+
 export const IMAGE_QUALITY_OPTIONS = ["auto", "low", "medium", "high"] as const satisfies readonly ImageQuality[];
 export const IMAGE_FORMAT_OPTIONS = ["png", "jpeg", "webp"] as const satisfies readonly ImageFormat[];
 export const IMAGE_BACKGROUND_OPTIONS = ["auto", "opaque"] as const satisfies readonly ImageBackground[];
 export const MODERATION_MODE_OPTIONS = ["auto", "low"] as const satisfies readonly ModerationMode[];
+export const PROVIDER_KIND_OPTIONS = ["openai", "gemini", "custom"] as const satisfies readonly ProviderKind[];
+export const FOCUSED_LAUNCH_OPTIONS = [GPT_IMAGE_2_LAUNCH_ID, NANO_BANANA_3_LAUNCH_ID, GENERAL_LAUNCH_ID] as const satisfies readonly FocusedLaunchId[];
+export const GEMINI_ASPECT_RATIO_OPTIONS = ["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"] as const satisfies readonly GeminiAspectRatio[];
+export const GEMINI_RESOLUTION_OPTIONS = ["0.5K", "1K", "2K", "4K"] as const satisfies readonly GeminiResolution[];
 const IMAGE_PATH_PATTERN = /\.(png|jpe?g|webp)$/i;
 
 export interface ValidationResult {
@@ -123,9 +158,34 @@ export function validateGptImage2Size(size: unknown): ValidationResult {
   return { ok: true };
 }
 
-export function validateImageParams(params: unknown): ValidationResult {
+export function isOpenAIImageParams(params: unknown): params is OpenAIImageParams {
+  return (
+    isRecord(params) &&
+    params.providerKind === "openai" &&
+    params.launchId === GPT_IMAGE_2_LAUNCH_ID &&
+    typeof params.model === "string" &&
+    typeof params.size === "string" &&
+    typeof params.stream === "boolean"
+  );
+}
+
+function paramsProviderKind(params: Record<string, unknown>): ProviderKind | undefined {
+  return isOneOf(params.providerKind, PROVIDER_KIND_OPTIONS) ? params.providerKind : undefined;
+}
+
+function paramsLaunchId(params: Record<string, unknown>): FocusedLaunchId | undefined {
+  return isOneOf(params.launchId, FOCUSED_LAUNCH_OPTIONS) ? params.launchId : undefined;
+}
+
+export function validateOpenAIImageParams(params: unknown): ValidationResult {
   if (!isRecord(params)) {
     return { ok: false, message: "参数格式无效。" };
+  }
+  if (params.providerKind !== undefined && params.providerKind !== "openai") {
+    return { ok: false, message: "OpenAI 图片参数的 providerKind 必须为 openai。" };
+  }
+  if (params.launchId !== undefined && params.launchId !== GPT_IMAGE_2_LAUNCH_ID) {
+    return { ok: false, message: `OpenAI 图片参数的 launchId 必须为 ${GPT_IMAGE_2_LAUNCH_ID}。` };
   }
   if (typeof params.model !== "string") {
     return { ok: false, message: "模型参数无效。" };
@@ -168,9 +228,85 @@ export function validateImageParams(params: unknown): ValidationResult {
   return { ok: true };
 }
 
+export function validateGeminiImageParams(params: unknown): ValidationResult {
+  if (!isRecord(params)) {
+    return { ok: false, message: "参数格式无效。" };
+  }
+  if (params.providerKind !== "gemini") {
+    return { ok: false, message: "Gemini 图片参数的 providerKind 必须为 gemini。" };
+  }
+  if (params.launchId !== NANO_BANANA_3_LAUNCH_ID) {
+    return { ok: false, message: `Gemini 图片参数的 launchId 必须为 ${NANO_BANANA_3_LAUNCH_ID}。` };
+  }
+  if (typeof params.model !== "string" || !params.model.trim()) {
+    return { ok: false, message: "模型参数无效。" };
+  }
+  if (!isOneOf(params.aspectRatio, GEMINI_ASPECT_RATIO_OPTIONS)) {
+    return { ok: false, message: "Gemini 图片比例参数无效。" };
+  }
+  if (!isOneOf(params.resolution, GEMINI_RESOLUTION_OPTIONS)) {
+    return { ok: false, message: "Gemini 图片分辨率参数无效。" };
+  }
+  if (!isInteger(params.outputCount) || params.outputCount < 1 || params.outputCount > 1) {
+    return { ok: false, message: "Gemini 首期输出数量固定为 1。" };
+  }
+  if (typeof params.thinking !== "boolean") {
+    return { ok: false, message: "Gemini Thinking 参数无效。" };
+  }
+  if (typeof params.searchGrounding !== "boolean") {
+    return { ok: false, message: "Gemini Search grounding 参数无效。" };
+  }
+  if (!isInteger(params.timeoutMs) || params.timeoutMs < 30000 || params.timeoutMs > 600000) {
+    return { ok: false, message: "超时时间需在 30 到 600 秒之间。" };
+  }
+  return { ok: true };
+}
+
+export function validateGeneralImageParams(params: unknown): ValidationResult {
+  if (!isRecord(params)) {
+    return { ok: false, message: "参数格式无效。" };
+  }
+  if (!isOneOf(params.providerKind, PROVIDER_KIND_OPTIONS)) {
+    return { ok: false, message: "General 图片参数的 providerKind 无效。" };
+  }
+  if (params.launchId !== GENERAL_LAUNCH_ID) {
+    return { ok: false, message: `General 图片参数的 launchId 必须为 ${GENERAL_LAUNCH_ID}。` };
+  }
+  if (typeof params.model !== "string") {
+    return { ok: false, message: "模型参数无效。" };
+  }
+  if (!isInteger(params.outputCount) || params.outputCount < 1 || params.outputCount > 1) {
+    return { ok: false, message: "General 首期输出数量固定为 1。" };
+  }
+  if (!isInteger(params.timeoutMs) || params.timeoutMs < 30000 || params.timeoutMs > 600000) {
+    return { ok: false, message: "超时时间需在 30 到 600 秒之间。" };
+  }
+  return { ok: true };
+}
+
+export function validateImageParams(params: unknown): ValidationResult {
+  if (!isRecord(params)) {
+    return { ok: false, message: "参数格式无效。" };
+  }
+
+  const providerKind = paramsProviderKind(params);
+  const launchId = paramsLaunchId(params);
+
+  if (providerKind === "gemini" || launchId === NANO_BANANA_3_LAUNCH_ID) {
+    return validateGeminiImageParams(params);
+  }
+  if (launchId === GENERAL_LAUNCH_ID) {
+    return validateGeneralImageParams(params);
+  }
+  return validateOpenAIImageParams(params);
+}
+
 export function validateProviderConfigInput(input: unknown): ValidationResult {
   if (!isRecord(input)) {
     return { ok: false, message: "配置参数格式无效。" };
+  }
+  if (input.kind !== undefined && !isOneOf(input.kind, PROVIDER_KIND_OPTIONS)) {
+    return { ok: false, message: "Provider 类型无效。" };
   }
   if (typeof input.baseURL !== "string") {
     return { ok: false, message: "Base URL 格式无效。" };
@@ -198,6 +334,12 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
   }
   if (input.apiKey !== undefined && typeof input.apiKey !== "string") {
     return { ok: false, message: "API Key 格式无效。" };
+  }
+  if (input.activeLaunchId !== undefined && !isOneOf(input.activeLaunchId, FOCUSED_LAUNCH_OPTIONS)) {
+    return { ok: false, message: "启动模型无效。" };
+  }
+  if (input.activeModelId !== undefined && typeof input.activeModelId !== "string") {
+    return { ok: false, message: "活动模型 ID 无效。" };
   }
   return { ok: true };
 }
@@ -233,7 +375,14 @@ export function validateInputAssetShape(asset: unknown): ValidationResult {
   return { ok: true };
 }
 
-export function validateRunJobRequest(request: unknown): ValidationResult {
+function hasOpenAIParamsShape(params: unknown): boolean {
+  if (!isRecord(params)) return false;
+  const providerKind = paramsProviderKind(params);
+  const launchId = paramsLaunchId(params);
+  return (providerKind === undefined || providerKind === "openai") && (launchId === undefined || launchId === GPT_IMAGE_2_LAUNCH_ID);
+}
+
+function validateRunJobRequestBase(request: unknown): ValidationResult {
   if (!isRecord(request)) {
     return { ok: false, message: "任务请求格式无效。" };
   }
@@ -249,13 +398,23 @@ export function validateRunJobRequest(request: unknown): ValidationResult {
   if (request.inputPaths.some((item) => !IMAGE_PATH_PATTERN.test(item))) {
     return { ok: false, message: "输入图片必须是 PNG、JPEG 或 WebP。" };
   }
-  if (request.inputPaths.length > MAX_GPT_IMAGE_INPUTS) {
+  return { ok: true };
+}
+
+export function validateOpenAIRunJobRequest(request: unknown): ValidationResult {
+  const base = validateRunJobRequestBase(request);
+  if (!base.ok) return base;
+  if (!isRecord(request)) {
+    return { ok: false, message: "任务请求格式无效。" };
+  }
+  const inputPaths = request.inputPaths as string[];
+  if (inputPaths.length > MAX_GPT_IMAGE_INPUTS) {
     return { ok: false, message: `GPT Image 2 输入图片不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
   }
-  if (request.mode === "generate" && request.inputPaths.length > 0) {
+  if (request.mode === "generate" && inputPaths.length > 0) {
     return { ok: false, message: "文生图不应携带输入图片。" };
   }
-  if ((request.mode === "edit" || request.mode === "inpaint") && request.inputPaths.length === 0) {
+  if ((request.mode === "edit" || request.mode === "inpaint") && inputPaths.length === 0) {
     return { ok: false, message: request.mode === "inpaint" ? "局部重绘至少需要一张源图。" : "图像编辑至少需要一张源图。" };
   }
   if (request.maskPath !== undefined && typeof request.maskPath !== "string") {
@@ -282,7 +441,23 @@ export function validateRunJobRequest(request: unknown): ValidationResult {
   if (request.mode === "inpaint" && !hasMask) {
     return { ok: false, message: "局部重绘需要提供 mask。" };
   }
-  return validateImageParams(request.params);
+  return validateOpenAIImageParams(request.params);
+}
+
+export function validateRunJobRequest(request: unknown): ValidationResult {
+  const base = validateRunJobRequestBase(request);
+  if (!base.ok) return base;
+  if (!isRecord(request)) {
+    return { ok: false, message: "任务请求格式无效。" };
+  }
+
+  const params = validateImageParams(request.params);
+  if (!params.ok) return params;
+
+  if (!hasOpenAIParamsShape(request.params)) {
+    return { ok: false, message: "当前版本尚未接入该模型运行时。" };
+  }
+  return validateOpenAIRunJobRequest(request);
 }
 
 export function validateWorkspaceDraftInput(input: unknown): ValidationResult {
@@ -298,7 +473,7 @@ export function validateWorkspaceDraftInput(input: unknown): ValidationResult {
   if (!Array.isArray(input.inputAssets)) {
     return { ok: false, message: "草稿输入资源无效。" };
   }
-  if (input.inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
+  if (hasOpenAIParamsShape(input.params) && input.inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
     return { ok: false, message: `草稿输入资源不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
   }
   for (const asset of input.inputAssets) {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_IMAGE_PARAMS,
+  DEFAULT_GEMINI_IMAGE_PARAMS,
+  DEFAULT_GENERAL_IMAGE_PARAMS,
   MAX_GPT_IMAGE_INPUTS,
   dataUrlToBase64,
   extensionForFormat,
@@ -48,6 +50,15 @@ describe("gpt-image-2 validation", () => {
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, outputFormat: "gif" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, background: "transparent" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, moderation: "strict" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+  });
+
+  it("validates provider-specific image param union members", () => {
+    expect(validateImageParams(DEFAULT_IMAGE_PARAMS).ok).toBe(true);
+    expect(validateImageParams(DEFAULT_GEMINI_IMAGE_PARAMS).ok).toBe(true);
+    expect(validateImageParams(DEFAULT_GENERAL_IMAGE_PARAMS).ok).toBe(true);
+    expect(validateImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, aspectRatio: "2:1" }).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, outputCount: 2 }).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_GENERAL_IMAGE_PARAMS, outputCount: 2 }).ok).toBe(false);
   });
 
   it("rejects malformed runtime params without throwing", () => {
@@ -99,7 +110,9 @@ describe("gpt-image-2 validation", () => {
     };
 
     expect(validateProviderConfigInput(valid).ok).toBe(true);
+    expect(validateProviderConfigInput({ ...valid, kind: "openai", activeLaunchId: "gpt-image-2", activeModelId: "gpt-image-2" }).ok).toBe(true);
     expect(validateProviderConfigInput(null as never).ok).toBe(false);
+    expect(validateProviderConfigInput({ ...valid, kind: "anthropic" } as never).ok).toBe(false);
     expect(validateProviderConfigInput({ ...valid, baseURL: null } as never).ok).toBe(false);
     expect(validateProviderConfigInput({ ...valid, defaultModel: "gpt-image-1.5" } as never).ok).toBe(false);
     expect(validateProviderConfigInput({ ...valid, defaultSize: "512x512" } as never).ok).toBe(false);
@@ -144,6 +157,7 @@ describe("gpt-image-2 validation", () => {
     expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskDataUrl: "data:image/png;base64,abc" } as never).ok).toBe(true);
     expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskDataUrl: "data:image/jpeg;base64,abc" } as never).ok).toBe(false);
     expect(validateRunJobRequest({ ...job, mode: "inpaint", inputPaths: ["/tmp/a.png"], maskDataUrl: "not-a-data-url" } as never).ok).toBe(false);
+    expect(validateRunJobRequest({ ...job, params: DEFAULT_GEMINI_IMAGE_PARAMS }).ok).toBe(false);
     expect(
       validateRunJobRequest({
         ...job,

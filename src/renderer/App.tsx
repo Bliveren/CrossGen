@@ -32,6 +32,7 @@ import {
   validateMaskMimeType,
   validateMaskSourceFormat,
   getValidationError,
+  isOpenAIImageParams,
   validateGptImage2Size
 } from "../shared/validation";
 import type {
@@ -40,10 +41,10 @@ import type {
   ImageAsset,
   ImageBackground,
   ImageFormat,
-  ImageParams,
   ImageQuality,
   InputAsset,
   ModerationMode,
+  OpenAIImageParams,
   ProviderConfig,
   WorkMode,
   UpdateCheckResult,
@@ -82,6 +83,7 @@ const RESIZER_WIDTH = 12;
 
 const fallbackConfig: ProviderConfig = {
   id: "default",
+  kind: "openai",
   name: "OpenAI",
   apiKeySaved: false,
   apiKeyPreview: undefined,
@@ -91,6 +93,9 @@ const fallbackConfig: ProviderConfig = {
   defaultSize: DEFAULT_IMAGE_PARAMS.size,
   defaultQuality: DEFAULT_IMAGE_PARAMS.quality,
   timeoutMs: DEFAULT_IMAGE_PARAMS.timeoutMs,
+  discoveredModels: [],
+  activeLaunchId: DEFAULT_IMAGE_PARAMS.launchId,
+  activeModelId: DEFAULT_IMAGE_PARAMS.model,
   updatedAt: new Date(0).toISOString()
 };
 
@@ -230,7 +235,7 @@ export function App() {
   const [snapshot, setSnapshot] = useState<AppSnapshot>(fallbackSnapshot);
   const [mode, setMode] = useState<WorkMode>("generate");
   const [prompt, setPrompt] = useState("A clean product photo of a matte black travel mug on a brushed steel counter");
-  const [params, setParams] = useState<ImageParams>(DEFAULT_IMAGE_PARAMS);
+  const [params, setParams] = useState<OpenAIImageParams>(DEFAULT_IMAGE_PARAMS);
   const [apiKey, setApiKey] = useState("");
   const [baseURL, setBaseURL] = useState(DEFAULT_BASE_URL);
   const [customSize, setCustomSize] = useState("2048x1152");
@@ -459,7 +464,7 @@ export function App() {
     if (!draft) return;
     setMode(draft.mode);
     setPrompt(draft.prompt);
-    setParams(draft.params);
+    setParams(isOpenAIImageParams(draft.params) ? draft.params : DEFAULT_IMAGE_PARAMS);
     setInputAssets(draft.inputAssets);
     setMaskAsset(draft.maskAsset ?? null);
     setMaskDataUrl(draft.maskDataUrl ?? null);
@@ -480,7 +485,7 @@ export function App() {
     }
   }
 
-  function updateParams(patch: Partial<ImageParams>) {
+  function updateParams(patch: Partial<OpenAIImageParams>) {
     markDraftChanged();
     setParams((current) => ({ ...current, ...patch }));
   }
@@ -731,7 +736,7 @@ export function App() {
     flashButton(`reuse:${job.id}`);
     setMode(job.mode);
     setPrompt(job.prompt);
-    setParams(job.params);
+    setParams(isOpenAIImageParams(job.params) ? job.params : DEFAULT_IMAGE_PARAMS);
     setInputAssets(job.inputAssets);
     setMaskAsset(job.maskAsset ?? null);
     setMaskDataUrl(null);
@@ -1407,6 +1412,7 @@ export function App() {
             filteredHistory.map((job) => {
               const result = getBestResult(job);
               const jobError = getJobError(job);
+              const paramsSummary = isOpenAIImageParams(job.params) ? `${job.params.size} · ${job.params.quality}` : job.modelDisplayName;
               return (
                 <article key={job.id} className={activeJob?.id === job.id ? "history-item active" : "history-item"}>
                   <button
@@ -1425,7 +1431,7 @@ export function App() {
                     </div>
                     <p>{job.prompt}</p>
                     <small>
-                      {job.status} · {job.params.size} · {job.params.quality} · {formatDuration(job.durationMs)}
+                      {job.status} · {paramsSummary} · {formatDuration(job.durationMs)}
                     </small>
                     {jobError && <p className="history-error">{jobError}</p>}
                   </div>

@@ -1,5 +1,9 @@
 export type WorkMode = "generate" | "edit" | "inpaint";
 
+export type ProviderKind = "openai" | "gemini" | "custom";
+
+export type FocusedLaunchId = "gpt-image-2" | "nano-banana-3" | "general";
+
 export type ImageQuality = "auto" | "low" | "medium" | "high";
 
 export type ImageFormat = "png" | "jpeg" | "webp";
@@ -10,8 +14,40 @@ export type ModerationMode = "auto" | "low";
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
 
+export interface ImageModelCapabilities {
+  generate: boolean;
+  edit: boolean;
+  inpaint: "exact-mask" | "guided-region" | false;
+  referenceImages: boolean;
+  multiTurn: boolean;
+  streamingPartials: boolean;
+  outputText: boolean;
+  configurableOutputFormat: boolean;
+  configurableResolution: "openai-size" | "gemini-resolution-aspect" | "none";
+  supportsThinking: boolean;
+  supportsSearchGrounding: boolean;
+}
+
+export interface FocusedModelDefinition {
+  launchId: FocusedLaunchId;
+  displayName: string;
+  providerKind: ProviderKind;
+  modelIds: string[];
+  defaultModelId: string;
+  capabilities: ImageModelCapabilities;
+}
+
+export interface DiscoveredModel {
+  id: string;
+  providerKind: ProviderKind;
+  displayName?: string;
+  description?: string;
+  raw?: unknown;
+}
+
 export interface ProviderConfig {
   id: string;
+  kind: ProviderKind;
   name: string;
   apiKeySaved: boolean;
   apiKeyPreview?: string;
@@ -21,19 +57,29 @@ export interface ProviderConfig {
   defaultSize: string;
   defaultQuality: ImageQuality;
   timeoutMs: number;
+  discoveredModels: DiscoveredModel[];
+  lastModelDiscoveryAt?: string;
+  lastModelDiscoveryError?: string;
+  activeLaunchId: FocusedLaunchId;
+  activeModelId: string;
   updatedAt: string;
 }
 
 export interface ProviderConfigInput {
+  kind?: ProviderKind;
   apiKey?: string;
   baseURL: string;
   defaultModel: string;
   defaultSize: string;
   defaultQuality: ImageQuality;
   timeoutMs: number;
+  activeLaunchId?: FocusedLaunchId;
+  activeModelId?: string;
 }
 
-export interface ImageParams {
+export interface OpenAIImageParams {
+  providerKind: "openai";
+  launchId: "gpt-image-2";
   model: string;
   size: string;
   quality: ImageQuality;
@@ -46,6 +92,32 @@ export interface ImageParams {
   moderation: ModerationMode;
   timeoutMs: number;
 }
+
+export type GeminiAspectRatio = "1:1" | "3:4" | "4:3" | "9:16" | "16:9" | "21:9";
+
+export type GeminiResolution = "0.5K" | "1K" | "2K" | "4K";
+
+export interface GeminiImageParams {
+  providerKind: "gemini";
+  launchId: "nano-banana-3";
+  model: string;
+  aspectRatio: GeminiAspectRatio;
+  resolution: GeminiResolution;
+  outputCount: number;
+  thinking: boolean;
+  searchGrounding: boolean;
+  timeoutMs: number;
+}
+
+export interface GeneralImageParams {
+  providerKind: ProviderKind;
+  launchId: "general";
+  model: string;
+  outputCount: number;
+  timeoutMs: number;
+}
+
+export type ImageParams = OpenAIImageParams | GeminiImageParams | GeneralImageParams;
 
 export interface InputAsset {
   id: string;
@@ -82,6 +154,11 @@ export interface UsageDetails {
 
 export interface GenerationJob {
   id: string;
+  providerKind: ProviderKind;
+  providerId: string;
+  launchId: FocusedLaunchId;
+  modelId: string;
+  modelDisplayName: string;
   mode: WorkMode;
   prompt: string;
   inputAssets: InputAsset[];
@@ -133,6 +210,8 @@ export interface DownloadRequest {
 }
 
 export interface WorkspaceDraftInput {
+  activeLaunchId?: FocusedLaunchId;
+  activeModelId?: string;
   mode: WorkMode;
   prompt: string;
   params: ImageParams;
@@ -143,6 +222,8 @@ export interface WorkspaceDraftInput {
 }
 
 export interface WorkspaceDraft extends WorkspaceDraftInput {
+  activeLaunchId: FocusedLaunchId;
+  activeModelId: string;
   updatedAt: string;
 }
 

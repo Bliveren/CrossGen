@@ -18,7 +18,6 @@ import type {
   ConnectionTestResult,
   DownloadRequest,
   GenerationJob,
-  ImageParams,
   InputAsset,
   JobProgressEvent,
   ProviderConfig,
@@ -32,7 +31,6 @@ import type {
   WorkspaceDraftInput
 } from "../shared/types.js";
 import {
-  DEFAULT_BASE_URL,
   DEFAULT_IMAGE_PARAMS,
   dataUrlToBase64,
   getValidationError,
@@ -42,12 +40,13 @@ import {
   validateRunJobRequest,
   validateWorkspaceDraftInput
 } from "../shared/validation.js";
-import { buildEndpoint, fetchWithTimeout, runOpenAIImageJob } from "./services/openaiImage.js";
+import { getModelDisplayName, GPT_IMAGE_2_LAUNCH_ID } from "../shared/modelCatalog.js";
+import { asOpenAIImageJob, buildEndpoint, fetchWithTimeout, runOpenAIImageJob } from "./services/openaiImage.js";
 import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePaths, normalizeManagedAssetPath } from "./services/assetOwnership.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
+import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STATE_VERSION = 1;
 const MAX_HISTORY = 100;
 const FALLBACK_KEY_PREFIX = "plain:";
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
@@ -64,27 +63,6 @@ protocol.registerSchemesAsPrivileged([
     }
   }
 ]);
-
-interface StoredConfig {
-  id: string;
-  name: string;
-  baseURL: string;
-  enabled: boolean;
-  defaultModel: string;
-  defaultSize: string;
-  defaultQuality: ImageParams["quality"];
-  timeoutMs: number;
-  updatedAt: string;
-  encryptedApiKey?: string;
-  encryption: "safeStorage" | "localFallback" | "none";
-}
-
-interface AppStateFile {
-  version: number;
-  config: StoredConfig;
-  history: GenerationJob[];
-  draft?: WorkspaceDraft;
-}
 
 interface ApiErrorPayload {
   error?: {
@@ -106,19 +84,6 @@ interface PackageMetadata {
     updateManifestUrl?: unknown;
   };
 }
-
-const defaultStoredConfig: StoredConfig = {
-  id: "default",
-  name: "OpenAI",
-  baseURL: DEFAULT_BASE_URL,
-  enabled: true,
-  defaultModel: DEFAULT_IMAGE_PARAMS.model,
-  defaultSize: DEFAULT_IMAGE_PARAMS.size,
-  defaultQuality: DEFAULT_IMAGE_PARAMS.quality,
-  timeoutMs: DEFAULT_IMAGE_PARAMS.timeoutMs,
-  updatedAt: new Date(0).toISOString(),
-  encryption: "none"
-};
 
 let stateCache: AppStateFile | null = null;
 let recoveredInterruptedJobs = false;
@@ -192,17 +157,10 @@ function getImagesDir(): string {
   return path.join(app.getPath("userData"), "images");
 }
 
-function getDefaultState(): AppStateFile {
-  return {
-    version: STATE_VERSION,
-    config: { ...defaultStoredConfig },
-    history: []
-  };
-}
-
-function toPublicConfig(config: StoredConfig): ProviderConfig {
+function toPublicConfig(config: StoredProviderConfig): ProviderConfig {
   return {
     id: config.id,
+    kind: config.kind,
     name: config.name,
     apiKeySaved: Boolean(config.encryptedApiKey),
     apiKeyPreview: getSavedApiKeyPreview(config),
@@ -212,6 +170,11 @@ function toPublicConfig(config: StoredConfig): ProviderConfig {
     defaultSize: config.defaultSize,
     defaultQuality: config.defaultQuality,
     timeoutMs: config.timeoutMs,
+    discoveredModels: config.discoveredModels,
+    lastModelDiscoveryAt: config.lastModelDiscoveryAt,
+    lastModelDiscoveryError: config.lastModelDiscoveryError,
+    activeLaunchId: config.activeLaunchId,
+    activeModelId: config.activeModelId,
     updatedAt: config.updatedAt
   };
 }
@@ -279,22 +242,9 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
   stateCache = payload;
 }
 
-async function readStateFile(filePath: string): Promise<Partial<AppStateFile>> {
+async function readStateFile(filePath: string): Promise<unknown> {
   const raw = await fs.readFile(filePath, "utf8");
-  return JSON.parse(raw) as Partial<AppStateFile>;
-}
-
-function normalizeState(parsed: Partial<AppStateFile>): AppStateFile {
-  return {
-    version: STATE_VERSION,
-    config: {
-      ...defaultStoredConfig,
-      ...(parsed.config ?? {}),
-      baseURL: normalizeBaseURL(parsed.config?.baseURL ?? DEFAULT_BASE_URL)
-    },
-    history: Array.isArray(parsed.history) ? parsed.history : [],
-    draft: parsed.draft
-  };
+  return JSON.parse(raw) as unknown;
 }
 
 function applyStartupRecovery(state: AppStateFile): AppStateFile {
@@ -303,7 +253,7 @@ function applyStartupRecovery(state: AppStateFile): AppStateFile {
   return result.changed ? { ...state, history: result.history } : state;
 }
 
-function encryptApiKey(apiKey: string): Pick<StoredConfig, "encryptedApiKey" | "encryption"> {
+function encryptApiKey(apiKey: string): Pick<StoredProviderConfig, "encryptedApiKey" | "encryption"> {
   const trimmed = apiKey.trim();
   if (!trimmed) {
     return { encryptedApiKey: undefined, encryption: "none" };
@@ -324,7 +274,7 @@ function encryptApiKey(apiKey: string): Pick<StoredConfig, "encryptedApiKey" | "
   };
 }
 
-function decryptApiKey(config: StoredConfig): string | null {
+function decryptApiKey(config: StoredProviderConfig): string | null {
   if (!config.encryptedApiKey) return null;
 
   if (config.encryption === "safeStorage") {
@@ -341,7 +291,7 @@ function decryptApiKey(config: StoredConfig): string | null {
   return null;
 }
 
-function getSavedApiKeyPreview(config: StoredConfig): string | undefined {
+function getSavedApiKeyPreview(config: StoredProviderConfig): string | undefined {
   if (!config.encryptedApiKey) return undefined;
 
   try {
@@ -607,10 +557,17 @@ async function persistMaskDataUrl(dataUrl: string): Promise<InputAsset> {
   };
 }
 
-function createJob(request: RunJobRequest, inputAssets: InputAsset[], maskAsset?: InputAsset): GenerationJob {
+function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAssets: InputAsset[], maskAsset?: InputAsset): GenerationJob {
   const now = new Date().toISOString();
+  const launchId = request.params.launchId;
+  const modelId = request.params.model;
   return {
     id: `job_${randomUUID()}`,
+    providerKind: request.params.providerKind,
+    providerId: config.id,
+    launchId,
+    modelId,
+    modelDisplayName: getModelDisplayName(launchId, modelId),
     mode: request.mode,
     prompt: request.prompt.trim(),
     inputAssets,
@@ -656,13 +613,18 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
     throw new Error(configValidation.message ?? "配置参数无效。");
   }
   const now = new Date().toISOString();
-  const nextConfig: StoredConfig = {
+  const activeLaunchId = input.activeLaunchId ?? state.config.activeLaunchId ?? GPT_IMAGE_2_LAUNCH_ID;
+  const activeModelId = input.activeModelId?.trim() || input.defaultModel.trim() || DEFAULT_IMAGE_PARAMS.model;
+  const nextConfig: StoredProviderConfig = {
     ...state.config,
+    kind: input.kind ?? state.config.kind,
     baseURL: normalizeBaseURL(input.baseURL),
     defaultModel: input.defaultModel.trim() || DEFAULT_IMAGE_PARAMS.model,
     defaultSize: input.defaultSize.trim() || DEFAULT_IMAGE_PARAMS.size,
     defaultQuality: input.defaultQuality,
     timeoutMs: input.timeoutMs,
+    activeLaunchId,
+    activeModelId,
     updatedAt: now
   };
 
@@ -680,7 +642,7 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
 
 async function handleClearApiKey(): Promise<ProviderConfig> {
   const state = await readState();
-  const nextConfig: StoredConfig = {
+  const nextConfig: StoredProviderConfig = {
     ...state.config,
     encryptedApiKey: undefined,
     encryption: "none",
@@ -696,8 +658,12 @@ async function handleSaveDraft(_event: IpcMainInvokeEvent, input: WorkspaceDraft
     throw new Error(validation.message ?? "草稿参数无效。");
   }
   const state = await readState();
+  const params = normalizeImageParams(input.params);
   const draft: WorkspaceDraft = {
     ...input,
+    params,
+    activeLaunchId: input.activeLaunchId ?? params.launchId,
+    activeModelId: input.activeModelId?.trim() || params.model,
     updatedAt: new Date().toISOString()
   };
   await writeState({ ...state, draft });
@@ -777,16 +743,20 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   if (!validation.ok) {
     throw new Error(validation.message ?? "任务请求无效。");
   }
-  const validationError = getValidationError(request.params, request.prompt);
+  const normalizedRequest: RunJobRequest = {
+    ...request,
+    params: normalizeImageParams(request.params)
+  };
+  const validationError = getValidationError(normalizedRequest.params, normalizedRequest.prompt);
   if (validationError) {
     throw new Error(validationError);
   }
 
   const state = await readState();
   const apiKey = await getApiKeyOrThrow();
-  const { inputs, mask } = await resolveRequestInputs(request);
+  const { inputs, mask } = await resolveRequestInputs(normalizedRequest);
   const startedAt = Date.now();
-  let job = createJob(request, inputs, mask);
+  let job = createJob(normalizedRequest, state.config, inputs, mask);
   await upsertJob(job);
 
   job = {
@@ -798,7 +768,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   sendJobEvent({ jobId: job.id, type: "started" });
 
   try {
-    job = await runOpenAIImageJob(job, apiKey, state.config.baseURL, {
+    job = await runOpenAIImageJob(asOpenAIImageJob(job), apiKey, state.config.baseURL, {
       fetch,
       imagesDir: getImagesDir(),
       ensureDir,
