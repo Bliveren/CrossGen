@@ -5,6 +5,10 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import {
+  resolveWindowsReleaseVerificationMode,
+  shouldRunSilentInstallCycle
+} from "../dist/shared/windowsReleaseVerification.js";
 import { createFindPidsByPathScript } from "../dist/shared/windowsVerifierScripts.js";
 
 const execFileAsync = promisify(execFile);
@@ -15,6 +19,7 @@ const installerPattern = /^Image2Tools(?:-Setup|-.*-win-.*)\.exe$/;
 const installerTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_INSTALL_TIMEOUT_MS ?? 120000);
 const smokeTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_SMOKE_TIMEOUT_MS ?? 12000);
 const windowTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_WINDOW_TIMEOUT_MS ?? 15000);
+const defaultSilentInstallArgs = ["/S", "/currentuser"];
 
 function assertWindows() {
   if (process.platform !== "win32") {
@@ -394,8 +399,9 @@ async function cleanupExistingInstall() {
 
 async function runSilentInstallCycle(installerPath) {
   await cleanupExistingInstall();
-  console.log(`Running silent Windows installer: ${installerPath}`);
-  await run(installerPath, ["/S"], { timeout: installerTimeoutMs });
+  const installArgs = silentInstallArgs();
+  console.log(`Running silent Windows installer: ${installerPath} ${installArgs.join(" ")}`);
+  await run(installerPath, installArgs, { timeout: installerTimeoutMs });
 
   let installedExecutable = "";
   let uninstaller = "";
@@ -422,16 +428,33 @@ async function runSilentInstallCycle(installerPath) {
   console.log("Silent Windows install/uninstall cycle passed.");
 }
 
+function silentInstallArgs() {
+  const raw = process.env.IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS;
+  if (!raw?.trim()) return defaultSilentInstallArgs;
+  const parsed = raw.split(/\s+/).map((item) => item.trim()).filter(Boolean);
+  return parsed.length > 0 ? parsed : defaultSilentInstallArgs;
+}
+
 async function main() {
   assertWindows();
 
   const installerPath = await findInstaller();
   const unpackedExecutable = await findUnpackedExecutable();
+  const verificationMode = resolveWindowsReleaseVerificationMode(process.env);
+
+  console.log(`Windows release verification mode: ${verificationMode}`);
 
   await assertPeExecutable(installerPath, "Windows installer");
   await assertPeExecutable(unpackedExecutable, "Unpacked Windows app");
   await launchApp(unpackedExecutable, "Unpacked Windows app");
-  await runSilentInstallCycle(installerPath);
+  if (shouldRunSilentInstallCycle(verificationMode)) {
+    await runSilentInstallCycle(installerPath);
+  } else {
+    console.log(
+      "Skipping silent Windows install/uninstall cycle in package-smoke mode. " +
+      "Run with IMAGE2TOOLS_WINDOWS_VERIFY_MODE=full-install on a native Windows release runner to verify installer installation."
+    );
+  }
   console.log("Windows release verification passed.");
 }
 

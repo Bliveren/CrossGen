@@ -132,11 +132,14 @@ Current partial evidence:
 - Ubuntu/Debian Bookworm ARM64 Docker validation on the macOS host passed
   `pnpm build`, `pnpm verify:mock-api`, Linux AppImage packaging, AppImage
   extraction, and extracted-app launch under Xvfb.
-- `pnpm verify:release:windows` now automates the Windows package checks that
-  can be safely run in CI or a Windows shell: NSIS installer/unpacked executable
-  PE metadata inspection, unpacked app launch, main-window detection, and a
-  short process stability smoke interval, plus silent install / installed app
-  launch / silent uninstall.
+- `pnpm verify:release:windows` defaults to full native Windows package
+  validation: NSIS installer/unpacked executable PE metadata inspection,
+  unpacked app launch, main-window detection, a short process stability smoke
+  interval, plus silent install / installed app launch / silent uninstall.
+  Hosted GitHub workflows set
+  `IMAGE2TOOLS_WINDOWS_VERIFY_MODE=package-smoke` so the installer PE and
+  unpacked-app smoke checks stay gated without relying on the hosted runner's
+  silent installer policy.
 - `pnpm verify:release:linux` now automates the Linux package checks that can be
   safely run in CI or a Linux shell: AppImage/unpacked executable inspection,
   unpacked app Xvfb launch, direct AppImage launch when FUSE is available,

@@ -92,6 +92,8 @@ jobs:
         run: pnpm package:win
 
       - name: Verify Windows package
+        env:
+          IMAGE2TOOLS_WINDOWS_VERIFY_MODE: package-smoke
         run: pnpm verify:release:windows
 
   linux-package:
