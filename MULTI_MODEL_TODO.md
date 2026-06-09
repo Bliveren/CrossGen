@@ -84,15 +84,15 @@ Target release: `v0.2.0`
 - [x] 实现 Gemini timeout 和错误处理
 - [x] 实现 Gemini API Key 错误脱敏
 - [x] 实现 `GeminiImageParams` validation
-- [ ] Nano Banana UI 增加 aspect ratio 控件
-- [ ] Nano Banana UI 增加 resolution 控件
-- [ ] Nano Banana UI 增加 Thinking 开关
-- [ ] Nano Banana UI 增加 Search grounding 开关
-- [ ] Nano Banana UI 隐藏 OpenAI-only 参数
-- [ ] Nano Banana 模式支持生成
-- [ ] Nano Banana 模式支持参考图编辑
-- [ ] Nano Banana 模式支持局部引导编辑
-- [ ] 局部引导编辑文案说明非 exact mask
+- [x] Nano Banana UI 增加 aspect ratio 控件
+- [x] Nano Banana UI 增加 resolution 控件
+- [x] Nano Banana UI 增加 Thinking 开关
+- [x] Nano Banana UI 增加 Search grounding 开关
+- [x] Nano Banana UI 隐藏 OpenAI-only 参数
+- [x] Nano Banana 模式支持生成
+- [x] Nano Banana 模式支持参考图编辑
+- [x] Nano Banana 模式支持局部引导编辑
+- [x] 局部引导编辑文案说明非 exact mask
 - [x] 为 Gemini request builder 写单元测试
 - [x] 为 Gemini response parser 写单元测试
 - [x] 新增 mock Gemini Image API
@@ -119,7 +119,7 @@ Target release: `v0.2.0`
 - [x] 展开后历史列表内部滚动
 - [x] 搜索历史时显示匹配数量
 - [x] 搜索历史时仍支持 6 条折叠规则
-- [ ] 复用历史任务时恢复对应 provider/model/params
+- [x] 复用历史任务时恢复对应 provider/model/params
 - [x] 删除历史任务继续只删除 owned output files
 - [x] 清空历史仍清理所有 owned outputs
 

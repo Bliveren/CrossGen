@@ -22,7 +22,7 @@ Target release: `v0.2.0`
 - [x] `Nano Banana 3` 启动按钮可按需启用/置灰
 - [ ] `General` 启动按钮可按需启用/置灰
 - [x] 不可用按钮有用户能理解的原因
-- [ ] 点击启动模型后主工作区切换到对应模型界面
+- [x] 点击启动模型后主工作区切换到对应模型界面
 - [x] 当前启动模型在 UI 中有清晰状态
 
 ## 2. Provider 与模型探测检查
@@ -67,8 +67,8 @@ Target release: `v0.2.0`
 ## 5. Nano Banana 3 检查
 
 - [x] 启动按钮映射到 `gemini-3.1-flash-image`
-- [ ] UI 显示 Nano Banana 3 专属参数
-- [ ] UI 不显示 OpenAI-only 参数
+- [x] UI 显示 Nano Banana 3 专属参数
+- [x] UI 不显示 OpenAI-only 参数
 - [x] 文生图请求使用 Gemini `generateContent`
 - [x] 参考图编辑请求包含 image `inlineData`
 - [x] 响应 image parts 能保存到本地
@@ -76,11 +76,11 @@ Target release: `v0.2.0`
 - [ ] 生成结果能显示在中间画布
 - [ ] 生成结果能下载
 - [x] 失败错误提示清晰且脱敏
-- [ ] Thinking 开关只在模型支持时显示
-- [ ] Search grounding 开关只在模型支持时显示
-- [ ] Resolution 控件符合 Nano Banana 3 能力
-- [ ] Aspect ratio 控件符合 Nano Banana 3 能力
-- [ ] 局部引导编辑文案不承诺 exact mask
+- [x] Thinking 开关只在模型支持时显示
+- [x] Search grounding 开关只在模型支持时显示
+- [x] Resolution 控件符合 Nano Banana 3 能力
+- [x] Aspect ratio 控件符合 Nano Banana 3 能力
+- [x] 局部引导编辑文案不承诺 exact mask
 - [x] mock Gemini verifier 通过
 
 ## 6. General 模式检查
@@ -103,7 +103,7 @@ Target release: `v0.2.0`
 - [x] 展开后右侧历史区域内部滚动
 - [x] 展开历史不会拉长窗口整体高度
 - [x] 搜索历史时模型字段可参与搜索
-- [ ] 复用历史任务能恢复对应模型参数
+- [x] 复用历史任务能恢复对应模型参数
 - [x] 删除单条历史仍只删除该 job owned files
 - [x] 清空历史仍清理 owned generated files
 

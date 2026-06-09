@@ -13,6 +13,7 @@ Target release: `v0.2.0`
 - 2026-06-09: OpenAI provider adapter extraction and GPT Image 2 regression coverage merged to `main` via PR #77.
 - 2026-06-09: Gemini image adapter runtime, `generateContent` request/response handling, inline image saving, validation, and adapter tests merged to `main` via PR #80.
 - 2026-06-09: Model discovery service/UI, provider selector, launch-button state, automatic save/test discovery refresh, and provider discovery tests merged to `main` via PR #79.
+- 2026-06-09: Nano Banana 3 renderer parameter UI, Gemini launch run path, guided-region copy, General unsupported state, and history reuse restore merged to `main` via PR #82.
 
 ## 1. 目标
 
