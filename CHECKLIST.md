@@ -101,7 +101,7 @@
 - [ ] Linux 原生桌面 AppImage 直接运行、下载、打开文件夹行为验证完成
 - [x] 真实 API 验收脚本默认受成本确认保护
 - [x] 真实 streaming 验收需要额外成本确认
-- [ ] Gemini / Nano Banana 3 真实 API 验收完成（当前只有 mock 自动化和外部手工 runbook）
+- [ ] Gemini / Nano Banana 3 真实 API 验收完成（已有受成本保护 verifier，仍需真实 Key 跑通并记录证据）
 - [x] 签名/公证 readiness 脚本不会暴露 secret 且不会尝试签名
 - [x] 配置迁移到当前 state v1 正常
 - [x] 长时间生成不会轻易超时
