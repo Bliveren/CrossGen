@@ -7,7 +7,7 @@ import { deflateSync } from "node:zlib";
 const model = process.env.IMAGE2TOOLS_GEMINI_MODEL ?? "gemini-3.1-flash-image";
 const baseURL = (process.env.IMAGE2TOOLS_GEMINI_BASE_URL ?? process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
 const apiKey = process.env.IMAGE2TOOLS_GEMINI_API_KEY ?? process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? "";
-const acceptCost = process.env.IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST === "1" || process.env.IMAGE2TOOLS_REAL_API_ACCEPT_COST === "1";
+const acceptCost = process.env.IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST === "1";
 const outputRoot = path.resolve("real-api-artifacts", "gemini");
 
 function requireAcceptance() {
