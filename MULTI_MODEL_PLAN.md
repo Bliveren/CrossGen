@@ -1,6 +1,6 @@
 # Image2Tools 多生图模型支持计划
 
-Last updated: 2026-06-09
+Last updated: 2026-06-10
 
 Target release: `v0.2.0`
 
@@ -18,6 +18,36 @@ Target release: `v0.2.0`
 - 2026-06-09: General provider-aware fallback for Gemini prompt/reference and OpenAI-compatible prompt-only OpenAI/Custom providers merged to `main` via PR #89.
 - 2026-06-09: Mock model discovery verifier, renderer multi-model smoke coverage, multi-model release/security docs, real Gemini verifier, release metadata, update manifest hash/size enforcement, and manifest asset helper merged through PRs #86-#97.
 - 2026-06-09: Release evidence ledger, checklist/evidence alignment guard, and refreshed completion audit merged through PRs #98-#100.
+- 2026-06-10: v0.2.0 release blockers are explicitly tracked below and linked to release evidence gates / GitHub issues.
+
+## 0.1 v0.2.0 当前卡点（发布阻塞）
+
+当前状态：`BLOCKED_FOR_EXTERNAL_EVIDENCE`。代码实现、mock 验证、release verifier、evidence ledger、checklist guard、manifest asset helper 和 CI package gates 已进入 `main`；`v0.2.0` 不能宣称完成或发布，是因为以下 6 个 release evidence 必需 gate 仍为 `pending`。
+
+权威校验：
+
+```bash
+pnpm verify:release-evidence
+node scripts/verify-release-evidence.mjs --require-complete
+```
+
+截至 2026-06-10，第一条命令只能证明 ledger 结构、脱敏和 checklist 对齐规则有效；第二条命令必须失败，直到下表 6 个 gate 全部拿到真实外部证据并标记 `passed`。
+
+| Gate | 卡点是什么 | 当前缺失证据 | 解锁动作 / 验收命令 | 追踪 |
+| --- | --- | --- | --- | --- |
+| `real-openai-api` | 需要真实 OpenAI Key、`gpt-image-2` 模型权限和显式成本确认；本地/CI mock 不能替代真实 API 验收。 | 模型发现包含 `gpt-image-2`；真实文生图、参考图编辑、mask 局部重绘成功；真实任务的历史、下载行为已检查。 | 设置真实 Key 后运行 `IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 pnpm verify:real-api`；按需追加 `IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST=1` 跑 streaming；把脱敏后的命令、artifact 路径、OS/commit、app 手工检查结果写入 `docs/release/evidence.json`。 | [#1](https://github.com/Bliveren/image2tools/issues/1) |
+| `real-gemini-api` | 需要真实 Gemini Key、`gemini-3.1-flash-image` 权限和显式成本确认；mock Gemini verifier 只能证明协议适配，不证明真实模型可用。 | 模型发现包含 `gemini-3.1-flash-image`；Nano Banana 3 文生图、参考图编辑、局部引导编辑成功；历史 provider/model、参数复用和下载行为已检查。 | 设置真实 Key 后运行 `IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 pnpm verify:real-gemini-api`；再做 app 级历史/下载/参数恢复验收；更新 evidence ledger 和 checklist。 | [#102](https://github.com/Bliveren/image2tools/issues/102) |
+| `macos-signed-notarized` | 需要 Developer ID Application 证书和 Apple notarization 凭据；当前默认 `pnpm package:mac` 只是本地预览路径，不能作为正式发布证据。 | `pnpm verify:signing-ready` 通过；`pnpm package:mac:signed` 产出签名/公证 artifact；`pnpm verify:release:mac` 对同一 artifact 通过；记录 notarization / artifact 证据。 | 在具备证书和 Apple env 的签名机上运行 `pnpm verify:signing-ready`、`pnpm package:mac:signed`、`pnpm verify:release:mac`；把签名身份摘要、公证结果、artifact URL/hash/size 写入 evidence。 | [#3](https://github.com/Bliveren/image2tools/issues/3) |
+| `windows-native-release` | Hosted CI 只跑 `package-smoke`，不能替代原生 Windows full-install 验收。 | 原生 Windows 上 NSIS 静默安装、已安装 app 启动、主窗口检测、静默卸载通过；mock OpenAI/Gemini 配置、下载、打开文件夹行为已检查。 | 在 Windows 机器运行 `pnpm package:win` 或 `pnpm package`，再运行默认 full-install 的 `pnpm verify:release:windows`；补充 app 手工检查和 OS/version/artifact 证据。 | [#4](https://github.com/Bliveren/image2tools/issues/4) |
+| `linux-native-release` | CI/Docker 环境可能缺 FUSE，不能替代原生 Linux desktop 直接 AppImage 验收。 | 原生 Linux 桌面上 direct AppImage 启动强制通过；mock OpenAI/Gemini 配置、下载、打开文件夹行为已检查。 | 在带 FUSE 的 Linux 桌面运行 `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 pnpm verify:release:linux`；补充 app 手工检查和 OS/version/artifact 证据。 | [#4](https://github.com/Bliveren/image2tools/issues/4) |
+| `update-manifest-assets` | 正式 update manifest 必须基于已经签名/公证或原生平台验收通过的最终分发 artifacts；不能用 preview、unsigned、unnotarized 或未验收 artifact。 | 公开 HTTPS release asset URL；`docs/updates/latest.json` 中每个 asset 的 `url`、`fileName`、`sha256`、`sizeBytes` 与真实 artifact 匹配。 | 上传正式 artifacts 后运行 `pnpm update:manifest-asset -- --file <artifact> --platform <darwin|win32|linux|all> --url <https-url> [--arch <arch>]`；更新 evidence 后跑 `pnpm verify:release-evidence -- --require-complete`。 | [#103](https://github.com/Bliveren/image2tools/issues/103) |
+
+执行边界：
+
+- 上述卡点不是代码实现缺口，而是外部凭据、平台环境、签名材料和正式分发资产证据缺口。
+- 子 agent 不能伪造真实 API 输出、Apple 公证、原生 Windows/Linux 桌面行为或 release asset URL/hash/size；没有证据前不得勾选 `TODO.md`、`CHECKLIST.md`、`MULTI_MODEL_CHECKLIST.md` 中对应项。
+- 一旦某个 gate 的外部证据到位，下一轮必须从最新 `origin/main` 新建 worktree/branch，只更新 evidence ledger、相关 checklist/todo/audit 文档和必要 manifest，不允许顺手做无关重构。
+- 全部 gate 完成的唯一收敛标准是：`pnpm verify:release-evidence -- --require-complete` 通过，且 `MULTI_MODEL_TODO.md` / `MULTI_MODEL_CHECKLIST.md` / `TODO.md` / `CHECKLIST.md` 不再留下与 `v0.2.0` 发布相关的未完成验收项。
 
 ## 1. 目标
 
@@ -53,7 +83,7 @@ Target release: `v0.2.0`
 - mock Gemini Image API、mock model discovery verifier、受成本保护的真实 OpenAI/Gemini verifier
 - 跨平台打包配置、release verifier、release evidence ledger、update manifest hash/size 校验和资产条目生成脚本
 
-当前剩余关键约束：
+当前剩余关键约束（摘要；发布阻塞以 `0.1 v0.2.0 当前卡点` 为准）：
 
 - 真实 OpenAI / Gemini API 验收仍需要外部 Key、模型权限和显式成本确认。
 - 签名/公证和正式更新 manifest 资产 URL/hash/size 仍需要真实分发 artifacts。
