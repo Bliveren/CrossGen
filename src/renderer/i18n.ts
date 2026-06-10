@@ -186,6 +186,7 @@ export interface UiCopy {
   zoomLevel: string;
   clicked: string;
   modes: Record<WorkMode, ModeCopy>;
+  guidedRegionMode: ModeCopy;
   notices: NoticeCopy;
   validation: ValidationCopy;
 }
@@ -312,6 +313,7 @@ export const translations: Record<Language, UiCopy> = {
       edit: { title: "Edit", action: "Edit", hint: "Use references" },
       inpaint: { title: "Inpaint", action: "Inpaint", hint: "Source + mask" }
     },
+    guidedRegionMode: { title: "Guided region", action: "Guide edit", hint: "Source + region" },
     notices: {
       ready: "Ready.",
       browserPreview: "Browser preview: Electron IPC is unavailable.",
@@ -494,6 +496,7 @@ export const translations: Record<Language, UiCopy> = {
       edit: { title: "编辑", action: "编辑", hint: "使用参考图" },
       inpaint: { title: "局部重绘", action: "局部重绘", hint: "源图 + 蒙版" }
     },
+    guidedRegionMode: { title: "区域引导", action: "区域引导", hint: "源图 + 区域" },
     notices: {
       ready: "就绪。",
       browserPreview: "浏览器预览：Electron IPC 不可用。",

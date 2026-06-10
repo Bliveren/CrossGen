@@ -38,7 +38,7 @@ describe("model discovery", () => {
   it("classifies focused model ids discovered from an OpenAI-compatible model list", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
-        data: [{ id: "gpt-image-2", object: "model" }, { id: "gemini-3.1-flash-image", object: "model" }]
+        data: [{ id: "gpt-image-2", object: "model" }, { id: "gemini-3.1-flash-image", object: "model" }, { id: "gemini-3-pro-image", object: "model" }]
       })
     );
 
@@ -46,7 +46,8 @@ describe("model discovery", () => {
 
     expect(result.models).toEqual([
       expect.objectContaining({ id: "gpt-image-2", providerKind: "openai" }),
-      expect.objectContaining({ id: "gemini-3.1-flash-image", providerKind: "gemini" })
+      expect.objectContaining({ id: "gemini-3.1-flash-image", providerKind: "gemini" }),
+      expect.objectContaining({ id: "gemini-3-pro-image", providerKind: "gemini" })
     ]);
   });
 

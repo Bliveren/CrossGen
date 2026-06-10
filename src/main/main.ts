@@ -42,7 +42,7 @@ import {
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
-  NANO_BANANA_3_MODEL_ID,
+  getFocusedModelDefinition,
   getModelDisplayName,
   isGeneralFallbackProvider,
   isPotentialGeneralImageModel,
@@ -583,7 +583,9 @@ function selectActiveLaunchForDiscovery(
   inferredProviderKind: StoredProviderConfig["kind"]
 ) {
   if (inferredProviderKind === "gemini") {
-    const nanoModel = models.find((model) => model.providerKind === "gemini" && normalizeModelId(model.id) === normalizeModelId(NANO_BANANA_3_MODEL_ID));
+    const nanoDefinition = getFocusedModelDefinition(NANO_BANANA_3_LAUNCH_ID);
+    const nanoModelIds = new Set((nanoDefinition?.modelIds ?? []).map(normalizeModelId));
+    const nanoModel = models.find((model) => model.providerKind === "gemini" && nanoModelIds.has(normalizeModelId(model.id)));
     if (nanoModel) {
       return {
         activeLaunchId: NANO_BANANA_3_LAUNCH_ID,

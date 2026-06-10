@@ -74,6 +74,7 @@ import {
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
   generalFallbackSupportsReferenceImages,
+  getFocusedModelDefinition,
   getGeneralImageModelCandidate,
   isGeneralFallbackProvider,
   isPotentialGeneralImageModel,
@@ -127,6 +128,12 @@ interface LaunchButtonState {
   providerKind: ProviderKind;
   available: boolean;
   reason: string;
+}
+
+interface LaunchModelOption {
+  id: string;
+  providerKind: ProviderKind;
+  displayName: string;
 }
 
 type OpenAIParamPatch = Partial<Omit<OpenAIImageParams, "providerKind" | "launchId">>;
@@ -361,11 +368,11 @@ function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: 
 
 function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButtonState[] {
   const hasDiscovery = config.discoveredModels.length > 0;
-  const generalCandidate = getGeneralImageModelCandidate(config.discoveredModels, config.kind) ?? getAnyGeneralImageModelCandidate(config);
   return FOCUSED_MODEL_CATALOG.map((definition) => {
-    const focusedModel = definition.launchId === GENERAL_LAUNCH_ID ? undefined : getFocusedDiscoveredModel(config, definition.modelIds);
-    const modelId = definition.launchId === GENERAL_LAUNCH_ID ? generalCandidate?.id ?? "" : focusedModel?.id ?? definition.defaultModelId;
-    const providerKind = definition.launchId === GENERAL_LAUNCH_ID ? generalCandidate?.providerKind ?? config.kind : definition.providerKind;
+    const modelOptions = getLaunchModelOptions(config, definition.launchId);
+    const preferredModel = getPreferredLaunchModel(config, definition.launchId, modelOptions);
+    const modelId = preferredModel?.id ?? definition.defaultModelId;
+    const providerKind = preferredModel?.providerKind ?? definition.providerKind;
     let available = false;
     let reason = "";
 
@@ -378,13 +385,13 @@ function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButt
     } else if (definition.launchId === GENERAL_LAUNCH_ID) {
       if (!isGeneralFallbackProvider(config.kind)) {
         reason = copy.generalRuntimeUnsupported;
-      } else if (!modelId) {
+      } else if (!preferredModel) {
         reason = copy.launchUnavailableNoImageModels;
       } else {
         available = true;
         reason = copy.launchAvailable;
       }
-    } else if (focusedModel) {
+    } else if (preferredModel) {
       available = true;
       reason = copy.launchAvailable;
     } else {
@@ -402,13 +409,51 @@ function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButt
   });
 }
 
-function getFocusedDiscoveredModel(config: ProviderConfig, modelIds: readonly string[]) {
-  const normalizedModelIds = new Set(modelIds.map(normalizeModelId));
-  return config.discoveredModels.find((model) => normalizedModelIds.has(normalizeModelId(model.id)));
+function getLaunchModelOptions(config: ProviderConfig, launchId: FocusedLaunchId): LaunchModelOption[] {
+  if (launchId === GENERAL_LAUNCH_ID) {
+    return getGeneralLaunchModelOptions(config);
+  }
+  const definition = FOCUSED_MODEL_CATALOG.find((item) => item.launchId === launchId);
+  if (!definition) return [];
+  const normalizedModelIds = new Set(definition.modelIds.map(normalizeModelId));
+  return config.discoveredModels
+    .filter((model) => normalizedModelIds.has(normalizeModelId(model.id)))
+    .map(toLaunchModelOption);
 }
 
-function getAnyGeneralImageModelCandidate(config: ProviderConfig) {
-  return config.discoveredModels.find((model) => isGeneralFallbackProvider(model.providerKind) && isPotentialGeneralImageModel(model));
+function getPreferredLaunchModel(config: ProviderConfig, launchId: FocusedLaunchId, options: LaunchModelOption[]): LaunchModelOption | undefined {
+  if (config.activeLaunchId === launchId) {
+    const activeModel = options.find((model) => normalizeModelId(model.id) === normalizeModelId(config.activeModelId));
+    if (activeModel) return activeModel;
+  }
+  return options[0];
+}
+
+function getGeneralLaunchModelOptions(config: ProviderConfig): LaunchModelOption[] {
+  const preferred = getGeneralImageModelCandidate(config.discoveredModels, config.kind);
+  const candidates = config.discoveredModels.filter((model) => isGeneralFallbackProvider(model.providerKind) && isPotentialGeneralImageModel(model));
+  const ordered = preferred ? [preferred, ...candidates.filter((model) => model !== preferred)] : candidates;
+  return ordered.map(toLaunchModelOption);
+}
+
+function toLaunchModelOption(model: { id: string; providerKind: ProviderKind; displayName?: string }): LaunchModelOption {
+  return {
+    id: model.id,
+    providerKind: model.providerKind,
+    displayName: model.displayName?.trim() || model.id
+  };
+}
+
+function modeLabelsForParams(copy: UiCopy, params: ImageParams): UiCopy["modes"] {
+  if (inpaintCapabilityForParams(params) !== "guided-region") return copy.modes;
+  return {
+    ...copy.modes,
+    inpaint: copy.guidedRegionMode
+  };
+}
+
+function inpaintCapabilityForParams(params: ImageParams) {
+  return getFocusedModelDefinition(params.launchId)?.capabilities.inpaint ?? false;
 }
 
 function getHistoryModelDetails(job: GenerationJob): HistoryModelDetails {
@@ -523,11 +568,11 @@ export function App() {
   const bridge = getBridge();
   const [language, setLanguage] = useState<Language>(() => getInitialLanguage());
   const copy = translations[language];
-  const modeLabels = copy.modes;
   const [snapshot, setSnapshot] = useState<AppSnapshot>(fallbackSnapshot);
   const [mode, setMode] = useState<WorkMode>("generate");
   const [prompt, setPrompt] = useState("A clean product photo of a matte black travel mug on a brushed steel counter");
   const [params, setParams] = useState<ImageParams>(DEFAULT_IMAGE_PARAMS);
+  const modeLabels = useMemo(() => modeLabelsForParams(copy, params), [copy, params]);
   const [apiKey, setApiKey] = useState("");
   const [providerKind, setProviderKind] = useState<ProviderKind>("openai");
   const [baseURL, setBaseURL] = useState(DEFAULT_BASE_URL);
@@ -582,11 +627,15 @@ export function App() {
   const generalAllowsReferences = generalParams ? generalFallbackSupportsReferenceImages(generalParams.providerKind) : false;
   const showReferenceTools = !generalParams || generalAllowsReferences;
   const generalModeNotice = generalParams ? generalRuntimeNotice(generalParams.providerKind, copy) : copy.generalRuntimeUnsupported;
-  const usesExactMask = Boolean(openAIParams);
+  const activeInpaintCapability = inpaintCapabilityForParams(params);
+  const usesExactMask = activeInpaintCapability === "exact-mask";
   const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
   const previewZoomPercent = Math.round(previewZoom * 100);
   const apiKeyPlaceholder = snapshot.config.apiKeyPreview ?? (snapshot.config.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
   const launchButtons = useMemo(() => getLaunchButtonStates(snapshot.config, copy), [copy, snapshot.config]);
+  const activeModelOptions = useMemo(() => getLaunchModelOptions(snapshot.config, snapshot.config.activeLaunchId), [snapshot.config]);
+  const activeModelValue =
+    activeModelOptions.find((model) => normalizeModelId(model.id) === normalizeModelId(snapshot.config.activeModelId))?.id ?? activeModelOptions[0]?.id ?? "";
   const activeLaunchDisplay = launchButtons.find((button) => button.launchId === snapshot.config.activeLaunchId)?.displayName ?? modelLabelFromId(snapshot.config.activeModelId);
   const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
   const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
@@ -966,6 +1015,43 @@ export function App() {
     }
   }
 
+  async function selectLaunchModel(modelId: string) {
+    if (!bridge || !modelId) return;
+    const selectedModel = activeModelOptions.find((model) => model.id === modelId);
+    if (!selectedModel) return;
+    const nextParams = createLaunchParams(snapshot.config.activeLaunchId, selectedModel.id, params, selectedModel.providerKind, snapshot.config);
+    setParams(nextParams);
+    if (isGeneralImageParams(nextParams)) {
+      if (!generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
+        setMode("generate");
+        setInputAssets([]);
+      }
+      setMaskAsset(null);
+      setMaskDataUrl(null);
+    }
+    updateCustomSizeFromParams(nextParams, setCustomSize);
+    markDraftChanged();
+    setIsSavingConfig(true);
+    try {
+      const config = await bridge.saveConfig({
+        kind: snapshot.config.kind,
+        baseURL: snapshot.config.baseURL,
+        defaultModel: defaultModelForConfigSave(snapshot.config.kind, nextParams, snapshot.config),
+        defaultSize: defaultSizeForConfigSave(nextParams, snapshot.config),
+        defaultQuality: defaultQualityForConfigSave(nextParams, snapshot.config),
+        timeoutMs: nextParams.timeoutMs,
+        activeLaunchId: snapshot.config.activeLaunchId,
+        activeModelId: selectedModel.id
+      });
+      applyConfig(config);
+      setNotice({ kind: "info", text: copy.notices.launchSelected(selectedModel.displayName) });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsSavingConfig(false);
+    }
+  }
+
   async function testConnection() {
     if (!bridge) {
       setNotice({ kind: "error", text: copy.notices.bridgeTestConnection });
@@ -1333,7 +1419,7 @@ export function App() {
   }
 
   const sizeValidation = openAIParams ? validateGptImage2Size(openAIParams.size) : null;
-  const maskDescription = geminiParams ? copy.guidedRegionDescription : copy.maskDescription;
+  const maskDescription = activeInpaintCapability === "guided-region" ? copy.guidedRegionDescription : copy.maskDescription;
   const parameterSummary = openAIParams ? (
     <>
       <span>{copy.size}</span>
@@ -1678,6 +1764,18 @@ export function App() {
                 <small>{button.available ? button.modelId || copy.generalFallback : button.reason}</small>
               </button>
             ))}
+            {activeModelOptions.length > 1 && (
+              <label className="launch-model-select">
+                {copy.model}
+                <select value={activeModelValue} onChange={(event) => void selectLaunchModel(event.target.value)} disabled={isSavingConfig}>
+                  {activeModelOptions.map((model) => (
+                    <option key={`${model.providerKind}:${model.id}`} value={model.id}>
+                      {model.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
         </form>
 

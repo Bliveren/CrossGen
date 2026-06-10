@@ -191,6 +191,57 @@ describe("Gemini image adapter", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("saves OpenAI-style base64 image payloads from Gemini-compatible gateways", async () => {
+    const fetchImpl = (async () =>
+      Response.json({
+        data: [{ b64_json: tinyPngBase64, mime_type: "image/png" }]
+      })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runGeminiImageJob(job(), "mock-gemini-key", "https://api.test/v1beta", runtime);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.outputs[0].fileName).toBe("job_gemini_test-result-0.png");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("saves data URL image payloads from Gemini-compatible gateways", async () => {
+    const fetchImpl = (async () =>
+      Response.json({
+        data: [{ url: `data:image/png;base64,${tinyPngBase64}` }]
+      })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runGeminiImageJob(job(), "mock-gemini-key", "https://api.test/v1beta", runtime);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.outputs[0].fileName).toBe("job_gemini_test-result-0.png");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("downloads Gemini fileData image URLs before saving results", async () => {
+    const fetchImpl = (async (url: string | URL | Request) => {
+      if (String(url) === "https://files.example.com/generated.png") {
+        return new Response(Buffer.from(tinyPngBase64, "base64"), { headers: { "content-type": "image/png" } });
+      }
+      return Response.json({
+        candidates: [
+          {
+            content: {
+              parts: [{ fileData: { mimeType: "image/png", fileUri: "https://files.example.com/generated.png" } }]
+            }
+          }
+        ]
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runGeminiImageJob(job(), "mock-gemini-key", "https://api.test/v1beta", runtime);
+
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
   it("sends source and mask images as inlineData for guided-region inpaint", async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-gemini-inputs-"));
     const sourcePath = path.join(tmpDir, "source.png");
