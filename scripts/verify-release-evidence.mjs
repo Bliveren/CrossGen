@@ -30,7 +30,7 @@ const checklistGuards = [
   },
   {
     file: "TODO.md",
-    text: "非 macOS 平台安装验证；Windows 与原生 Linux 桌面 shell 行为仍待验证",
+    text: "非 macOS 平台安装验证；Windows 已完成，原生 Linux 桌面 shell 行为仍待验证",
     gateIds: ["windows-native-release", "linux-native-release"]
   },
   {

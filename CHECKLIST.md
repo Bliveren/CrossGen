@@ -101,8 +101,8 @@
 - [x] Linux ARM64 容器环境可 build、通过 mock verifier、生成 AppImage、解包并在 Xvfb 下启动
 - [x] Linux package gate 已接入 `pnpm verify:release:linux`
 - [x] Linux verifier 在 FUSE 可用时覆盖直接 AppImage 启动，并支持 `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1` 强制原生验收
-- [ ] Windows 原生安装与启动验证完成
-  - 2026-06-10: Windows full-install verifier 已通过并记录证据；该 guarded checklist 项仍保持未完成，直到 `windows-native-release` gate 的 download/open-folder 证据也补齐。
+- [x] Windows 原生安装与启动验证完成
+  - 2026-06-10: Windows full-install verifier、packaged-app mock provider、native download 和 open-folder 证据已记录；`windows-native-release` gate 已通过。
 - [ ] Linux 原生桌面 AppImage 直接运行、下载、打开文件夹行为验证完成
 - [x] 真实 API 验收脚本默认受成本确认保护
 - [x] 真实 streaming 验收需要额外成本确认
