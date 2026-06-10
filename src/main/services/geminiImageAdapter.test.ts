@@ -219,6 +219,34 @@ describe("Gemini image adapter", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("extracts Markdown data URL images from Gemini text parts", async () => {
+    const fetchImpl = (async () =>
+      Response.json({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: `![image](data:image/jpeg;base64,${tinyPngBase64})` }]
+            },
+            finishReason: "STOP"
+          }
+        ]
+      })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runGeminiImageJob(job(), "mock-gemini-key", "https://api.test/v1beta", runtime);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.outputs[0]).toMatchObject({
+      fileName: "job_gemini_test-result-0.jpg",
+      mimeType: "image/jpeg"
+    });
+    expect(result.providerMetadata).toMatchObject({
+      geminiTextParts: ["![image](data:image/jpeg;base64,[image data omitted])"],
+      geminiFinishReasons: ["STOP"]
+    });
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
   it("downloads Gemini fileData image URLs before saving results", async () => {
     const fetchImpl = (async (url: string | URL | Request) => {
       if (String(url) === "https://files.example.com/generated.png") {

@@ -333,7 +333,8 @@ function collectGeminiResponseParts(payload: GeminiGenerateContentResponse): {
     for (const part of parts) {
       if (!isRecord(part)) continue;
       if (typeof part.text === "string" && part.text.trim()) {
-        textParts.push(part.text);
+        textParts.push(textPartForMetadata(part.text));
+        images.push(...imageSourcesFromText(part.text));
       }
       const imageSource = imageSourceFromResponsePart(part);
       if (imageSource) {
@@ -384,6 +385,24 @@ function imageSourceFromResponsePart(part: Record<string, unknown>): GeminiImage
     data: "",
     url
   };
+}
+
+function imageSourcesFromText(text: string): GeminiImageSource[] {
+  return [...text.matchAll(dataImageUrlPattern())].map((match) => {
+    const mimeType = normalizeGeminiResponseMimeType(match[1], "image/png");
+    return {
+      mimeType,
+      data: `data:${mimeType};base64,${match[2] ?? ""}`
+    };
+  });
+}
+
+function textPartForMetadata(text: string): string {
+  return text.trim().replace(dataImageUrlPattern(), (_match, mimeType: string) => `data:${mimeType};base64,[image data omitted]`);
+}
+
+function dataImageUrlPattern(): RegExp {
+  return /data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/_=-]+)/gi;
 }
 
 async function saveGeminiImages(jobId: string, images: GeminiImageSource[], runtime: GeminiImageRuntime): Promise<ImageAsset[]> {
