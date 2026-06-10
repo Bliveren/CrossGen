@@ -5,10 +5,16 @@ Status: draft until real API acceptance, signed/notarized distribution assets, a
 ## Highlights
 
 - Multi-model workspace for GPT Image 2, Nano Banana 3, and General launch flows.
+- Refined left sidebar with separate model configuration, launch model, parameter configuration, draft, notice, and update areas.
+- Model configuration now runs automatic connection checks on startup and after saved API config changes. The UI shows connection status beside the model configuration title and surfaces friendly failure guidance.
+- Model discovery can infer provider/model availability from the configured API and enables launch families based on discovered models rather than only the selected provider label.
 - OpenAI provider path keeps GPT Image 2 generation, editing, exact-mask inpainting, streaming partial previews, downloads, and history.
-- Gemini provider path adds the app's Nano Banana 3 launch target, currently mapped to `gemini-3.1-flash-image`, with `generateContent` image generation, reference-image editing, guided-region editing, and Gemini-specific controls.
+- Gemini provider path adds the app's Nano Banana 3 launch target for discovered Gemini image models such as `gemini-3.1-flash-image` and `gemini-3-pro-image`, with `generateContent` image generation, reference-image editing, guided-region editing, and Gemini-specific controls.
+- Launch model buttons now include concrete discovered-model choices when multiple compatible models are available under the same launch family.
 - General launch mode is a minimal fallback for discovered non-focused image models. Gemini General supports prompt and reference images; OpenAI and Custom General use a prompt-only OpenAI-compatible `/images/generations` contract.
 - History entries now retain provider/model context so reused prompts restore the matching launch model and parameters.
+- Clearing all recent-task history now requires explicit confirmation.
+- Update checks now default to the raw GitHub manifest URL to avoid the previous GitHub Pages 404. The sidebar shows an automatic up-to-date status, saves the current draft before update launch, and starts the Windows NSIS installer in silent mode with app restart after installation.
 
 ## Verification Gates
 

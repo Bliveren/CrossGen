@@ -1,6 +1,6 @@
 {
   "version": "0.2.0",
   "pubDate": "2026-06-09T00:00:00.000Z",
-  "notes": "Multi-model workspace release metadata staged. Add signed and externally verified release assets before publishing the update manifest.",
+  "notes": "Multi-model workspace, sidebar model configuration, automatic connection checks, concrete launch-model selection, and updater refinements staged. Add signed and externally verified release assets before publishing the update manifest.",
   "assets": []
 }
