@@ -1,6 +1,6 @@
 # Image2Tools Completion Audit
 
-Date: 2026-06-09
+Date: 2026-06-10
 Branch: `main`
 Target release: `v0.2.0`
 
@@ -41,7 +41,7 @@ governance without leaking secrets or private local artifacts.
 | Update manifest safety | `src/shared/updateManifest.ts`, installer byte verification, update manifest tests, and `pnpm update:manifest-asset` require URL/hash/size metadata | Done; formal signed asset metadata pending |
 | Release evidence governance | `docs/release/evidence.json` records required external gates; `pnpm verify:release-evidence` validates schema, redaction, and guarded checklist alignment | Done; required gates still pending |
 | macOS packaging | `package:mac`, DMG/ZIP targets, ad-hoc preview build path, signed packaging command, signing-readiness script, and mac release verifier are present | Configured; Developer ID signed/notarized evidence pending |
-| Windows packaging | `package:win`, NSIS target, CI package-smoke mode, and full native installer verifier are present | Configured; native Windows shell evidence pending |
+| Windows packaging | `package:win`, NSIS target, CI package-smoke mode, and full native installer verifier are present; Windows full-install verifier evidence is recorded in `docs/release/windows-full-install-2026-06-10.md` | Partial external evidence recorded; native download/open-folder evidence pending |
 | Linux packaging | AppImage target, CI verifier, extracted app Xvfb launch, and direct AppImage requirement flag are present | Configured; native Linux desktop evidence pending |
 | GitHub Actions | CI includes build/mock verification plus macOS, Windows, and Linux package jobs; recent PR gates have been green before merge | Done |
 | Secret handling and open-source scan | `.gitignore`, `SECURITY.md`, and `OPEN_SOURCE_AUDIT.md` document secret handling, ignored outputs, and scan expectations | Done; re-run before publication |
@@ -87,8 +87,11 @@ checklist items complete without redacted evidence in
   `pnpm verify:release:mac` with Developer ID and Apple notarization
   credentials.
 - Native Windows release validation:
-  `pnpm package:win` and default full `pnpm verify:release:windows` on a native
-  Windows shell.
+  a native Windows full-install verifier passed for commit
+  `e6587d2e3e2bff7d586164b4dd4294aed026c953`, covering PE checks, unpacked and
+  installed app launch, main-window detection, silent install, and silent
+  uninstall. The gate remains pending until native download/open-folder behavior
+  is checked and recorded.
 - Native Linux desktop validation:
   `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 pnpm verify:release:linux` on a
   native Linux desktop shell, plus download/open-folder checks.

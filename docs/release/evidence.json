@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.0",
-  "lastUpdated": "2026-06-09T00:00:00.000Z",
+  "lastUpdated": "2026-06-10T02:16:23.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -95,18 +95,27 @@
         "Download and open-folder behavior are checked on native Windows."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-06-10T02:16:23.000Z",
+        "commit": "e6587d2e3e2bff7d586164b4dd4294aed026c953",
+        "environment": "Native Windows shell; package version 0.2.0; artifact release\\Image2Tools-Setup.exe.",
+        "commands": [
+          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; corepack pnpm@10.25.0 verify:release:windows"
+        ],
         "references": [
           {
             "label": "Native Windows release validation tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/4"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending native Windows shell validation."
+        "artifacts": [
+          {
+            "kind": "evidence-note",
+            "path": "docs/release/windows-full-install-2026-06-10.md",
+            "public": true,
+            "description": "Redacted Windows full-install verifier result and remaining download/open-folder gap."
+          }
+        ],
+        "summary": "Partial Windows native evidence recorded: full-install verifier passed, including PE checks, unpacked and installed app launch, main-window detection, NSIS silent install, and silent uninstall. Gate remains pending because native download/open-folder acceptance was not counted as passed."
       }
     },
     {
