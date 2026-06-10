@@ -223,6 +223,11 @@ Current partial evidence:
   `IMAGE2TOOLS_WINDOWS_VERIFY_MODE=package-smoke` so the installer PE and
   unpacked-app smoke checks stay gated without relying on the hosted runner's
   silent installer policy.
+- On 2026-06-10, a native Windows full-install verifier run passed for commit
+  `e6587d2e3e2bff7d586164b4dd4294aed026c953`; see
+  `docs/release/windows-full-install-2026-06-10.md`. This is partial evidence:
+  native download/open-folder behavior was not counted as passed, so the
+  `windows-native-release` gate remains pending.
 - `pnpm verify:release:linux` now automates the Linux package checks that can be
   safely run in CI or a Linux shell: AppImage/unpacked executable inspection,
   unpacked app Xvfb launch, direct AppImage launch when FUSE is available,
@@ -231,7 +236,8 @@ Current partial evidence:
   to make direct AppImage execution mandatory.
 - Direct AppImage execution in Docker remains blocked by missing FUSE device
   support, so this is not a substitute for native Linux desktop validation.
-- Windows native manual validation has not been performed.
+- Windows native full-install validation has been performed, but native
+  download/open-folder validation is still pending.
 
 Run on each native platform:
 

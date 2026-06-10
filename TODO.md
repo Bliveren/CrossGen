@@ -130,6 +130,7 @@
 - [x] 取得绿色 CI
 - [ ] 完成签名、公证并补充正式分发资产 URL / hash / size 证据
 - [ ] 非 macOS 平台安装验证；Windows 与原生 Linux 桌面 shell 行为仍待验证
+  - 2026-06-10: Windows full-install verifier 通过证据已记录到 `docs/release/windows-full-install-2026-06-10.md`；该项仍保持未完成，直到 Windows download/open-folder 和原生 Linux 桌面验证都有证据。
 - [x] 增加中英文界面切换
 
 ## 建议优先级
