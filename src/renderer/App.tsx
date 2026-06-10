@@ -75,7 +75,9 @@ import {
   NANO_BANANA_3_MODEL_ID,
   generalFallbackSupportsReferenceImages,
   getGeneralImageModelCandidate,
-  isGeneralFallbackProvider
+  isGeneralFallbackProvider,
+  isPotentialGeneralImageModel,
+  normalizeModelId
 } from "../shared/modelCatalog";
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 
@@ -122,6 +124,7 @@ interface LaunchButtonState {
   launchId: FocusedLaunchId;
   displayName: string;
   modelId: string;
+  providerKind: ProviderKind;
   available: boolean;
   reason: string;
 }
@@ -238,12 +241,6 @@ function defaultLaunchForProvider(kind: ProviderKind): FocusedLaunchId {
   return GPT_IMAGE_2_LAUNCH_ID;
 }
 
-function providerForLaunch(launchId: FocusedLaunchId, fallback: ProviderKind): ProviderKind {
-  const definition = FOCUSED_MODEL_CATALOG.find((item) => item.launchId === launchId);
-  if (!definition || definition.launchId === GENERAL_LAUNCH_ID) return fallback;
-  return definition.providerKind;
-}
-
 function createOpenAIParams(modelId: string, current: ImageParams, config?: ProviderConfig): OpenAIImageParams {
   const base = isOpenAIImageParams(current) ? current : DEFAULT_IMAGE_PARAMS;
   return {
@@ -324,13 +321,13 @@ function defaultQualityForConfigSave(params: ImageParams, config: ProviderConfig
 
 function runtimeSelectionError(params: ImageParams, config: ProviderConfig, copy: UiCopy): string | null {
   if (isOpenAIImageParams(params)) {
-    return config.kind === "openai" && config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ? null : copy.selectLaunchToRun("GPT Image 2");
+    return config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ? null : copy.selectLaunchToRun("GPT Image 2");
   }
   if (isGeminiImageParams(params)) {
-    return config.kind === "gemini" && config.activeLaunchId === NANO_BANANA_3_LAUNCH_ID ? null : copy.selectLaunchToRun("Nano Banana 3");
+    return config.activeLaunchId === NANO_BANANA_3_LAUNCH_ID ? null : copy.selectLaunchToRun("Nano Banana 3");
   }
   if (!isGeneralImageParams(params)) return copy.generalRuntimeUnsupported;
-  if (config.kind !== params.providerKind || config.activeLaunchId !== GENERAL_LAUNCH_ID) return copy.selectLaunchToRun("General");
+  if (config.activeLaunchId !== GENERAL_LAUNCH_ID) return copy.selectLaunchToRun("General");
   if (!isGeneralFallbackProvider(params.providerKind)) return copy.generalRuntimeUnsupported;
   if (!params.model.trim()) return copy.launchUnavailableNoImageModels;
   return null;
@@ -363,11 +360,12 @@ function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: 
 }
 
 function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButtonState[] {
-  const discoveredIds = new Set(config.discoveredModels.map((model) => model.id));
   const hasDiscovery = config.discoveredModels.length > 0;
-  const generalCandidate = getGeneralImageModelCandidate(config.discoveredModels, config.kind);
+  const generalCandidate = getGeneralImageModelCandidate(config.discoveredModels, config.kind) ?? getAnyGeneralImageModelCandidate(config);
   return FOCUSED_MODEL_CATALOG.map((definition) => {
-    const modelId = definition.launchId === GENERAL_LAUNCH_ID ? generalCandidate?.id ?? "" : definition.defaultModelId;
+    const focusedModel = definition.launchId === GENERAL_LAUNCH_ID ? undefined : getFocusedDiscoveredModel(config, definition.modelIds);
+    const modelId = definition.launchId === GENERAL_LAUNCH_ID ? generalCandidate?.id ?? "" : focusedModel?.id ?? definition.defaultModelId;
+    const providerKind = definition.launchId === GENERAL_LAUNCH_ID ? generalCandidate?.providerKind ?? config.kind : definition.providerKind;
     let available = false;
     let reason = "";
 
@@ -386,9 +384,7 @@ function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButt
         available = true;
         reason = copy.launchAvailable;
       }
-    } else if (config.kind !== definition.providerKind) {
-      reason = copy.launchUnavailableProvider(providerLabelFromKind(definition.providerKind));
-    } else if (definition.modelIds.some((id) => discoveredIds.has(id))) {
+    } else if (focusedModel) {
       available = true;
       reason = copy.launchAvailable;
     } else {
@@ -399,10 +395,20 @@ function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButt
       launchId: definition.launchId,
       displayName: definition.displayName,
       modelId,
+      providerKind,
       available,
       reason
     };
   });
+}
+
+function getFocusedDiscoveredModel(config: ProviderConfig, modelIds: readonly string[]) {
+  const normalizedModelIds = new Set(modelIds.map(normalizeModelId));
+  return config.discoveredModels.find((model) => normalizedModelIds.has(normalizeModelId(model.id)));
+}
+
+function getAnyGeneralImageModelCandidate(config: ProviderConfig) {
+  return config.discoveredModels.find((model) => isGeneralFallbackProvider(model.providerKind) && isPotentialGeneralImageModel(model));
 }
 
 function getHistoryModelDetails(job: GenerationJob): HistoryModelDetails {
@@ -923,8 +929,8 @@ export function App() {
 
   async function launchModel(button: LaunchButtonState) {
     if (!bridge || !button.available) return;
-    const launchProvider = providerForLaunch(button.launchId, snapshot.config.kind);
-    const launchConfig = snapshot.config.kind === launchProvider ? snapshot.config : undefined;
+    const launchProvider = button.providerKind;
+    const launchConfig = snapshot.config;
     const nextParams = createLaunchParams(button.launchId, button.modelId, params, launchProvider, launchConfig);
     setParams(nextParams);
     if (isGeneralImageParams(nextParams)) {
@@ -942,9 +948,9 @@ export function App() {
     setIsSavingConfig(true);
     try {
       const config = await bridge.saveConfig({
-        kind: launchProvider,
-        baseURL: defaultBaseURLForProvider(launchProvider, baseURL),
-        defaultModel: defaultModelForConfigSave(launchProvider, nextParams, snapshot.config),
+        kind: snapshot.config.kind,
+        baseURL: snapshot.config.baseURL,
+        defaultModel: defaultModelForConfigSave(snapshot.config.kind, nextParams, snapshot.config),
         defaultSize: defaultSizeForConfigSave(nextParams, snapshot.config),
         defaultQuality: defaultQualityForConfigSave(nextParams, snapshot.config),
         timeoutMs: nextParams.timeoutMs,

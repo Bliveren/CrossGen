@@ -9,15 +9,10 @@ import {
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
-  NANO_BANANA_3_MODEL_ID
+  NANO_BANANA_3_MODEL_ID,
+  getFocusedModelDefinition
 } from "../../shared/modelCatalog.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
-
-const LAUNCH_PROVIDER = {
-  [GPT_IMAGE_2_LAUNCH_ID]: "openai",
-  [NANO_BANANA_3_LAUNCH_ID]: "gemini",
-  [GENERAL_LAUNCH_ID]: "custom"
-} as const satisfies Record<FocusedLaunchId, StoredProviderConfig["kind"]>;
 
 export function providerDisplayName(kind: StoredProviderConfig["kind"]): string {
   if (kind === "gemini") return "Gemini";
@@ -32,9 +27,9 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
   const defaultModel = defaultModelForProvider(kind, input.defaultModel);
   const baseURL = normalizeBaseURL(input.baseURL || defaultBaseURLForProvider(kind, current.baseURL));
   const discoveryInvalidated = providerChanged || baseURL !== current.baseURL;
-  const requestedLaunchId = compatibleLaunchForProvider(kind, input.activeLaunchId);
+  const requestedLaunchId = input.activeLaunchId;
   const activeLaunchId = activeLaunchForProvider(kind, requestedLaunchId ?? (providerChanged ? undefined : current.activeLaunchId));
-  const activeModelId = requestedLaunchId ? input.activeModelId?.trim() || defaultModel : defaultModel;
+  const activeModelId = requestedLaunchId ? input.activeModelId?.trim() || defaultModelForLaunch(requestedLaunchId, defaultModel) : defaultModel;
   const nextConfig: StoredProviderConfig = {
     ...current,
     kind,
@@ -87,8 +82,8 @@ function activeLaunchForProvider(kind: StoredProviderConfig["kind"], requestedLa
   return GPT_IMAGE_2_LAUNCH_ID;
 }
 
-function compatibleLaunchForProvider(kind: StoredProviderConfig["kind"], launchId: ProviderConfigInput["activeLaunchId"]): ProviderConfigInput["activeLaunchId"] {
-  if (!launchId) return undefined;
-  if (launchId === GENERAL_LAUNCH_ID) return launchId;
-  return LAUNCH_PROVIDER[launchId] === kind ? launchId : undefined;
+function defaultModelForLaunch(launchId: FocusedLaunchId, fallback: string): string {
+  const definition = getFocusedModelDefinition(launchId);
+  if (!definition || definition.launchId === GENERAL_LAUNCH_ID) return fallback;
+  return definition.defaultModelId;
 }

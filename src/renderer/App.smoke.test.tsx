@@ -118,6 +118,49 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("enables focused launches from discovered API models instead of the selected provider", async () => {
+    const bridge = await renderApp(
+      snapshot({
+        config: providerConfig({
+          kind: "openai",
+          name: "OpenAI",
+          baseURL: "https://gateway.example.com/v1",
+          apiKeySaved: true,
+          discoveredModels: [
+            { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
+            { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }
+          ],
+          lastModelDiscoveryAt: now
+        })
+      })
+    );
+
+    expect(launchButton("GPT Image 2").disabled).toBe(false);
+    expect(launchButton("Nano Banana 3").disabled).toBe(false);
+
+    await click(launchButton("Nano Banana 3"));
+    await click(buttonByText("Generate", ".primary-run"));
+
+    expect(bridge.saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "openai",
+        baseURL: "https://gateway.example.com/v1",
+        activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+        activeModelId: NANO_BANANA_3_MODEL_ID
+      })
+    );
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "generate",
+        params: expect.objectContaining({
+          providerKind: "gemini",
+          launchId: NANO_BANANA_3_LAUNCH_ID,
+          model: NANO_BANANA_3_MODEL_ID
+        })
+      })
+    );
+  });
+
   it("can discover models, select Nano Banana 3, and run through the Electron bridge", async () => {
     const geminiConfig = providerConfig({
       kind: "gemini",
