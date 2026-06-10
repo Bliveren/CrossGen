@@ -254,7 +254,7 @@ function defaultLaunchForProvider(kind: ProviderKind): FocusedLaunchId {
 
 function createOpenAIParams(modelId: string, current: ImageParams, config?: ProviderConfig): OpenAIImageParams {
   const base = isOpenAIImageParams(current) ? current : DEFAULT_IMAGE_PARAMS;
-  return {
+  return normalizeOpenAIParamsForOutputCount({
     ...DEFAULT_IMAGE_PARAMS,
     ...base,
     providerKind: "openai",
@@ -263,7 +263,20 @@ function createOpenAIParams(modelId: string, current: ImageParams, config?: Prov
     size: config?.defaultSize ?? base.size,
     quality: config?.defaultQuality ?? base.quality,
     timeoutMs: config?.timeoutMs ?? base.timeoutMs
+  });
+}
+
+function normalizeOpenAIParamsForOutputCount(params: OpenAIImageParams): OpenAIImageParams {
+  if (!params.stream || params.n <= 1) return params;
+  return {
+    ...params,
+    stream: false,
+    partialImages: 0
   };
+}
+
+function normalizeParamsForOutputCount(params: ImageParams): ImageParams {
+  return isOpenAIImageParams(params) ? normalizeOpenAIParamsForOutputCount(params) : params;
 }
 
 function createGeminiParams(modelId: string, current: ImageParams, config?: ProviderConfig): GeminiImageParams {
@@ -597,6 +610,7 @@ export function App() {
   const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null);
   const [maskCheck, setMaskCheck] = useState<MaskCheck | null>(null);
   const [activeJob, setActiveJob] = useState<GenerationJob | null>(null);
+  const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   const [partialImages, setPartialImages] = useState<ImageAsset[]>([]);
   const [notice, setNotice] = useState<Notice>({
     kind: bridge ? "info" : "error",
@@ -636,7 +650,9 @@ export function App() {
   const sourceAsset = inputAssets[0];
   const sourcePreview = assetSource(sourceAsset);
   const maskPreview = maskDataUrl ?? assetSource(maskAsset);
-  const activeImage = getBestResult(activeJob) ?? partialImages[partialImages.length - 1];
+  const activeResults = getResultAssets(activeJob);
+  const selectedResult = activeResults.find((asset) => asset.id === selectedResultId);
+  const activeImage = selectedResult ?? getBestResult(activeJob) ?? partialImages[partialImages.length - 1];
   const activeImageSource = assetSource(activeImage);
   const activeJobError = getJobError(activeJob);
   const openAIParams = isOpenAIImageParams(params) ? params : null;
@@ -748,6 +764,14 @@ export function App() {
       )
       .finally(() => setIsCheckingUpdate(false));
   }, []);
+
+  useEffect(() => {
+    setSelectedResultId((current) => {
+      if (activeResults.length === 0) return null;
+      if (current && activeResults.some((asset) => asset.id === current)) return current;
+      return activeResults[activeResults.length - 1]?.id ?? null;
+    });
+  }, [activeJob?.id, activeJob?.outputs]);
 
   useEffect(() => {
     setPreviewZoom(1);
@@ -885,19 +909,20 @@ export function App() {
   function restoreDraft(draft?: WorkspaceDraft, config = snapshot.config) {
     setHasRestoredDraft(true);
     if (!draft) return;
-    const draftMode = isGeneralImageParams(draft.params) && draft.mode === "inpaint" ? (draft.inputAssets.length > 0 ? "edit" : "generate") : draft.mode;
+    const restoredParams = normalizeParamsForOutputCount(draft.params);
+    const draftMode = isGeneralImageParams(restoredParams) && draft.mode === "inpaint" ? (draft.inputAssets.length > 0 ? "edit" : "generate") : draft.mode;
     setMode(draftMode);
     setPrompt(draft.prompt);
-    setParams(draft.params);
-    updateCustomSizeFromParams(draft.params, setCustomSize);
-    setProviderKind(draft.params.providerKind);
-    setBaseURL(defaultBaseURLForProvider(draft.params.providerKind, config.baseURL));
+    setParams(restoredParams);
+    updateCustomSizeFromParams(restoredParams, setCustomSize);
+    setProviderKind(restoredParams.providerKind);
+    setBaseURL(defaultBaseURLForProvider(restoredParams.providerKind, config.baseURL));
     setInputAssets(draft.inputAssets);
-    setMaskAsset(isGeneralImageParams(draft.params) ? null : draft.maskAsset ?? null);
-    setMaskDataUrl(isGeneralImageParams(draft.params) ? null : draft.maskDataUrl ?? null);
+    setMaskAsset(isGeneralImageParams(restoredParams) ? null : draft.maskAsset ?? null);
+    setMaskDataUrl(isGeneralImageParams(restoredParams) ? null : draft.maskDataUrl ?? null);
     setBrushSize(draft.brushSize);
     setDraftUpdatedAt(draft.updatedAt);
-    setNotice({ kind: "info", text: paramsNotice(draft.params, copy.notices.draftRestored(formatDate(draft.updatedAt)), copy) });
+    setNotice({ kind: "info", text: paramsNotice(restoredParams, copy.notices.draftRestored(formatDate(draft.updatedAt)), copy) });
   }
 
   async function clearDraft() {
@@ -914,12 +939,14 @@ export function App() {
 
   function updateOpenAIParams(patch: OpenAIParamPatch) {
     markDraftChanged();
-    setParams((current) => ({
-      ...(isOpenAIImageParams(current) ? current : createOpenAIParams("", current, snapshot.config)),
-      ...patch,
-      providerKind: "openai",
-      launchId: GPT_IMAGE_2_LAUNCH_ID
-    }));
+    setParams((current) =>
+      normalizeOpenAIParamsForOutputCount({
+        ...(isOpenAIImageParams(current) ? current : createOpenAIParams("", current, snapshot.config)),
+        ...patch,
+        providerKind: "openai",
+        launchId: GPT_IMAGE_2_LAUNCH_ID
+      })
+    );
   }
 
   function updateGeminiParams(patch: GeminiParamPatch) {
@@ -1256,13 +1283,14 @@ export function App() {
     setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[requestMode].action) });
 
     try {
+      const requestParams = normalizeParamsForOutputCount(params);
       const job = await bridge.runJob({
         mode: requestMode,
         prompt,
         inputPaths: requestMode === "generate" ? [] : inputAssets.map((asset) => asset.path),
         maskPath: requestMode === "inpaint" && !maskDataUrl ? maskAsset?.path : undefined,
         maskDataUrl: requestMode === "inpaint" && maskDataUrl ? maskDataUrl : undefined,
-        params
+        params: requestParams
       });
       setActiveJob(job);
       setSnapshot((current) => ({
@@ -1344,22 +1372,23 @@ export function App() {
 
   function reuseJob(job: GenerationJob) {
     flashButton(`reuse:${job.id}`);
-    const nextMode = isGeneralImageParams(job.params) && job.mode === "inpaint" ? (job.inputAssets.length > 0 ? "edit" : "generate") : job.mode;
+    const reusedParams = normalizeParamsForOutputCount(job.params);
+    const nextMode = isGeneralImageParams(reusedParams) && job.mode === "inpaint" ? (job.inputAssets.length > 0 ? "edit" : "generate") : job.mode;
     setMode(nextMode);
     setPrompt(job.prompt);
-    setParams(job.params);
-    updateCustomSizeFromParams(job.params, setCustomSize);
+    setParams(reusedParams);
+    updateCustomSizeFromParams(reusedParams, setCustomSize);
     setProviderKind(job.providerKind);
     setBaseURL(defaultBaseURLForProvider(job.providerKind, baseURL));
     if (job.providerKind === snapshot.config.kind) {
       setSnapshot((current) => ({ ...current, config: patchConfigActiveLaunch(current.config, job) }));
     }
     setInputAssets(job.inputAssets);
-    setMaskAsset(isGeneralImageParams(job.params) ? null : job.maskAsset ?? null);
+    setMaskAsset(isGeneralImageParams(reusedParams) ? null : job.maskAsset ?? null);
     setMaskDataUrl(null);
     setActiveJob(job);
     setHasUserChangedDraft(true);
-    setNotice({ kind: "info", text: paramsNotice(job.params, copy.notices.jobLoaded, copy) });
+    setNotice({ kind: "info", text: paramsNotice(reusedParams, copy.notices.jobLoaded, copy) });
   }
 
   function removeInputAsset(assetId: string) {
@@ -1599,8 +1628,13 @@ export function App() {
           onChange={(event) => updateOpenAIParams({ n: clamp(Number(event.target.value), 1, 10) })}
         />
       </label>
-      <label className="checkbox-row">
-        <input type="checkbox" checked={openAIParams.stream} onChange={(event) => updateOpenAIParams({ stream: event.target.checked })} />
+      <label className="checkbox-row" title={openAIParams.n > 1 ? copy.streamSingleOutputOnly : undefined}>
+        <input
+          type="checkbox"
+          checked={openAIParams.stream}
+          disabled={openAIParams.n > 1}
+          onChange={(event) => updateOpenAIParams({ stream: event.target.checked })}
+        />
         {copy.streamPartialPreview}
       </label>
       <label>
@@ -1609,7 +1643,7 @@ export function App() {
           type="number"
           min="0"
           max="3"
-          disabled={!openAIParams.stream}
+          disabled={!openAIParams.stream || openAIParams.n > 1}
           value={openAIParams.partialImages}
           onChange={(event) => updateOpenAIParams({ partialImages: clamp(Number(event.target.value), 0, 3) })}
         />
@@ -2028,6 +2062,23 @@ export function App() {
                 </div>
               )}
             </div>
+
+            {activeResults.length > 1 && (
+              <div className="result-strip">
+                {activeResults.map((asset, index) => (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    className={asset.id === activeImage?.id ? "active" : undefined}
+                    onClick={() => setSelectedResultId(asset.id)}
+                    title={`${copy.generatedResult} ${index + 1}`}
+                  >
+                    <img src={assetSource(asset)} alt={`${copy.generatedResult} ${index + 1}`} />
+                    <span>{index + 1}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {partialImages.length > 0 && (
               <div className="partial-strip">

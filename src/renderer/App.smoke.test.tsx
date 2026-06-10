@@ -100,6 +100,31 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("General").textContent).toContain("No image models discovered");
   });
 
+  it("submits GPT Image 2 multi-count requests without stream partial previews", async () => {
+    const bridge = await renderApp(snapshot());
+
+    await click(buttonByText("Parameters", ".section-toggle"));
+    await changeInput(inputByLabel("Count"), "4");
+
+    const streamPreview = inputByLabel("Stream partial preview");
+    expect(streamPreview.disabled).toBe(true);
+    expect(streamPreview.checked).toBe(false);
+
+    await click(buttonByText("Generate", ".primary-run"));
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          providerKind: "openai",
+          launchId: GPT_IMAGE_2_LAUNCH_ID,
+          n: 4,
+          stream: false,
+          partialImages: 0
+        })
+      })
+    );
+  });
+
   it("enables OpenAI General prompt-only fallback for non-focused image models", async () => {
     const bridge = await renderApp(
       snapshot({
@@ -400,6 +425,27 @@ describe("renderer multi-model smoke", () => {
       suggestedName: "result_gemini.png"
     });
   });
+
+  it("renders selectable thumbnails for multi-output jobs", async () => {
+    const job = geminiJob(0, {
+      outputs: [
+        imageAsset("result_1.png", "job_gemini_0"),
+        imageAsset("result_2.png", "job_gemini_0"),
+        imageAsset("result_3.png", "job_gemini_0")
+      ]
+    });
+    await renderApp(snapshot({ history: [job] }));
+
+    await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
+
+    const resultButtons = document.querySelectorAll<HTMLButtonElement>(".result-strip button");
+    expect(resultButtons).toHaveLength(3);
+    expect(document.querySelector<HTMLImageElement>(".zoom-surface img")?.src).toContain("result_3.png");
+
+    await click(resultButtons[1]);
+
+    expect(document.querySelector<HTMLImageElement>(".zoom-surface img")?.src).toContain("result_2.png");
+  });
 });
 
 async function renderApp(initialSnapshot: AppSnapshot): Promise<AppBridge> {
@@ -596,6 +642,22 @@ async function click(button: HTMLButtonElement) {
   await act(async () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
+}
+
+async function changeInput(input: HTMLInputElement, value: string) {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+function inputByLabel(labelText: string): HTMLInputElement {
+  const label = [...document.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(labelText));
+  const input = label?.querySelector<HTMLInputElement>("input");
+  if (!input) throw new Error(`Input labeled "${labelText}" was not found.`);
+  return input;
 }
 
 async function keyDown(element: HTMLElement, key: string, init: KeyboardEventInit = {}) {

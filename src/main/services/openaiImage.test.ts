@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { InputAsset, JobProgressEvent, OpenAIImageParams } from "../../shared/types";
 import { DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
 import type { StoredProviderConfig } from "./stateMigration";
-import { baseRequestBody, buildEndpoint, openaiImageAdapter, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImageAdapter";
+import { baseRequestBody, buildEndpoint, normalizeOpenAIRequestParams, openaiImageAdapter, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImageAdapter";
 
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
 
@@ -103,6 +103,16 @@ describe("OpenAI image service", () => {
       output_compression: 42,
       background: "opaque"
     });
+    expect(baseRequestBody(params({ n: 4, stream: true, partialImages: 2 }), "prompt")).toMatchObject({
+      n: 4,
+      stream: false
+    });
+    expect(baseRequestBody(params({ n: 4, stream: true, partialImages: 2 }), "prompt")).not.toHaveProperty("partial_images");
+    expect(normalizeOpenAIRequestParams(params({ n: 4, stream: true, partialImages: 2 }))).toMatchObject({
+      n: 4,
+      stream: false,
+      partialImages: 0
+    });
   });
 
   it("calls image generations and saves base64 results", async () => {
@@ -195,6 +205,57 @@ describe("OpenAI image service", () => {
     await expect(readFile(result.outputs[1].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("uses non-stream JSON requests when multiple OpenAI outputs are requested", async () => {
+    let requestAccept = "";
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requestAccept = new Headers(init?.headers).get("Accept") ?? "";
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({
+        data: Array.from({ length: 4 }, () => ({ b64_json: tinyPngBase64 })),
+        usage: { total_tokens: 12 }
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job({ params: params({ n: 4, stream: true, partialImages: 2 }) }), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(requestAccept).toBe("application/json");
+    expect(requestBody).toMatchObject({ n: 4, stream: false });
+    expect(requestBody).not.toHaveProperty("partial_images");
+    expect(result.params).toMatchObject({ n: 4, stream: false, partialImages: 0 });
+    expect(result.outputs.map((asset) => asset.fileName)).toEqual([
+      "job_test-result-0.png",
+      "job_test-result-1.png",
+      "job_test-result-2.png",
+      "job_test-result-3.png"
+    ]);
+  });
+
+  it("backfills OpenAI outputs when a provider ignores n and returns one image at a time", async () => {
+    const requestBodies: Array<Record<string, unknown>> = [];
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)));
+      return Response.json({
+        data: [{ b64_json: tinyPngBase64 }],
+        usage: { total_tokens: requestBodies.length }
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job({ params: params({ n: 3, stream: true, partialImages: 2 }) }), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(requestBodies.map((body) => body.n)).toEqual([3, 2, 1]);
+    expect(requestBodies.every((body) => body.stream === false)).toBe(true);
+    expect(result.params).toMatchObject({ n: 3, stream: false, partialImages: 0 });
+    expect(result.usage?.total_tokens).toBe(6);
+    expect(result.outputs.map((asset) => asset.fileName)).toEqual([
+      "job_test-result-0.png",
+      "job_test-result-1.png",
+      "job_test-result-2.png"
+    ]);
+  });
+
   it("calls image edits with image and mask multipart fields", async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
     const sourcePath = path.join(tmpDir, "source.png");
@@ -267,7 +328,7 @@ describe("OpenAI image service", () => {
     let form: FormData | undefined;
     const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
       form = init?.body as FormData;
-      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }, { b64_json: tinyPngBase64 }, { b64_json: tinyPngBase64 }] });
     }) as typeof fetch;
     const { runtime } = await createRuntime(fetchImpl);
 

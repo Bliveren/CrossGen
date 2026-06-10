@@ -941,6 +941,7 @@ label {
   gap: 9px;
 }
 
+.result-strip,
 .partial-strip {
   display: flex;
   gap: 10px;
@@ -948,6 +949,7 @@ label {
   padding-bottom: 4px;
 }
 
+.result-strip button,
 .partial-strip button {
   position: relative;
   width: 86px;
@@ -959,12 +961,19 @@ label {
   background: #fffdf8;
 }
 
+.result-strip button.active {
+  border-color: #1f7a55;
+  box-shadow: 0 0 0 2px rgba(31, 122, 85, 0.18);
+}
+
+.result-strip img,
 .partial-strip img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
+.result-strip span,
 .partial-strip span {
   position: absolute;
   right: 5px;

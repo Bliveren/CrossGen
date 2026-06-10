@@ -125,6 +125,7 @@ export interface UiCopy {
   background: string;
   count: string;
   streamPartialPreview: string;
+  streamSingleOutputOnly: string;
   partialImages: string;
   thinking: string;
   searchGrounding: string;
@@ -259,6 +260,7 @@ export const translations: Record<Language, UiCopy> = {
     background: "Background",
     count: "Count",
     streamPartialPreview: "Stream partial preview",
+    streamSingleOutputOnly: "Stream partial preview is available only when count is 1.",
     partialImages: "Partial images",
     thinking: "Thinking",
     searchGrounding: "Search grounding",
@@ -453,6 +455,7 @@ export const translations: Record<Language, UiCopy> = {
     background: "背景",
     count: "数量",
     streamPartialPreview: "流式局部预览",
+    streamSingleOutputOnly: "流式局部预览仅支持数量为 1 时使用。",
     partialImages: "局部预览数",
     thinking: "Thinking",
     searchGrounding: "联网搜索 grounding",

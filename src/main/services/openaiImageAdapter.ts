@@ -55,6 +55,11 @@ interface ApiErrorPayload {
   };
 }
 
+interface JsonImagesResult {
+  outputs: ImageAsset[];
+  usage?: UsageDetails;
+}
+
 export type OpenAIImageRuntime = ImageJobRuntime;
 export type OpenAIImageJob = GenerationJob & { params: OpenAIImageParams };
 
@@ -81,28 +86,38 @@ export function asOpenAIImageJob(job: GenerationJob): OpenAIImageJob {
   return job as OpenAIImageJob;
 }
 
+export function normalizeOpenAIRequestParams(params: OpenAIImageParams): OpenAIImageParams {
+  if (!params.stream || params.n <= 1) return params;
+  return {
+    ...params,
+    stream: false,
+    partialImages: 0
+  };
+}
+
 export function baseRequestBody(params: OpenAIImageParams, prompt: string): Record<string, string | number | boolean> {
+  const requestParams = normalizeOpenAIRequestParams(params);
   const body: Record<string, string | number | boolean> = {
-    model: params.model,
+    model: requestParams.model,
     prompt,
-    size: params.size,
-    quality: params.quality,
-    output_format: params.outputFormat,
-    n: params.n,
-    stream: params.stream,
-    moderation: params.moderation
+    size: requestParams.size,
+    quality: requestParams.quality,
+    output_format: requestParams.outputFormat,
+    n: requestParams.n,
+    stream: requestParams.stream,
+    moderation: requestParams.moderation
   };
 
-  if (params.stream) {
-    body.partial_images = params.partialImages;
+  if (requestParams.stream) {
+    body.partial_images = requestParams.partialImages;
   }
 
-  if (shouldSendCompression(params.outputFormat)) {
-    body.output_compression = params.outputCompression;
+  if (shouldSendCompression(requestParams.outputFormat)) {
+    body.output_compression = requestParams.outputCompression;
   }
 
-  if (params.background !== "auto") {
-    body.background = params.background;
+  if (requestParams.background !== "auto") {
+    body.background = requestParams.background;
   }
 
   return body;
@@ -205,10 +220,16 @@ export async function runOpenAIImageJob(
   baseURL: string,
   runtime: OpenAIImageRuntime
 ): Promise<GenerationJob> {
-  if (job.mode === "generate") {
-    return runGeneration(job, apiKey, baseURL, runtime);
+  const requestJob = normalizeOpenAIJobParams(job);
+  if (requestJob.mode === "generate") {
+    return runGeneration(requestJob, apiKey, baseURL, runtime);
   }
-  return runEdit(job, apiKey, baseURL, runtime);
+  return runEdit(requestJob, apiKey, baseURL, runtime);
+}
+
+function normalizeOpenAIJobParams(job: OpenAIImageJob): OpenAIImageJob {
+  const params = normalizeOpenAIRequestParams(job.params);
+  return params === job.params ? job : { ...job, params };
 }
 
 async function runGeneration(
@@ -217,7 +238,22 @@ async function runGeneration(
   baseURL: string,
   runtime: OpenAIImageRuntime
 ): Promise<GenerationJob> {
-  const response = await fetchWithTimeout(
+  const response = await fetchGenerationResponse(job, apiKey, baseURL, runtime);
+
+  if (!job.params.stream) {
+    return handleJsonImagesWithBackfill(response, job, runtime, (nextJob) => fetchGenerationResponse(nextJob, apiKey, baseURL, runtime));
+  }
+
+  return handleImagesResponse(response, job, "image_generation", runtime);
+}
+
+async function fetchGenerationResponse(
+  job: OpenAIImageJob,
+  apiKey: string,
+  baseURL: string,
+  runtime: OpenAIImageRuntime
+): Promise<Response> {
+  return fetchWithTimeout(
     runtime.fetch,
     buildEndpoint(baseURL, "/images/generations"),
     {
@@ -231,8 +267,6 @@ async function runGeneration(
     },
     job.params.timeoutMs
   );
-
-  return handleImagesResponse(response, job, "image_generation", runtime);
 }
 
 async function runEdit(
@@ -241,6 +275,18 @@ async function runEdit(
   baseURL: string,
   runtime: OpenAIImageRuntime
 ): Promise<GenerationJob> {
+  validateEditJob(job);
+
+  const response = await fetchEditResponse(job, apiKey, baseURL, runtime);
+
+  if (!job.params.stream) {
+    return handleJsonImagesWithBackfill(response, job, runtime, (nextJob) => fetchEditResponse(nextJob, apiKey, baseURL, runtime));
+  }
+
+  return handleImagesResponse(response, job, "image_edit", runtime);
+}
+
+function validateEditJob(job: OpenAIImageJob): void {
   if (job.inputAssets.length === 0) {
     throw new Error(job.mode === "inpaint" ? "局部重绘至少需要一张源图。" : "图像编辑至少需要一张源图。");
   }
@@ -257,7 +303,14 @@ async function runEdit(
       throw new Error(sourceFormat.message ?? "Mask format is invalid.");
     }
   }
+}
 
+async function fetchEditResponse(
+  job: OpenAIImageJob,
+  apiKey: string,
+  baseURL: string,
+  runtime: OpenAIImageRuntime
+): Promise<Response> {
   const form = new FormData();
   for (const [key, value] of Object.entries(baseRequestBody(job.params, job.prompt))) {
     form.append(key, String(value));
@@ -272,7 +325,7 @@ async function runEdit(
     form.append("mask", await assetToBlob(job.maskAsset), job.maskAsset.name);
   }
 
-  const response = await fetchWithTimeout(
+  return fetchWithTimeout(
     runtime.fetch,
     buildEndpoint(baseURL, "/images/edits"),
     {
@@ -285,8 +338,6 @@ async function runEdit(
     },
     job.params.timeoutMs
   );
-
-  return handleImagesResponse(response, job, "image_edit", runtime);
 }
 
 async function assetToBlob(asset: InputAsset): Promise<Blob> {
@@ -320,6 +371,80 @@ async function handleJsonImagesResponse(
   job: OpenAIImageJob,
   runtime: OpenAIImageRuntime
 ): Promise<GenerationJob> {
+  const { outputs, usage } = await readAndSaveJsonImagesResponse(response, job, runtime, 0, job.params.n);
+
+  if (outputs.length === 0) {
+    throw new Error("OpenAI API 没有返回可保存的图片。");
+  }
+
+  return {
+    ...job,
+    outputs,
+    usage,
+    status: "succeeded",
+    updatedAt: new Date().toISOString()
+  };
+}
+
+async function handleJsonImagesWithBackfill(
+  response: Response,
+  job: OpenAIImageJob,
+  runtime: OpenAIImageRuntime,
+  fetchAdditional: (job: OpenAIImageJob) => Promise<Response>
+): Promise<GenerationJob> {
+  const requestedCount = Math.max(1, job.params.n);
+  const firstResult = await readAndSaveJsonImagesResponse(response, job, runtime, 0, requestedCount);
+  const outputs = [...firstResult.outputs];
+  let usage = firstResult.usage;
+
+  if (outputs.length === 0) {
+    throw new Error("OpenAI API 没有返回可保存的图片。");
+  }
+
+  while (outputs.length < requestedCount) {
+    const remainingCount = requestedCount - outputs.length;
+    const nextJob: OpenAIImageJob = {
+      ...job,
+      params: {
+        ...job.params,
+        n: remainingCount,
+        stream: false,
+        partialImages: 0
+      }
+    };
+    const nextResponse = await fetchAdditional(nextJob);
+    const nextResult = await readAndSaveJsonImagesResponse(nextResponse, job, runtime, outputs.length, remainingCount);
+    if (nextResult.outputs.length === 0) {
+      break;
+    }
+    outputs.push(...nextResult.outputs);
+    usage = mergeUsageDetails(usage, nextResult.usage);
+  }
+
+  if (outputs.length < requestedCount) {
+    throw new Error(`OpenAI API 返回图片数量不足：请求 ${requestedCount} 张，实际收到 ${outputs.length} 张。`);
+  }
+
+  return {
+    ...job,
+    outputs,
+    usage,
+    status: "succeeded",
+    updatedAt: new Date().toISOString()
+  };
+}
+
+async function readAndSaveJsonImagesResponse(
+  response: Response,
+  job: OpenAIImageJob,
+  runtime: OpenAIImageRuntime,
+  firstIndex: number,
+  maxResults: number
+): Promise<JsonImagesResult> {
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType && !contentType.includes("application/json")) {
     throw new Error(await readUnexpectedOpenAIResponse(response, "JSON 图片结果"));
@@ -331,19 +456,40 @@ async function handleJsonImagesResponse(
   } catch {
     throw new Error("OpenAI API 返回的图片结果不是有效 JSON。请检查 Base URL 是否指向 OpenAI 兼容的 /v1 接口。");
   }
-  const outputs = await saveImageItems(job, payload.data ?? [], "result", runtime);
+  const outputs = await saveImageItems(job, (payload.data ?? []).slice(0, maxResults), "result", runtime, firstIndex);
 
-  if (outputs.length === 0) {
-    throw new Error("OpenAI API 没有返回可保存的图片。");
-  }
+  return { outputs, usage: payload.usage };
+}
 
+function mergeUsageDetails(current: UsageDetails | undefined, next: UsageDetails | undefined): UsageDetails | undefined {
+  if (!current) return next;
+  if (!next) return current;
+  const details = mergeUsageTokenDetails(current.input_tokens_details, next.input_tokens_details);
   return {
-    ...job,
-    outputs,
-    usage: payload.usage,
-    status: "succeeded",
-    updatedAt: new Date().toISOString()
+    total_tokens: sumOptionalNumbers(current.total_tokens, next.total_tokens),
+    input_tokens: sumOptionalNumbers(current.input_tokens, next.input_tokens),
+    output_tokens: sumOptionalNumbers(current.output_tokens, next.output_tokens),
+    ...(details ? { input_tokens_details: details } : {})
   };
+}
+
+function mergeUsageTokenDetails(
+  current: UsageDetails["input_tokens_details"],
+  next: UsageDetails["input_tokens_details"]
+): UsageDetails["input_tokens_details"] | undefined {
+  if (!current) return next;
+  if (!next) return current;
+  const textTokens = sumOptionalNumbers(current.text_tokens, next.text_tokens);
+  const imageTokens = sumOptionalNumbers(current.image_tokens, next.image_tokens);
+  return {
+    ...(textTokens === undefined ? {} : { text_tokens: textTokens }),
+    ...(imageTokens === undefined ? {} : { image_tokens: imageTokens })
+  };
+}
+
+function sumOptionalNumbers(current: number | undefined, next: number | undefined): number | undefined {
+  if (current === undefined && next === undefined) return undefined;
+  return (current ?? 0) + (next ?? 0);
 }
 
 async function readModelsResponse(response: Response): Promise<DiscoveredModel[]> {
