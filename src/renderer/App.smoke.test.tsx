@@ -64,6 +64,22 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Save an API key first.");
   });
 
+  it("auto-tests saved API config on startup and after config save", async () => {
+    const bridge = await renderApp(snapshot());
+
+    await flushAsync();
+
+    expect(bridge.testConnection).toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Connected");
+
+    vi.mocked(bridge.testConnection).mockClear();
+    await click(buttonByText("Save"));
+    await flushAsync();
+
+    expect(bridge.saveConfig).toHaveBeenCalled();
+    expect(bridge.testConnection).toHaveBeenCalledTimes(1);
+  });
+
   it("enables only GPT Image 2 for OpenAI discovery without enabling General", async () => {
     await renderApp(
       snapshot({
@@ -142,9 +158,9 @@ describe("renderer multi-model smoke", () => {
 
     await click(launchButton("Nano Banana 3"));
     expect(document.body.textContent).toContain("Guided region");
-    const modelSelect = document.querySelector<HTMLSelectElement>(".launch-model-select select")!;
-    expect(modelSelect).toBeTruthy();
-    await selectOption(modelSelect, GEMINI_3_PRO_IMAGE_MODEL_ID);
+    const modelOption = launchModelOption("Gemini 3 Pro Image");
+    expect(modelOption).toBeTruthy();
+    await click(modelOption);
     await click(buttonByText("Generate", ".primary-run"));
 
     expect(bridge.saveConfig).toHaveBeenCalledWith(
@@ -282,18 +298,21 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
-  it("keeps service config, launch buttons, and parameters in a clear left-rail order", async () => {
+  it("keeps model config, launch buttons, parameters, and updates in a clear left-rail order", async () => {
     await renderApp(snapshot());
     const sidebar = document.querySelector<HTMLElement>(".sidebar")!;
     const configSection = sidebar.querySelector<HTMLElement>("form.tool-section")!;
-    const launchStrip = sidebar.querySelector<HTMLElement>(".launch-strip")!;
+    const launchSection = sidebar.querySelector<HTMLElement>(".launch-section")!;
     const parameterSection = buttonByText("Parameters", ".section-toggle").closest<HTMLElement>(".tool-section")!;
+    const updatePanel = sidebar.querySelector<HTMLElement>(".update-panel")!;
 
-    expect(configSection.textContent).toContain("Provider");
-    expect(launchStrip.textContent).toContain("Launch");
+    expect(configSection.textContent).toContain("Model config");
+    expect(launchSection.textContent).toContain("Launch");
     expect(parameterSection.textContent).toContain("Parameters");
-    expect(configSection.compareDocumentPosition(launchStrip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(launchStrip.compareDocumentPosition(parameterSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(updatePanel.textContent).toContain("Updates");
+    expect(configSection.compareDocumentPosition(launchSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(launchSection.compareDocumentPosition(parameterSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(parameterSection.compareDocumentPosition(updatePanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("supports keyboard resizing without losing fixed history layout", async () => {
@@ -343,7 +362,24 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector(".launch-button small")).toBeTruthy();
     expect(document.querySelectorAll(".history-item")).toHaveLength(6);
     expect(buttonByText("Show all 10")).toBeTruthy();
-    expect(launchButton("General").textContent).toContain("gemini-2.0-flash-preview-image-generation-with-a-very-long-display-name");
+    expect(launchButton("General").textContent).toContain("Gemini image fallback with a very long display name");
+  });
+
+  it("requires confirmation before clearing all history", async () => {
+    const bridge = await renderApp(snapshot({ history: [geminiJob(0), geminiJob(1)] }));
+    const clearAllButton = document.querySelector<HTMLButtonElement>('button[title="Clear all history records"]')!;
+
+    expect(clearAllButton).toBeTruthy();
+    await click(clearAllButton);
+
+    expect(bridge.clearHistory).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Clear all history?");
+    expect(document.body.textContent).toContain("This will delete all 2 history records");
+
+    await click(buttonByText("Clear all", ".danger-button"));
+
+    expect(bridge.clearHistory).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).not.toContain("Clear all history?");
   });
 
   it("renders Gemini results on the canvas and routes downloads through the bridge", async () => {
@@ -539,22 +575,26 @@ function launchButton(name: string): HTMLButtonElement {
   return buttonByText(name, ".launch-button");
 }
 
+function launchModelOption(name: string): HTMLButtonElement {
+  return buttonByText(name, ".launch-model-option");
+}
+
 function buttonByText(text: string, selector = "button"): HTMLButtonElement {
   const button = [...document.querySelectorAll<HTMLButtonElement>(selector)].find((item) => item.textContent?.includes(text));
   if (!button) throw new Error(`Button containing "${text}" was not found.`);
   return button;
 }
 
-async function click(button: HTMLButtonElement) {
+async function flushAsync() {
   await act(async () => {
-    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+    await Promise.resolve();
   });
 }
 
-async function selectOption(select: HTMLSelectElement, value: string) {
+async function click(button: HTMLButtonElement) {
   await act(async () => {
-    select.value = value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 }
 

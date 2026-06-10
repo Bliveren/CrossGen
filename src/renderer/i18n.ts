@@ -83,6 +83,12 @@ export interface UiCopy {
   discoveryLastRun: (date: string, count: number) => string;
   discoverModels: string;
   discoveringModels: string;
+  discoveredModelsCount: (count: number) => string;
+  connectionIdle: string;
+  connectionChecking: string;
+  connectionOk: string;
+  connectionError: string;
+  connectionErrorDetail: (message: string) => string;
   launchModels: string;
   launchAvailable: string;
   launchUnavailableNoKey: string;
@@ -159,6 +165,11 @@ export interface UiCopy {
   history: string;
   recentJobs: string;
   clearHistory: string;
+  clearAllHistoryTooltip: string;
+  confirmClearHistoryTitle: string;
+  confirmClearHistoryBody: (count: number) => string;
+  confirmClearHistory: string;
+  cancel: string;
   searchPrompt: string;
   historyMatchCount: (count: number) => string;
   showAllHistory: (count: number) => string;
@@ -197,7 +208,7 @@ export const translations: Record<Language, UiCopy> = {
     english: "English",
     chinese: "中文",
     tagline: "Generate, edit, inpaint, download.",
-    provider: "Provider",
+    provider: "Model config",
     providerLabel: "Provider",
     apiKey: "API Key",
     baseURL: "Base URL",
@@ -206,6 +217,12 @@ export const translations: Record<Language, UiCopy> = {
     discoveryLastRun: (date: string, count: number) => `${date} · ${count} model${count === 1 ? "" : "s"}`,
     discoverModels: "Discover models",
     discoveringModels: "Discovering",
+    discoveredModelsCount: (count: number) => `${count} model${count === 1 ? "" : "s"} discovered`,
+    connectionIdle: "Not tested",
+    connectionChecking: "Checking",
+    connectionOk: "Connected",
+    connectionError: "Connection issue",
+    connectionErrorDetail: (message: string) => `Connection issue: ${message}. Check the API key, base URL, provider protocol, or network.`,
     launchModels: "Launch",
     launchAvailable: "Available",
     launchUnavailableNoKey: "Save an API key first.",
@@ -282,6 +299,11 @@ export const translations: Record<Language, UiCopy> = {
     history: "History",
     recentJobs: "Recent jobs",
     clearHistory: "Clear history",
+    clearAllHistoryTooltip: "Clear all history records",
+    confirmClearHistoryTitle: "Clear all history?",
+    confirmClearHistoryBody: (count: number) => `This will delete all ${count} history record${count === 1 ? "" : "s"} and managed result files.`,
+    confirmClearHistory: "Clear all",
+    cancel: "Cancel",
     searchPrompt: "Search prompt",
     historyMatchCount: (count: number) => `${count} match${count === 1 ? "" : "es"}`,
     showAllHistory: (count: number) => `Show all ${count}`,
@@ -296,12 +318,12 @@ export const translations: Record<Language, UiCopy> = {
     currentVersion: "Current",
     checkUpdates: "Check",
     checkingUpdates: "Checking",
-    installUpdate: "Install",
+    installUpdate: "Update",
     downloadingUpdate: "Downloading",
     updateNotConfigured: "Update feed is not configured.",
-    updateCurrent: "You're on the latest version.",
+    updateCurrent: "Up to date.",
     updateAvailable: (version: string) => `Version ${version} is available.`,
-    updateReady: (version: string) => `Installer for ${version} opened.`,
+    updateReady: (version: string) => `Updater for ${version} opened. Local config and drafts remain in user data.`,
     updateCheckFailed: "Update check failed.",
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
@@ -380,7 +402,7 @@ export const translations: Record<Language, UiCopy> = {
     english: "English",
     chinese: "中文",
     tagline: "生成、编辑、局部重绘、下载。",
-    provider: "服务配置",
+    provider: "模型配置",
     providerLabel: "服务商",
     apiKey: "API Key",
     baseURL: "Base URL",
@@ -389,6 +411,12 @@ export const translations: Record<Language, UiCopy> = {
     discoveryLastRun: (date: string, count: number) => `${date} · ${count} 个模型`,
     discoverModels: "探测模型",
     discoveringModels: "探测中",
+    discoveredModelsCount: (count: number) => `探测到【${count}】个模型`,
+    connectionIdle: "未测试",
+    connectionChecking: "检测中",
+    connectionOk: "连接成功",
+    connectionError: "连接异常",
+    connectionErrorDetail: (message: string) => `连接异常：${message}。请检查 API Key、Base URL、服务商协议或网络。`,
     launchModels: "启动模型",
     launchAvailable: "可用",
     launchUnavailableNoKey: "请先保存 API Key。",
@@ -410,7 +438,7 @@ export const translations: Record<Language, UiCopy> = {
     clearKey: "清除 Key",
     keySaved: "Key 已保存",
     noKeySaved: "未保存 Key",
-    parameters: "参数",
+    parameters: "参数配置",
     hide: "收起",
     show: "展开",
     size: "尺寸",
@@ -465,6 +493,11 @@ export const translations: Record<Language, UiCopy> = {
     history: "历史",
     recentJobs: "最近任务",
     clearHistory: "清空历史",
+    clearAllHistoryTooltip: "清空全部历史记录",
+    confirmClearHistoryTitle: "确认清空全部历史？",
+    confirmClearHistoryBody: (count: number) => `将删除全部 ${count} 条历史记录及其托管结果文件。`,
+    confirmClearHistory: "确认清空",
+    cancel: "取消",
     searchPrompt: "搜索提示词",
     historyMatchCount: (count: number) => `${count} 条匹配`,
     showAllHistory: (count: number) => `显示全部 ${count} 条`,
@@ -479,12 +512,12 @@ export const translations: Record<Language, UiCopy> = {
     currentVersion: "当前版本",
     checkUpdates: "检查",
     checkingUpdates: "检查中",
-    installUpdate: "安装",
+    installUpdate: "更新",
     downloadingUpdate: "下载中",
     updateNotConfigured: "未配置升级地址。",
-    updateCurrent: "当前已是最新版本。",
+    updateCurrent: "已是最新版本。",
     updateAvailable: (version: string) => `发现新版本 ${version}。`,
-    updateReady: (version: string) => `${version} 安装程序已打开。`,
+    updateReady: (version: string) => `${version} 更新程序已启动。本地配置和草稿会保留。`,
     updateCheckFailed: "检查更新失败。",
     zoomIn: "放大",
     zoomOut: "缩小",

@@ -8,6 +8,7 @@ import {
   shell,
   type IpcMainInvokeEvent
 } from "electron";
+import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { promises as fs } from "node:fs";
@@ -337,6 +338,25 @@ function redactLikelySecrets(value: string): string {
 
 function getUpdatesDir(): string {
   return path.join(app.getPath("userData"), "updates");
+}
+
+function quoteCmdArg(value: string): string {
+  return `"${value.replace(/%/g, "%%").replace(/"/g, '""')}"`;
+}
+
+function launchWindowsInstallerAndRestart(installerPath: string): void {
+  const command = [
+    "timeout /t 1 /nobreak > nul",
+    `start /wait "" ${quoteCmdArg(installerPath)} /S`,
+    `start "" ${quoteCmdArg(process.execPath)}`
+  ].join(" & ");
+  const child = spawn(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", command], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true
+  });
+  child.unref();
+  setTimeout(() => app.quit(), 50);
 }
 
 function getUpdateManifestUrl(): string {
@@ -823,7 +843,8 @@ async function handleCheckForUpdates(): Promise<UpdateCheckResult> {
     );
 
     if (!response.ok) {
-      throw new Error(`更新检查失败：HTTP ${response.status}`);
+      const notFoundHint = response.status === 404 ? "manifest 地址不存在，请检查更新地址或发布配置。" : "";
+      throw new Error(`更新检查失败：HTTP ${response.status}${notFoundHint ? `，${notFoundHint}` : ""}`);
     }
 
     const manifest = parseUpdateManifest(await response.json());
@@ -875,6 +896,16 @@ async function handleDownloadAndInstallUpdate(): Promise<UpdateInstallResult> {
   if (process.platform !== "win32") {
     await fs.chmod(filePath, 0o755).catch(() => undefined);
   }
+
+  if (process.platform === "win32") {
+    launchWindowsInstallerAndRestart(filePath);
+    return {
+      version: update.latestVersion,
+      filePath,
+      message: "更新包已下载并启动静默安装，应用将关闭并在安装完成后重新打开。"
+    };
+  }
+
   const openError = await shell.openPath(filePath);
   if (openError) {
     throw new Error(`更新包已下载，但无法打开安装程序：${openError}`);

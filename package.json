@@ -5,7 +5,7 @@
   "author": "Nowo, Corgnitor, and Image2Tools contributors",
   "license": "MIT",
   "image2tools": {
-    "updateManifestUrl": "https://bliveren.github.io/image2tools/updates/latest.json"
+    "updateManifestUrl": "https://raw.githubusercontent.com/Bliveren/image2tools/main/docs/updates/latest.json"
   },
   "type": "module",
   "packageManager": "pnpm@10.25.0",
