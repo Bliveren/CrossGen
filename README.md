@@ -17,7 +17,7 @@
 </h1>
 
 <p align="center">
-  A local-first desktop workspace for GPT Image 2, Gemini-backed Nano Banana 3, and focused image-model fallback workflows.
+  An easy-to-use, all-in-one AI image generation management tool for GPT Image 2, Gemini-backed Nano Banana 3, and compatible image providers.
 </p>
 
 <p align="center">
@@ -43,32 +43,34 @@
 
 ## What Is Image2Tools
 
-Image2Tools is a focused desktop client for image-generation workflows. The current main branch supports GPT Image 2 through the OpenAI Image API, the app's Nano Banana 3 launch target through Gemini `gemini-3.1-flash-image`, and a minimal General launch mode for discovered non-focused image models.
+Image2Tools is an easy-to-use, all-in-one desktop tool for AI image generation management. The current main branch supports GPT Image 2 through the OpenAI Image API, the app's Nano Banana 3 launch target through Gemini image models such as `gemini-3.1-flash-image` and `gemini-3-pro-image`, and a minimal General launch mode for discovered non-focused image models.
 
-The app is built for non-developers, individual creators, product teams, and internal AI workflow builders who need a simple desktop tool instead of a cloud workspace or account system. The multi-model UI separates provider configuration, model discovery, launch-model selection, model-specific parameters, local history, and release verification so new providers can be added without weakening the existing GPT Image 2 path.
+The app is built for non-developers, individual creators, product teams, and internal AI workflow builders who need a simple desktop tool instead of a cloud workspace or account system. The latest UI separates model configuration, launch-model selection, model-specific parameters, local history, draft recovery, and update management so API setup, model discovery, generation, reuse, and desktop updates stay in one local workflow.
 
 ## Features
 
 | Area | Capability |
 | --- | --- |
-| Provider setup | OpenAI, Gemini, and OpenAI-compatible Custom provider selection, per-provider Base URL defaults, saved key preview, and model discovery. |
-| Launch models | GPT Image 2, Nano Banana 3, and General launch buttons with availability reasons from discovered models. |
+| Model configuration | OpenAI, Gemini, and OpenAI-compatible Custom setup with Base URL/API Key storage, saved key preview, automatic connection checks, and friendly failure hints. |
+| Model discovery | Detects models exposed by the configured API and uses discovered provider/model metadata instead of relying only on the selected provider label. |
+| Launch models | GPT Image 2, Nano Banana 3, and General launch buttons with availability reasons plus concrete discovered-model choices inside each launch button. |
 | GPT Image 2 | Text-to-image, single/multi-image editing, exact-mask inpainting, streaming partial previews, and validated OpenAI Image API parameters. |
 | Nano Banana 3 | Gemini `generateContent` image generation, reference-image editing, guided-region editing, aspect ratio, resolution, Thinking, and Search grounding controls. |
 | General | Minimal fallback for discovered non-focused image models: Gemini supports prompt and reference images, while OpenAI and Custom use a prompt-only OpenAI-compatible generation contract. |
-| Local history | Generated assets are saved in Electron user data with provider/model chips and can be reused, opened, or downloaded. |
+| Local history | Generated assets are saved in Electron user data with provider/model chips and can be reused, opened, downloaded, or cleared after explicit confirmation. |
 | Workspace recovery | Draft prompt, parameters, references, masks, and brush size are autosaved. |
 | Bilingual UI | In-app language switch supports English and Simplified Chinese through localStorage. |
-| Updates | Manifest-based update checks with platform and architecture matching. |
+| Updates | Startup update checks, clear up-to-date status, manifest-based platform matching, draft preservation before update, and Windows silent update/restart flow. |
 | Safety | Managed asset protocol prevents arbitrary local file exposure from previews. |
 
 ## Product Flow
 
-1. Choose an OpenAI or Gemini provider, then save the API key and Base URL.
+1. Configure the API provider, Base URL, and API Key. The app automatically tests the saved connection on startup and after config changes.
 2. Run model discovery and pick GPT Image 2, Nano Banana 3, or General from the launch-model area.
-3. Choose Generate, Edit, or Inpaint/Guided Region where the selected model supports it.
-4. Tune model-specific parameters. GPT Image 2 exposes OpenAI Image API controls and streaming; Nano Banana 3 exposes Gemini image controls; General stays minimal.
-5. Download results, open the local output folder, or reuse history prompts with their provider/model context.
+3. If multiple compatible concrete models are discovered under a launch family, open the launch button menu and choose the exact model to run.
+4. Choose Generate, Edit, or Inpaint/Guided Region where the selected model supports it.
+5. Tune model-specific parameters. GPT Image 2 exposes OpenAI Image API controls and streaming; Nano Banana 3 exposes Gemini image controls; General stays minimal.
+6. Download results, open the local output folder, or reuse history prompts with their provider/model context.
 
 ## Open Source Status
 
@@ -258,7 +260,7 @@ Image2Tools is released under the [MIT License](./LICENSE).
 </p>
 
 <p align="center">
-  一个面向 GPT Image 2、Gemini 支撑的 Nano Banana 3，以及重点图片模型兜底流程的本地优先桌面工作台。
+  方便易用的一站式AI生图管理工具，支持 GPT Image 2、Gemini 支撑的 Nano Banana 3，以及兼容图片模型服务。
 </p>
 
 <p align="center">
@@ -278,32 +280,34 @@ Image2Tools is released under the [MIT License](./LICENSE).
 
 ## 项目定位
 
-Image2Tools 是一个聚焦图片生成工作流的桌面客户端。当前 main 分支支持通过 OpenAI Image API 使用 GPT Image 2，通过 Gemini `gemini-3.1-flash-image` 使用应用内的 Nano Banana 3 启动入口，并为应用探测到的非重点图片模型提供最小 General 兜底模式。
+Image2Tools 是一个方便易用的一站式AI生图管理工具。当前 main 分支支持通过 OpenAI Image API 使用 GPT Image 2，通过 Gemini 图片模型（如 `gemini-3.1-flash-image` 和 `gemini-3-pro-image`）使用应用内的 Nano Banana 3 启动入口，并为应用探测到的非重点图片模型提供最小 General 兜底模式。
 
-适合非开发人员、个人创作者、产品团队、AI 应用工程团队和需要轻量图像工作台的内部工具场景。多模型界面把服务商配置、模型探测、启动模型选择、模型专属参数、本地历史和发布验证拆开，便于后续扩展新 provider，同时不影响现有 GPT Image 2 链路。
+适合非开发人员、个人创作者、产品团队、AI 应用工程团队和需要轻量图像工作台的内部工具场景。最新版界面把模型配置、启动模型选择、模型专属参数、本地历史、草稿恢复和升级管理拆开，让 API 配置、模型探测、生成、复用和桌面更新集中在一个本地工作流里完成。
 
 ## 功能亮点
 
 | 模块 | 能力 |
 | --- | --- |
-| 服务配置 | OpenAI、Gemini 与 OpenAI 兼容 Custom 服务商选择、默认 Base URL、Key 脱敏预览和模型探测。 |
-| 启动模型 | GPT Image 2、Nano Banana 3、General 启动按钮，并根据探测结果显示可用性原因。 |
+| 模型配置 | OpenAI、Gemini 与 OpenAI 兼容 Custom 配置，支持 Base URL/API Key 本地保存、Key 脱敏预览、自动联通测试和友好的失败原因提示。 |
+| 模型探测 | 基于用户配置的 API 探测可用模型，并使用探测到的 provider/model 信息匹配功能，而不是只依赖用户选择的服务商标签。 |
+| 启动模型 | GPT Image 2、Nano Banana 3、General 启动按钮，根据探测结果显示可用性原因，并把具体可运行模型折叠到对应启动按钮内选择。 |
 | GPT Image 2 | 文生图、单图/多图编辑、精确 mask 局部重绘、流式局部预览和 OpenAI Image API 参数校验。 |
 | Nano Banana 3 | Gemini `generateContent` 图片生成、参考图编辑、引导式区域编辑、画面比例、分辨率、Thinking 和 Search grounding 控件。 |
 | General | 针对探测到的非重点图片模型提供最小兜底；Gemini 支持 prompt 与参考图，OpenAI 和 Custom 使用 OpenAI 兼容的纯提示词生成契约。 |
-| 本地历史 | 输出资产保存在 Electron user data，历史条目显示 provider/model，可下载、打开目录、复用 prompt。 |
+| 本地历史 | 输出资产保存在 Electron user data，历史条目显示 provider/model，可下载、打开目录、复用 prompt；清空全部历史前需要二次确认。 |
 | 草稿恢复 | 自动保存 prompt、参数、参考图、mask 和画笔大小。 |
 | 双语界面 | 应用内支持 English / 简体中文切换，语言选择保存在 localStorage。 |
-| 自动升级 | 支持基于 manifest 的升级检查，按平台和架构匹配安装包。 |
+| 自动升级 | 启动时自动检查更新，明确提示已是最新版本；发现新版本时提供更新按钮，更新前保存草稿，Windows 支持静默安装后重启。 |
 | 安全边界 | 使用受限的本地资源协议预览受管图片，避免任意文件暴露。 |
 
 ## 产品流程
 
-1. 选择 OpenAI 或 Gemini 服务商，保存 API Key 与 Base URL。
+1. 配置 API 服务商、Base URL 与 API Key。应用会在保存后和下次启动时自动测试联通状态。
 2. 执行模型探测，并在启动模型区选择 GPT Image 2、Nano Banana 3 或 General。
-3. 根据模型能力选择生成、编辑或局部重绘 / 引导式区域编辑。
-4. 调整模型专属参数：GPT Image 2 显示 OpenAI Image API 与 streaming 控件，Nano Banana 3 显示 Gemini 图片参数，General 保持最小能力。
-5. 下载结果、打开本地输出目录，或从历史记录复用带有 provider/model 上下文的 prompt。
+3. 如果某个启动模型下探测到多个具体模型，打开启动按钮内的下拉菜单，选择实际要运行的模型。
+4. 根据模型能力选择生成、编辑或局部重绘 / 引导式区域编辑。
+5. 调整模型专属参数：GPT Image 2 显示 OpenAI Image API 与 streaming 控件，Nano Banana 3 显示 Gemini 图片参数，General 保持最小能力。
+6. 下载结果、打开本地输出目录，或从历史记录复用带有 provider/model 上下文的 prompt。
 
 ## MIT 开源状态
 
