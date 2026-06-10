@@ -60,6 +60,7 @@ interface GeminiModelsResponse {
 
 interface GeminiGenerateContentResponse {
   candidates?: unknown[];
+  data?: unknown;
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
@@ -78,6 +79,7 @@ interface GeminiApiErrorPayload {
 
 type GeminiImageJob = GenerationJob & { params: GeminiImageParams };
 type GeminiImageRuntime = ImageJobRuntime;
+type GeminiImageSource = GeminiInlineData & { url?: string };
 
 export const geminiImageAdapter: ImageProviderAdapter = {
   kind: "gemini",
@@ -285,7 +287,7 @@ async function handleGeminiGenerateContentResponse(
   const parsed = collectGeminiResponseParts(payload);
   const outputs = await saveGeminiImages(job.id, parsed.images, runtime);
   if (outputs.length === 0) {
-    throw new Error("Gemini API 没有返回可保存的图片。");
+    throw new Error(geminiNoImageMessage(parsed));
   }
 
   return {
@@ -309,13 +311,15 @@ async function handleGeminiGenerateContentResponse(
 }
 
 function collectGeminiResponseParts(payload: GeminiGenerateContentResponse): {
-  images: GeminiInlineData[];
+  images: GeminiImageSource[];
   textParts: string[];
   finishReasons: string[];
 } {
-  const images: GeminiInlineData[] = [];
+  const images: GeminiImageSource[] = [];
   const textParts: string[] = [];
   const finishReasons: string[] = [];
+
+  images.push(...openAIStyleImagesFromGeminiPayload(payload));
 
   const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
   for (const candidate of candidates) {
@@ -331,9 +335,9 @@ function collectGeminiResponseParts(payload: GeminiGenerateContentResponse): {
       if (typeof part.text === "string" && part.text.trim()) {
         textParts.push(part.text);
       }
-      const inlineData = inlineDataFromResponsePart(part);
-      if (inlineData) {
-        images.push(inlineData);
+      const imageSource = imageSourceFromResponsePart(part);
+      if (imageSource) {
+        images.push(imageSource);
       }
     }
   }
@@ -341,17 +345,48 @@ function collectGeminiResponseParts(payload: GeminiGenerateContentResponse): {
   return { images, textParts, finishReasons };
 }
 
-function inlineDataFromResponsePart(part: Record<string, unknown>): GeminiInlineData | null {
+function openAIStyleImagesFromGeminiPayload(payload: GeminiGenerateContentResponse): GeminiImageSource[] {
+  if (!Array.isArray(payload.data)) return [];
+  return payload.data.flatMap((item): GeminiImageSource[] => {
+    if (!isRecord(item)) return [];
+    const data = firstString(item.b64_json, item.b64Json, item.base64, item.data);
+    const url = firstString(item.url, item.uri);
+    const mimeType = firstString(item.mimeType, item.mime_type, item.mime);
+    const fallbackMimeType = mimeTypeFromUrl(data) ?? mimeTypeFromUrl(url) ?? "image/png";
+    if (data) return [{ mimeType: normalizeGeminiResponseMimeType(mimeType, fallbackMimeType), data }];
+    if (url) return [{ mimeType: normalizeGeminiResponseMimeType(mimeType, fallbackMimeType), data: "", url }];
+    return [];
+  });
+}
+
+function imageSourceFromResponsePart(part: Record<string, unknown>): GeminiImageSource | null {
   const rawInlineData = isRecord(part.inlineData) ? part.inlineData : isRecord(part.inline_data) ? part.inline_data : undefined;
-  if (!rawInlineData || typeof rawInlineData.data !== "string") return null;
-  const mimeType = typeof rawInlineData.mimeType === "string" ? rawInlineData.mimeType : "image/png";
+  if (rawInlineData) {
+    const data = firstString(rawInlineData.data, rawInlineData.b64_json, rawInlineData.b64Json, rawInlineData.base64, rawInlineData.bytesBase64Encoded);
+    const mimeType = firstString(rawInlineData.mimeType, rawInlineData.mime_type, rawInlineData.mime);
+    if (data) {
+      return {
+        mimeType: normalizeGeminiResponseMimeType(mimeType, mimeTypeFromUrl(data) ?? "image/png"),
+        data
+      };
+    }
+  }
+
+  const rawFileData = isRecord(part.fileData) ? part.fileData : isRecord(part.file_data) ? part.file_data : undefined;
+  const url = rawFileData
+    ? firstString(rawFileData.fileUri, rawFileData.file_uri, rawFileData.uri, rawFileData.url)
+    : firstString(part.fileUri, part.file_uri, part.url, part.uri);
+  if (!url) return null;
+  const mimeType = rawFileData ? firstString(rawFileData.mimeType, rawFileData.mime_type, rawFileData.mime) : undefined;
+  const fallbackMimeType = mimeTypeFromUrl(url) ?? "image/png";
   return {
-    mimeType: normalizeSupportedGeminiMimeType(mimeType),
-    data: rawInlineData.data
+    mimeType: normalizeGeminiResponseMimeType(mimeType, fallbackMimeType),
+    data: "",
+    url
   };
 }
 
-async function saveGeminiImages(jobId: string, images: GeminiInlineData[], runtime: GeminiImageRuntime): Promise<ImageAsset[]> {
+async function saveGeminiImages(jobId: string, images: GeminiImageSource[], runtime: GeminiImageRuntime): Promise<ImageAsset[]> {
   const outputs: ImageAsset[] = [];
   for (const [index, image] of images.entries()) {
     outputs.push(await saveBase64Image(jobId, image, index, runtime));
@@ -361,7 +396,7 @@ async function saveGeminiImages(jobId: string, images: GeminiInlineData[], runti
 
 async function saveBase64Image(
   jobId: string,
-  image: GeminiInlineData,
+  image: GeminiImageSource,
   index: number,
   runtime: GeminiImageRuntime
 ): Promise<ImageAsset> {
@@ -369,7 +404,7 @@ async function saveBase64Image(
   const mimeType = normalizeSupportedGeminiMimeType(image.mimeType);
   const fileName = `${jobId}-result-${index}.${extensionForMimeType(mimeType)}`;
   const filePath = path.join(runtime.imagesDir, fileName);
-  await fs.writeFile(filePath, Buffer.from(image.data, "base64"));
+  await fs.writeFile(filePath, Buffer.from(await geminiImageSourceToBase64(image, runtime), "base64"));
 
   return {
     id: `img_${randomUUID()}`,
@@ -380,6 +415,28 @@ async function saveBase64Image(
     sourceType: "result",
     createdAt: new Date().toISOString()
   };
+}
+
+async function geminiImageSourceToBase64(image: GeminiImageSource, runtime: GeminiImageRuntime): Promise<string> {
+  if (image.data) return image.data.startsWith("data:image/") ? dataUrlToBase64(image.data) : image.data;
+  if (!image.url) return "";
+  if (image.url.startsWith("data:image/")) return dataUrlToBase64(image.url);
+  const response = await fetchWithTimeout(
+    runtime.fetch,
+    image.url,
+    {
+      method: "GET",
+      headers: {
+        Accept: image.mimeType
+      }
+    },
+    30000
+  );
+  if (!response.ok) {
+    throw new Error(`Gemini API 返回了图片 URL，但下载失败：HTTP ${response.status}。`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return buffer.toString("base64");
 }
 
 async function readGeminiModelsResponse(response: Response): Promise<DiscoveredModel[]> {
@@ -463,6 +520,29 @@ function requestIdFromHeaders(headers: Headers): string | undefined {
   return headers.get("x-request-id") ?? headers.get("x-goog-request-id") ?? undefined;
 }
 
+function firstString(...values: unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim();
+}
+
+function mimeTypeFromUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  const dataUrlMatch = /^data:([^;,]+)/i.exec(url);
+  if (dataUrlMatch?.[1]) return dataUrlMatch[1];
+  const normalizedUrl = url.toLowerCase().split(/[?#]/)[0] ?? "";
+  if (normalizedUrl.endsWith(".jpg") || normalizedUrl.endsWith(".jpeg")) return "image/jpeg";
+  if (normalizedUrl.endsWith(".webp")) return "image/webp";
+  if (normalizedUrl.endsWith(".png")) return "image/png";
+  return undefined;
+}
+
+function geminiNoImageMessage(parsed: { textParts: string[]; finishReasons: string[] }): string {
+  const details = [
+    parsed.finishReasons.length > 0 ? `finishReason: ${parsed.finishReasons.join(", ")}` : "",
+    parsed.textParts.length > 0 ? `text: ${parsed.textParts.join(" ").slice(0, 160)}` : ""
+  ].filter(Boolean);
+  return details.length > 0 ? `Gemini API 没有返回可保存的图片。${details.join("；")}` : "Gemini API 没有返回可保存的图片。";
+}
+
 function normalizeGeminiAdapterError(error: unknown): string {
   if (error instanceof Error) return redactLikelySecrets(error.message);
   return redactLikelySecrets(String(error));
@@ -472,6 +552,14 @@ function normalizeSupportedGeminiMimeType(mimeType: string): "image/png" | "imag
   const normalized = normalizeImageMimeType(mimeType);
   if (normalized === "image/png" || normalized === "image/jpeg" || normalized === "image/webp") return normalized;
   throw new Error("Gemini inline images must be PNG, JPEG, or WebP.");
+}
+
+function normalizeGeminiResponseMimeType(mimeType: string | undefined, fallback: string): "image/png" | "image/jpeg" | "image/webp" {
+  try {
+    return normalizeSupportedGeminiMimeType(mimeType ?? fallback);
+  } catch {
+    return normalizeSupportedGeminiMimeType(fallback);
+  }
 }
 
 function extensionForMimeType(mimeType: "image/png" | "image/jpeg" | "image/webp"): "png" | "jpg" | "webp" {

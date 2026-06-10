@@ -4,6 +4,7 @@ export const GPT_IMAGE_2_LAUNCH_ID = "gpt-image-2" as const;
 export const GPT_IMAGE_2_MODEL_ID = "gpt-image-2" as const;
 export const NANO_BANANA_3_LAUNCH_ID = "nano-banana-3" as const;
 export const NANO_BANANA_3_MODEL_ID = "gemini-3.1-flash-image" as const;
+export const GEMINI_3_PRO_IMAGE_MODEL_ID = "gemini-3-pro-image" as const;
 export const GENERAL_LAUNCH_ID = "general" as const;
 export const GENERAL_MODEL_ID = "general" as const;
 
@@ -43,7 +44,7 @@ export const FOCUSED_MODEL_CATALOG = [
     launchId: NANO_BANANA_3_LAUNCH_ID,
     displayName: "Nano Banana 3",
     providerKind: "gemini",
-    modelIds: [NANO_BANANA_3_MODEL_ID],
+    modelIds: [NANO_BANANA_3_MODEL_ID, GEMINI_3_PRO_IMAGE_MODEL_ID],
     defaultModelId: NANO_BANANA_3_MODEL_ID,
     capabilities: {
       generate: true,

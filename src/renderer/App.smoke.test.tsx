@@ -17,6 +17,7 @@ import {
   DEFAULT_IMAGE_PARAMS
 } from "../shared/validation";
 import {
+  GEMINI_3_PRO_IMAGE_MODEL_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
@@ -128,7 +129,8 @@ describe("renderer multi-model smoke", () => {
           apiKeySaved: true,
           discoveredModels: [
             { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
-            { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }
+            { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
+            { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini", displayName: "Gemini 3 Pro Image" }
           ],
           lastModelDiscoveryAt: now
         })
@@ -139,6 +141,10 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("Nano Banana 3").disabled).toBe(false);
 
     await click(launchButton("Nano Banana 3"));
+    expect(document.body.textContent).toContain("Guided region");
+    const modelSelect = document.querySelector<HTMLSelectElement>(".launch-model-select select")!;
+    expect(modelSelect).toBeTruthy();
+    await selectOption(modelSelect, GEMINI_3_PRO_IMAGE_MODEL_ID);
     await click(buttonByText("Generate", ".primary-run"));
 
     expect(bridge.saveConfig).toHaveBeenCalledWith(
@@ -146,7 +152,7 @@ describe("renderer multi-model smoke", () => {
         kind: "openai",
         baseURL: "https://gateway.example.com/v1",
         activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
-        activeModelId: NANO_BANANA_3_MODEL_ID
+        activeModelId: GEMINI_3_PRO_IMAGE_MODEL_ID
       })
     );
     expect(bridge.runJob).toHaveBeenCalledWith(
@@ -155,7 +161,7 @@ describe("renderer multi-model smoke", () => {
         params: expect.objectContaining({
           providerKind: "gemini",
           launchId: NANO_BANANA_3_LAUNCH_ID,
-          model: NANO_BANANA_3_MODEL_ID
+          model: GEMINI_3_PRO_IMAGE_MODEL_ID
         })
       })
     );
@@ -542,6 +548,13 @@ function buttonByText(text: string, selector = "button"): HTMLButtonElement {
 async function click(button: HTMLButtonElement) {
   await act(async () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+async function selectOption(select: HTMLSelectElement, value: string) {
+  await act(async () => {
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
 

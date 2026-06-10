@@ -446,6 +446,15 @@ label {
   color: #2d6e60;
 }
 
+.launch-model-select {
+  gap: 5px;
+  padding-top: 2px;
+}
+
+.launch-model-select select {
+  min-width: 0;
+}
+
 .dot {
   width: 8px;
   height: 8px;

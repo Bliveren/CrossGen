@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   FOCUSED_MODEL_CATALOG,
+  GEMINI_3_PRO_IMAGE_MODEL_ID,
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
@@ -37,6 +38,7 @@ describe("focused model catalog", () => {
       displayName: "Nano Banana 3",
       providerKind: "gemini",
       defaultModelId: NANO_BANANA_3_MODEL_ID,
+      modelIds: [NANO_BANANA_3_MODEL_ID, GEMINI_3_PRO_IMAGE_MODEL_ID],
       capabilities: {
         inpaint: "guided-region",
         outputText: true,
@@ -74,7 +76,8 @@ describe("focused model catalog", () => {
     ];
     const geminiModels = [
       { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" as const },
-      { id: "gemini-3-pro-image", providerKind: "gemini" as const, displayName: "Gemini image model" }
+      { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini" as const, displayName: "Gemini 3 Pro Image" },
+      { id: "gemini-2.0-flash-preview-image-generation", providerKind: "gemini" as const, displayName: "Gemini image model" }
     ];
     const customModels = [
       { id: "chat-model", providerKind: "custom" as const },
@@ -82,7 +85,7 @@ describe("focused model catalog", () => {
     ];
 
     expect(getGeneralImageModelCandidate(openAIModels, "openai")?.id).toBe("dall-e-3");
-    expect(getGeneralImageModelCandidate(geminiModels, "gemini")?.id).toBe("gemini-3-pro-image");
+    expect(getGeneralImageModelCandidate(geminiModels, "gemini")?.id).toBe("gemini-2.0-flash-preview-image-generation");
     expect(getGeneralImageModelCandidate(customModels, "custom")?.id).toBe("flux-pro");
     expect(getGeneralImageModelCandidate([{ id: "gpt-4.1", providerKind: "openai" }], "openai")).toBeUndefined();
   });
