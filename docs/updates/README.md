@@ -1,13 +1,16 @@
 # Image2Tools Update Feed
 
-This directory is intended to be served by GitHub Pages from the repository
-`docs/` folder.
+This directory contains the update manifest consumed by the desktop app.
 
-Stable manifest URL:
+Default manifest URL used by packaged apps:
 
 ```text
-https://bliveren.github.io/image2tools/updates/latest.json
+https://raw.githubusercontent.com/Bliveren/image2tools/main/docs/updates/latest.json
 ```
+
+GitHub Pages can also serve this directory from `docs/` once Pages is enabled
+for the repository. Until then, the raw GitHub URL is the stable default to
+avoid a 404 update check.
 
 For each release:
 

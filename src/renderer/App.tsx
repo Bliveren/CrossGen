@@ -14,7 +14,6 @@ import {
   Languages,
   Loader2,
   Paintbrush,
-  PlugZap,
   RefreshCw,
   Save,
   Search,
@@ -94,6 +93,11 @@ interface MaskCheck {
   message: string;
 }
 
+interface ConnectionCheck {
+  status: "idle" | "checking" | "ok" | "error";
+  message?: string;
+}
+
 const sizePresets = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x1152", "2048x2048", "3840x2160", "2160x3840"];
 const qualityOptions: ImageQuality[] = ["auto", "low", "medium", "high"];
 const formatOptions: ImageFormat[] = ["png", "jpeg", "webp"];
@@ -108,7 +112,7 @@ const MIN_SIDEBAR_WIDTH = 260;
 const MAX_SIDEBAR_WIDTH = 430;
 const MIN_HISTORY_WIDTH = 280;
 const MAX_HISTORY_WIDTH = 460;
-const MIN_WORKSPACE_WIDTH = 620;
+const MIN_WORKSPACE_WIDTH = 680;
 const RESIZER_WIDTH = 12;
 const HISTORY_COLLAPSED_LIMIT = 6;
 const DEFAULT_HISTORY_MODEL_DISPLAY = "GPT Image 2";
@@ -456,6 +460,17 @@ function inpaintCapabilityForParams(params: ImageParams) {
   return getFocusedModelDefinition(params.launchId)?.capabilities.inpaint ?? false;
 }
 
+function connectionStatusLabel(check: ConnectionCheck, copy: UiCopy): string {
+  if (check.status === "checking") return copy.connectionChecking;
+  if (check.status === "ok") return copy.connectionOk;
+  if (check.status === "error") return copy.connectionError;
+  return copy.connectionIdle;
+}
+
+function discoverySummary(config: ProviderConfig, copy: UiCopy): string {
+  return config.lastModelDiscoveryError ?? copy.discoveredModelsCount(config.discoveredModels.length);
+}
+
 function getHistoryModelDetails(job: GenerationJob): HistoryModelDetails {
   const jobRecord = runtimeRecord(job);
   const paramsRecord = runtimeRecord(job.params);
@@ -592,10 +607,13 @@ export function App() {
   const [isDiscoveringModels, setIsDiscoveringModels] = useState(false);
   const [isClearingApiKey, setIsClearingApiKey] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck>({ status: "idle" });
   const [isRunning, setIsRunning] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [openLaunchMenuId, setOpenLaunchMenuId] = useState<FocusedLaunchId | null>(null);
   const [historySearch, setHistorySearch] = useState("");
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
   const [brushSize, setBrushSize] = useState(72);
   const [isPainting, setIsPainting] = useState(false);
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
@@ -613,6 +631,7 @@ export function App() {
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
   const paintedDuringStrokeRef = useRef(false);
+  const hasAutoTestedConnectionRef = useRef(false);
 
   const sourceAsset = inputAssets[0];
   const sourcePreview = assetSource(sourceAsset);
@@ -633,10 +652,11 @@ export function App() {
   const previewZoomPercent = Math.round(previewZoom * 100);
   const apiKeyPlaceholder = snapshot.config.apiKeyPreview ?? (snapshot.config.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
   const launchButtons = useMemo(() => getLaunchButtonStates(snapshot.config, copy), [copy, snapshot.config]);
-  const activeModelOptions = useMemo(() => getLaunchModelOptions(snapshot.config, snapshot.config.activeLaunchId), [snapshot.config]);
-  const activeModelValue =
-    activeModelOptions.find((model) => normalizeModelId(model.id) === normalizeModelId(snapshot.config.activeModelId))?.id ?? activeModelOptions[0]?.id ?? "";
   const activeLaunchDisplay = launchButtons.find((button) => button.launchId === snapshot.config.activeLaunchId)?.displayName ?? modelLabelFromId(snapshot.config.activeModelId);
+  const connectionLabel = connectionStatusLabel(connectionCheck, copy);
+  const connectionTitle = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : connectionLabel;
+  const connectionErrorText = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : null;
+  const discoveryText = discoverySummary(snapshot.config, copy);
   const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
   const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
 
@@ -763,6 +783,18 @@ export function App() {
   useEffect(() => {
     void refreshSnapshot();
   }, []);
+
+  useEffect(() => {
+    if (!bridge) return;
+    if (!snapshot.config.apiKeySaved) {
+      hasAutoTestedConnectionRef.current = false;
+      setConnectionCheck({ status: "idle" });
+      return;
+    }
+    if (hasAutoTestedConnectionRef.current) return;
+    hasAutoTestedConnectionRef.current = true;
+    void runConnectionTest({ silent: true });
+  }, [bridge, snapshot.config.apiKeySaved, snapshot.config.updatedAt]);
 
   useEffect(() => {
     if (!bridge || !hasRestoredDraft || !hasUserChangedDraft) return;
@@ -920,6 +952,11 @@ export function App() {
     });
   }
 
+  function resetConnectionCheckForConfigEdit() {
+    hasAutoTestedConnectionRef.current = false;
+    setConnectionCheck({ status: "idle" });
+  }
+
   async function saveConfig() {
     if (!bridge) {
       setNotice({ kind: "error", text: copy.notices.bridgeSaveConfig });
@@ -946,6 +983,12 @@ export function App() {
         kind: config.lastModelDiscoveryError ? "error" : "success",
         text: config.lastModelDiscoveryError ? config.lastModelDiscoveryError : copy.notices.configSaved
       });
+      if (config.apiKeySaved) {
+        hasAutoTestedConnectionRef.current = true;
+        await runConnectionTest({ silent: false, apiKeySaved: config.apiKeySaved });
+      } else {
+        setConnectionCheck({ status: "idle" });
+      }
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
@@ -972,6 +1015,7 @@ export function App() {
 
   function changeProvider(kind: ProviderKind) {
     markDraftChanged();
+    resetConnectionCheckForConfigEdit();
     setProviderKind(kind);
     setBaseURL(defaultBaseURLForProvider(kind, baseURL));
   }
@@ -1015,11 +1059,12 @@ export function App() {
     }
   }
 
-  async function selectLaunchModel(modelId: string) {
-    if (!bridge || !modelId) return;
-    const selectedModel = activeModelOptions.find((model) => model.id === modelId);
-    if (!selectedModel) return;
-    const nextParams = createLaunchParams(snapshot.config.activeLaunchId, selectedModel.id, params, selectedModel.providerKind, snapshot.config);
+  async function selectLaunchModel(launchId: FocusedLaunchId, selectedModel: LaunchModelOption) {
+    if (!bridge || !selectedModel.id) return;
+    const modelOptions = getLaunchModelOptions(snapshot.config, launchId);
+    const isAvailable = modelOptions.some((model) => model.id === selectedModel.id && model.providerKind === selectedModel.providerKind);
+    if (!isAvailable) return;
+    const nextParams = createLaunchParams(launchId, selectedModel.id, params, selectedModel.providerKind, snapshot.config);
     setParams(nextParams);
     if (isGeneralImageParams(nextParams)) {
       if (!generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
@@ -1040,10 +1085,11 @@ export function App() {
         defaultSize: defaultSizeForConfigSave(nextParams, snapshot.config),
         defaultQuality: defaultQualityForConfigSave(nextParams, snapshot.config),
         timeoutMs: nextParams.timeoutMs,
-        activeLaunchId: snapshot.config.activeLaunchId,
+        activeLaunchId: launchId,
         activeModelId: selectedModel.id
       });
       applyConfig(config);
+      setOpenLaunchMenuId(null);
       setNotice({ kind: "info", text: copy.notices.launchSelected(selectedModel.displayName) });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
@@ -1052,21 +1098,30 @@ export function App() {
     }
   }
 
-  async function testConnection() {
+  async function runConnectionTest({ silent = false, apiKeySaved = snapshot.config.apiKeySaved }: { silent?: boolean; apiKeySaved?: boolean } = {}) {
     if (!bridge) {
-      setNotice({ kind: "error", text: copy.notices.bridgeTestConnection });
+      if (!silent) setNotice({ kind: "error", text: copy.notices.bridgeTestConnection });
+      return;
+    }
+    if (!apiKeySaved) {
+      setConnectionCheck({ status: "idle" });
       return;
     }
     setIsTestingConnection(true);
+    setConnectionCheck({ status: "checking" });
     try {
-      if (apiKey.trim() || baseURL !== snapshot.config.baseURL || providerKind !== snapshot.config.kind) {
-        await saveConfig();
-      }
       const result = await bridge.testConnection();
-      setNotice({ kind: result.ok ? "success" : "error", text: result.message });
-      await refreshSnapshot();
+      setConnectionCheck({ status: result.ok ? "ok" : "error", message: result.message });
+      if (!silent || !result.ok) {
+        setNotice({
+          kind: result.ok ? "success" : "error",
+          text: result.ok ? result.message : copy.connectionErrorDetail(result.message)
+        });
+      }
     } catch (error) {
-      setNotice({ kind: "error", text: normalizeNotice(error) });
+      const message = normalizeNotice(error);
+      setConnectionCheck({ status: "error", message });
+      setNotice({ kind: "error", text: copy.connectionErrorDetail(message) });
     } finally {
       setIsTestingConnection(false);
     }
@@ -1082,6 +1137,8 @@ export function App() {
       const config = await bridge.clearApiKey();
       applyConfig(config);
       setApiKey("");
+      hasAutoTestedConnectionRef.current = false;
+      setConnectionCheck({ status: "idle" });
       setNotice({ kind: "success", text: copy.notices.keyCleared });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
@@ -1108,6 +1165,17 @@ export function App() {
     if (!bridge) return;
     setIsInstallingUpdate(true);
     try {
+      await bridge.saveDraft({
+        activeLaunchId: params.launchId,
+        activeModelId: params.model,
+        mode,
+        prompt,
+        params,
+        inputAssets,
+        maskAsset: maskAsset ?? undefined,
+        maskDataUrl: maskDataUrl ?? undefined,
+        brushSize
+      });
       const result = await bridge.downloadAndInstallUpdate();
       setNotice({ kind: "success", text: copy.updateReady(result.version) });
     } catch (error) {
@@ -1251,12 +1319,13 @@ export function App() {
     }
   }
 
-  async function clearHistory() {
+  async function confirmClearHistory() {
     if (!bridge) return;
     try {
       const history = await bridge.clearHistory();
       setSnapshot((current) => ({ ...current, history }));
       setActiveJob(null);
+      setIsClearHistoryConfirmOpen(false);
       setNotice({ kind: "success", text: copy.notices.historyCleared });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
@@ -1654,43 +1723,30 @@ export function App() {
           </div>
         </section>
 
-        <section className="update-panel">
-          <div className="section-title">
-            <RefreshCw size={16} />
-            <h2>{copy.updates}</h2>
-          </div>
-          <div className="update-status">
-            <span>
-              {copy.currentVersion}: {snapshot.appVersion}
-            </span>
-            <strong data-status={updateCheck?.status ?? "idle"}>{isCheckingUpdate ? copy.checkingUpdates : formatUpdateStatus(updateCheck)}</strong>
-          </div>
-          <div className="button-row">
-            <button type="button" className="secondary" onClick={checkForUpdates} disabled={!bridge || isCheckingUpdate || isInstallingUpdate}>
-              {isCheckingUpdate ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
-              {isCheckingUpdate ? copy.checkingUpdates : copy.checkUpdates}
-            </button>
-            <button
-              type="button"
-              onClick={downloadAndInstallUpdate}
-              disabled={!bridge || updateCheck?.status !== "available" || isCheckingUpdate || isInstallingUpdate}
-            >
-              {isInstallingUpdate ? <Loader2 className="spin" size={16} /> : <Download size={16} />}
-              {isInstallingUpdate ? copy.downloadingUpdate : copy.installUpdate}
-            </button>
-          </div>
-        </section>
-
         <form
-          className="tool-section"
+          className="tool-section model-config-section"
           onSubmit={(event) => {
             event.preventDefault();
             void saveConfig();
           }}
         >
-          <div className="section-title">
-            <KeyRound size={16} />
-            <h2>{copy.provider}</h2>
+          <div className="section-title config-title">
+            <div className="section-title-label">
+              <KeyRound size={16} />
+              <h2>{copy.provider}</h2>
+            </div>
+            <span className="connection-badge" data-status={connectionCheck.status} title={connectionTitle}>
+              {isTestingConnection || connectionCheck.status === "checking" ? (
+                <Loader2 className="spin" size={13} />
+              ) : connectionCheck.status === "ok" ? (
+                <CheckCircle2 size={13} />
+              ) : connectionCheck.status === "error" ? (
+                <AlertTriangle size={13} />
+              ) : (
+                <span className="connection-dot" />
+              )}
+              {connectionLabel}
+            </span>
           </div>
           <label>
             {copy.providerLabel}
@@ -1706,22 +1762,27 @@ export function App() {
               type="password"
               autoComplete="off"
               value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
+              onChange={(event) => {
+                resetConnectionCheckForConfigEdit();
+                setApiKey(event.target.value);
+              }}
               placeholder={apiKeyPlaceholder}
             />
           </label>
           <label>
             {copy.baseURL}
-            <input value={baseURL} onChange={(event) => setBaseURL(event.target.value)} />
+            <input
+              value={baseURL}
+              onChange={(event) => {
+                resetConnectionCheckForConfigEdit();
+                setBaseURL(event.target.value);
+              }}
+            />
           </label>
           <div className="button-row">
             <button type="button" onClick={saveConfig} disabled={isSavingConfig}>
               {isSavingConfig ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
               {copy.save}
-            </button>
-            <button type="button" className="secondary" onClick={testConnection} disabled={isTestingConnection}>
-              {isTestingConnection ? <Loader2 className="spin" size={16} /> : <PlugZap size={16} />}
-              {copy.test}
             </button>
             <button type="button" className="ghost" onClick={clearApiKey} disabled={isClearingApiKey || !snapshot.config.apiKeySaved}>
               {isClearingApiKey ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />}
@@ -1732,58 +1793,92 @@ export function App() {
             <span className={snapshot.config.apiKeySaved ? "dot ok" : "dot"} />
             {snapshot.config.apiKeySaved ? copy.keySaved : copy.noKeySaved}
           </div>
-          <div className="model-discovery-status" data-kind={snapshot.config.lastModelDiscoveryError ? "error" : "info"}>
-            <span>{copy.discoveryStatus}</span>
-            <strong>
-              {snapshot.config.lastModelDiscoveryError
-                ? snapshot.config.lastModelDiscoveryError
-                : snapshot.config.lastModelDiscoveryAt
-                  ? copy.discoveryLastRun(formatDate(snapshot.config.lastModelDiscoveryAt), snapshot.config.discoveredModels.length)
-                  : copy.discoveryNotRun}
-            </strong>
-          </div>
-          <button type="button" className="secondary discover-button" onClick={discoverModels} disabled={!bridge || isDiscoveringModels || !snapshot.config.apiKeySaved}>
-            {isDiscoveringModels ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
-            {isDiscoveringModels ? copy.discoveringModels : copy.discoverModels}
-          </button>
-          <div className="launch-strip" aria-label={copy.launchModels}>
-            <div className="launch-strip-header">
-              <span>{copy.launchModels}</span>
-              <strong>{activeLaunchDisplay}</strong>
-            </div>
-            {launchButtons.map((button) => (
-              <button
-                key={button.launchId}
-                type="button"
-                className={snapshot.config.activeLaunchId === button.launchId ? "launch-button active" : "launch-button"}
-                onClick={() => launchModel(button)}
-                disabled={!button.available || isSavingConfig}
-                title={button.reason}
-              >
-                <span>{button.displayName}</span>
-                <small>{button.available ? button.modelId || copy.generalFallback : button.reason}</small>
-              </button>
-            ))}
-            {activeModelOptions.length > 1 && (
-              <label className="launch-model-select">
-                {copy.model}
-                <select value={activeModelValue} onChange={(event) => void selectLaunchModel(event.target.value)} disabled={isSavingConfig}>
-                  {activeModelOptions.map((model) => (
-                    <option key={`${model.providerKind}:${model.id}`} value={model.id}>
-                      {model.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+          {connectionErrorText && <p className="inline-check error config-error-detail">{connectionErrorText}</p>}
+          <div className="discovery-row">
+            <button type="button" className="secondary discover-button" onClick={discoverModels} disabled={!bridge || isDiscoveringModels || !snapshot.config.apiKeySaved}>
+              {isDiscoveringModels ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
+              {isDiscoveringModels ? copy.discoveringModels : copy.discoverModels}
+            </button>
+            <span className="model-discovery-summary" data-kind={snapshot.config.lastModelDiscoveryError ? "error" : "info"} title={snapshot.config.lastModelDiscoveryError ?? discoveryText}>
+              {discoveryText}
+            </span>
           </div>
         </form>
 
+        <section className="tool-section launch-section">
+          <div className="section-title launch-title">
+            <div className="section-title-label">
+              <Wand2 size={16} />
+              <h2>{copy.launchModels}</h2>
+            </div>
+            <strong>{activeLaunchDisplay}</strong>
+          </div>
+          <div className="launch-strip" aria-label={copy.launchModels}>
+            {launchButtons.map((button) => {
+              const modelOptions = getLaunchModelOptions(snapshot.config, button.launchId);
+              const hasModelMenu = button.available && modelOptions.length > 1;
+              const activeModelOption =
+                modelOptions.find((model) => model.id === snapshot.config.activeModelId && model.providerKind === button.providerKind) ??
+                modelOptions.find((model) => model.id === button.modelId && model.providerKind === button.providerKind);
+              const isActive = snapshot.config.activeLaunchId === button.launchId;
+              return (
+                <div key={button.launchId} className="launch-item">
+                  <button
+                    type="button"
+                    className={isActive ? "launch-button active" : "launch-button"}
+                    onClick={() => {
+                      if (!button.available) return;
+                      setOpenLaunchMenuId((current) => (hasModelMenu ? (current === button.launchId ? null : button.launchId) : null));
+                      void launchModel(button);
+                    }}
+                    disabled={!button.available || isSavingConfig}
+                    title={button.reason}
+                    aria-expanded={hasModelMenu ? openLaunchMenuId === button.launchId : undefined}
+                  >
+                    <span className="launch-button-main">
+                      <span>{button.displayName}</span>
+                      {hasModelMenu && (openLaunchMenuId === button.launchId ? <ChevronUp size={15} /> : <ChevronDown size={15} />)}
+                    </span>
+                    <small>{button.available ? activeModelOption?.displayName ?? (button.modelId || copy.generalFallback) : button.reason}</small>
+                  </button>
+                  {hasModelMenu && openLaunchMenuId === button.launchId && (
+                    <div className="launch-model-menu" role="listbox" aria-label={`${button.displayName} ${copy.model}`}>
+                      {modelOptions.map((model) => {
+                        const isSelected = snapshot.config.activeLaunchId === button.launchId && snapshot.config.activeModelId === model.id && params.providerKind === model.providerKind;
+                        return (
+                          <button
+                            key={`${model.providerKind}:${model.id}`}
+                            type="button"
+                            className={isSelected ? "launch-model-option active" : "launch-model-option"}
+                            onClick={() => void selectLaunchModel(button.launchId, model)}
+                            disabled={isSavingConfig}
+                            role="option"
+                            aria-selected={isSelected}
+                            title={model.id}
+                          >
+                            <span>{model.displayName}</span>
+                            <small>{providerLabelFromKind(model.providerKind)}</small>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         <section className="tool-section">
           <button type="button" className="section-toggle" onClick={() => setShowAdvanced((current) => !current)}>
-            <SlidersHorizontal size={16} />
-            {copy.parameters}
-            <span>{showAdvanced ? copy.hide : copy.show}</span>
+            <span className="section-toggle-label">
+              <SlidersHorizontal size={16} />
+              <span>{copy.parameters}</span>
+            </span>
+            <span className="section-toggle-state">
+              {showAdvanced ? copy.hide : copy.show}
+              {showAdvanced ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            </span>
           </button>
 
           <div className="compact-grid">
@@ -1808,6 +1903,25 @@ export function App() {
         <section className="notice-area" data-kind={notice.kind}>
           {notice.kind === "error" ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
           <span>{notice.text}</span>
+        </section>
+
+        <section className="update-panel sidebar-bottom">
+          <div className="section-title">
+            <RefreshCw size={16} />
+            <h2>{copy.updates}</h2>
+          </div>
+          <div className="update-status">
+            <span>
+              {copy.currentVersion}: {snapshot.appVersion}
+            </span>
+            <strong data-status={updateCheck?.status ?? "idle"}>{isCheckingUpdate ? copy.checkingUpdates : formatUpdateStatus(updateCheck)}</strong>
+          </div>
+          {updateCheck?.status === "available" && (
+            <button type="button" onClick={downloadAndInstallUpdate} disabled={!bridge || isCheckingUpdate || isInstallingUpdate}>
+              {isInstallingUpdate ? <Loader2 className="spin" size={16} /> : <Download size={16} />}
+              {isInstallingUpdate ? copy.downloadingUpdate : copy.installUpdate}
+            </button>
+          )}
         </section>
       </aside>
 
@@ -1855,10 +1969,6 @@ export function App() {
               ))}
             </div>
           )}
-          <button type="button" className="ghost" onClick={refreshSnapshot} disabled={isLoadingSnapshot}>
-            {isLoadingSnapshot ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
-            {copy.sync}
-          </button>
         </div>
 
         <div className="preview-layout">
@@ -2089,7 +2199,13 @@ export function App() {
             <p className="eyebrow">{copy.history}</p>
             <h2>{copy.recentJobs}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={clearHistory} disabled={snapshot.history.length === 0} title={copy.clearHistory}>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => setIsClearHistoryConfirmOpen(true)}
+            disabled={snapshot.history.length === 0}
+            title={copy.clearAllHistoryTooltip}
+          >
             <Trash2 size={16} />
           </button>
         </header>
@@ -2182,6 +2298,31 @@ export function App() {
           )}
         </div>
       </aside>
+      {isClearHistoryConfirmOpen && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsClearHistoryConfirmOpen(false);
+          }}
+        >
+          <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-history-title">
+            <div>
+              <h2 id="clear-history-title">{copy.confirmClearHistoryTitle}</h2>
+              <p>{copy.confirmClearHistoryBody(snapshot.history.length)}</p>
+            </div>
+            <div className="dialog-actions">
+              <button type="button" className="ghost" onClick={() => setIsClearHistoryConfirmOpen(false)}>
+                {copy.cancel}
+              </button>
+              <button type="button" className="danger-button" onClick={confirmClearHistory}>
+                <Trash2 size={16} />
+                {copy.confirmClearHistory}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
