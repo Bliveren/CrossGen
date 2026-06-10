@@ -67,7 +67,7 @@ describe("release evidence verifier", () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 0/6 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated: 1/6 required gate(s) passed.");
     expect(result.stdout).toContain("real-openai-api");
   });
 

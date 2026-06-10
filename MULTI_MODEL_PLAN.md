@@ -19,11 +19,11 @@ Target release: `v0.2.0`
 - 2026-06-09: Mock model discovery verifier, renderer multi-model smoke coverage, multi-model release/security docs, real Gemini verifier, release metadata, update manifest hash/size enforcement, and manifest asset helper merged through PRs #86-#97.
 - 2026-06-09: Release evidence ledger, checklist/evidence alignment guard, and refreshed completion audit merged through PRs #98-#100.
 - 2026-06-10: v0.2.0 release blockers are explicitly tracked below and linked to release evidence gates / GitHub issues.
-- 2026-06-10: Windows native full-install verifier evidence was recorded; `windows-native-release` remains pending until native download/open-folder behavior is checked.
+- 2026-06-10: Windows native full-install, packaged-app mock provider, download, and open-folder evidence was recorded; `windows-native-release` is passed.
 
 ## 0.1 v0.2.0 当前卡点（发布阻塞）
 
-当前状态：`BLOCKED_FOR_EXTERNAL_EVIDENCE`。代码实现、mock 验证、release verifier、evidence ledger、checklist guard、manifest asset helper 和 CI package gates 已进入 `main`；`v0.2.0` 不能宣称完成或发布，是因为以下 6 个 release evidence 必需 gate 仍为 `pending`。
+当前状态：`BLOCKED_FOR_EXTERNAL_EVIDENCE`。代码实现、mock 验证、release verifier、evidence ledger、checklist guard、manifest asset helper 和 CI package gates 已进入 `main`；Windows 原生发布验证已通过，`v0.2.0` 仍不能宣称完成或发布，是因为以下 5 个 release evidence 必需 gate 仍为 `pending`。
 
 权威校验：
 
@@ -32,16 +32,19 @@ pnpm verify:release-evidence
 node scripts/verify-release-evidence.mjs --require-complete
 ```
 
-截至 2026-06-10，第一条命令只能证明 ledger 结构、脱敏和 checklist 对齐规则有效；第二条命令必须失败，直到下表 6 个 gate 全部拿到真实外部证据并标记 `passed`。
+截至 2026-06-10，第一条命令证明 ledger 结构、脱敏和 checklist 对齐规则有效，并应报告 `1/6` 个 required gate 已通过；第二条命令必须失败，直到剩余 5 个 gate 全部拿到真实外部证据并标记 `passed`。
 
 | Gate | 卡点是什么 | 当前缺失证据 | 解锁动作 / 验收命令 | 追踪 |
 | --- | --- | --- | --- | --- |
 | `real-openai-api` | 需要真实 OpenAI Key、`gpt-image-2` 模型权限和显式成本确认；本地/CI mock 不能替代真实 API 验收。 | 模型发现包含 `gpt-image-2`；真实文生图、参考图编辑、mask 局部重绘成功；真实任务的历史、下载行为已检查。 | 设置真实 Key 后运行 `IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 pnpm verify:real-api`；按需追加 `IMAGE2TOOLS_REAL_API_ACCEPT_STREAM_COST=1` 跑 streaming；把脱敏后的命令、artifact 路径、OS/commit、app 手工检查结果写入 `docs/release/evidence.json`。 | [#1](https://github.com/Bliveren/image2tools/issues/1) |
 | `real-gemini-api` | 需要真实 Gemini Key、`gemini-3.1-flash-image` 权限和显式成本确认；mock Gemini verifier 只能证明协议适配，不证明真实模型可用。 | 模型发现包含 `gemini-3.1-flash-image`；Nano Banana 3 文生图、参考图编辑、局部引导编辑成功；历史 provider/model、参数复用和下载行为已检查。 | 设置真实 Key 后运行 `IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 pnpm verify:real-gemini-api`；再做 app 级历史/下载/参数恢复验收；更新 evidence ledger 和 checklist。 | [#102](https://github.com/Bliveren/image2tools/issues/102) |
 | `macos-signed-notarized` | 需要 Developer ID Application 证书和 Apple notarization 凭据；当前默认 `pnpm package:mac` 只是本地预览路径，不能作为正式发布证据。 | `pnpm verify:signing-ready` 通过；`pnpm package:mac:signed` 产出签名/公证 artifact；`pnpm verify:release:mac` 对同一 artifact 通过；记录 notarization / artifact 证据。 | 在具备证书和 Apple env 的签名机上运行 `pnpm verify:signing-ready`、`pnpm package:mac:signed`、`pnpm verify:release:mac`；把签名身份摘要、公证结果、artifact URL/hash/size 写入 evidence。 | [#3](https://github.com/Bliveren/image2tools/issues/3) |
-| `windows-native-release` | Hosted CI 只跑 `package-smoke`，不能替代原生 Windows full-install 验收；2026-06-10 已取得一次原生 full-install verifier 通过证据。 | 仍缺 native download / open-folder 行为通过证据；full-install 已覆盖 PE 检查、未安装 app 启动、NSIS 静默安装、已安装 app 启动、主窗口检测和静默卸载。 | 在 Windows 机器补充 download/open-folder 验收并记录 OS/version/artifact 证据；必要时对最终分发 artifact 重跑 `IMAGE2TOOLS_WINDOWS_VERIFY_MODE=full-install pnpm verify:release:windows`。 | [#4](https://github.com/Bliveren/image2tools/issues/4) |
 | `linux-native-release` | CI/Docker 环境可能缺 FUSE，不能替代原生 Linux desktop 直接 AppImage 验收。 | 原生 Linux 桌面上 direct AppImage 启动强制通过；mock OpenAI/Gemini 配置、下载、打开文件夹行为已检查。 | 在带 FUSE 的 Linux 桌面运行 `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 pnpm verify:release:linux`；补充 app 手工检查和 OS/version/artifact 证据。 | [#4](https://github.com/Bliveren/image2tools/issues/4) |
 | `update-manifest-assets` | 正式 update manifest 必须基于已经签名/公证或原生平台验收通过的最终分发 artifacts；不能用 preview、unsigned、unnotarized 或未验收 artifact。 | 公开 HTTPS release asset URL；`docs/updates/latest.json` 中每个 asset 的 `url`、`fileName`、`sha256`、`sizeBytes` 与真实 artifact 匹配。 | 上传正式 artifacts 后运行 `pnpm update:manifest-asset -- --file <artifact> --platform <darwin|win32|linux|all> --url <https-url> [--arch <arch>]`；更新 evidence 后跑 `pnpm verify:release-evidence -- --require-complete`。 | [#103](https://github.com/Bliveren/image2tools/issues/103) |
+
+已解除：
+
+- `windows-native-release`：Windows 11 Pro `10.0.26100` 上 full-install verifier 通过，packaged app mock OpenAI/Gemini 配置和生成通过，native download 保存文件且 size/hash 匹配，native open-folder 打开 Explorer 到预期目录；证据见 `docs/release/windows-full-install-2026-06-10.md` 和 `docs/release/windows-native-download-open-folder-2026-06-10.md`。
 
 执行边界：
 
@@ -88,7 +91,7 @@ node scripts/verify-release-evidence.mjs --require-complete
 
 - 真实 OpenAI / Gemini API 验收仍需要外部 Key、模型权限和显式成本确认。
 - 签名/公证和正式更新 manifest 资产 URL/hash/size 仍需要真实分发 artifacts。
-- Windows 原生安装验证和 Linux 原生桌面直接 AppImage 验证仍需要对应平台环境。
+- Linux 原生桌面直接 AppImage 验证仍需要对应平台环境；Windows 原生发布验证已通过。
 - Nano Banana 局部编辑仍是“局部引导编辑”，不能描述为 OpenAI 等价 exact mask inpaint。
 
 ## 3. 官方能力判断

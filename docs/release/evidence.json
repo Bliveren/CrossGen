@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.0",
-  "lastUpdated": "2026-06-10T02:16:23.000Z",
+  "lastUpdated": "2026-06-10T04:11:24.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -87,7 +87,7 @@
       "id": "windows-native-release",
       "title": "Native Windows release package validation",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Windows package verifier runs in full native install mode.",
         "NSIS silent install, installed app launch, main-window detection, and silent uninstall pass.",
@@ -95,9 +95,9 @@
         "Download and open-folder behavior are checked on native Windows."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-10T02:16:23.000Z",
-        "commit": "e6587d2e3e2bff7d586164b4dd4294aed026c953",
-        "environment": "Native Windows shell; package version 0.2.0; artifact release\\Image2Tools-Setup.exe.",
+        "verifiedAt": "2026-06-10T04:11:24.000Z",
+        "commit": "4b4dd18ff4255fcb4bfb2a25fadde7bbf788eafd",
+        "environment": "Microsoft Windows 11 Pro 10.0.26100 build 26100 x64; package version 0.2.0; artifacts release\\Image2Tools-Setup.exe and release\\win-unpacked\\Image2Tools.exe.",
         "commands": [
           "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; corepack pnpm@10.25.0 verify:release:windows"
         ],
@@ -112,10 +112,16 @@
             "kind": "evidence-note",
             "path": "docs/release/windows-full-install-2026-06-10.md",
             "public": true,
-            "description": "Redacted Windows full-install verifier result and remaining download/open-folder gap."
+            "description": "Redacted Windows full-install verifier result."
+          },
+          {
+            "kind": "evidence-note",
+            "path": "docs/release/windows-native-download-open-folder-2026-06-10.md",
+            "public": true,
+            "description": "Redacted Windows packaged-app mock provider, native download, and native open-folder acceptance result."
           }
         ],
-        "summary": "Partial Windows native evidence recorded: full-install verifier passed, including PE checks, unpacked and installed app launch, main-window detection, NSIS silent install, and silent uninstall. Gate remains pending because native download/open-folder acceptance was not counted as passed."
+        "summary": "Windows native release evidence passed: full-install verifier passed, packaged app configured mock OpenAI and Gemini endpoints, mock generation produced outputs, native download saved the selected file with matching size/hash, and native open-folder opened Explorer at the expected output directory."
       }
     },
     {

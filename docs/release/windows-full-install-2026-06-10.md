@@ -1,8 +1,9 @@
 # Windows Full-Install Verification - 2026-06-10
 
-This note records partial external evidence for the `windows-native-release`
-gate. It does not mark the gate complete because native download and open-folder
-acceptance was not counted as passed.
+This note records the first external full-install verifier evidence for the
+`windows-native-release` gate. It is complemented by
+`docs/release/windows-native-download-open-folder-2026-06-10.md`, which records
+the follow-up native download/open-folder acceptance that completed the gate.
 
 ## Source
 
@@ -46,9 +47,10 @@ Supplemental packaged-app bridge checks reached OpenAI / Gemini mock provider
 configuration, discovery, connection, and generation through the packaged app
 bridge.
 
-## Remaining Windows Evidence
+## Follow-Up Windows Evidence
 
-Native download / open-folder automation was not counted as passed because
-native Save dialog automation remained unstable. The `windows-native-release`
-gate remains pending until that behavior is checked on native Windows and
-recorded in the release evidence ledger.
+Native download/open-folder acceptance was completed in a follow-up Windows
+test run against commit `4b4dd18ff4255fcb4bfb2a25fadde7bbf788eafd`; see
+`docs/release/windows-native-download-open-folder-2026-06-10.md`. The
+`windows-native-release` gate is now marked passed in the release evidence
+ledger.
