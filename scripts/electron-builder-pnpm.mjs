@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { constants } from "node:fs";
+import { access } from "node:fs/promises";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -18,8 +20,8 @@ export async function getPackageManagerSpec(packageJsonPath = path.resolve("pack
   return getPackageManagerSpecFromPackageJson(packageJson);
 }
 
-export async function createPnpmWrapperScripts(directory, packageManagerSpec, platform = process.platform) {
-  await writeFile(path.join(directory, "pnpm"), createPnpmShellScript(packageManagerSpec), { mode: 0o755 });
+export async function createPnpmWrapperScripts(directory, packageManagerSpec, platform = process.platform, fallbackPnpmCommand = "pnpm") {
+  await writeFile(path.join(directory, "pnpm"), createPnpmShellScript(packageManagerSpec, fallbackPnpmCommand), { mode: 0o755 });
 
   if (platform === "win32") {
     await writeFile(path.join(directory, "pnpm.cmd"), createPnpmWindowsCmdScript(packageManagerSpec), "utf8");
@@ -30,7 +32,7 @@ export async function createPnpmWrapperScripts(directory, packageManagerSpec, pl
 async function runElectronBuilder(args) {
   const packageManagerSpec = await getPackageManagerSpec();
   const wrapperDir = await mkdtemp(path.join(tmpdir(), "image2tools-pnpm-wrapper-"));
-  await createPnpmWrapperScripts(wrapperDir, packageManagerSpec);
+  await createPnpmWrapperScripts(wrapperDir, packageManagerSpec, process.platform, await resolvePnpmFallbackCommand());
 
   try {
     await new Promise((resolve, reject) => {
@@ -47,6 +49,26 @@ async function runElectronBuilder(args) {
   } finally {
     await rm(wrapperDir, { force: true, recursive: true });
   }
+}
+
+async function resolvePnpmFallbackCommand() {
+  const fromPath = await findExecutableOnPath("pnpm");
+  return fromPath ?? "pnpm";
+}
+
+async function findExecutableOnPath(commandName) {
+  const pathValue = process.env.PATH ?? "";
+  for (const directory of pathValue.split(path.delimiter)) {
+    if (!directory) continue;
+    const candidate = path.join(directory, commandName);
+    try {
+      await access(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // Continue searching PATH.
+    }
+  }
+  return null;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

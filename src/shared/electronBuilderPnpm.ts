@@ -5,8 +5,15 @@ export function getPackageManagerSpecFromPackageJson(packageJson: unknown): stri
   return packageJson.packageManager;
 }
 
-export function createPnpmShellScript(packageManagerSpec: string): string {
-  return `#!/usr/bin/env sh\nexec corepack ${packageManagerSpec} "$@"\n`;
+export function createPnpmShellScript(packageManagerSpec: string, fallbackPnpmCommand = "pnpm"): string {
+  return [
+    "#!/usr/bin/env sh",
+    "if command -v corepack >/dev/null 2>&1; then",
+    `  exec corepack ${packageManagerSpec} "$@"`,
+    "fi",
+    `exec ${quoteShellValue(fallbackPnpmCommand)} "$@"`,
+    ""
+  ].join("\n");
 }
 
 export function createPnpmWindowsCmdScript(packageManagerSpec: string): string {
@@ -27,4 +34,8 @@ export function withPrependedPath(directory: string, env: Record<string, string 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function quoteShellValue(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
