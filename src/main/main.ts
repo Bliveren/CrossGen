@@ -38,13 +38,20 @@ import {
   validateWorkspaceDraftInput
 } from "../shared/validation.js";
 import {
+  GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
-  getModelDisplayName
+  GPT_IMAGE_2_MODEL_ID,
+  NANO_BANANA_3_LAUNCH_ID,
+  NANO_BANANA_3_MODEL_ID,
+  getModelDisplayName,
+  isGeneralFallbackProvider,
+  isPotentialGeneralImageModel,
+  normalizeModelId
 } from "../shared/modelCatalog.js";
 import { compareVersions, isAllowedUpdateUrl, parseUpdateManifest, safeUpdateFileName, selectUpdateAsset } from "../shared/updateManifest.js";
 import { fetchWithTimeout } from "./services/openaiImage.js";
-import { getImageProviderAdapter, getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
-import { discoverModels, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
+import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
+import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
 import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePaths, normalizeManagedAssetPath } from "./services/assetOwnership.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
@@ -538,13 +545,23 @@ async function handleClearDraft(): Promise<void> {
 async function refreshModelDiscovery(config: StoredProviderConfig): Promise<StoredProviderConfig> {
   const apiKey = getApiKeyForConfigOrThrow(config);
   try {
-    const adapter = getImageProviderAdapter(config.kind);
-    const models = adapter
-      ? await adapter.discoverModels(config, apiKey, { fetch })
-      : (await discoverModels(config.kind, config.baseURL, apiKey, Math.min(config.timeoutMs, 30000), { fetch })).models;
+    const discovery = await discoverModelsAcrossProviders(config.kind, config.baseURL, apiKey, Math.min(config.timeoutMs, 30000), { fetch });
+    const kind = discovery.inferredProviderKind ?? config.kind;
+    const activeSelection = discovery.inferredProviderKind
+      ? selectActiveLaunchForDiscovery(config, discovery.models, discovery.inferredProviderKind)
+      : {
+          activeLaunchId: config.activeLaunchId,
+          activeModelId: config.activeModelId,
+          defaultModel: config.defaultModel
+        };
     return {
       ...config,
-      discoveredModels: models,
+      kind,
+      name: providerDisplayName(kind),
+      defaultModel: activeSelection.defaultModel,
+      activeLaunchId: activeSelection.activeLaunchId,
+      activeModelId: activeSelection.activeModelId,
+      discoveredModels: discovery.models,
       lastModelDiscoveryAt: new Date().toISOString(),
       lastModelDiscoveryError: undefined,
       updatedAt: new Date().toISOString()
@@ -558,6 +575,49 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
       updatedAt: new Date().toISOString()
     };
   }
+}
+
+function selectActiveLaunchForDiscovery(
+  config: StoredProviderConfig,
+  models: StoredProviderConfig["discoveredModels"],
+  inferredProviderKind: StoredProviderConfig["kind"]
+) {
+  if (inferredProviderKind === "gemini") {
+    const nanoModel = models.find((model) => model.providerKind === "gemini" && normalizeModelId(model.id) === normalizeModelId(NANO_BANANA_3_MODEL_ID));
+    if (nanoModel) {
+      return {
+        activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+        activeModelId: nanoModel.id,
+        defaultModel: nanoModel.id
+      };
+    }
+  }
+
+  if (inferredProviderKind === "openai") {
+    const gptModel = models.find((model) => model.providerKind === "openai" && normalizeModelId(model.id) === normalizeModelId(GPT_IMAGE_2_MODEL_ID));
+    if (gptModel) {
+      return {
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: gptModel.id,
+        defaultModel: gptModel.id
+      };
+    }
+  }
+
+  const generalModel = models.find((model) => isGeneralFallbackProvider(model.providerKind) && isPotentialGeneralImageModel(model));
+  if (generalModel) {
+    return {
+      activeLaunchId: GENERAL_LAUNCH_ID,
+      activeModelId: generalModel.id,
+      defaultModel: generalModel.id
+    };
+  }
+
+  return {
+    activeLaunchId: config.activeLaunchId,
+    activeModelId: config.activeModelId,
+    defaultModel: config.defaultModel
+  };
 }
 
 async function handleDiscoverModels(): Promise<ProviderConfig> {
@@ -637,7 +697,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   }
 
   const state = await readState();
-  if (normalizedRequest.params.providerKind !== state.config.kind) {
+  if (!canRunRequestWithConfig(normalizedRequest, state.config)) {
     throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
   }
   const apiKey = await getApiKeyOrThrow();
@@ -682,6 +742,16 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     sendJobEvent({ jobId: job.id, type: "failed", error: message });
     return job;
   }
+}
+
+function canRunRequestWithConfig(request: RunJobRequest, config: StoredProviderConfig): boolean {
+  if (request.params.providerKind === config.kind) return true;
+  if (request.params.launchId !== config.activeLaunchId) return false;
+
+  const requestedModelId = normalizeModelId(request.params.model);
+  return config.discoveredModels.some(
+    (model) => model.providerKind === request.params.providerKind && normalizeModelId(model.id) === requestedModelId
+  );
 }
 
 async function handleDownloadAsset(_event: IpcMainInvokeEvent, request: DownloadRequest): Promise<string | null> {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { discoverModels, sanitizeModelDiscoveryError } from "./modelDiscovery";
+import { discoverModels, discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./modelDiscovery";
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -35,6 +35,21 @@ describe("model discovery", () => {
     ]);
   });
 
+  it("classifies focused model ids discovered from an OpenAI-compatible model list", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        data: [{ id: "gpt-image-2", object: "model" }, { id: "gemini-3.1-flash-image", object: "model" }]
+      })
+    );
+
+    const result = await discoverModels("openai", "https://gateway.example.com/v1", "gateway-key", 30000, { fetch: fetchImpl });
+
+    expect(result.models).toEqual([
+      expect.objectContaining({ id: "gpt-image-2", providerKind: "openai" }),
+      expect.objectContaining({ id: "gemini-3.1-flash-image", providerKind: "gemini" })
+    ]);
+  });
+
   it("discovers Gemini models and normalizes resource names", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
@@ -60,6 +75,25 @@ describe("model discovery", () => {
         displayName: "Gemini 3.1 Flash Image"
       })
     ]);
+  });
+
+  it("merges provider probes and infers a provider when the selected protocol fails", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (url) => {
+      const target = String(url);
+      if (target.includes("?key=")) {
+        return jsonResponse({
+          models: [{ name: "models/gemini-3.1-flash-image", displayName: "Gemini 3.1 Flash Image" }]
+        });
+      }
+      return jsonResponse({ error: { message: "OpenAI-compatible route unavailable for gateway-key" } }, 404);
+    });
+
+    const result = await discoverModelsAcrossProviders("openai", "https://gateway.example.com/v1beta", "gateway-key", 30000, {
+      fetch: fetchImpl
+    });
+
+    expect(result.inferredProviderKind).toBe("gemini");
+    expect(result.models).toEqual([expect.objectContaining({ id: "gemini-3.1-flash-image", providerKind: "gemini" })]);
   });
 
   it("sanitizes API keys from discovery errors", async () => {

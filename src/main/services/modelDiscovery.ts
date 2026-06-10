@@ -1,4 +1,5 @@
 import type { DiscoveredModel, ProviderKind } from "../../shared/types.js";
+import { getProviderKindForFocusedModelId } from "../../shared/modelCatalog.js";
 import { DEFAULT_GEMINI_BASE_URL, normalizeBaseURL } from "../../shared/validation.js";
 import { buildEndpoint, fetchWithTimeout } from "./openaiImage.js";
 
@@ -23,6 +24,7 @@ export interface ModelDiscoveryResult {
   models: DiscoveredModel[];
   status: number;
   requestId?: string;
+  inferredProviderKind?: ProviderKind;
 }
 
 export interface ModelDiscoveryRuntime {
@@ -42,9 +44,58 @@ export async function discoverModels(
   return discoverOpenAICompatibleModels(providerKind, baseURL, apiKey, timeoutMs, runtime);
 }
 
+export async function discoverModelsAcrossProviders(
+  providerKind: ProviderKind,
+  baseURL: string,
+  apiKey: string,
+  timeoutMs: number,
+  runtime: ModelDiscoveryRuntime
+): Promise<ModelDiscoveryResult> {
+  const attempts = discoveryProviderOrder(providerKind);
+  const results: Array<{ providerKind: ProviderKind; result: ModelDiscoveryResult }> = [];
+  const errors: string[] = [];
+
+  for (const attemptProviderKind of attempts) {
+    try {
+      results.push({
+        providerKind: attemptProviderKind,
+        result: await discoverModels(attemptProviderKind, baseURL, apiKey, timeoutMs, runtime)
+      });
+    } catch (error) {
+      errors.push(`${providerLabel(attemptProviderKind)}: ${sanitizeModelDiscoveryError(error, apiKey)}`);
+    }
+  }
+
+  if (results.length === 0) {
+    throw new Error(errors.join(" | ") || "model discovery failed.");
+  }
+
+  const resultsWithModels = results.filter((result) => result.result.models.length > 0);
+  const selectedProviderHasModels = resultsWithModels.some((result) => result.providerKind === providerKind);
+
+  return {
+    models: uniqueModels(results.flatMap((result) => result.result.models)),
+    status: results[0]?.result.status ?? 200,
+    requestId: results.find((result) => result.result.requestId)?.result.requestId,
+    inferredProviderKind: !selectedProviderHasModels && resultsWithModels.length === 1 ? resultsWithModels[0]?.providerKind : undefined
+  };
+}
+
 export function sanitizeModelDiscoveryError(error: unknown, apiKey?: string): string {
   const raw = error instanceof Error ? error.message : String(error);
   return redactLikelySecrets(raw, apiKey).replace(/\s+/g, " ").trim();
+}
+
+function discoveryProviderOrder(providerKind: ProviderKind): ProviderKind[] {
+  if (providerKind === "gemini") return ["gemini", "openai"];
+  if (providerKind === "custom") return ["custom", "gemini"];
+  return ["openai", "gemini"];
+}
+
+function providerLabel(providerKind: ProviderKind): string {
+  if (providerKind === "gemini") return "Gemini";
+  if (providerKind === "custom") return "Custom";
+  return "OpenAI-compatible";
 }
 
 async function discoverOpenAICompatibleModels(
@@ -115,11 +166,12 @@ function parseOpenAIModels(payload: OpenAIModelsResponse, providerKind: Provider
   if (!Array.isArray(payload.data)) return [];
   return payload.data.flatMap((item) => {
     if (!isRecord(item) || typeof item.id !== "string" || !item.id.trim()) return [];
+    const id = item.id.trim();
     return [
       {
-        id: item.id.trim(),
-        providerKind,
-        displayName: typeof item.id === "string" ? item.id.trim() : undefined,
+        id,
+        providerKind: getProviderKindForFocusedModelId(id) ?? providerKind,
+        displayName: id,
         raw: item
       }
     ];

@@ -69,9 +69,6 @@ export async function runGeneralImageJob(
   if (!isGeneralFallbackProvider(job.params.providerKind)) {
     throw new Error(unsupportedGeneralProviderMessage(job.params.providerKind));
   }
-  if (job.params.providerKind !== config.kind) {
-    throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
-  }
 
   if (job.params.providerKind === "gemini") {
     const providerJob = {

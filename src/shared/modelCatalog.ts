@@ -122,6 +122,15 @@ export function isFocusedImageModelId(providerKind: ProviderKind, modelId: strin
   );
 }
 
+export function getProviderKindForFocusedModelId(modelId: string): ProviderKind | undefined {
+  const normalizedId = normalizeModelId(modelId);
+  return FOCUSED_MODEL_CATALOG.find(
+    (definition) =>
+      definition.launchId !== GENERAL_LAUNCH_ID &&
+      definition.modelIds.some((id) => normalizeModelId(id) === normalizedId)
+  )?.providerKind;
+}
+
 export function isPotentialGeneralImageModel(model: DiscoveredModel): boolean {
   if (isFocusedImageModelId(model.providerKind, model.id)) return false;
   const haystack = normalizeModelId([model.id, model.displayName].filter(Boolean).join(" "));
@@ -133,6 +142,6 @@ export function getGeneralImageModelCandidate(discoveredModels: DiscoveredModel[
   return discoveredModels.find((model) => model.providerKind === providerKind && isPotentialGeneralImageModel(model));
 }
 
-function normalizeModelId(value: string): string {
+export function normalizeModelId(value: string): string {
   return value.trim().toLowerCase().replace(/^models\//, "");
 }

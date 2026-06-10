@@ -96,7 +96,7 @@ describe("main config save builder", () => {
     expect(next.lastModelDiscoveryAt).toBeUndefined();
   });
 
-  it("drops incompatible requested launch and model when switching provider", () => {
+  it("preserves an explicitly requested cross-provider focused launch", () => {
     const next = buildProviderConfigForSave(
       savedConfig(),
       input({
@@ -109,7 +109,7 @@ describe("main config save builder", () => {
       "2026-06-09T02:00:00.000Z"
     );
 
-    expect(next.activeLaunchId).toBe("nano-banana-3");
-    expect(next.activeModelId).toBe("gemini-3.1-flash-image");
+    expect(next.activeLaunchId).toBe("gpt-image-2");
+    expect(next.activeModelId).toBe("gpt-image-2");
   });
 });
