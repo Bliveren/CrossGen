@@ -20,10 +20,11 @@ Target release: `v0.2.0`
 - 2026-06-09: Release evidence ledger, checklist/evidence alignment guard, and refreshed completion audit merged through PRs #98-#100.
 - 2026-06-10: v0.2.0 release blockers are explicitly tracked below and linked to release evidence gates / GitHub issues.
 - 2026-06-10: Windows native full-install, packaged-app download, and open-folder evidence were recorded; `windows-native-release` is passed.
+- 2026-06-11: Linux native release verification passed via WSL2 Ubuntu 24.04 (direct AppImage mandatory); `linux-native-release` is passed.
 
 ## 0.1 v0.2.0 当前卡点（发布阻塞）
 
-当前状态：`BLOCKED_FOR_EXTERNAL_EVIDENCE`。代码实现、mock 验证、release verifier、evidence ledger、checklist guard、manifest asset helper 和 CI package gates 已进入 `main`；`windows-native-release` 已通过，但 `v0.2.0` 仍不能宣称完成或发布，因为其余 5 个 release evidence 必需 gate 仍为 `pending`。
+当前状态：`BLOCKED_FOR_EXTERNAL_EVIDENCE`。代码实现、mock 验证、release verifier、evidence ledger、checklist guard、manifest asset helper 和 CI package gates 已进入 `main`；`windows-native-release` 和 `linux-native-release` 已通过，但 `v0.2.0` 仍不能宣称完成或发布，因为其余 4 个 release evidence 必需 gate 仍为 `pending`。
 
 权威校验：
 
@@ -32,7 +33,7 @@ pnpm verify:release-evidence
 node scripts/verify-release-evidence.mjs --require-complete
 ```
 
-截至 2026-06-10，第一条命令能证明 ledger 结构、脱敏和 checklist 对齐规则有效，并显示 `1/6` required gate passed；第二条命令必须失败，直到全部 6 个 gate 都拿到真实外部证据并标记 `passed`。
+截至 2026-06-11，第一条命令能证明 ledger 结构、脱敏和 checklist 对齐规则有效，并显示 `2/6` required gates passed；第二条命令必须失败，直到全部 6 个 gate 都拿到真实外部证据并标记 `passed`。
 
 | Gate | 卡点是什么 | 当前缺失证据 | 解锁动作 / 验收命令 | 追踪 |
 | --- | --- | --- | --- | --- |
@@ -40,7 +41,7 @@ node scripts/verify-release-evidence.mjs --require-complete
 | `real-gemini-api` | 需要真实 Gemini Key、`gemini-3.1-flash-image` 权限和显式成本确认；mock Gemini verifier 只能证明协议适配，不证明真实模型可用。 | 模型发现包含 `gemini-3.1-flash-image`；Nano Banana 3 文生图、参考图编辑、局部引导编辑成功；历史 provider/model、参数复用和下载行为已检查。 | 设置真实 Key 后运行 `IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 pnpm verify:real-gemini-api`；再做 app 级历史/下载/参数恢复验收；更新 evidence ledger 和 checklist。 | [#102](https://github.com/Bliveren/image2tools/issues/102) |
 | `macos-signed-notarized` | 需要 Developer ID Application 证书和 Apple notarization 凭据；当前默认 `pnpm package:mac` 只是本地预览路径，不能作为正式发布证据。 | `pnpm verify:signing-ready` 通过；`pnpm package:mac:signed` 产出签名/公证 artifact；`pnpm verify:release:mac` 对同一 artifact 通过；记录 notarization / artifact 证据。 | 在具备证书和 Apple env 的签名机上运行 `pnpm verify:signing-ready`、`pnpm package:mac:signed`、`pnpm verify:release:mac`；把签名身份摘要、公证结果、artifact URL/hash/size 写入 evidence。 | [#3](https://github.com/Bliveren/image2tools/issues/3) |
 | `windows-native-release` | Hosted CI 只跑 `package-smoke`，不能替代原生 Windows full-install 验收；2026-06-10 已完成原生 Windows full-install、packaged app download 和 open-folder 验证。 | 无；该 gate 已通过。 | 若最终 Windows 分发 artifact 改变，重新运行 `IMAGE2TOOLS_WINDOWS_VERIFY_MODE=full-install pnpm verify:release:windows` 并补做 download/open-folder 验收。 | [#4](https://github.com/Bliveren/image2tools/issues/4) |
-| `linux-native-release` | CI/Docker 环境可能缺 FUSE，不能替代原生 Linux desktop 直接 AppImage 验收。 | 原生 Linux 桌面上 direct AppImage 启动强制通过；mock OpenAI/Gemini 配置、下载、打开文件夹行为已检查。 | 在带 FUSE 的 Linux 桌面运行 `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 pnpm verify:release:linux`；补充 app 手工检查和 OS/version/artifact 证据。 | [#4](https://github.com/Bliveren/image2tools/issues/4) |
+| `linux-native-release` | 2026-06-11 已在 WSL2 Ubuntu 24.04 上通过 direct AppImage 验证（FUSE mandatory）。 | 无；该 gate 已通过。 | 若最终 Linux 分发 artifact 改变，重新运行 `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 pnpm verify:release:linux` 并补做 download/open-folder 验收。 | [#4](https://github.com/Bliveren/image2tools/issues/4) |
 | `update-manifest-assets` | 正式 update manifest 必须基于已经签名/公证或原生平台验收通过的最终分发 artifacts；不能用 preview、unsigned、unnotarized 或未验收 artifact。 | 公开 HTTPS release asset URL；`docs/updates/latest.json` 中每个 asset 的 `url`、`fileName`、`sha256`、`sizeBytes` 与真实 artifact 匹配。 | 上传正式 artifacts 后运行 `pnpm update:manifest-asset -- --file <artifact> --platform <darwin|win32|linux|all> --url <https-url> [--arch <arch>]`；更新 evidence 后跑 `pnpm verify:release-evidence -- --require-complete`。 | [#103](https://github.com/Bliveren/image2tools/issues/103) |
 
 执行边界：

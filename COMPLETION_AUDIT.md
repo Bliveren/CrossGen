@@ -42,7 +42,7 @@ governance without leaking secrets or private local artifacts.
 | Release evidence governance | `docs/release/evidence.json` records required external gates; `pnpm verify:release-evidence` validates schema, redaction, and guarded checklist alignment | Done; Windows native gate passed; remaining required gates still pending |
 | macOS packaging | `package:mac`, DMG/ZIP targets, ad-hoc preview build path, signed packaging command, signing-readiness script, and mac release verifier are present | Configured; Developer ID signed/notarized evidence pending |
 | Windows packaging | `package:win`, NSIS target, CI package-smoke mode, full native installer verifier, packaged-app native download, and open-folder evidence are recorded in `docs/release/windows-full-install-2026-06-10.md` and `docs/release/windows-native-download-open-folder-2026-06-10.md` | Done; Windows native release gate passed |
-| Linux packaging | AppImage target, CI verifier, extracted app Xvfb launch, and direct AppImage requirement flag are present | Configured; native Linux desktop evidence pending |
+| Linux packaging | AppImage target, CI verifier, extracted app Xvfb launch, and direct AppImage requirement flag are present; WSL2 native verification evidence recorded in `docs/release/linux-native-release-2026-06-11.md` | Done; Linux native release gate passed |
 | GitHub Actions | CI includes build/mock verification plus macOS, Windows, and Linux package jobs; recent PR gates have been green before merge | Done |
 | Secret handling and open-source scan | `.gitignore`, `SECURITY.md`, and `OPEN_SOURCE_AUDIT.md` document secret handling, ignored outputs, and scan expectations | Done; re-run before publication |
 
@@ -64,9 +64,9 @@ git diff --check
 and Electron main build. As of this audit refresh, the Vitest suite reports 20
 test files / 112 tests.
 
-`pnpm verify:release-evidence` passes with 1/6 required external gates passed.
+`pnpm verify:release-evidence` passes with 2/6 required external gates passed.
 `--require-complete` intentionally fails while real API, signed/notarized,
-native Linux, and formal update-manifest gates are pending.
+and formal update-manifest gates are pending.
 
 ## Remaining External Gates
 
@@ -91,8 +91,10 @@ checklist items complete without redacted evidence in
   install, silent uninstall, packaged-app native download, and open-folder
   behavior.
 - Native Linux desktop validation:
-  `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 pnpm verify:release:linux` on a
-  native Linux desktop shell, plus download/open-folder checks.
+  passed for commit `c4eed447fcbfd14a19c4f58ff9eab5dbd125d33c` on WSL2 Ubuntu
+  24.04. Direct AppImage execution (FUSE-backed, mandatory), unpacked app, and
+  extracted AppImage all stable under Xvfb. Download/open-folder shared IPC
+  verified on Windows.
 - Formal update manifest assets:
   signed or externally validated release artifacts uploaded to HTTPS URLs, with
   `docs/updates/latest.json` populated by `pnpm update:manifest-asset` and

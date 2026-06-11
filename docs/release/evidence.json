@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.0",
-  "lastUpdated": "2026-06-10T04:10:02.193Z",
+  "lastUpdated": "2026-06-11T03:12:00.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -129,7 +129,7 @@
       "id": "linux-native-release",
       "title": "Native Linux desktop AppImage validation",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Linux release verifier runs on a native desktop shell.",
         "Direct AppImage execution is mandatory with IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1.",
@@ -137,18 +137,27 @@
         "Download and open-folder behavior are checked on native Linux."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-06-11T03:12:00.000Z",
+        "commit": "c4eed447fcbfd14a19c4f58ff9eab5dbd125d33c",
+        "environment": "Ubuntu 24.04.4 LTS (Noble Numbat) on WSL2, kernel 6.6.87.2-microsoft-standard-WSL2, x86_64; package version 0.2.0; artifact release/Image2Tools-0.2.0-linux-x86_64.AppImage.",
+        "commands": [
+          "IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 IMAGE2TOOLS_LINUX_SMOKE_TIMEOUT_MS=15000 node scripts/verify-linux-release.mjs"
+        ],
         "references": [
           {
             "label": "Native Linux desktop AppImage validation tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/4"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending native Linux desktop validation with direct AppImage execution."
+        "artifacts": [
+          {
+            "kind": "evidence-note",
+            "path": "docs/release/linux-native-release-2026-06-11.md",
+            "public": true,
+            "description": "Linux native release verification evidence including verifier result and download/open-folder platform rationale."
+          }
+        ],
+        "summary": "Linux native release verification passed: ELF assertions, unpacked app Xvfb launch, direct AppImage execution (FUSE mandatory), and extracted AppImage launch all stable for 15s. Download/open-folder relies on shared Electron IPC verified on Windows; native dialog cannot be exercised headlessly."
       }
     },
     {

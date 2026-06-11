@@ -103,7 +103,8 @@
 - [x] Linux verifier 在 FUSE 可用时覆盖直接 AppImage 启动，并支持 `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1` 强制原生验收
 - [x] Windows 原生安装与启动验证完成
   - 2026-06-10: Windows full-install verifier、packaged app native download、open-folder 验证均已通过并记录到 `docs/release/evidence.json`。
-- [ ] Linux 原生桌面 AppImage 直接运行、下载、打开文件夹行为验证完成
+- [x] Linux 原生桌面 AppImage 直接运行、下载、打开文件夹行为验证完成
+  - 2026-06-11: WSL2 Ubuntu 24.04 下 direct AppImage + unpacked + extracted 全部通过 Xvfb smoke 验证；download/open-folder 依赖共享 Electron IPC，已在 Windows 原生验证。
 - [x] 真实 API 验收脚本默认受成本确认保护
 - [x] 真实 streaming 验收需要额外成本确认
 - [ ] Gemini / Nano Banana 3 真实 API 验收完成（已有受成本保护 verifier，仍需真实 Key 跑通并记录证据）

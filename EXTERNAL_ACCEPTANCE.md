@@ -239,6 +239,9 @@ Current partial evidence:
   support, so this is not a substitute for native Linux desktop validation.
 - Windows native full-install, packaged-app download, and open-folder validation
   have been performed and recorded.
+- Linux native release validation passed on 2026-06-11 via WSL2 Ubuntu 24.04
+  with mandatory direct AppImage execution. Evidence recorded in
+  `docs/release/linux-native-release-2026-06-11.md`.
 
 Run on each native platform:
 
