@@ -129,8 +129,8 @@
 - [x] 将 Linux release verifier 扩展到可选直接 AppImage 启动，原生验收可通过环境变量强制要求 FUSE
 - [x] 取得绿色 CI
 - [ ] 完成签名、公证并补充正式分发资产 URL / hash / size 证据
-- [ ] 非 macOS 平台安装验证；Windows 已完成，原生 Linux 桌面 shell 行为仍待验证
-  - 2026-06-10: Windows full-install verifier、packaged-app mock provider、native download 和 open-folder 证据已记录；该组合项仍保持未完成，直到原生 Linux 桌面验证也有证据。
+- [ ] 非 macOS 平台安装验证；Windows 与原生 Linux 桌面 shell 行为仍待验证
+  - 2026-06-10: Windows native release gate 已通过，证据见 `docs/release/windows-full-install-2026-06-10.md` 和 `docs/release/windows-native-download-open-folder-2026-06-10.md`；该项仍保持未完成，直到原生 Linux 桌面验证也有证据。
 - [x] 增加中英文界面切换
 
 ## 建议优先级

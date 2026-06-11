@@ -1,9 +1,9 @@
 # Windows Full-Install Verification - 2026-06-10
 
-This note records the first external full-install verifier evidence for the
-`windows-native-release` gate. It is complemented by
-`docs/release/windows-native-download-open-folder-2026-06-10.md`, which records
-the follow-up native download/open-folder acceptance that completed the gate.
+This note records the full-install portion of the `windows-native-release`
+gate. A follow-up native download/open-folder check completed the remaining
+Windows evidence in
+`docs/release/windows-native-download-open-folder-2026-06-10.md`.
 
 ## Source
 
@@ -49,8 +49,8 @@ bridge.
 
 ## Follow-Up Windows Evidence
 
-Native download/open-folder acceptance was completed in a follow-up Windows
-test run against commit `4b4dd18ff4255fcb4bfb2a25fadde7bbf788eafd`; see
+Native download / open-folder automation was completed later on 2026-06-10 and
+recorded in
 `docs/release/windows-native-download-open-folder-2026-06-10.md`. The
-`windows-native-release` gate is now marked passed in the release evidence
-ledger.
+`windows-native-release` gate is no longer pending after that follow-up evidence
+is included in the release evidence ledger.

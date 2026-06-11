@@ -102,7 +102,7 @@
 - [x] Linux package gate 已接入 `pnpm verify:release:linux`
 - [x] Linux verifier 在 FUSE 可用时覆盖直接 AppImage 启动，并支持 `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1` 强制原生验收
 - [x] Windows 原生安装与启动验证完成
-  - 2026-06-10: Windows full-install verifier、packaged-app mock provider、native download 和 open-folder 证据已记录；`windows-native-release` gate 已通过。
+  - 2026-06-10: Windows full-install verifier、packaged app native download、open-folder 验证均已通过并记录到 `docs/release/evidence.json`。
 - [ ] Linux 原生桌面 AppImage 直接运行、下载、打开文件夹行为验证完成
 - [x] 真实 API 验收脚本默认受成本确认保护
 - [x] 真实 streaming 验收需要额外成本确认

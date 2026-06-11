@@ -39,9 +39,9 @@ governance without leaking secrets or private local artifacts.
 | Mock verification | `pnpm verify:mock-api`, `pnpm verify:mock-gemini-api`, and `pnpm verify:mock-model-discovery` cover no-cost OpenAI, Gemini, and discovery paths | Done |
 | Release package metadata | Package version, description, copyright, app id, artifact names, and staged update manifest metadata align with `v0.2.0` | Done |
 | Update manifest safety | `src/shared/updateManifest.ts`, installer byte verification, update manifest tests, and `pnpm update:manifest-asset` require URL/hash/size metadata | Done; formal signed asset metadata pending |
-| Release evidence governance | `docs/release/evidence.json` records required external gates; `pnpm verify:release-evidence` validates schema, redaction, and guarded checklist alignment | Done; required gates still pending |
+| Release evidence governance | `docs/release/evidence.json` records required external gates; `pnpm verify:release-evidence` validates schema, redaction, and guarded checklist alignment | Done; Windows native gate passed; remaining required gates still pending |
 | macOS packaging | `package:mac`, DMG/ZIP targets, ad-hoc preview build path, signed packaging command, signing-readiness script, and mac release verifier are present | Configured; Developer ID signed/notarized evidence pending |
-| Windows packaging | `package:win`, NSIS target, CI package-smoke mode, and full native installer verifier are present; Windows full-install plus native download/open-folder evidence is recorded in `docs/release/windows-full-install-2026-06-10.md` and `docs/release/windows-native-download-open-folder-2026-06-10.md` | Done |
+| Windows packaging | `package:win`, NSIS target, CI package-smoke mode, full native installer verifier, packaged-app native download, and open-folder evidence are recorded in `docs/release/windows-full-install-2026-06-10.md` and `docs/release/windows-native-download-open-folder-2026-06-10.md` | Done; Windows native release gate passed |
 | Linux packaging | AppImage target, CI verifier, extracted app Xvfb launch, and direct AppImage requirement flag are present | Configured; native Linux desktop evidence pending |
 | GitHub Actions | CI includes build/mock verification plus macOS, Windows, and Linux package jobs; recent PR gates have been green before merge | Done |
 | Secret handling and open-source scan | `.gitignore`, `SECURITY.md`, and `OPEN_SOURCE_AUDIT.md` document secret handling, ignored outputs, and scan expectations | Done; re-run before publication |
@@ -66,7 +66,7 @@ test files / 112 tests.
 
 `pnpm verify:release-evidence` passes with 1/6 required external gates passed.
 `--require-complete` intentionally fails while real API, signed/notarized,
-native Linux desktop, and formal update-manifest evidence remain pending.
+native Linux, and formal update-manifest gates are pending.
 
 ## Remaining External Gates
 
@@ -85,6 +85,11 @@ checklist items complete without redacted evidence in
   `pnpm verify:signing-ready`, `pnpm package:mac:signed`, and
   `pnpm verify:release:mac` with Developer ID and Apple notarization
   credentials.
+- Native Windows release validation:
+  passed for commit `4b4dd18ff4255fcb4bfb2a25fadde7bbf788eafd`, covering PE
+  checks, unpacked and installed app launch, main-window detection, silent
+  install, silent uninstall, packaged-app native download, and open-folder
+  behavior.
 - Native Linux desktop validation:
   `IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 pnpm verify:release:linux` on a
   native Linux desktop shell, plus download/open-folder checks.

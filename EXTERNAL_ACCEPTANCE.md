@@ -210,7 +210,7 @@ issue if one exists.
 
 Use a public tracking issue after the repository is public.
 
-Current platform evidence:
+Current partial evidence:
 
 - Ubuntu/Debian Bookworm ARM64 Docker validation on the macOS host passed
   `pnpm build`, `pnpm verify:mock-api`, Linux AppImage packaging, AppImage
@@ -226,10 +226,9 @@ Current platform evidence:
 - On 2026-06-10, native Windows validation passed for commit
   `4b4dd18ff4255fcb4bfb2a25fadde7bbf788eafd`; see
   `docs/release/windows-full-install-2026-06-10.md` and
-  `docs/release/windows-native-download-open-folder-2026-06-10.md`. The run
-  covered full-install verifier checks, packaged-app mock OpenAI/Gemini
-  configuration and generation, native download, and native open-folder
-  behavior. The `windows-native-release` gate is passed.
+  `docs/release/windows-native-download-open-folder-2026-06-10.md`. This covers
+  the full-install verifier plus packaged-app native download and open-folder
+  behavior, so the `windows-native-release` gate is passed.
 - `pnpm verify:release:linux` now automates the Linux package checks that can be
   safely run in CI or a Linux shell: AppImage/unpacked executable inspection,
   unpacked app Xvfb launch, direct AppImage launch when FUSE is available,
@@ -238,8 +237,8 @@ Current platform evidence:
   to make direct AppImage execution mandatory.
 - Direct AppImage execution in Docker remains blocked by missing FUSE device
   support, so this is not a substitute for native Linux desktop validation.
-- Windows native release validation is complete; native Linux desktop
-  validation is still pending.
+- Windows native full-install, packaged-app download, and open-folder validation
+  have been performed and recorded.
 
 Run on each native platform:
 
