@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.0",
-  "lastUpdated": "2026-06-11T08:04:03.000Z",
+  "lastUpdated": "2026-06-11T09:00:14.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -98,7 +98,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "Pending Developer ID identity and Apple notarization credentials."
+        "summary": "Pending Developer ID identity and Apple notarization credentials. v0.2.0 ships as an unsigned/ad-hoc preview prerelease; this gate stays pending until Developer ID signing and Apple notarization are completed for a future release."
       }
     },
     {
@@ -182,7 +182,7 @@
       "id": "update-manifest-assets",
       "title": "Formal update manifest distribution assets",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Distribution artifacts are uploaded to a public HTTPS release URL.",
         "docs/updates/latest.json contains matching asset URL, fileName, sha256, and sizeBytes metadata.",
@@ -190,18 +190,28 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-06-11T09:00:14.000Z",
+        "commit": "d5972c9f038e5267d0a7845d7ee22729071cdbda",
+        "environment": "macOS 26.5.1 arm64; package version 0.2.0; unsigned/ad-hoc preview artifacts published to the v0.2.0 GitHub release: Image2Tools-0.2.0-mac-arm64.dmg (darwin/arm64) and Image2Tools-Setup.exe (win32/x64).",
+        "commands": [
+          "node scripts/update-manifest-asset.mjs --file release/Image2Tools-0.2.0-mac-arm64.dmg --platform darwin --arch arm64 --url https://github.com/Bliveren/image2tools/releases/download/v0.2.0/Image2Tools-0.2.0-mac-arm64.dmg",
+          "node scripts/update-manifest-asset.mjs --file Image2Tools-Setup.exe --platform win32 --arch x64 --url https://github.com/Bliveren/image2tools/releases/download/v0.2.0/Image2Tools-Setup.exe"
+        ],
         "references": [
           {
             "label": "Formal update manifest distribution asset tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/103"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending signed and externally validated release artifacts."
+        "artifacts": [
+          {
+            "kind": "update-manifest",
+            "path": "docs/updates/latest.json",
+            "public": true,
+            "description": "Update manifest with darwin/arm64 dmg and win32/x64 installer asset URLs, sha256, and sizeBytes for the unsigned v0.2.0 preview."
+          }
+        ],
+        "summary": "Update manifest assets populated for the unsigned v0.2.0 preview. The darwin dmg and win32 installer entries carry HTTPS GitHub release URLs, sha256, and sizeBytes generated from the exact uploaded artifacts (uploaded dmg hash matches the local artifact). The app updater verifies downloaded size and SHA-256 before opening. Note: these are unsigned/ad-hoc preview artifacts, not Developer ID signed/notarized builds."
       }
     }
   ]

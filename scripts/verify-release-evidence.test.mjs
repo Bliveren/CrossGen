@@ -67,8 +67,8 @@ describe("release evidence verifier", () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 4/6 required gate(s) passed.");
-    expect(result.stdout).toContain("update-manifest-assets");
+    expect(result.stdout).toContain("Release evidence validated: 5/6 required gate(s) passed.");
+    expect(result.stdout).toContain("macos-signed-notarized");
   });
 
   it("requires all release evidence gates when requested", async () => {
@@ -123,21 +123,21 @@ describe("release evidence verifier", () => {
       await mkdir(docsReleaseDir, { recursive: true });
       await copyFile(path.resolve("docs/release/evidence.json"), path.join(docsReleaseDir, "evidence.json"));
 
-      const checklistPath = path.join(tempRoot, "CHECKLIST.md");
+      const checklistPath = path.join(tempRoot, "TODO.md");
       const checklist = await readFile(checklistPath, "utf8");
       await writeFile(
         checklistPath,
         checklist.replace(
-          "- [ ] 正式更新 manifest 已补充分发资产 URL、hash 和 size",
-          "- [x] 正式更新 manifest 已补充分发资产 URL、hash 和 size"
+          "- [ ] 完成签名、公证并补充正式分发资产 URL / hash / size 证据",
+          "- [x] 完成签名、公证并补充正式分发资产 URL / hash / size 证据"
         )
       );
 
       const result = await run([], { cwd: tempRoot });
 
       expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain("正式更新 manifest 已补充分发资产 URL、hash 和 size");
-      expect(result.stderr).toContain("update-manifest-assets");
+      expect(result.stderr).toContain("完成签名、公证并补充正式分发资产 URL / hash / size 证据");
+      expect(result.stderr).toContain("macos-signed-notarized");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

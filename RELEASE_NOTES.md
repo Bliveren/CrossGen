@@ -1,6 +1,6 @@
-# Image2Tools v0.2.0 Release Notes Draft
+# Image2Tools v0.2.0 Release Notes
 
-Status: draft until real API acceptance, signed/notarized distribution assets, and native platform release gates are complete.
+Status: unsigned preview prerelease. macOS and Windows artifacts are published for evaluation. macOS builds are ad-hoc signed and not Apple-notarized, so Gatekeeper may warn on first launch (right-click > Open, or remove the quarantine attribute). Developer ID signed and notarized distribution is tracked for a future release.
 
 ## Highlights
 
@@ -52,6 +52,8 @@ pnpm verify:release:linux
 
 Re-run the secret scan in [SECURITY.md](./SECURITY.md) after every release-note or packaging metadata update.
 
-The staged app package metadata is `0.2.0`. Do not publish `docs/updates/latest.json`
-with downloadable assets until the signed/notarized artifacts have verified URL,
-hash, and `sizeBytes` metadata.
+The app package metadata is `0.2.0`. For this unsigned preview, `docs/updates/latest.json`
+publishes the darwin (arm64 dmg) and win32 (x64 installer) assets with verified URL,
+`sha256`, and `sizeBytes` metadata generated from the exact uploaded artifacts. When
+Developer ID signed and notarized macOS artifacts become available, regenerate the
+manifest from the signed build and supersede this preview.

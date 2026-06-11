@@ -1,6 +1,23 @@
 {
   "version": "0.2.0",
-  "pubDate": "2026-06-09T00:00:00.000Z",
-  "notes": "Multi-model workspace, sidebar model configuration, automatic connection checks, concrete launch-model selection, and updater refinements staged. Add signed and externally verified release assets before publishing the update manifest.",
-  "assets": []
+  "pubDate": "2026-06-11T00:00:00.000Z",
+  "notes": "Unsigned preview release. Multi-model workspace for GPT Image 2 and Nano Banana 3, sidebar model configuration, automatic connection checks, concrete launch-model selection, and updater refinements. macOS artifacts are ad-hoc signed and not Apple-notarized; Gatekeeper may warn on first launch.",
+  "assets": [
+    {
+      "platform": "darwin",
+      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.0/Image2Tools-0.2.0-mac-arm64.dmg",
+      "fileName": "Image2Tools-0.2.0-mac-arm64.dmg",
+      "sha256": "291136df53718c22d5696e655ff9ee1ed5dd2fd1801f90f670593378b9718675",
+      "sizeBytes": 114865365,
+      "arch": "arm64"
+    },
+    {
+      "platform": "win32",
+      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.0/Image2Tools-Setup.exe",
+      "fileName": "Image2Tools-Setup.exe",
+      "sha256": "b265f42788aaf951ad806ff141496c1cdfa0334349e9f036b715ad85568b3be4",
+      "sizeBytes": 98325141,
+      "arch": "x64"
+    }
+  ]
 }

@@ -12,10 +12,17 @@ describe("package release configuration", () => {
     expect(packageJson.build.copyright).toContain("Corgnitor");
   });
 
-  it("keeps the update manifest staged until signed assets are published", () => {
+  it("publishes update manifest assets with verifiable size and sha256 for the preview", () => {
     expect(updateManifest.version).toBe(packageJson.version);
-    expect(updateManifest.assets).toEqual([]);
-    expect(updateManifest.notes).toContain("signed and externally verified release assets");
+    expect(updateManifest.assets.length).toBeGreaterThan(0);
+    const platforms = updateManifest.assets.map((asset) => asset.platform);
+    expect(platforms).toContain("darwin");
+    expect(platforms).toContain("win32");
+    for (const asset of updateManifest.assets) {
+      expect(asset.url.startsWith("https://")).toBe(true);
+      expect(asset.sha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(Number.isSafeInteger(asset.sizeBytes) && asset.sizeBytes > 0).toBe(true);
+    }
   });
 
   it("keeps the Windows installer asset name stable for latest-release download links", () => {

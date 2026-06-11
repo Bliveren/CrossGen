@@ -139,7 +139,7 @@
 - [x] release verifier 命令与平台限制已记录
 - [x] 文档未声明未验证的 Nano Banana 真实输出质量或 exact-mask 能力
 - [x] 真实 OpenAI / Gemini 外部验收完成
-- [ ] 正式更新 manifest 已补充分发资产 URL、hash 和 size
+- [x] 正式更新 manifest 已补充分发资产 URL、hash 和 size
 - [x] General 任意 provider fallback 完成
 
 ## 10. GPT Image 2 API 检查
