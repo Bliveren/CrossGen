@@ -1737,7 +1737,7 @@ export function App() {
     >
       <aside className="sidebar">
         <header className="brand-block">
-          <img className="brand-icon" src="/favicon.svg" alt="" />
+          <img className="brand-icon" src="./favicon.svg" alt="" />
           <div>
             <h1>Image2Tools</h1>
             <p className="muted">{copy.tagline}</p>
