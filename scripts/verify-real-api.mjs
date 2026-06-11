@@ -131,20 +131,43 @@ function commonFields() {
   };
 }
 
-async function saveB64(label, b64, outputDir) {
-  const buffer = Buffer.from(b64, "base64");
+async function imageItemToBuffer(label, item) {
+  if (item?.b64_json) {
+    return Buffer.from(item.b64_json, "base64");
+  }
+  const url = item?.url;
+  if (typeof url === "string" && url) {
+    if (url.startsWith("data:image/")) {
+      const base64 = url.slice(url.indexOf(",") + 1);
+      return Buffer.from(base64, "base64");
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`${label} image url fetch failed with HTTP ${response.status}.`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
+  return null;
+}
+
+async function saveBuffer(label, buffer, outputDir) {
   const digest = createHash("sha256").update(buffer).digest("hex").slice(0, 12);
   const outputPath = path.join(outputDir, `${label}-${digest}.png`);
   await writeFile(outputPath, buffer);
   return outputPath;
 }
 
+async function saveB64(label, b64, outputDir) {
+  return saveBuffer(label, Buffer.from(b64, "base64"), outputDir);
+}
+
 async function saveB64Image(label, payload, outputDir) {
-  const b64 = payload.data?.[0]?.b64_json;
-  if (!b64) {
-    throw new Error(`${label} did not return data[0].b64_json.`);
+  const item = payload.data?.[0];
+  const buffer = await imageItemToBuffer(label, item);
+  if (!buffer) {
+    throw new Error(`${label} did not return data[0].b64_json or data[0].url.`);
   }
-  return saveB64(label, b64, outputDir);
+  return saveBuffer(label, buffer, outputDir);
 }
 
 async function requestGeneration(outputDir) {

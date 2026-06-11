@@ -67,8 +67,8 @@ describe("release evidence verifier", () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 1/6 required gate(s) passed.");
-    expect(result.stdout).toContain("real-openai-api");
+    expect(result.stdout).toContain("Release evidence validated: 4/6 required gate(s) passed.");
+    expect(result.stdout).toContain("update-manifest-assets");
   });
 
   it("requires all release evidence gates when requested", async () => {
@@ -123,18 +123,21 @@ describe("release evidence verifier", () => {
       await mkdir(docsReleaseDir, { recursive: true });
       await copyFile(path.resolve("docs/release/evidence.json"), path.join(docsReleaseDir, "evidence.json"));
 
-      const checklistPath = path.join(tempRoot, "MULTI_MODEL_CHECKLIST.md");
+      const checklistPath = path.join(tempRoot, "CHECKLIST.md");
       const checklist = await readFile(checklistPath, "utf8");
       await writeFile(
         checklistPath,
-        checklist.replace("- [ ] OpenAI Key 可发现 `gpt-image-2`", "- [x] OpenAI Key 可发现 `gpt-image-2`")
+        checklist.replace(
+          "- [ ] 正式更新 manifest 已补充分发资产 URL、hash 和 size",
+          "- [x] 正式更新 manifest 已补充分发资产 URL、hash 和 size"
+        )
       );
 
       const result = await run([], { cwd: tempRoot });
 
       expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain("OpenAI Key 可发现 `gpt-image-2`");
-      expect(result.stderr).toContain("real-openai-api");
+      expect(result.stderr).toContain("正式更新 manifest 已补充分发资产 URL、hash 和 size");
+      expect(result.stderr).toContain("update-manifest-assets");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

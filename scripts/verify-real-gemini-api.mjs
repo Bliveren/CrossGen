@@ -8,6 +8,8 @@ const model = process.env.IMAGE2TOOLS_GEMINI_MODEL ?? "gemini-3.1-flash-image";
 const baseURL = (process.env.IMAGE2TOOLS_GEMINI_BASE_URL ?? process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
 const apiKey = process.env.IMAGE2TOOLS_GEMINI_API_KEY ?? process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? "";
 const acceptCost = process.env.IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST === "1";
+// "query" (native Google: ?key=...), "bearer" (OpenAI-compatible aggregator: Authorization header).
+const authMode = (process.env.IMAGE2TOOLS_GEMINI_AUTH_MODE ?? "query").toLowerCase();
 const outputRoot = path.resolve("real-api-artifacts", "gemini");
 
 function requireAcceptance() {
@@ -39,8 +41,17 @@ function endpoint(pathname, params = {}) {
       url.searchParams.set(key, String(value));
     }
   }
-  url.searchParams.set("key", apiKey);
+  if (authMode !== "bearer") {
+    url.searchParams.set("key", apiKey);
+  }
   return url;
+}
+
+function authHeaders(extra = {}) {
+  if (authMode === "bearer") {
+    return { Authorization: `Bearer ${apiKey}`, ...extra };
+  }
+  return { ...extra };
 }
 
 async function parseJsonResponse(response, label) {
@@ -64,9 +75,11 @@ async function verifyModels() {
   const modelIds = new Set();
 
   do {
-    const response = await fetch(endpoint("/models", { pageSize: 1000, pageToken }));
+    const response = await fetch(endpoint("/models", { pageSize: 1000, pageToken }), {
+      headers: authHeaders()
+    });
     const payload = await parseJsonResponse(response, "models");
-    for (const item of payload.models ?? []) {
+    for (const item of payload.models ?? payload.data ?? []) {
       const id = item.id ?? item.name?.replace(/^models\//, "");
       if (id) modelIds.add(id);
     }
@@ -155,12 +168,27 @@ async function saveGeminiOutputs(label, payload, outputDir) {
   const parts = (payload.candidates ?? []).flatMap((candidate) => candidate?.content?.parts ?? []);
   const imageParts = parts
     .map((part) => part.inlineData ?? part.inline_data)
-    .filter((part) => part?.data && part?.mimeType);
+    .filter((part) => part?.data && (part?.mimeType ?? part?.mime_type))
+    .map((part) => ({ data: part.data, mimeType: part.mimeType ?? part.mime_type }));
+
+  // Some OpenAI-compatible Gemini aggregators return the image as a data URL
+  // embedded in a markdown text part instead of inlineData.
+  const dataUrlPattern = /data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)/g;
+  for (const part of parts) {
+    if (typeof part.text !== "string") continue;
+    let match;
+    while ((match = dataUrlPattern.exec(part.text)) !== null) {
+      imageParts.push({ mimeType: match[1], data: match[2] });
+    }
+  }
+
   if (imageParts.length === 0) {
     throw new Error(`${label} did not return any inline image parts.`);
   }
 
-  const textParts = parts.map((part) => part.text).filter((part) => typeof part === "string" && part.trim());
+  const textParts = parts
+    .map((part) => part.text)
+    .filter((part) => typeof part === "string" && part.trim() && !part.includes("data:image/"));
   if (textParts.length > 0) {
     await writeFile(path.join(outputDir, `${label}-text-parts.json`), JSON.stringify(textParts, null, 2));
   }
@@ -175,7 +203,7 @@ async function saveGeminiOutputs(label, payload, outputDir) {
 async function generateContent(label, prompt, inlineImages, outputDir) {
   const response = await fetch(endpoint(`/models/${encodeURIComponent(model)}:generateContent`), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({
       contents: [
         {
