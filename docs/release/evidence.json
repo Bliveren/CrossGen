@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.0",
-  "lastUpdated": "2026-06-11T09:00:14.000Z",
+  "lastUpdated": "2026-06-11T09:53:00.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -190,9 +190,9 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-11T09:00:14.000Z",
-        "commit": "d5972c9f038e5267d0a7845d7ee22729071cdbda",
-        "environment": "macOS 26.5.1 arm64; package version 0.2.0; unsigned/ad-hoc preview artifacts published to the v0.2.0 GitHub release: Image2Tools-0.2.0-mac-arm64.dmg (darwin/arm64) and Image2Tools-Setup.exe (win32/x64).",
+        "verifiedAt": "2026-06-11T09:53:00.000Z",
+        "commit": "b32201f3449b8837cd45eb9802fd0252c8e29465",
+        "environment": "macOS 26.5.1 arm64; package version 0.2.0; unsigned/ad-hoc preview artifacts rebuilt from the brand-icon fix and published to the v0.2.0 GitHub release: Image2Tools-0.2.0-mac-arm64.dmg (darwin/arm64) and Image2Tools-Setup.exe (win32/x64).",
         "commands": [
           "node scripts/update-manifest-asset.mjs --file release/Image2Tools-0.2.0-mac-arm64.dmg --platform darwin --arch arm64 --url https://github.com/Bliveren/image2tools/releases/download/v0.2.0/Image2Tools-0.2.0-mac-arm64.dmg",
           "node scripts/update-manifest-asset.mjs --file Image2Tools-Setup.exe --platform win32 --arch x64 --url https://github.com/Bliveren/image2tools/releases/download/v0.2.0/Image2Tools-Setup.exe"
@@ -211,7 +211,7 @@
             "description": "Update manifest with darwin/arm64 dmg and win32/x64 installer asset URLs, sha256, and sizeBytes for the unsigned v0.2.0 preview."
           }
         ],
-        "summary": "Update manifest assets populated for the unsigned v0.2.0 preview. The darwin dmg and win32 installer entries carry HTTPS GitHub release URLs, sha256, and sizeBytes generated from the exact uploaded artifacts (uploaded dmg hash matches the local artifact). The app updater verifies downloaded size and SHA-256 before opening. Note: these are unsigned/ad-hoc preview artifacts, not Developer ID signed/notarized builds."
+        "summary": "Update manifest assets populated for the unsigned v0.2.0 preview, rebuilt after the brand-icon path fix (commit b32201f). The darwin dmg entry was regenerated from the rebuilt artifact (sha256 5c68ed3..., 114865274 bytes). The darwin dmg and win32 installer entries carry HTTPS GitHub release URLs, sha256, and sizeBytes generated from the exact uploaded artifacts. The app updater verifies downloaded size and SHA-256 before opening. Note: these are unsigned/ad-hoc preview artifacts, not Developer ID signed/notarized builds."
       }
     }
   ]
