@@ -1455,7 +1455,10 @@ export function App() {
   }
 
   function startPaint(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (requestMode !== "inpaint" || !sourcePreview) return;
+    // Painting is what CREATES a freehand mask, so it cannot gate on requestMode === "inpaint"
+    // (which only becomes true once a mask already exists). Gate on the conditions under which
+    // the canvas is shown: img2img tab, a source image present, non-General.
+    if (isGeneralMode || tabMode !== "img2img" || !sourcePreview) return;
     setIsPainting(true);
     paintedDuringStrokeRef.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);

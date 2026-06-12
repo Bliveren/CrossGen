@@ -96,13 +96,6 @@ export function normalizeBaseURL(value: unknown): string {
   }
 }
 
-export function inferProviderKindFromURL(baseURL: string): ProviderKind | undefined {
-  const normalized = normalizeBaseURL(baseURL).toLowerCase();
-  if (normalized.includes("generativelanguage.googleapis.com")) return "gemini";
-  if (normalized.includes("api.openai.com")) return "openai";
-  return undefined; // 其余交给 model discovery 决定
-}
-
 export function redactSecret(value: unknown): string {
   if (typeof value !== "string") return "";
   if (!value) return "";

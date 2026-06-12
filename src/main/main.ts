@@ -33,7 +33,6 @@ import {
   DEFAULT_IMAGE_PARAMS,
   dataUrlToBase64,
   getValidationError,
-  inferProviderKindFromURL,
   validateApiKey,
   validateProviderConfigInput,
   validateRunJobRequest,
@@ -507,13 +506,13 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
     throw new Error(configValidation.message ?? "配置参数无效。");
   }
   const now = new Date().toISOString();
-  // 当 UI 不再提交 provider kind 时，先用 base URL 做启发式推断（openai.com / generativelanguage），
-  // 其余交给 model discovery 跨协议探测。
-  const effectiveInput: ProviderConfigInput =
-    input.kind === undefined
-      ? { ...input, kind: inferProviderKindFromURL(input.baseURL) ?? state.config.kind }
-      : input;
-  let nextConfig = buildProviderConfigForSave(state.config, effectiveInput, now);
+  // The UI no longer submits a provider kind. We deliberately preserve the stored kind here
+  // (buildProviderConfigForSave keeps current.kind when input.kind is undefined) instead of
+  // guessing from the base URL: a URL-based guess that differs from the stored kind would trip
+  // buildProviderConfigForSave's "provider changed" path, silently wiping the saved key and
+  // pinning a stale launch. Provider reclassification is handled non-destructively by model
+  // discovery's inferredProviderKind below.
+  let nextConfig = buildProviderConfigForSave(state.config, input, now);
 
   if (input.apiKey !== undefined && input.apiKey.trim()) {
     const validation = validateApiKey(input.apiKey);

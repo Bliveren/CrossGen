@@ -97,8 +97,8 @@ describe("model discovery", () => {
     expect(result.models).toEqual([expect.objectContaining({ id: "gemini-3.1-flash-image", providerKind: "gemini" })]);
   });
 
-  it("tries all protocols for an unspecified (custom) provider", () => {
-    expect(discoveryProviderOrder("custom")).toEqual(["openai", "gemini", "custom"]);
+  it("keeps custom on a single OpenAI-compatible probe plus Gemini", () => {
+    expect(discoveryProviderOrder("custom")).toEqual(["custom", "gemini"]);
     expect(discoveryProviderOrder("openai")).toEqual(["openai", "gemini"]);
     expect(discoveryProviderOrder("gemini")).toEqual(["gemini", "openai"]);
   });

@@ -8,7 +8,6 @@ import {
   dataUrlToBase64,
   extensionForFormat,
   getValidationError,
-  inferProviderKindFromURL,
   maskMimeTypeForSource,
   mimeTypeForFormat,
   mimeTypeFromDataUrl,
@@ -86,15 +85,6 @@ describe("gpt-image-2 validation", () => {
     expect(shouldSendCompression("png")).toBe(false);
     expect(shouldSendCompression("jpeg")).toBe(true);
     expect(shouldSendCompression("webp")).toBe(true);
-  });
-
-  it("infers provider kind from official base URLs only", () => {
-    expect(inferProviderKindFromURL("https://api.openai.com/v1")).toBe("openai");
-    expect(inferProviderKindFromURL("https://API.OpenAI.com/v1/")).toBe("openai");
-    expect(inferProviderKindFromURL("https://generativelanguage.googleapis.com/v1beta")).toBe("gemini");
-    expect(inferProviderKindFromURL("https://aggregator.example.com/v1")).toBeUndefined();
-    // 空串经 normalizeBaseURL 回退到默认 OpenAI base URL，因此识别为 openai。
-    expect(inferProviderKindFromURL("")).toBe("openai");
   });
 
   it("validates prompt and API key inputs", () => {
