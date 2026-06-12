@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { discoverModels, discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./modelDiscovery";
+import { discoverModels, discoverModelsAcrossProviders, discoveryProviderOrder, sanitizeModelDiscoveryError } from "./modelDiscovery";
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -95,6 +95,12 @@ describe("model discovery", () => {
 
     expect(result.inferredProviderKind).toBe("gemini");
     expect(result.models).toEqual([expect.objectContaining({ id: "gemini-3.1-flash-image", providerKind: "gemini" })]);
+  });
+
+  it("tries all protocols for an unspecified (custom) provider", () => {
+    expect(discoveryProviderOrder("custom")).toEqual(["openai", "gemini", "custom"]);
+    expect(discoveryProviderOrder("openai")).toEqual(["openai", "gemini"]);
+    expect(discoveryProviderOrder("gemini")).toEqual(["gemini", "openai"]);
   });
 
   it("sanitizes API keys from discovery errors", async () => {

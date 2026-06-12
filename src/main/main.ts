@@ -33,6 +33,7 @@ import {
   DEFAULT_IMAGE_PARAMS,
   dataUrlToBase64,
   getValidationError,
+  inferProviderKindFromURL,
   validateApiKey,
   validateProviderConfigInput,
   validateRunJobRequest,
@@ -506,7 +507,13 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
     throw new Error(configValidation.message ?? "配置参数无效。");
   }
   const now = new Date().toISOString();
-  let nextConfig = buildProviderConfigForSave(state.config, input, now);
+  // 当 UI 不再提交 provider kind 时，先用 base URL 做启发式推断（openai.com / generativelanguage），
+  // 其余交给 model discovery 跨协议探测。
+  const effectiveInput: ProviderConfigInput =
+    input.kind === undefined
+      ? { ...input, kind: inferProviderKindFromURL(input.baseURL) ?? state.config.kind }
+      : input;
+  let nextConfig = buildProviderConfigForSave(state.config, effectiveInput, now);
 
   if (input.apiKey !== undefined && input.apiKey.trim()) {
     const validation = validateApiKey(input.apiKey);
@@ -516,7 +523,11 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
     Object.assign(nextConfig, encryptApiKey(input.apiKey));
   }
 
-  if (input.apiKey !== undefined && input.apiKey.trim()) {
+  // 有 key 即触发模型发现：新提交 key，或在已有 key 的情况下改了 base URL（换聚合器需重新分类）。
+  const hasUsableApiKey = Boolean(nextConfig.encryptedApiKey);
+  const baseURLChanged = nextConfig.baseURL !== state.config.baseURL;
+  const submittedNewApiKey = input.apiKey !== undefined && input.apiKey.trim().length > 0;
+  if (hasUsableApiKey && (submittedNewApiKey || baseURLChanged)) {
     nextConfig = await refreshModelDiscovery(nextConfig);
   }
 

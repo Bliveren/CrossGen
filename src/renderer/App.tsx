@@ -993,7 +993,6 @@ export function App() {
     try {
       const providerChanged = providerKind !== snapshot.config.kind;
       const config = await bridge.saveConfig({
-        kind: providerKind,
         apiKey: apiKey.trim() ? apiKey : undefined,
         baseURL,
         defaultModel: defaultModelForConfigSave(providerKind, params, snapshot.config),
@@ -1038,13 +1037,6 @@ export function App() {
     } finally {
       setIsDiscoveringModels(false);
     }
-  }
-
-  function changeProvider(kind: ProviderKind) {
-    markDraftChanged();
-    resetConnectionCheckForConfigEdit();
-    setProviderKind(kind);
-    setBaseURL(defaultBaseURLForProvider(kind, baseURL));
   }
 
   async function launchModel(button: LaunchButtonState) {
@@ -1784,11 +1776,10 @@ export function App() {
           </div>
           <label>
             {copy.providerLabel}
-            <select value={providerKind} onChange={(event) => changeProvider(event.target.value as ProviderKind)}>
-              <option value="openai">OpenAI</option>
-              <option value="gemini">Gemini</option>
-              <option value="custom">Custom</option>
-            </select>
+            <div className="provider-detected" aria-live="polite">
+              {providerLabelFromKind(providerKind)}
+              <small>{copy.providerAutoDetected}</small>
+            </div>
           </label>
           <label>
             {copy.apiKey}

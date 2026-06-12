@@ -284,6 +284,25 @@ label {
   font-size: 13px;
 }
 
+.provider-detected {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(125, 110, 95, 0.08);
+  border: 1px solid rgba(125, 110, 95, 0.16);
+  color: #4a4339;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.provider-detected small {
+  font-size: 11px;
+  font-weight: 400;
+  color: #8a7f72;
+}
+
 .button-row,
 .run-row,
 .asset-tools,

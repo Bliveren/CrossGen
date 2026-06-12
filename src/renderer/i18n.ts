@@ -76,6 +76,7 @@ export interface UiCopy {
   tagline: string;
   provider: string;
   providerLabel: string;
+  providerAutoDetected: string;
   apiKey: string;
   baseURL: string;
   discoveryStatus: string;
@@ -211,6 +212,7 @@ export const translations: Record<Language, UiCopy> = {
     tagline: "An easy-to-use, all-in-one AI image generation management tool.",
     provider: "Model config",
     providerLabel: "Provider",
+    providerAutoDetected: "Auto-detected from API",
     apiKey: "API Key",
     baseURL: "Base URL",
     discoveryStatus: "Model discovery",
@@ -406,6 +408,7 @@ export const translations: Record<Language, UiCopy> = {
     tagline: "方便易用的一站式AI生图管理工具。",
     provider: "模型配置",
     providerLabel: "服务商",
+    providerAutoDetected: "已根据 API 自动识别",
     apiKey: "API Key",
     baseURL: "Base URL",
     discoveryStatus: "模型探测",
