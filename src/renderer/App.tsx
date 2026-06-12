@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowDownUp,
   Brush,
   ChevronDown,
   ChevronUp,
@@ -13,6 +14,7 @@ import {
   KeyRound,
   Languages,
   Loader2,
+  Maximize2,
   Paintbrush,
   RefreshCw,
   Save,
@@ -632,6 +634,7 @@ export function App() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [openLaunchMenuId, setOpenLaunchMenuId] = useState<FocusedLaunchId | null>(null);
   const [historySearch, setHistorySearch] = useState("");
+  const [historySort, setHistorySort] = useState<"newest" | "oldest">("newest");
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
   const [brushSize, setBrushSize] = useState(72);
@@ -643,6 +646,10 @@ export function App() {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
+  const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isReferenceDragOver, setIsReferenceDragOver] = useState(false);
   const [buttonFeedback, setButtonFeedback] = useState<Record<string, number>>({});
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredWidth("image2tools.sidebarWidth", DEFAULT_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH));
   const [historyWidth, setHistoryWidth] = useState(() => readStoredWidth("image2tools.historyWidth", DEFAULT_HISTORY_WIDTH, MIN_HISTORY_WIDTH, MAX_HISTORY_WIDTH));
@@ -652,6 +659,7 @@ export function App() {
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
   const paintedDuringStrokeRef = useRef(false);
   const hasAutoTestedConnectionRef = useRef(false);
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
 
   const sourceAsset = inputAssets[0];
   const sourcePreview = assetSource(sourceAsset);
@@ -696,13 +704,21 @@ export function App() {
 
   const filteredHistory = useMemo(() => {
     const query = historySearch.trim().toLowerCase();
-    if (!query) return snapshot.history;
-    return snapshot.history.filter((job) => {
-      const modelDetails = getHistoryModelDetails(job);
-      const haystack = `${job.prompt} ${job.mode} ${job.status} ${job.error ?? ""} ${job.createdAt} ${modelDetails.searchText}`.toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [historySearch, snapshot.history]);
+    const matched = !query
+      ? snapshot.history
+      : snapshot.history.filter((job) => {
+          const modelDetails = getHistoryModelDetails(job);
+          const haystack = `${job.prompt} ${job.mode} ${job.status} ${job.error ?? ""} ${job.createdAt} ${modelDetails.searchText}`.toLowerCase();
+          return haystack.includes(query);
+        });
+    const sorted = [...matched];
+    if (historySort === "oldest") {
+      sorted.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+    } else {
+      sorted.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    }
+    return sorted;
+  }, [historySearch, historySort, snapshot.history]);
   const hasHistoryOverflow = filteredHistory.length > HISTORY_COLLAPSED_LIMIT;
   const visibleHistory = isHistoryExpanded ? filteredHistory : filteredHistory.slice(0, HISTORY_COLLAPSED_LIMIT);
   const isSearchingHistory = historySearch.trim().length > 0;
@@ -1216,6 +1232,22 @@ export function App() {
     return result.message ?? copy.updateCurrent;
   }
 
+  function addInputAssets(assets: InputAsset[]) {
+    if (assets.length === 0) return;
+    markDraftChanged();
+    const next = dedupeAssets([...inputAssets, ...assets]);
+    const usesOpenAIInputCap = Boolean(openAIParams);
+    const cappedNext = usesOpenAIInputCap ? next.slice(0, MAX_GPT_IMAGE_INPUTS) : next;
+    const addedCount = Math.max(0, cappedNext.length - inputAssets.length);
+    const capped = Boolean(usesOpenAIInputCap && next.length > MAX_GPT_IMAGE_INPUTS);
+    setInputAssets(cappedNext);
+    if (tabMode === "text2img") setTabMode("img2img");
+    setNotice({
+      kind: capped ? "info" : "success",
+      text: copy.notices.imagesAdded(addedCount, cappedNext.length, capped, MAX_GPT_IMAGE_INPUTS)
+    });
+  }
+
   async function selectImages() {
     if (generalParams && !generalAllowsReferences) {
       setNotice({ kind: "error", text: copy.generalPromptOnlyRuntime });
@@ -1226,20 +1258,31 @@ export function App() {
       return;
     }
     const assets = await bridge.selectImages();
-    if (assets.length > 0) {
-      markDraftChanged();
-      const next = dedupeAssets([...inputAssets, ...assets]);
-      const usesOpenAIInputCap = Boolean(openAIParams);
-      const cappedNext = usesOpenAIInputCap ? next.slice(0, MAX_GPT_IMAGE_INPUTS) : next;
-      const addedCount = Math.max(0, cappedNext.length - inputAssets.length);
-      const capped = Boolean(usesOpenAIInputCap && next.length > MAX_GPT_IMAGE_INPUTS);
-      setInputAssets(cappedNext);
-      if (tabMode === "text2img") setTabMode("img2img");
-      setNotice({
-        kind: capped ? "info" : "success",
-        text: copy.notices.imagesAdded(addedCount, cappedNext.length, capped, MAX_GPT_IMAGE_INPUTS)
-      });
+    addInputAssets(assets);
+  }
+
+  async function handleReferenceDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsReferenceDragOver(false);
+    if (generalParams && !generalAllowsReferences) {
+      setNotice({ kind: "error", text: copy.generalPromptOnlyRuntime });
+      return;
     }
+    if (!bridge) return;
+    const files = Array.from(event.dataTransfer.files ?? []);
+    const paths = files
+      .map((file) => (file as File & { path?: string }).path)
+      .filter((value): value is string => typeof value === "string" && /\.(png|jpe?g|webp)$/i.test(value));
+    if (paths.length === 0) {
+      const history = event.dataTransfer.getData("application/x-image2tools-asset");
+      if (history && /\.(png|jpe?g|webp)$/i.test(history)) {
+        const assets = await bridge.importImages([history]);
+        addInputAssets(assets);
+      }
+      return;
+    }
+    const assets = await bridge.importImages(paths);
+    addInputAssets(assets);
   }
 
   async function selectMask() {
@@ -1408,6 +1451,42 @@ export function App() {
 
   function adjustPreviewZoom(delta: number) {
     setPreviewZoom((current) => clamp(Math.round((current + delta) * 100) / 100, MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM));
+  }
+
+  function resetPreviewView() {
+    setPreviewZoom(1);
+    setPreviewPan({ x: 0, y: 0 });
+  }
+
+  function handlePreviewWheel(event: React.WheelEvent<HTMLDivElement>) {
+    if (!activeImage) return;
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? PREVIEW_ZOOM_STEP : -PREVIEW_ZOOM_STEP;
+    setPreviewZoom((current) => {
+      const next = clamp(Math.round((current + delta) * 100) / 100, MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM);
+      if (next === 1) setPreviewPan({ x: 0, y: 0 });
+      return next;
+    });
+  }
+
+  function handlePreviewPanStart(event: React.PointerEvent<HTMLDivElement>) {
+    if (!activeImage || previewZoom <= 1) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsPanning(true);
+    panStartRef.current = { x: event.clientX, y: event.clientY, panX: previewPan.x, panY: previewPan.y };
+  }
+
+  function handlePreviewPanMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!isPanning || !panStartRef.current) return;
+    const { x, y, panX, panY } = panStartRef.current;
+    setPreviewPan({ x: panX + (event.clientX - x), y: panY + (event.clientY - y) });
+  }
+
+  function handlePreviewPanEnd(event: React.PointerEvent<HTMLDivElement>) {
+    if (!isPanning) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setIsPanning(false);
+    panStartRef.current = null;
   }
 
   function nudgeColumn(column: "sidebar" | "history", delta: number) {
@@ -1779,13 +1858,6 @@ export function App() {
             </span>
           </div>
           <label>
-            {copy.providerLabel}
-            <div className="provider-detected" aria-live="polite">
-              {providerLabelFromKind(providerKind)}
-              <small>{copy.providerAutoDetected}</small>
-            </div>
-          </label>
-          <label>
             {copy.apiKey}
             <input
               type="password"
@@ -1821,6 +1893,11 @@ export function App() {
           <div className="config-status">
             <span className={snapshot.config.apiKeySaved ? "dot ok" : "dot"} />
             {snapshot.config.apiKeySaved ? copy.keySaved : copy.noKeySaved}
+            {snapshot.config.apiKeySaved && (
+              <span className="provider-chip-inline" title={copy.providerAutoDetected}>
+                {providerLabelFromKind(providerKind)}
+              </span>
+            )}
           </div>
           {connectionErrorText && <p className="inline-check error config-error-detail">{connectionErrorText}</p>}
           <div className="discovery-row">
@@ -2011,20 +2088,9 @@ export function App() {
           <section className="result-stage">
             <div className="stage-toolbar">
               <div>
-                <p className="eyebrow">{copy.preview}</p>
-                <h2>{activeJob ? `${modeLabels[activeJob.mode].title} ${copy.resultSuffix}` : copy.outputCanvas}</h2>
+                <h2>{copy.resultViewer}</h2>
               </div>
               <div className="stage-actions">
-                <button type="button" className="icon-button" disabled={!activeImage} onClick={() => adjustPreviewZoom(-PREVIEW_ZOOM_STEP)} title={copy.zoomOut}>
-                  <ZoomOut size={17} />
-                </button>
-                <span className="zoom-readout" title={copy.zoomLevel}>{previewZoomPercent}%</span>
-                <button type="button" className="icon-button" disabled={!activeImage} onClick={() => adjustPreviewZoom(PREVIEW_ZOOM_STEP)} title={copy.zoomIn}>
-                  <ZoomIn size={17} />
-                </button>
-                <button type="button" className="ghost reset-zoom" disabled={!activeImage || previewZoom === 1} onClick={() => setPreviewZoom(1)}>
-                  {copy.resetZoom}
-                </button>
                 <button
                   type="button"
                   className={activeImage ? buttonFeedbackClass(`download:${activeImage.id}`) : "icon-button"}
@@ -2048,9 +2114,36 @@ export function App() {
 
             <div className="result-canvas">
               {activeImageSource ? (
-                <div className="zoom-surface">
-                  <img src={activeImageSource} alt={copy.generatedResult} style={{ width: `${previewZoom * 100}%` }} />
-                </div>
+                <>
+                  <div
+                    className={isPanning ? "zoom-surface panning" : previewZoom > 1 ? "zoom-surface pannable" : "zoom-surface"}
+                    onWheel={handlePreviewWheel}
+                    onDoubleClick={() => setIsPreviewOpen(true)}
+                    onPointerDown={handlePreviewPanStart}
+                    onPointerMove={handlePreviewPanMove}
+                    onPointerUp={handlePreviewPanEnd}
+                    onPointerCancel={handlePreviewPanEnd}
+                  >
+                    <img
+                      src={activeImageSource}
+                      alt={copy.generatedResult}
+                      draggable={false}
+                      style={{ width: `${previewZoom * 100}%`, transform: `translate(${previewPan.x}px, ${previewPan.y}px)` }}
+                    />
+                  </div>
+                  <div className="zoom-overlay">
+                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(-PREVIEW_ZOOM_STEP)} title={copy.zoomOut}>
+                      <ZoomOut size={16} />
+                    </button>
+                    <span className="zoom-readout" title={copy.zoomLevel}>{previewZoomPercent}%</span>
+                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(PREVIEW_ZOOM_STEP)} title={copy.zoomIn}>
+                      <ZoomIn size={16} />
+                    </button>
+                    <button type="button" className="icon-button" disabled={previewZoom === 1 && previewPan.x === 0 && previewPan.y === 0} onClick={resetPreviewView} title={copy.resetZoom}>
+                      <Maximize2 size={16} />
+                    </button>
+                  </div>
+                </>
               ) : activeJobError ? (
                 <div className="job-error-panel" role="alert">
                   <AlertTriangle size={30} />
@@ -2153,9 +2246,21 @@ export function App() {
                   </p>
                 )}
 
-                <div className="reference-grid">
+                <div
+                  className={isReferenceDragOver ? "reference-grid drag-over" : "reference-grid"}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "copy";
+                    if (!isReferenceDragOver) setIsReferenceDragOver(true);
+                  }}
+                  onDragLeave={(event) => {
+                    if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+                    setIsReferenceDragOver(false);
+                  }}
+                  onDrop={handleReferenceDrop}
+                >
                   {inputAssets.length === 0 ? (
-                    <div className="empty-inline">{copy.noReferences}</div>
+                    <div className="empty-inline">{copy.dropReferencesHint}</div>
                   ) : (
                     inputAssets.map((asset, index) => (
                       <div key={asset.id} className="asset-tile">
@@ -2270,6 +2375,24 @@ export function App() {
           <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder={copy.searchPrompt} />
         </label>
 
+        <div className="history-sort">
+          <ArrowDownUp size={14} />
+          <button
+            type="button"
+            className={historySort === "newest" ? "history-sort-option active" : "history-sort-option"}
+            onClick={() => setHistorySort("newest")}
+          >
+            {copy.sortNewest}
+          </button>
+          <button
+            type="button"
+            className={historySort === "oldest" ? "history-sort-option active" : "history-sort-option"}
+            onClick={() => setHistorySort("oldest")}
+          >
+            {copy.sortOldest}
+          </button>
+        </div>
+
         {(isSearchingHistory || hasHistoryOverflow) && (
           <div className="history-list-status">
             {isSearchingHistory && <span>{copy.historyMatchCount(filteredHistory.length)}</span>}
@@ -2300,7 +2423,20 @@ export function App() {
                     title={jobError ?? job.status}
                     aria-label={jobError ? `${copy.jobFailed}: ${jobError}` : `${copy.openJob}: ${job.status}`}
                   >
-                    {result ? <img src={assetSource(result)} alt={copy.historyResult} /> : <span>{job.status}</span>}
+                    {result ? (
+                      <img
+                        src={assetSource(result)}
+                        alt={copy.historyResult}
+                        draggable={Boolean(result.path)}
+                        onDragStart={(event) => {
+                          if (!result.path) return;
+                          event.dataTransfer.setData("application/x-image2tools-asset", result.path);
+                          event.dataTransfer.effectAllowed = "copy";
+                        }}
+                      />
+                    ) : (
+                      <span>{job.status}</span>
+                    )}
                   </button>
                   <div className="history-copy">
                     <div className="history-meta">
@@ -2376,6 +2512,20 @@ export function App() {
               </button>
             </div>
           </section>
+        </div>
+      )}
+      {isPreviewOpen && activeImageSource && (
+        <div
+          className="preview-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsPreviewOpen(false);
+          }}
+        >
+          <button type="button" className="preview-modal-close icon-button" onClick={() => setIsPreviewOpen(false)} title={copy.cancel}>
+            <X size={18} />
+          </button>
+          <img src={activeImageSource} alt={copy.generatedResult} className="preview-modal-image" />
         </div>
       )}
     </main>

@@ -7,6 +7,8 @@ release/
 real-api-artifacts/
 coverage/
 .DS_Store
+output/
+.playwright-cli/
 *.log
 *.local
 .env

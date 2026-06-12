@@ -266,6 +266,7 @@ export interface AppBridge {
   saveDraft: (input: WorkspaceDraftInput) => Promise<WorkspaceDraft>;
   clearDraft: () => Promise<void>;
   selectImages: () => Promise<InputAsset[]>;
+  importImages: (paths: string[]) => Promise<InputAsset[]>;
   selectMask: () => Promise<InputAsset | null>;
   runJob: (request: RunJobRequest) => Promise<GenerationJob>;
   downloadAsset: (request: DownloadRequest) => Promise<string | null>;

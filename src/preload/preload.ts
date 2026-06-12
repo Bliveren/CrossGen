@@ -17,6 +17,7 @@ const bridge: AppBridge = {
   saveDraft: (input: WorkspaceDraftInput) => ipcRenderer.invoke("draft:save", input),
   clearDraft: () => ipcRenderer.invoke("draft:clear"),
   selectImages: () => ipcRenderer.invoke("dialog:selectImages"),
+  importImages: (paths: string[]) => ipcRenderer.invoke("dialog:importImages", paths),
   selectMask: () => ipcRenderer.invoke("dialog:selectMask"),
   runJob: (request: RunJobRequest) => ipcRenderer.invoke("job:run", request),
   downloadAsset: (request: DownloadRequest) => ipcRenderer.invoke("asset:download", request),

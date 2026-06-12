@@ -140,6 +140,7 @@ export interface UiCopy {
   sync: string;
   preview: string;
   resultSuffix: string;
+  resultViewer: string;
   outputCanvas: string;
   download: string;
   openFolder: string;
@@ -154,6 +155,7 @@ export interface UiCopy {
   uploadMask: string;
   clear: string;
   noReferences: string;
+  dropReferencesHint: string;
   source: string;
   reference: string;
   mask: string;
@@ -173,6 +175,8 @@ export interface UiCopy {
   confirmClearHistory: string;
   cancel: string;
   searchPrompt: string;
+  sortNewest: string;
+  sortOldest: string;
   historyMatchCount: (count: number) => string;
   showAllHistory: (count: number) => string;
   collapseHistory: string;
@@ -278,6 +282,7 @@ export const translations: Record<Language, UiCopy> = {
     sync: "Sync",
     preview: "Preview",
     resultSuffix: "result",
+    resultViewer: "Result viewer",
     outputCanvas: "Output canvas",
     download: "Download",
     openFolder: "Open folder",
@@ -292,6 +297,7 @@ export const translations: Record<Language, UiCopy> = {
     uploadMask: "Upload mask",
     clear: "Clear",
     noReferences: "No reference images selected.",
+    dropReferencesHint: "No reference images. Drag images here, drag a history result, or use Add references.",
     source: "Source",
     reference: "Reference",
     mask: "Mask",
@@ -311,6 +317,8 @@ export const translations: Record<Language, UiCopy> = {
     confirmClearHistory: "Clear all",
     cancel: "Cancel",
     searchPrompt: "Search prompt",
+    sortNewest: "Newest",
+    sortOldest: "Oldest",
     historyMatchCount: (count: number) => `${count} match${count === 1 ? "" : "es"}`,
     showAllHistory: (count: number) => `Show all ${count}`,
     collapseHistory: "Show fewer",
@@ -479,6 +487,7 @@ export const translations: Record<Language, UiCopy> = {
     sync: "同步",
     preview: "预览",
     resultSuffix: "结果",
+    resultViewer: "展示编辑",
     outputCanvas: "输出画布",
     download: "下载",
     openFolder: "打开文件夹",
@@ -493,6 +502,7 @@ export const translations: Record<Language, UiCopy> = {
     uploadMask: "上传蒙版",
     clear: "清除",
     noReferences: "未选择参考图。",
+    dropReferencesHint: "暂无参考图。可拖拽图片到此处、拖入历史结果，或点击「添加参考图」。",
     source: "源图",
     reference: "参考图",
     mask: "蒙版",
@@ -512,6 +522,8 @@ export const translations: Record<Language, UiCopy> = {
     confirmClearHistory: "确认清空",
     cancel: "取消",
     searchPrompt: "搜索提示词",
+    sortNewest: "最新优先",
+    sortOldest: "最早优先",
     historyMatchCount: (count: number) => `${count} 条匹配`,
     showAllHistory: (count: number) => `显示全部 ${count} 条`,
     collapseHistory: "收起",
