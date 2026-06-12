@@ -49,7 +49,7 @@ function completeLedger() {
   ];
   return {
     schemaVersion: 1,
-    releaseVersion: "0.2.0",
+    releaseVersion: "0.2.1",
     lastUpdated: "2026-06-09T12:00:00.000Z",
     gates: gateIds.map((id) => ({
       id,
@@ -67,8 +67,8 @@ describe("release evidence verifier", () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 5/6 required gate(s) passed.");
-    expect(result.stdout).toContain("macos-signed-notarized");
+    expect(result.stdout).toContain("Release evidence validated: 3/6 required gate(s) passed.");
+    expect(result.stdout).toContain("real-openai-api");
   });
 
   it("requires all release evidence gates when requested", async () => {

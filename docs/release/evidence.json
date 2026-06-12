@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "releaseVersion": "0.2.0",
+  "releaseVersion": "0.2.1",
   "lastUpdated": "2026-06-11T09:53:00.000Z",
   "gates": [
     {
       "id": "real-openai-api",
       "title": "Real OpenAI GPT Image 2 API acceptance",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "Model discovery confirms gpt-image-2 is available to the tested key.",
         "Text-to-image generation succeeds with real OpenAI Image API output.",
@@ -16,34 +16,25 @@
         "App history and download behavior are checked with the real task outputs."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-11T07:38:59.000Z",
-        "commit": "c89876d5455f4e792d757c13e927257019e79db8",
-        "environment": "macOS 26.5.1 arm64; package version 0.2.0; OpenAI-compatible image aggregator endpoint (not the official OpenAI API); model gpt-image-2.",
-        "commands": [
-          "IMAGE2TOOLS_API_KEY=[REDACTED] IMAGE2TOOLS_BASE_URL=[REDACTED_AGGREGATOR] IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 pnpm verify:real-api"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Real OpenAI GPT Image 2 external acceptance tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/1"
           }
         ],
-        "artifacts": [
-          {
-            "kind": "verifier-output",
-            "path": "real-api-artifacts/2026-06-11T07-38-59-229Z",
-            "public": false,
-            "description": "Redacted-local generation, single-edit, multi-edit, and mask inpaint outputs from the real-api verifier (gpt-image-2). Git-ignored; not distributed."
-          }
-        ],
-        "summary": "Verified gpt-image-2 model discovery, text-to-image generation, single and multi reference editing, and mask-based inpaint against a cost-approved OpenAI-compatible image aggregator endpoint. The verifier was extended to accept image-url responses in addition to b64_json."
+        "artifacts": [],
+        "summary": "Reset to pending for 0.2.1. v0.2.1 changes OpenAI edit/inpaint request behavior (streaming is now forced off for non-generate jobs), so the 0.2.0 real-API acceptance must be re-run against a real key before this gate is marked passed again, with explicit focus on reference editing and mask inpaint no longer hitting the non-SSE streaming error."
       }
     },
     {
       "id": "real-gemini-api",
       "title": "Real Gemini / Nano Banana 3 API acceptance",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "Model discovery confirms gemini-3.1-flash-image is available to the tested key.",
         "Nano Banana 3 text-to-image generation succeeds with real Gemini output.",
@@ -52,27 +43,18 @@
         "App history, provider/model display, parameter restore, and download behavior are checked with the real task outputs."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-11T07:50:56.000Z",
-        "commit": "c89876d5455f4e792d757c13e927257019e79db8",
-        "environment": "macOS 26.5.1 arm64; package version 0.2.0; OpenAI-compatible image aggregator endpoint (not the official Google Generative Language API); model gemini-3.1-flash-image; bearer auth mode.",
-        "commands": [
-          "IMAGE2TOOLS_GEMINI_API_KEY=[REDACTED] IMAGE2TOOLS_GEMINI_BASE_URL=[REDACTED_AGGREGATOR] IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 IMAGE2TOOLS_GEMINI_AUTH_MODE=bearer pnpm verify:real-gemini-api"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Real Gemini / Nano Banana 3 external acceptance tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/102"
           }
         ],
-        "artifacts": [
-          {
-            "kind": "verifier-output",
-            "path": "real-api-artifacts/gemini/2026-06-11T07-50-56-419Z",
-            "public": false,
-            "description": "Redacted-local Nano Banana 3 generation, reference-edit, and guided-region-edit outputs from the real-gemini-api verifier (gemini-3.1-flash-image). Git-ignored; not distributed."
-          }
-        ],
-        "summary": "Verified gemini-3.1-flash-image model discovery, Nano Banana 3 text-to-image generation, reference-image editing, and guided-region editing against a cost-approved OpenAI-compatible image aggregator endpoint. The verifier was extended with a bearer auth mode and markdown data-URL image parsing for aggregator-style responses. Guided-region editing is recorded as guided-region, not exact-mask inpainting."
+        "artifacts": [],
+        "summary": "Reset to pending for 0.2.1. The two-tab workspace and provider auto-detection in 0.2.1 change how reference and guided-region edits are reached in the UI, so Nano Banana 3 acceptance must be re-run against a real Gemini key before this gate is marked passed again."
       }
     },
     {

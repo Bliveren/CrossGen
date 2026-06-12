@@ -11,7 +11,7 @@ Target release: `v0.2.0`
 - [x] `v0.2.0` update manifest 资产条目可由脚本从本地 artifact 生成
 - [x] `v0.2.0` 外部发布证据有统一 ledger 和 validator
 - [x] `v0.2.0` 发布前完成多模型 mock 验证
-- [x] `v0.2.0` 发布前完成至少一轮真实 OpenAI / Gemini API 外部验收
+- [ ] `v0.2.0` 发布前完成至少一轮真实 OpenAI / Gemini API 外部验收
 
 ## 1. 产品检查
 
@@ -155,14 +155,14 @@ Target release: `v0.2.0`
 
 ## 11. 真实 API 验收
 
-- [x] OpenAI Key 可发现 `gpt-image-2`
-- [x] OpenAI Key 可完成一次文生图
-- [x] OpenAI Key 可完成一次参考图编辑
-- [x] OpenAI Key 可完成一次 mask 局部重绘
-- [x] Gemini Key 可发现 `gemini-3.1-flash-image`
-- [x] Gemini Key 可完成一次 Nano Banana 3 文生图
-- [x] Gemini Key 可完成一次 Nano Banana 3 参考图编辑
-- [x] Gemini Key 可完成一次 Nano Banana 3 局部引导编辑
+- [ ] OpenAI Key 可发现 `gpt-image-2`
+- [ ] OpenAI Key 可完成一次文生图
+- [ ] OpenAI Key 可完成一次参考图编辑
+- [ ] OpenAI Key 可完成一次 mask 局部重绘
+- [ ] Gemini Key 可发现 `gemini-3.1-flash-image`
+- [ ] Gemini Key 可完成一次 Nano Banana 3 文生图
+- [ ] Gemini Key 可完成一次 Nano Banana 3 参考图编辑
+- [ ] Gemini Key 可完成一次 Nano Banana 3 局部引导编辑
 - [ ] 历史中能区分 OpenAI 与 Gemini 任务
 - [x] 真实 API 验收仍受成本确认环境变量保护
 
