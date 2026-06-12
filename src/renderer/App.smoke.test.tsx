@@ -182,7 +182,6 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("Nano Banana 3").disabled).toBe(false);
 
     await click(launchButton("Nano Banana 3"));
-    expect(document.body.textContent).toContain("Guided region");
     const modelOption = launchModelOption("Gemini 3 Pro Image");
     expect(modelOption).toBeTruthy();
     await click(modelOption);
@@ -190,7 +189,6 @@ describe("renderer multi-model smoke", () => {
 
     expect(bridge.saveConfig).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: "openai",
         baseURL: "https://gateway.example.com/v1",
         activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
         activeModelId: GEMINI_3_PRO_IMAGE_MODEL_ID
@@ -206,6 +204,10 @@ describe("renderer multi-model smoke", () => {
         })
       })
     );
+
+    // Guided-region copy must remain for Gemini when the image-to-image mask area is shown.
+    await click(buttonByText("Image to image", ".mode-tab"));
+    expect(document.body.textContent).toContain("guidance");
   });
 
   it("can discover models, select Nano Banana 3, and run through the Electron bridge", async () => {
@@ -253,6 +255,8 @@ describe("renderer multi-model smoke", () => {
       })
     );
 
+    // Reference tools (and the upload-rights reminder) live under the image-to-image tab now.
+    await click(buttonByText("Image to image", ".mode-tab"));
     expect(document.body.textContent).toContain("Only upload images you have permission to use");
     expect(buttonByText("Upload mask")).toBeTruthy();
   });
@@ -307,7 +311,7 @@ describe("renderer multi-model smoke", () => {
     const promptInput = document.querySelector<HTMLTextAreaElement>("textarea")!;
     const originalPrompt = promptInput.value;
 
-    await click(buttonByText("Edit"));
+    await click(buttonByText("Image to image", ".mode-tab"));
     await click(launchButton("General"));
 
     expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(originalPrompt);
@@ -317,8 +321,7 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.saveConfig).toHaveBeenLastCalledWith(
       expect.objectContaining({
         activeLaunchId: "general",
-        activeModelId: "dall-e-3",
-        kind: "openai"
+        activeModelId: "dall-e-3"
       })
     );
   });

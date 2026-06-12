@@ -303,6 +303,12 @@ label {
   color: #8a7f72;
 }
 
+.mask-optional {
+  font-size: 12px;
+  font-weight: 400;
+  color: #8a7f72;
+}
+
 .button-row,
 .run-row,
 .asset-tools,
