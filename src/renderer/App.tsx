@@ -660,6 +660,7 @@ export function App() {
   const paintedDuringStrokeRef = useRef(false);
   const hasAutoTestedConnectionRef = useRef(false);
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const zoomSurfaceRef = useRef<HTMLDivElement | null>(null);
 
   const sourceAsset = inputAssets[0];
   const sourcePreview = assetSource(sourceAsset);
@@ -1458,16 +1459,23 @@ export function App() {
     setPreviewPan({ x: 0, y: 0 });
   }
 
-  function handlePreviewWheel(event: React.WheelEvent<HTMLDivElement>) {
-    if (!activeImage) return;
-    event.preventDefault();
-    const delta = event.deltaY < 0 ? PREVIEW_ZOOM_STEP : -PREVIEW_ZOOM_STEP;
-    setPreviewZoom((current) => {
-      const next = clamp(Math.round((current + delta) * 100) / 100, MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM);
-      if (next === 1) setPreviewPan({ x: 0, y: 0 });
-      return next;
-    });
-  }
+  useEffect(() => {
+    const surface = zoomSurfaceRef.current;
+    if (!surface || !activeImage) return;
+    const onWheel = (event: WheelEvent) => {
+      // Non-passive listener so preventDefault stops the surrounding panel/canvas
+      // from also scrolling — wheel here only zooms the preview.
+      event.preventDefault();
+      const delta = event.deltaY < 0 ? PREVIEW_ZOOM_STEP : -PREVIEW_ZOOM_STEP;
+      setPreviewZoom((current) => {
+        const next = clamp(Math.round((current + delta) * 100) / 100, MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM);
+        if (next === 1) setPreviewPan({ x: 0, y: 0 });
+        return next;
+      });
+    };
+    surface.addEventListener("wheel", onWheel, { passive: false });
+    return () => surface.removeEventListener("wheel", onWheel);
+  }, [activeImage]);
 
   function handlePreviewPanStart(event: React.PointerEvent<HTMLDivElement>) {
     if (!activeImage || previewZoom <= 1) return;
@@ -2116,8 +2124,8 @@ export function App() {
               {activeImageSource ? (
                 <>
                   <div
+                    ref={zoomSurfaceRef}
                     className={isPanning ? "zoom-surface panning" : previewZoom > 1 ? "zoom-surface pannable" : "zoom-surface"}
-                    onWheel={handlePreviewWheel}
                     onDoubleClick={() => setIsPreviewOpen(true)}
                     onPointerDown={handlePreviewPanStart}
                     onPointerMove={handlePreviewPanMove}
