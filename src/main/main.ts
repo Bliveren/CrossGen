@@ -8,7 +8,6 @@ import {
   shell,
   type IpcMainInvokeEvent
 } from "electron";
-import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { promises as fs } from "node:fs";
@@ -58,13 +57,15 @@ import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePat
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
 import { verifyUpdateAssetBytes } from "./services/updateInstallerVerification.js";
+import { launchWindowsInstallerAndRestart } from "./services/windowsUpdateLauncher.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAX_HISTORY = 100;
 const FALLBACK_KEY_PREFIX = "plain:";
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 const ASSET_PROTOCOL = "image2tools-asset";
-const UPDATE_TIMEOUT_MS = 30000;
+const UPDATE_CHECK_TIMEOUT_MS = 30000;
+const UPDATE_DOWNLOAD_TIMEOUT_MS = 600000; // 10 minutes for large installer downloads
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -338,25 +339,6 @@ function redactLikelySecrets(value: string): string {
 
 function getUpdatesDir(): string {
   return path.join(app.getPath("userData"), "updates");
-}
-
-function quoteCmdArg(value: string): string {
-  return `"${value.replace(/%/g, "%%").replace(/"/g, '""')}"`;
-}
-
-function launchWindowsInstallerAndRestart(installerPath: string): void {
-  const command = [
-    "timeout /t 1 /nobreak > nul",
-    `start /wait "" ${quoteCmdArg(installerPath)} /S`,
-    `start "" ${quoteCmdArg(process.execPath)}`
-  ].join(" & ");
-  const child = spawn(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", command], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true
-  });
-  child.unref();
-  setTimeout(() => app.quit(), 50);
 }
 
 function getUpdateManifestUrl(): string {
@@ -849,7 +831,7 @@ async function handleCheckForUpdates(): Promise<UpdateCheckResult> {
           Accept: "application/json"
         }
       },
-      UPDATE_TIMEOUT_MS
+      UPDATE_CHECK_TIMEOUT_MS
     );
 
     if (!response.ok) {
@@ -893,7 +875,7 @@ async function handleDownloadAndInstallUpdate(): Promise<UpdateInstallResult> {
   await ensureDir(getUpdatesDir());
   const fileName = safeUpdateFileName(update.asset);
   const filePath = path.join(getUpdatesDir(), fileName);
-  const response = await fetchWithTimeout(fetch, update.asset.url, { method: "GET" }, UPDATE_TIMEOUT_MS);
+  const response = await fetchWithTimeout(fetch, update.asset.url, { method: "GET" }, UPDATE_DOWNLOAD_TIMEOUT_MS);
 
   if (!response.ok) {
     throw new Error(`更新包下载失败：HTTP ${response.status}`);
@@ -908,7 +890,7 @@ async function handleDownloadAndInstallUpdate(): Promise<UpdateInstallResult> {
   }
 
   if (process.platform === "win32") {
-    launchWindowsInstallerAndRestart(filePath);
+    launchWindowsInstallerAndRestart(filePath, { appQuit: () => app.quit() });
     return {
       version: update.latestVersion,
       filePath,
