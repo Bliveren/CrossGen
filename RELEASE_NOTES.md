@@ -1,15 +1,20 @@
 # Image2Tools Release Notes
 
-## v0.2.1 (in development)
+## v0.2.2 (unsigned preview)
 
-Bugfix and UX release based on post-0.2.0 user feedback. Not yet released; real
-OpenAI/Gemini API acceptance must be re-run before publishing (see
-`docs/release/evidence.json`).
+Bugfix, UX, and open-source presentation release based on post-0.2.0 user
+feedback. Real OpenAI/Gemini API acceptance must be re-run before publishing
+(see `docs/release/evidence.json`).
+
+### Fixes
 
 - Reference-image editing no longer fails against aggregator/proxy backends:
   edit and inpaint requests are now sent without SSE streaming, which fixes the
   "provider returned non-SSE response for streaming request" error. Text-to-image
   streaming previews are unchanged.
+
+### Experience
+
 - The provider dropdown is gone. The app now auto-detects the provider from the
   configured base URL and from model discovery, and shows the detected provider
   read-only. Changing the base URL on a saved key re-runs discovery.
@@ -17,6 +22,21 @@ OpenAI/Gemini API acceptance must be re-run before publishing (see
   image and Image to image. The mask is now an optional input under Image to
   image rather than a separate tab. Internal routing and Gemini guided-region
   behavior are unchanged.
+- Provider info panel collapses to save sidebar space.
+- Image preview is reworked: zoom with the mouse wheel without scrolling the
+  surrounding panel, and a dedicated preview viewer.
+- History gains newest/oldest sorting and drag-to-reorder.
+- Drag-and-drop image upload onto the workspace.
+
+### Open-source presentation
+
+- README showcase now uses real product screenshots instead of placeholders.
+- Added a Download & Install section with macOS Gatekeeper quarantine bypass
+  (`xattr -dr com.apple.quarantine`), Windows SmartScreen guidance, and SHA256
+  verification instructions against `docs/updates/latest.json`.
+- README header adds dynamic badges (release, CI, last commit, stars) alongside
+  the license/platform/stack badges.
+- GitHub About description and repository topics expanded for discoverability.
 
 ## v0.2.0
 
