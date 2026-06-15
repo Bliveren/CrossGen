@@ -37,9 +37,9 @@
 
 ## Showcase
 
-![Image2Tools desktop workspace](./docs/assets/readme-showcase.svg)
+![Image2Tools desktop workspace generating with GPT Image 2](./docs/assets/screenshot-workspace.png)
 
-![Image2Tools workflow](./docs/assets/readme-flow.svg)
+![Image2Tools editing a source image with reference inputs](./docs/assets/screenshot-edit.png)
 
 ## What Is Image2Tools
 
@@ -274,9 +274,9 @@ Image2Tools is released under the [MIT License](./LICENSE).
 
 ## 项目展示
 
-![Image2Tools 桌面工作台](./docs/assets/readme-showcase.svg)
+![Image2Tools 桌面工作台：使用 GPT Image 2 生成](./docs/assets/screenshot-workspace.png)
 
-![Image2Tools 工作流](./docs/assets/readme-flow.svg)
+![Image2Tools 编辑模式：基于参考图修改](./docs/assets/screenshot-edit.png)
 
 ## 项目定位
 

@@ -14,3 +14,7 @@ output/
 .env
 .env.*
 !.env.example
+
+# playwright session artifacts
+.playwright-mcp/
+.playwright-cli/
