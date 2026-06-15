@@ -21,6 +21,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Bliveren/image2tools/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Bliveren/image2tools?include_prereleases&color=ff7a18" /></a>
+  <a href="https://github.com/Bliveren/image2tools/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Bliveren/image2tools/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://github.com/Bliveren/image2tools/commits"><img alt="Last commit" src="https://img.shields.io/github/last-commit/Bliveren/image2tools" /></a>
+  <a href="https://github.com/Bliveren/image2tools/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Bliveren/image2tools?style=flat" /></a>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-1f6f61" /></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-102f3f" />
   <img alt="Stack" src="https://img.shields.io/badge/stack-Electron%20%2B%20React%20%2B%20Vite-f1c86b" />
@@ -29,6 +33,7 @@
 <p align="center">
   <a href="#features">Features</a> ·
   <a href="#showcase">Showcase</a> ·
+  <a href="#download--install">Download</a> ·
   <a href="#open-source-status">Open Source Status</a> ·
   <a href="#development">Development</a> ·
   <a href="#about-the-sponsors">Sponsors</a> ·
@@ -40,6 +45,34 @@
 ![Image2Tools desktop workspace generating with GPT Image 2](./docs/assets/screenshot-workspace.png)
 
 ![Image2Tools editing a source image with reference inputs](./docs/assets/screenshot-edit.png)
+
+## Download & Install
+
+Download the latest installer from the [Releases page](https://github.com/Bliveren/image2tools/releases/latest).
+
+| Platform | File | Notes |
+| --- | --- | --- |
+| macOS (Apple Silicon) | `Image2Tools-<version>-mac-arm64.dmg` | ad-hoc signed, not Apple-notarized |
+| Windows (x64) | `Image2Tools-Setup.exe` | NSIS installer |
+
+These are unsigned preview builds, so the OS may warn on first launch. This is expected and does not mean the app is unsafe — the source is public and auditable, and you can verify each artifact's SHA256 below.
+
+**macOS** — if Gatekeeper blocks the app, either right-click the app and choose **Open** twice, or clear the quarantine attribute:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Image2Tools.app
+```
+
+**Windows** — if SmartScreen shows a blue prompt, click **More info** → **Run anyway**.
+
+**Verify the download (optional).** Compare the SHA256 of your downloaded file against the value published in [`docs/updates/latest.json`](./docs/updates/latest.json):
+
+```bash
+# macOS
+shasum -a 256 ~/Downloads/Image2Tools-*-mac-arm64.dmg
+# Windows (PowerShell)
+Get-FileHash .\Image2Tools-Setup.exe -Algorithm SHA256
+```
 
 ## What Is Image2Tools
 
@@ -267,6 +300,7 @@ Image2Tools is released under the [MIT License](./LICENSE).
   <a href="#english">English</a> ·
   <a href="#功能亮点">功能亮点</a> ·
   <a href="#项目展示">项目展示</a> ·
+  <a href="#下载安装">下载安装</a> ·
   <a href="#mit-开源状态">MIT 开源状态</a> ·
   <a href="#开发运行">开发运行</a> ·
   <a href="#背后的企业">背后的企业</a>

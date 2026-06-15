@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "releaseVersion": "0.2.1",
-  "lastUpdated": "2026-06-11T09:53:00.000Z",
+  "releaseVersion": "0.2.2",
+  "lastUpdated": "2026-06-15T07:00:00.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -27,7 +27,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "Reset to pending for 0.2.1. v0.2.1 changes OpenAI edit/inpaint request behavior (streaming is now forced off for non-generate jobs), so the 0.2.0 real-API acceptance must be re-run against a real key before this gate is marked passed again, with explicit focus on reference editing and mask inpaint no longer hitting the non-SSE streaming error."
+        "summary": "Reset to pending for 0.2.2. 0.2.1 changed OpenAI edit/inpaint request behavior (streaming is forced off for non-generate jobs) and 0.2.2 reworks the result-viewer interaction surface; the real-API acceptance must be re-run against a real key before this gate is marked passed again, with explicit focus on reference editing and mask inpaint no longer hitting the non-SSE streaming error."
       }
     },
     {
@@ -54,7 +54,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "Reset to pending for 0.2.1. The two-tab workspace and provider auto-detection in 0.2.1 change how reference and guided-region edits are reached in the UI, so Nano Banana 3 acceptance must be re-run against a real Gemini key before this gate is marked passed again."
+        "summary": "Reset to pending for 0.2.2. The two-tab workspace and provider auto-detection (0.2.1) plus the reworked result-viewer and reference drag-drop flow (0.2.2) change how reference and guided-region edits are reached in the UI, so Nano Banana 3 acceptance must be re-run against a real Gemini key before this gate is marked passed again."
       }
     },
     {
