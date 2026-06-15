@@ -1,10 +1,12 @@
 # Image2Tools Release Notes
 
-## v0.2.1 (in development)
+## v0.2.1
 
-Bugfix and UX release based on post-0.2.0 user feedback. Not yet released; real
-OpenAI/Gemini API acceptance must be re-run before publishing (see
-`docs/release/evidence.json`).
+Status: unsigned preview prerelease. This bugfix and UX release is based on
+post-0.2.0 user feedback. macOS builds are ad-hoc signed and not
+Apple-notarized, so Gatekeeper may warn on first launch. Real OpenAI/Gemini API
+acceptance and Developer ID signing/notarization are still tracked in
+`docs/release/evidence.json`.
 
 - Reference-image editing no longer fails against aggregator/proxy backends:
   edit and inpaint requests are now sent without SSE streaming, which fixes the
