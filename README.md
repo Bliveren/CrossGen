@@ -312,6 +312,34 @@ Image2Tools is released under the [MIT License](./LICENSE).
 
 ![Image2Tools 编辑模式：基于参考图修改](./docs/assets/screenshot-edit.png)
 
+## 下载安装
+
+从 [Releases 页面](https://github.com/Bliveren/image2tools/releases/latest) 下载最新安装包。
+
+| 平台 | 文件 | 说明 |
+| --- | --- | --- |
+| macOS（Apple 芯片） | `Image2Tools-<版本>-mac-arm64.dmg` | 临时签名，未经 Apple 公证 |
+| Windows（x64） | `Image2Tools-Setup.exe` | NSIS 安装程序 |
+
+这些是未签名的预览版，系统可能在首次打开时弹出安全提示。这属于正常现象，并不代表应用不安全——源码完全公开可审计，你也可以用下方 SHA256 校验每个安装包。
+
+**macOS** — 若 Gatekeeper 拦截，可右键应用选择 **打开** 两次，或清除隔离属性：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Image2Tools.app
+```
+
+**Windows** — 若出现 SmartScreen 蓝色提示，点击 **更多信息** → **仍要运行**。
+
+**校验下载（可选）。** 将下载文件的 SHA256 与 [`docs/updates/latest.json`](./docs/updates/latest.json) 中发布的值比对：
+
+```bash
+# macOS
+shasum -a 256 ~/Downloads/Image2Tools-*-mac-arm64.dmg
+# Windows (PowerShell)
+Get-FileHash .\Image2Tools-Setup.exe -Algorithm SHA256
+```
+
 ## 项目定位
 
 Image2Tools 是一个方便易用的一站式AI生图管理工具。当前 main 分支支持通过 OpenAI Image API 使用 GPT Image 2，通过 Gemini 图片模型（如 `gemini-3.1-flash-image` 和 `gemini-3-pro-image`）使用应用内的 Nano Banana 3 启动入口，并为应用探测到的非重点图片模型提供最小 General 兜底模式。
