@@ -86,7 +86,10 @@ export function sanitizeModelDiscoveryError(error: unknown, apiKey?: string): st
   return redactLikelySecrets(raw, apiKey).replace(/\s+/g, " ").trim();
 }
 
-function discoveryProviderOrder(providerKind: ProviderKind): ProviderKind[] {
+export function discoveryProviderOrder(providerKind: ProviderKind): ProviderKind[] {
+  // "custom" already uses the OpenAI-compatible protocol, so probing "openai" too would hit the
+  // same /models endpoint twice and list generic models under both tags. The two protocols are
+  // OpenAI-compatible (custom/openai) and Gemini, so ["custom", "gemini"] already covers both.
   if (providerKind === "gemini") return ["gemini", "openai"];
   if (providerKind === "custom") return ["custom", "gemini"];
   return ["openai", "gemini"];

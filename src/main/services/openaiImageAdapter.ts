@@ -227,8 +227,12 @@ export async function runOpenAIImageJob(
   return runEdit(requestJob, apiKey, baseURL, runtime);
 }
 
-function normalizeOpenAIJobParams(job: OpenAIImageJob): OpenAIImageJob {
-  const params = normalizeOpenAIRequestParams(job.params);
+export function normalizeOpenAIJobParams(job: OpenAIImageJob): OpenAIImageJob {
+  let params = normalizeOpenAIRequestParams(job.params);
+  // 聚合器普遍不支持 /images/edits 的 SSE 流式响应；编辑/局部重绘统一走非流式。
+  if (job.mode !== "generate" && params.stream) {
+    params = { ...params, stream: false, partialImages: 0 };
+  }
   return params === job.params ? job : { ...job, params };
 }
 

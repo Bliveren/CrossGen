@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { InputAsset, JobProgressEvent, OpenAIImageParams } from "../../shared/types";
 import { DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
 import type { StoredProviderConfig } from "./stateMigration";
-import { baseRequestBody, buildEndpoint, normalizeOpenAIRequestParams, openaiImageAdapter, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImageAdapter";
+import { baseRequestBody, buildEndpoint, normalizeOpenAIJobParams, normalizeOpenAIRequestParams, openaiImageAdapter, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImageAdapter";
 
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
 
@@ -113,6 +113,20 @@ describe("OpenAI image service", () => {
       stream: false,
       partialImages: 0
     });
+  });
+
+  it("disables streaming for edit and inpaint jobs but keeps it for generate", () => {
+    const editJob = normalizeOpenAIJobParams(job({ mode: "edit", params: params({ stream: true, partialImages: 2 }) }));
+    expect(editJob.params.stream).toBe(false);
+    expect(editJob.params.partialImages).toBe(0);
+
+    const inpaintJob = normalizeOpenAIJobParams(job({ mode: "inpaint", params: params({ stream: true, partialImages: 3 }) }));
+    expect(inpaintJob.params.stream).toBe(false);
+    expect(inpaintJob.params.partialImages).toBe(0);
+
+    const generateJob = normalizeOpenAIJobParams(job({ mode: "generate", params: params({ stream: true, partialImages: 2 }) }));
+    expect(generateJob.params.stream).toBe(true);
+    expect(generateJob.params.partialImages).toBe(2);
   });
 
   it("calls image generations and saves base64 results", async () => {
@@ -427,14 +441,14 @@ describe("OpenAI image service", () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         const encoder = new TextEncoder();
-        controller.enqueue(encoder.encode(`event: image_edit.completed\ndata: {"type":"image_edit.completed","data":[{"b64_json":"${tinyPngBase64}"}]}\n\n`));
+        controller.enqueue(encoder.encode(`event: image_generation.completed\ndata: {"type":"image_generation.completed","data":[{"b64_json":"${tinyPngBase64}"}]}\n\n`));
         controller.close();
       }
     });
     const fetchImpl = (async () => new Response(stream, { headers: { "content-type": "text/event-stream" } })) as typeof fetch;
     const { runtime } = await createRuntime(fetchImpl);
 
-    const result = await runOpenAIImageJob(job({ mode: "edit", inputAssets: [await sourceAsset()], params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", runtime);
+    const result = await runOpenAIImageJob(job({ mode: "generate", params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", runtime);
 
     expect(result.status).toBe("succeeded");
     expect(result.outputs.map((asset) => asset.sourceType)).toEqual(["result"]);

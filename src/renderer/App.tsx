@@ -117,6 +117,12 @@ const RESIZER_WIDTH = 12;
 const HISTORY_COLLAPSED_LIMIT = 6;
 const DEFAULT_HISTORY_MODEL_DISPLAY = "GPT Image 2";
 
+type TabMode = "text2img" | "img2img";
+
+function tabModeForWorkMode(mode: WorkMode): TabMode {
+  return mode === "generate" ? "text2img" : "img2img";
+}
+
 interface HistoryModelDetails {
   modelDisplayName: string;
   modelTitle: string;
@@ -597,7 +603,7 @@ export function App() {
   const [language, setLanguage] = useState<Language>(() => getInitialLanguage());
   const copy = translations[language];
   const [snapshot, setSnapshot] = useState<AppSnapshot>(fallbackSnapshot);
-  const [mode, setMode] = useState<WorkMode>("generate");
+  const [tabMode, setTabMode] = useState<TabMode>("text2img");
   const [prompt, setPrompt] = useState("A clean product photo of a matte black travel mug on a brushed steel counter");
   const [params, setParams] = useState<ImageParams>(DEFAULT_IMAGE_PARAMS);
   const modeLabels = useMemo(() => modeLabelsForParams(copy, params), [copy, params]);
@@ -660,7 +666,19 @@ export function App() {
   const generalParams = isGeneralImageParams(params) ? params : null;
   const isGeneralMode = Boolean(generalParams);
   const generalAllowsReferences = generalParams ? generalFallbackSupportsReferenceImages(generalParams.providerKind) : false;
-  const showReferenceTools = !generalParams || generalAllowsReferences;
+  const hasMask = Boolean(maskAsset || maskDataUrl);
+  // 内部 WorkMode 由 UI 的 tabMode 推导：text2img→generate；img2img 有蒙版→inpaint，否则→edit。
+  // General 模式仍按既有规则（支持参考图且已选图→edit，否则 generate）。
+  const requestMode: WorkMode = generalParams
+    ? generalAllowsReferences && inputAssets.length > 0
+      ? "edit"
+      : "generate"
+    : tabMode === "text2img"
+      ? "generate"
+      : hasMask
+        ? "inpaint"
+        : "edit";
+  const showReferenceTools = generalParams ? generalAllowsReferences : tabMode === "img2img";
   const generalModeNotice = generalParams ? generalRuntimeNotice(generalParams.providerKind, copy) : copy.generalRuntimeUnsupported;
   const activeInpaintCapability = inpaintCapabilityForParams(params);
   const usesExactMask = activeInpaintCapability === "exact-mask";
@@ -690,19 +708,17 @@ export function App() {
   const isSearchingHistory = historySearch.trim().length > 0;
 
   const modeError = useMemo(() => {
-    if (generalParams && mode === "inpaint") return copy.validation.generalNoInpaint;
     if (generalParams && !generalFallbackSupportsReferenceImages(generalParams.providerKind) && inputAssets.length > 0) {
       return copy.validation.generalPromptOnly;
     }
-    if (mode === "edit" && inputAssets.length === 0) return copy.validation.addReference;
-    if (mode === "inpaint" && inputAssets.length === 0) return copy.validation.addSource;
-    if (openAIParams && mode !== "generate" && inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
+    if (requestMode === "edit" && inputAssets.length === 0) return copy.validation.addReference;
+    if (requestMode === "inpaint" && inputAssets.length === 0) return copy.validation.addSource;
+    if (openAIParams && requestMode !== "generate" && inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
       return copy.validation.maxInputs(MAX_GPT_IMAGE_INPUTS);
     }
-    if (mode === "inpaint" && !maskPreview) return copy.validation.paintOrUploadMask;
-    if (usesExactMask && mode === "inpaint" && maskCheck && !maskCheck.ok) return maskCheck.message;
+    if (usesExactMask && requestMode === "inpaint" && maskCheck && !maskCheck.ok) return maskCheck.message;
     return null;
-  }, [copy, generalParams, inputAssets.length, maskCheck, maskPreview, mode, openAIParams, usesExactMask]);
+  }, [copy, generalParams, inputAssets.length, maskCheck, openAIParams, requestMode, usesExactMask]);
 
   const launchRuntimeError = runtimeSelectionError(params, snapshot.config, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, prompt), copy) ?? modeError;
@@ -780,9 +796,6 @@ export function App() {
   useEffect(() => {
     if (!generalParams) return;
     if (!generalFallbackSupportsReferenceImages(generalParams.providerKind)) {
-      if (mode !== "generate") {
-        setMode("generate");
-      }
       if (inputAssets.length > 0) {
         setInputAssets([]);
       }
@@ -792,17 +805,11 @@ export function App() {
       }
       return;
     }
-    if (mode === "inpaint") {
-      setMode(inputAssets.length > 0 ? "edit" : "generate");
-    }
-    if (mode === "edit" && inputAssets.length === 0) {
-      setMode("generate");
-    }
     if (maskAsset || maskDataUrl) {
       setMaskAsset(null);
       setMaskDataUrl(null);
     }
-  }, [generalParams, inputAssets.length, maskAsset, maskDataUrl, mode]);
+  }, [generalParams, inputAssets.length, maskAsset, maskDataUrl]);
 
   useEffect(() => {
     void refreshSnapshot();
@@ -827,7 +834,7 @@ export function App() {
         .saveDraft({
           activeLaunchId: params.launchId,
           activeModelId: params.model,
-          mode,
+          mode: requestMode,
           prompt,
           params,
           inputAssets,
@@ -840,7 +847,7 @@ export function App() {
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [bridge, brushSize, hasRestoredDraft, hasUserChangedDraft, inputAssets, maskAsset, maskDataUrl, mode, params, prompt]);
+  }, [bridge, brushSize, hasRestoredDraft, hasUserChangedDraft, inputAssets, maskAsset, maskDataUrl, requestMode, params, prompt]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -864,7 +871,7 @@ export function App() {
   useEffect(() => {
     const source = sourcePreview;
     const mask = maskPreview;
-    if (mode !== "inpaint" || !mask) {
+    if (requestMode !== "inpaint" || !mask) {
       setMaskCheck(null);
       return;
     }
@@ -885,7 +892,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [copy, inputAssets, maskAsset?.mimeType, maskPreview, mode, sourcePreview, usesExactMask]);
+  }, [copy, inputAssets, maskAsset?.mimeType, maskPreview, requestMode, sourcePreview, usesExactMask]);
 
   async function refreshSnapshot() {
     if (!bridge) return;
@@ -910,8 +917,8 @@ export function App() {
     setHasRestoredDraft(true);
     if (!draft) return;
     const restoredParams = normalizeParamsForOutputCount(draft.params);
-    const draftMode = isGeneralImageParams(restoredParams) && draft.mode === "inpaint" ? (draft.inputAssets.length > 0 ? "edit" : "generate") : draft.mode;
-    setMode(draftMode);
+    // 兼容 v0.2.0 旧 draft（仅存 WorkMode）：generate→text2img；edit/inpaint→img2img。
+    setTabMode(tabModeForWorkMode(draft.mode));
     setPrompt(draft.prompt);
     setParams(restoredParams);
     updateCustomSizeFromParams(restoredParams, setCustomSize);
@@ -993,7 +1000,6 @@ export function App() {
     try {
       const providerChanged = providerKind !== snapshot.config.kind;
       const config = await bridge.saveConfig({
-        kind: providerKind,
         apiKey: apiKey.trim() ? apiKey : undefined,
         baseURL,
         defaultModel: defaultModelForConfigSave(providerKind, params, snapshot.config),
@@ -1040,13 +1046,6 @@ export function App() {
     }
   }
 
-  function changeProvider(kind: ProviderKind) {
-    markDraftChanged();
-    resetConnectionCheckForConfigEdit();
-    setProviderKind(kind);
-    setBaseURL(defaultBaseURLForProvider(kind, baseURL));
-  }
-
   async function launchModel(button: LaunchButtonState) {
     if (!bridge || !button.available) return;
     const launchProvider = button.providerKind;
@@ -1054,10 +1053,8 @@ export function App() {
     const nextParams = createLaunchParams(button.launchId, button.modelId, params, launchProvider, launchConfig);
     setParams(nextParams);
     if (isGeneralImageParams(nextParams)) {
-      if (generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
-        if (mode === "inpaint") setMode(inputAssets.length > 0 ? "edit" : "generate");
-      } else {
-        setMode("generate");
+      if (!generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
+        setTabMode("text2img");
         setInputAssets([]);
       }
       setMaskAsset(null);
@@ -1068,7 +1065,6 @@ export function App() {
     setIsSavingConfig(true);
     try {
       const config = await bridge.saveConfig({
-        kind: snapshot.config.kind,
         baseURL: snapshot.config.baseURL,
         defaultModel: defaultModelForConfigSave(snapshot.config.kind, nextParams, snapshot.config),
         defaultSize: defaultSizeForConfigSave(nextParams, snapshot.config),
@@ -1095,7 +1091,7 @@ export function App() {
     setParams(nextParams);
     if (isGeneralImageParams(nextParams)) {
       if (!generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
-        setMode("generate");
+        setTabMode("text2img");
         setInputAssets([]);
       }
       setMaskAsset(null);
@@ -1106,7 +1102,6 @@ export function App() {
     setIsSavingConfig(true);
     try {
       const config = await bridge.saveConfig({
-        kind: snapshot.config.kind,
         baseURL: snapshot.config.baseURL,
         defaultModel: defaultModelForConfigSave(snapshot.config.kind, nextParams, snapshot.config),
         defaultSize: defaultSizeForConfigSave(nextParams, snapshot.config),
@@ -1195,7 +1190,7 @@ export function App() {
       await bridge.saveDraft({
         activeLaunchId: params.launchId,
         activeModelId: params.model,
-        mode,
+        mode: requestMode,
         prompt,
         params,
         inputAssets,
@@ -1239,7 +1234,7 @@ export function App() {
       const addedCount = Math.max(0, cappedNext.length - inputAssets.length);
       const capped = Boolean(usesOpenAIInputCap && next.length > MAX_GPT_IMAGE_INPUTS);
       setInputAssets(cappedNext);
-      if (mode === "generate") setMode("edit");
+      if (tabMode === "text2img") setTabMode("img2img");
       setNotice({
         kind: capped ? "info" : "success",
         text: copy.notices.imagesAdded(addedCount, cappedNext.length, capped, MAX_GPT_IMAGE_INPUTS)
@@ -1261,7 +1256,7 @@ export function App() {
       markDraftChanged();
       setMaskAsset(asset);
       setMaskDataUrl(null);
-      setMode("inpaint");
+      setTabMode("img2img");
       setNotice({ kind: "success", text: copy.notices.maskAdded });
     }
   }
@@ -1279,7 +1274,6 @@ export function App() {
     setIsRunning(true);
     setPartialImages([]);
     setActiveJob(null);
-    const requestMode: WorkMode = generalParams ? (generalAllowsReferences && inputAssets.length > 0 ? "edit" : "generate") : mode;
     setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[requestMode].action) });
 
     try {
@@ -1373,8 +1367,7 @@ export function App() {
   function reuseJob(job: GenerationJob) {
     flashButton(`reuse:${job.id}`);
     const reusedParams = normalizeParamsForOutputCount(job.params);
-    const nextMode = isGeneralImageParams(reusedParams) && job.mode === "inpaint" ? (job.inputAssets.length > 0 ? "edit" : "generate") : job.mode;
-    setMode(nextMode);
+    setTabMode(tabModeForWorkMode(job.mode));
     setPrompt(job.prompt);
     setParams(reusedParams);
     updateCustomSizeFromParams(reusedParams, setCustomSize);
@@ -1462,7 +1455,10 @@ export function App() {
   }
 
   function startPaint(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (mode !== "inpaint" || !sourcePreview) return;
+    // Painting is what CREATES a freehand mask, so it cannot gate on requestMode === "inpaint"
+    // (which only becomes true once a mask already exists). Gate on the conditions under which
+    // the canvas is shown: img2img tab, a source image present, non-General.
+    if (isGeneralMode || tabMode !== "img2img" || !sourcePreview) return;
     setIsPainting(true);
     paintedDuringStrokeRef.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -1784,11 +1780,10 @@ export function App() {
           </div>
           <label>
             {copy.providerLabel}
-            <select value={providerKind} onChange={(event) => changeProvider(event.target.value as ProviderKind)}>
-              <option value="openai">OpenAI</option>
-              <option value="gemini">Gemini</option>
-              <option value="custom">Custom</option>
-            </select>
+            <div className="provider-detected" aria-live="polite">
+              {providerLabelFromKind(providerKind)}
+              <small>{copy.providerAutoDetected}</small>
+            </div>
           </label>
           <label>
             {copy.apiKey}
@@ -1984,23 +1979,30 @@ export function App() {
             </div>
           ) : (
             <div className="mode-tabs" role="tablist" aria-label={copy.parameters}>
-              {(Object.keys(modeLabels) as WorkMode[]).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={mode === item ? "mode-tab active" : "mode-tab"}
-                  onClick={() => {
-                    markDraftChanged();
-                    setMode(item);
-                  }}
-                >
-                  {item === "generate" && <Wand2 size={16} />}
-                  {item === "edit" && <ImagePlus size={16} />}
-                  {item === "inpaint" && <Brush size={16} />}
-                  <span>{modeLabels[item].title}</span>
-                  <small>{modeLabels[item].hint}</small>
-                </button>
-              ))}
+              <button
+                type="button"
+                className={tabMode === "text2img" ? "mode-tab active" : "mode-tab"}
+                onClick={() => {
+                  markDraftChanged();
+                  setTabMode("text2img");
+                }}
+              >
+                <Wand2 size={16} />
+                <span>{copy.tabs.text2img.title}</span>
+                <small>{copy.tabs.text2img.hint}</small>
+              </button>
+              <button
+                type="button"
+                className={tabMode === "img2img" ? "mode-tab active" : "mode-tab"}
+                onClick={() => {
+                  markDraftChanged();
+                  setTabMode("img2img");
+                }}
+              >
+                <ImagePlus size={16} />
+                <span>{copy.tabs.img2img.title}</span>
+                <small>{copy.tabs.img2img.hint}</small>
+              </button>
             </div>
           )}
         </div>
@@ -2107,7 +2109,7 @@ export function App() {
               <div className="run-row">
                 <button type="button" className="primary-run" onClick={runJob} disabled={!canRun}>
                   {isRunning ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
-                  {isRunning ? copy.running : modeLabels[mode].action}
+                  {isRunning ? copy.running : modeLabels[requestMode].action}
                 </button>
                 <button type="button" className={buttonFeedbackClass("copy:prompt", "secondary")} onClick={() => copyPrompt(prompt)}>
                   <Clipboard size={16} />
@@ -2173,11 +2175,13 @@ export function App() {
               </>
             )}
 
-            {mode === "inpaint" && !isGeneralMode && (
+            {tabMode === "img2img" && !isGeneralMode && (
               <div className="mask-editor">
                 <div className="mask-header">
                   <div>
-                    <h3>{copy.mask}</h3>
+                    <h3>
+                      {copy.mask} <span className="mask-optional">{copy.maskOptional}</span>
+                    </h3>
                     <p>{maskDescription}</p>
                   </div>
                   <div className="brush-controls">

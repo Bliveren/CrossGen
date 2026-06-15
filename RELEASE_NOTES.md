@@ -1,4 +1,24 @@
-# Image2Tools v0.2.0 Release Notes
+# Image2Tools Release Notes
+
+## v0.2.1 (in development)
+
+Bugfix and UX release based on post-0.2.0 user feedback. Not yet released; real
+OpenAI/Gemini API acceptance must be re-run before publishing (see
+`docs/release/evidence.json`).
+
+- Reference-image editing no longer fails against aggregator/proxy backends:
+  edit and inpaint requests are now sent without SSE streaming, which fixes the
+  "provider returned non-SSE response for streaming request" error. Text-to-image
+  streaming previews are unchanged.
+- The provider dropdown is gone. The app now auto-detects the provider from the
+  configured base URL and from model discovery, and shows the detected provider
+  read-only. Changing the base URL on a saved key re-runs discovery.
+- The three mode tabs (generate/edit/inpaint) are collapsed into two: Text to
+  image and Image to image. The mask is now an optional input under Image to
+  image rather than a separate tab. Internal routing and Gemini guided-region
+  behavior are unchanged.
+
+## v0.2.0
 
 Status: unsigned preview prerelease. macOS and Windows artifacts are published for evaluation. macOS builds are ad-hoc signed and not Apple-notarized, so Gatekeeper may warn on first launch (right-click > Open, or remove the quarantine attribute). Developer ID signed and notarized distribution is tracked for a future release.
 

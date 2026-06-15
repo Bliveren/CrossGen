@@ -506,6 +506,12 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
     throw new Error(configValidation.message ?? "配置参数无效。");
   }
   const now = new Date().toISOString();
+  // The UI no longer submits a provider kind. We deliberately preserve the stored kind here
+  // (buildProviderConfigForSave keeps current.kind when input.kind is undefined) instead of
+  // guessing from the base URL: a URL-based guess that differs from the stored kind would trip
+  // buildProviderConfigForSave's "provider changed" path, silently wiping the saved key and
+  // pinning a stale launch. Provider reclassification is handled non-destructively by model
+  // discovery's inferredProviderKind below.
   let nextConfig = buildProviderConfigForSave(state.config, input, now);
 
   if (input.apiKey !== undefined && input.apiKey.trim()) {
@@ -516,7 +522,11 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
     Object.assign(nextConfig, encryptApiKey(input.apiKey));
   }
 
-  if (input.apiKey !== undefined && input.apiKey.trim()) {
+  // 有 key 即触发模型发现：新提交 key，或在已有 key 的情况下改了 base URL（换聚合器需重新分类）。
+  const hasUsableApiKey = Boolean(nextConfig.encryptedApiKey);
+  const baseURLChanged = nextConfig.baseURL !== state.config.baseURL;
+  const submittedNewApiKey = input.apiKey !== undefined && input.apiKey.trim().length > 0;
+  if (hasUsableApiKey && (submittedNewApiKey || baseURLChanged)) {
     nextConfig = await refreshModelDiscovery(nextConfig);
   }
 

@@ -21,7 +21,7 @@
 
 ## 3. 生成流程检查
 
-- [x] 文本提示可成功出图（需真实 API Key 手工验收）
+- [ ] 文本提示可成功出图（需真实 API Key 手工验收）
 - [x] 流式预览可显示 partial image
 - [x] 终图可保存到本地
 - [x] 可选择 PNG / JPEG / WEBP
@@ -32,9 +32,9 @@
 
 ## 4. 编辑流程检查
 
-- [x] 单图编辑可用（需真实 API Key 手工验收）
-- [x] 多图参考编辑可用（需真实 API Key 手工验收）
-- [x] 局部重绘可用（需真实 API Key 手工验收）
+- [ ] 单图编辑可用（需真实 API Key 手工验收）
+- [ ] 多图参考编辑可用（需真实 API Key 手工验收）
+- [ ] 局部重绘可用（需真实 API Key 手工验收）
 - [x] mask 尺寸校验生效
 - [x] mask 与首张源图格式一致性校验生效
 - [x] mask alpha 通道校验生效
@@ -107,7 +107,7 @@
   - 2026-06-11: WSL2 Ubuntu 24.04 下 direct AppImage + unpacked + extracted 全部通过 Xvfb smoke 验证；download/open-folder 依赖共享 Electron IPC，已在 Windows 原生验证。
 - [x] 真实 API 验收脚本默认受成本确认保护
 - [x] 真实 streaming 验收需要额外成本确认
-- [x] Gemini / Nano Banana 3 真实 API 验收完成（已有受成本保护 verifier，仍需真实 Key 跑通并记录证据）
+- [ ] Gemini / Nano Banana 3 真实 API 验收完成（已有受成本保护 verifier，仍需真实 Key 跑通并记录证据）
 - [x] 签名/公证 readiness 脚本不会暴露 secret 且不会尝试签名
 - [x] macOS release verifier 不再写死旧版本 dmg 文件名
 - [x] 配置迁移到当前 state v1 正常
@@ -115,11 +115,11 @@
 
 ## 8. 手工验收用例
 
-- [x] 仅输入 prompt 生成一张图（需真实 API Key）
-- [x] 输入长 prompt 生成一张图（需真实 API Key）
-- [x] 上传一张参考图后编辑（需真实 API Key）
-- [x] 上传多张参考图后编辑（需真实 API Key）
-- [x] 用 mask 对图局部重绘（需真实 API Key）
+- [ ] 仅输入 prompt 生成一张图（需真实 API Key）
+- [ ] 输入长 prompt 生成一张图（需真实 API Key）
+- [ ] 上传一张参考图后编辑（需真实 API Key）
+- [ ] 上传多张参考图后编辑（需真实 API Key）
+- [ ] 用 mask 对图局部重绘（需真实 API Key）
 - [x] 下载 PNG
 - [x] 下载 JPEG
 - [x] 下载 WEBP
@@ -138,7 +138,7 @@
 - [x] mock OpenAI verifier、mock Gemini verifier 和 mock model discovery verifier 命令已记录
 - [x] release verifier 命令与平台限制已记录
 - [x] 文档未声明未验证的 Nano Banana 真实输出质量或 exact-mask 能力
-- [x] 真实 OpenAI / Gemini 外部验收完成
+- [ ] 真实 OpenAI / Gemini 外部验收完成
 - [x] 正式更新 manifest 已补充分发资产 URL、hash 和 size
 - [x] General 任意 provider fallback 完成
 

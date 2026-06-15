@@ -76,6 +76,7 @@ export interface UiCopy {
   tagline: string;
   provider: string;
   providerLabel: string;
+  providerAutoDetected: string;
   apiKey: string;
   baseURL: string;
   discoveryStatus: string;
@@ -199,6 +200,8 @@ export interface UiCopy {
   clicked: string;
   modes: Record<WorkMode, ModeCopy>;
   guidedRegionMode: ModeCopy;
+  tabs: { text2img: { title: string; hint: string }; img2img: { title: string; hint: string } };
+  maskOptional: string;
   notices: NoticeCopy;
   validation: ValidationCopy;
 }
@@ -211,6 +214,7 @@ export const translations: Record<Language, UiCopy> = {
     tagline: "An easy-to-use, all-in-one AI image generation management tool.",
     provider: "Model config",
     providerLabel: "Provider",
+    providerAutoDetected: "Auto-detected from API",
     apiKey: "API Key",
     baseURL: "Base URL",
     discoveryStatus: "Model discovery",
@@ -338,6 +342,11 @@ export const translations: Record<Language, UiCopy> = {
       inpaint: { title: "Inpaint", action: "Inpaint", hint: "Source + mask" }
     },
     guidedRegionMode: { title: "Guided region", action: "Guide edit", hint: "Source + region" },
+    tabs: {
+      text2img: { title: "Text to image", hint: "Prompt only" },
+      img2img: { title: "Image to image", hint: "References + optional mask" }
+    },
+    maskOptional: "(optional)",
     notices: {
       ready: "Ready.",
       browserPreview: "Browser preview: Electron IPC is unavailable.",
@@ -406,6 +415,7 @@ export const translations: Record<Language, UiCopy> = {
     tagline: "方便易用的一站式AI生图管理工具。",
     provider: "模型配置",
     providerLabel: "服务商",
+    providerAutoDetected: "已根据 API 自动识别",
     apiKey: "API Key",
     baseURL: "Base URL",
     discoveryStatus: "模型探测",
@@ -533,6 +543,11 @@ export const translations: Record<Language, UiCopy> = {
       inpaint: { title: "局部重绘", action: "局部重绘", hint: "源图 + 蒙版" }
     },
     guidedRegionMode: { title: "区域引导", action: "区域引导", hint: "源图 + 区域" },
+    tabs: {
+      text2img: { title: "文生图", hint: "仅提示词" },
+      img2img: { title: "图生图", hint: "参考图 + 可选蒙版" }
+    },
+    maskOptional: "（可选）",
     notices: {
       ready: "就绪。",
       browserPreview: "浏览器预览：Electron IPC 不可用。",
