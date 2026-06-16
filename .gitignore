@@ -7,8 +7,17 @@ release/
 real-api-artifacts/
 coverage/
 .DS_Store
+output/
+.playwright-cli/
 *.log
 *.local
 .env
 .env.*
 !.env.example
+
+# playwright session artifacts
+.playwright-mcp/
+.playwright-cli/
+
+# product landing page lives in GitLab, not GitHub
+docs/products/

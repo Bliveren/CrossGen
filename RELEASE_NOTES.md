@@ -1,5 +1,38 @@
 # Image2Tools Release Notes
 
+## v0.2.2 (unsigned preview)
+
+Experience and open-source presentation release on top of v0.2.1. Real
+OpenAI/Gemini API acceptance must be re-run before publishing (see
+`docs/release/evidence.json`).
+
+### Experience
+
+- Result viewer reworked into a dedicated image preview: mouse-wheel zoom that
+  no longer scrolls the surrounding panel, double-click to open a full preview,
+  and drag-to-pan when zoomed in. Zoom controls move into a canvas overlay.
+- Provider info collapses to a compact inline chip beside the key status to
+  save sidebar space.
+- History gains newest/oldest sorting, and history result images can be dragged
+  into the reference area.
+- Drag-and-drop image files from the OS onto the reference area to import them.
+
+### Fixes
+
+- External drag-drop upload now resolves dropped file paths through
+  `webUtils.getPathForFile` instead of the non-standard `File.path`, which
+  Electron 32+ removed — drag-drop import works again in packaged builds.
+
+### Open-source presentation
+
+- README showcase now uses real product screenshots instead of placeholders.
+- Added a Download & Install section with macOS Gatekeeper quarantine bypass
+  (`xattr -dr com.apple.quarantine`), Windows SmartScreen guidance, and SHA256
+  verification instructions against `docs/updates/latest.json`.
+- README header adds dynamic badges (release, CI, last commit, stars) alongside
+  the license/platform/stack badges.
+- GitHub About description and repository topics expanded for discoverability.
+
 ## v0.2.1
 
 Status: unsigned preview prerelease. This bugfix and UX release is based on

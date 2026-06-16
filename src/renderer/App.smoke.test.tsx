@@ -514,6 +514,8 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     saveDraft: vi.fn(async (input) => ({ ...input, activeLaunchId: input.activeLaunchId ?? input.params.launchId, activeModelId: input.activeModelId ?? input.params.model, updatedAt: now }) as WorkspaceDraft),
     clearDraft: vi.fn(async () => undefined),
     selectImages: vi.fn(async () => []),
+    getDroppedFilePaths: vi.fn(() => []),
+    importImages: vi.fn(async () => []),
     selectMask: vi.fn(async () => null),
     runJob: vi.fn(async (request) => {
       const job = jobFromRequest(request, currentSnapshot.config);

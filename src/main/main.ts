@@ -677,6 +677,12 @@ async function handleSelectImages(): Promise<InputAsset[]> {
   return selectedFilesToAssets(result.filePaths);
 }
 
+async function handleImportImages(_event: IpcMainInvokeEvent, paths: unknown): Promise<InputAsset[]> {
+  if (!Array.isArray(paths)) return [];
+  const safePaths = paths.filter((value): value is string => typeof value === "string" && value.length > 0);
+  return selectedFilesToAssets(safePaths);
+}
+
 async function handleSelectMask(): Promise<InputAsset | null> {
   const result = await dialog.showOpenDialog({
     title: "Select mask",
@@ -942,6 +948,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("draft:save", handleSaveDraft);
   ipcMain.handle("draft:clear", handleClearDraft);
   ipcMain.handle("dialog:selectImages", handleSelectImages);
+  ipcMain.handle("dialog:importImages", handleImportImages);
   ipcMain.handle("dialog:selectMask", handleSelectMask);
   ipcMain.handle("job:run", handleRunJob);
   ipcMain.handle("asset:download", handleDownloadAsset);
