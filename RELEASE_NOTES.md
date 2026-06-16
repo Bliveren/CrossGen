@@ -2,31 +2,26 @@
 
 ## v0.2.2 (unsigned preview)
 
-Bugfix, UX, and open-source presentation release based on post-0.2.0 user
-feedback. Real OpenAI/Gemini API acceptance must be re-run before publishing
-(see `docs/release/evidence.json`).
-
-### Fixes
-
-- Reference-image editing no longer fails against aggregator/proxy backends:
-  edit and inpaint requests are now sent without SSE streaming, which fixes the
-  "provider returned non-SSE response for streaming request" error. Text-to-image
-  streaming previews are unchanged.
+Experience and open-source presentation release on top of v0.2.1. Real
+OpenAI/Gemini API acceptance must be re-run before publishing (see
+`docs/release/evidence.json`).
 
 ### Experience
 
-- The provider dropdown is gone. The app now auto-detects the provider from the
-  configured base URL and from model discovery, and shows the detected provider
-  read-only. Changing the base URL on a saved key re-runs discovery.
-- The three mode tabs (generate/edit/inpaint) are collapsed into two: Text to
-  image and Image to image. The mask is now an optional input under Image to
-  image rather than a separate tab. Internal routing and Gemini guided-region
-  behavior are unchanged.
-- Provider info panel collapses to save sidebar space.
-- Image preview is reworked: zoom with the mouse wheel without scrolling the
-  surrounding panel, and a dedicated preview viewer.
-- History gains newest/oldest sorting and drag-to-reorder.
-- Drag-and-drop image upload onto the workspace.
+- Result viewer reworked into a dedicated image preview: mouse-wheel zoom that
+  no longer scrolls the surrounding panel, double-click to open a full preview,
+  and drag-to-pan when zoomed in. Zoom controls move into a canvas overlay.
+- Provider info collapses to a compact inline chip beside the key status to
+  save sidebar space.
+- History gains newest/oldest sorting, and history result images can be dragged
+  into the reference area.
+- Drag-and-drop image files from the OS onto the reference area to import them.
+
+### Fixes
+
+- External drag-drop upload now resolves dropped file paths through
+  `webUtils.getPathForFile` instead of the non-standard `File.path`, which
+  Electron 32+ removed — drag-drop import works again in packaged builds.
 
 ### Open-source presentation
 
@@ -37,6 +32,26 @@ feedback. Real OpenAI/Gemini API acceptance must be re-run before publishing
 - README header adds dynamic badges (release, CI, last commit, stars) alongside
   the license/platform/stack badges.
 - GitHub About description and repository topics expanded for discoverability.
+
+## v0.2.1
+
+Status: unsigned preview prerelease. This bugfix and UX release is based on
+post-0.2.0 user feedback. macOS builds are ad-hoc signed and not
+Apple-notarized, so Gatekeeper may warn on first launch. Real OpenAI/Gemini API
+acceptance and Developer ID signing/notarization are still tracked in
+`docs/release/evidence.json`.
+
+- Reference-image editing no longer fails against aggregator/proxy backends:
+  edit and inpaint requests are now sent without SSE streaming, which fixes the
+  "provider returned non-SSE response for streaming request" error. Text-to-image
+  streaming previews are unchanged.
+- The provider dropdown is gone. The app now auto-detects the provider from the
+  configured base URL and from model discovery, and shows the detected provider
+  read-only. Changing the base URL on a saved key re-runs discovery.
+- The three mode tabs (generate/edit/inpaint) are collapsed into two: Text to
+  image and Image to image. The mask is now an optional input under Image to
+  image rather than a separate tab. Internal routing and Gemini guided-region
+  behavior are unchanged.
 
 ## v0.2.0
 

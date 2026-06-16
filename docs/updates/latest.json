@@ -1,22 +1,22 @@
 {
-  "version": "0.2.0",
-  "pubDate": "2026-06-11T00:00:00.000Z",
-  "notes": "Unsigned preview release. Multi-model workspace for GPT Image 2 and Nano Banana 3, sidebar model configuration, automatic connection checks, concrete launch-model selection, and updater refinements. macOS artifacts are ad-hoc signed and not Apple-notarized; Gatekeeper may warn on first launch.",
+  "version": "0.2.1",
+  "pubDate": "2026-06-15T02:18:02.000Z",
+  "notes": "Unsigned preview release. Fixes aggregator edit/inpaint requests by disabling SSE streaming for non-generate jobs, removes the provider dropdown in favor of model discovery, and simplifies the workspace to Text to image / Image to image. macOS artifacts are ad-hoc signed and not Apple-notarized; Gatekeeper may warn on first launch.",
   "assets": [
     {
       "platform": "darwin",
-      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.0/Image2Tools-0.2.0-mac-arm64.dmg",
-      "fileName": "Image2Tools-0.2.0-mac-arm64.dmg",
-      "sha256": "5c68ed39e001220ae8923a848addb94ae9d0b3b8ff784eee64ea9234b1a58822",
-      "sizeBytes": 114865274,
+      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.1/Image2Tools-0.2.1-mac-arm64.dmg",
+      "fileName": "Image2Tools-0.2.1-mac-arm64.dmg",
+      "sha256": "920b239531ac295339c97dc544b27a8f0ca10bf315c573b6f6e098bf22da11c5",
+      "sizeBytes": 114860800,
       "arch": "arm64"
     },
     {
       "platform": "win32",
-      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.0/Image2Tools-Setup.exe",
+      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.1/Image2Tools-Setup.exe",
       "fileName": "Image2Tools-Setup.exe",
-      "sha256": "b265f42788aaf951ad806ff141496c1cdfa0334349e9f036b715ad85568b3be4",
-      "sizeBytes": 98325141,
+      "sha256": "7a00eaca3a335f75ccf9c8ebf3f270686b5670df33d21b5c4e416ea030dd4270",
+      "sizeBytes": 98326132,
       "arch": "x64"
     }
   ]
