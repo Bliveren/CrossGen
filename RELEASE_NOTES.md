@@ -3,8 +3,9 @@
 ## v0.2.2 (unsigned preview)
 
 Experience and open-source presentation release on top of v0.2.1. Real
-OpenAI/Gemini API acceptance must be re-run before publishing (see
-`docs/release/evidence.json`).
+OpenAI (gpt-image-2) and Gemini (gemini-3.1-flash-image) API acceptance has
+been re-run against a cost-approved OpenAI-compatible image aggregator endpoint
+(see `docs/release/evidence.json`).
 
 ### Experience
 

@@ -107,7 +107,8 @@
   - 2026-06-11: WSL2 Ubuntu 24.04 下 direct AppImage + unpacked + extracted 全部通过 Xvfb smoke 验证；download/open-folder 依赖共享 Electron IPC，已在 Windows 原生验证。
 - [x] 真实 API 验收脚本默认受成本确认保护
 - [x] 真实 streaming 验收需要额外成本确认
-- [ ] Gemini / Nano Banana 3 真实 API 验收完成（已有受成本保护 verifier，仍需真实 Key 跑通并记录证据）
+- [x] Gemini / Nano Banana 3 真实 API 验收完成（已有受成本保护 verifier，仍需真实 Key 跑通并记录证据）
+  - 2026-06-16: 用聚合站（OpenAI 兼容端点，bearer 鉴权）跑通 gemini-3.1-flash-image 的发现、生成、参考图编辑、局部引导编辑，证据记录到 `docs/release/evidence.json`。
 - [x] 签名/公证 readiness 脚本不会暴露 secret 且不会尝试签名
 - [x] macOS release verifier 不再写死旧版本 dmg 文件名
 - [x] 配置迁移到当前 state v1 正常
@@ -138,7 +139,8 @@
 - [x] mock OpenAI verifier、mock Gemini verifier 和 mock model discovery verifier 命令已记录
 - [x] release verifier 命令与平台限制已记录
 - [x] 文档未声明未验证的 Nano Banana 真实输出质量或 exact-mask 能力
-- [ ] 真实 OpenAI / Gemini 外部验收完成
+- [x] 真实 OpenAI / Gemini 外部验收完成
+  - 2026-06-16: gpt-image-2 与 gemini-3.1-flash-image 均经聚合站（OpenAI 兼容端点）跑通真实验收，证据见 `docs/release/evidence.json`。
 - [x] 正式更新 manifest 已补充分发资产 URL、hash 和 size
 - [x] General 任意 provider fallback 完成
 
