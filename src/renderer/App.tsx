@@ -1271,8 +1271,8 @@ export function App() {
     }
     if (!bridge) return;
     const files = Array.from(event.dataTransfer.files ?? []);
-    const paths = files
-      .map((file) => (file as File & { path?: string }).path)
+    const paths = bridge
+      .getDroppedFilePaths(files)
       .filter((value): value is string => typeof value === "string" && /\.(png|jpe?g|webp)$/i.test(value));
     if (paths.length === 0) {
       const history = event.dataTransfer.getData("application/x-image2tools-asset");
