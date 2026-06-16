@@ -1,22 +1,22 @@
 {
-  "version": "0.2.1",
-  "pubDate": "2026-06-15T02:18:02.000Z",
-  "notes": "Unsigned preview release. Fixes aggregator edit/inpaint requests by disabling SSE streaming for non-generate jobs, removes the provider dropdown in favor of model discovery, and simplifies the workspace to Text to image / Image to image. macOS artifacts are ad-hoc signed and not Apple-notarized; Gatekeeper may warn on first launch.",
+  "version": "0.2.2",
+  "pubDate": "2026-06-16T02:35:00.000Z",
+  "notes": "Unsigned preview release. Reworks the result viewer into a dedicated image preview (mouse-wheel zoom that no longer scrolls the panel, double-click full preview, drag-to-pan), collapses provider info to an inline chip, adds history newest/oldest sorting with drag-to-reference, and OS drag-and-drop image upload. Fixes drag-drop path resolution for Electron 39 (webUtils.getPathForFile) and the Windows in-app updater timeout/process blocking. macOS artifacts are ad-hoc signed and not Apple-notarized; Gatekeeper may warn on first launch.",
   "assets": [
     {
       "platform": "darwin",
-      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.1/Image2Tools-0.2.1-mac-arm64.dmg",
-      "fileName": "Image2Tools-0.2.1-mac-arm64.dmg",
-      "sha256": "920b239531ac295339c97dc544b27a8f0ca10bf315c573b6f6e098bf22da11c5",
-      "sizeBytes": 114860800,
+      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.2/Image2Tools-0.2.2-mac-arm64.dmg",
+      "fileName": "Image2Tools-0.2.2-mac-arm64.dmg",
+      "sha256": "d4f8974ef14f86562aa7917888633cbe4dfd21f75b72d43e40469a3c159e23a0",
+      "sizeBytes": 114859171,
       "arch": "arm64"
     },
     {
       "platform": "win32",
-      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.1/Image2Tools-Setup.exe",
+      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.2/Image2Tools-Setup.exe",
       "fileName": "Image2Tools-Setup.exe",
-      "sha256": "7a00eaca3a335f75ccf9c8ebf3f270686b5670df33d21b5c4e416ea030dd4270",
-      "sizeBytes": 98326132,
+      "sha256": "0fc55c5a9bb80cec53519c6c1164af4a579aee4d5d204aebc2b51b92e3af68f1",
+      "sizeBytes": 98328122,
       "arch": "x64"
     }
   ]
