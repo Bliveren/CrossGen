@@ -4,7 +4,12 @@ import path from "node:path";
 
 const defaultEvidenceFile = "docs/release/evidence.json";
 const allowedStatuses = new Set(["pending", "passed", "failed", "blocked"]);
-const requiredGateIds = [
+// Gates that must exist in the ledger. Whether each blocks release readiness is
+// driven by its own `required` flag in the evidence file, not by this list.
+// macos-signed-notarized is intentionally a non-blocking enhancement gate:
+// the app ships as an unsigned/ad-hoc preview, so signing/notarization absence
+// must not block a release.
+const knownGateIds = [
   "real-openai-api",
   "real-gemini-api",
   "macos-signed-notarized",
@@ -365,7 +370,7 @@ function validateLedger(ledger, packageJson, { requireComplete }) {
     if (gatesById.has(gate.id)) {
       throw new Error(`Duplicate release evidence gate id: ${gate.id}`);
     }
-    if (!requiredGateIds.includes(gate.id)) {
+    if (!knownGateIds.includes(gate.id)) {
       throw new Error(`Unknown release evidence gate id: ${gate.id}`);
     }
     gatesById.set(gate.id, gate);
@@ -380,7 +385,7 @@ function validateLedger(ledger, packageJson, { requireComplete }) {
     validateEvidence(gate.evidence, `${label}.evidence`, gate.status);
   }
 
-  const missingGateIds = requiredGateIds.filter((id) => !gatesById.has(id));
+  const missingGateIds = knownGateIds.filter((id) => !gatesById.has(id));
   if (missingGateIds.length > 0) {
     throw new Error(`Missing required release evidence gate(s): ${missingGateIds.join(", ")}`);
   }

@@ -78,7 +78,7 @@
     {
       "id": "macos-signed-notarized",
       "title": "Signed and notarized macOS release package",
-      "required": true,
+      "required": false,
       "status": "pending",
       "acceptanceCriteria": [
         "Developer ID signing readiness passes without exposing secret values.",
@@ -98,7 +98,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "Pending Developer ID identity and Apple notarization credentials. v0.2.0 ships as an unsigned/ad-hoc preview prerelease; this gate stays pending until Developer ID signing and Apple notarization are completed for a future release."
+        "summary": "Non-blocking enhancement gate. Image2Tools ships as an unsigned/ad-hoc-signed preview; macOS Gatekeeper bypass (xattr -dr com.apple.quarantine) is documented in README and RELEASE_NOTES. Developer ID signing and Apple notarization remain a tracked future improvement, but their absence does NOT block a release: this gate is intentionally marked required=false so release readiness does not depend on signing/notarization credentials. Flip to required=true once a Developer ID identity and notarization are in place."
       }
     },
     {

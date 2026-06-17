@@ -63,19 +63,46 @@ function completeLedger() {
 }
 
 describe("release evidence verifier", () => {
-  it("validates the staged release evidence ledger with pending gates", async () => {
+  it("validates the staged release evidence ledger", async () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 3/6 required gate(s) passed.");
-    expect(result.stdout).toContain("real-openai-api");
+    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
   });
 
-  it("requires all release evidence gates when requested", async () => {
+  it("passes --require-complete because the only pending gate is non-blocking", async () => {
     const result = await run(["--require-complete"]);
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Required release evidence gates are not passed");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
+  });
+
+  it("fails --require-complete when a required gate is still pending", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "image2tools-release-evidence-"));
+    try {
+      const ledger = completeLedger();
+      const pendingGate = ledger.gates.find((gate) => gate.id === "real-openai-api");
+      pendingGate.status = "pending";
+      pendingGate.evidence = {
+        verifiedAt: null,
+        commit: null,
+        environment: null,
+        commands: [],
+        references: [{ label: "tracker", url: "https://github.com/Bliveren/image2tools/issues/1" }],
+        artifacts: [],
+        summary: "Pending real API acceptance."
+      };
+      const filePath = path.join(tempRoot, "evidence.json");
+      await writeFile(filePath, JSON.stringify(ledger, null, 2));
+
+      const result = await run(["--file", filePath, "--require-complete"]);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Required release evidence gates are not passed");
+      expect(result.stderr).toContain("real-openai-api");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it("accepts a complete redacted evidence ledger", async () => {

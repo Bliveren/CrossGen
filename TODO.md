@@ -129,6 +129,7 @@
 - [x] 将 Linux release verifier 扩展到可选直接 AppImage 启动，原生验收可通过环境变量强制要求 FUSE
 - [x] 取得绿色 CI
 - [ ] 完成签名、公证并补充正式分发资产 URL / hash / size 证据
+  - 2026-06-16: 该项降级为非阻塞增强（evidence gate `macos-signed-notarized` 已设为 required=false）。应用以未签名/ad-hoc 预览包发布，README/RELEASE_NOTES 提供 Gatekeeper 绕过说明；取得 Developer ID 与公证后再将该 gate 改回 required=true。
 - [x] 非 macOS 平台安装验证；Windows 已完成，原生 Linux 桌面 shell 行为仍待验证
   - 2026-06-10: Windows native release gate 已通过。
   - 2026-06-11: Linux native release gate 已通过（WSL2 direct AppImage 验证）。
