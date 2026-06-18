@@ -55,7 +55,22 @@ Download the latest installer from the [Releases page](https://github.com/Bliver
 | macOS (Apple Silicon) | `Image2Tools-<version>-mac-arm64.dmg` | ad-hoc signed, not Apple-notarized |
 | Windows (x64) | `Image2Tools-Setup.exe` | NSIS installer |
 
-These are unsigned preview builds, so the OS may warn on first launch. This is expected and does not mean the app is unsafe — the source is public and auditable, and you can verify each artifact's SHA256 below.
+> ### ⚠️ Why your OS shows an "unverified developer" warning
+>
+> Image2Tools preview builds are **not yet signed with an Apple Developer ID or a
+> Windows code-signing certificate** (commercial paid certificates we haven't
+> purchased for this preview). Because of that, on first launch macOS Gatekeeper
+> says something like *"Apple could not verify Image2Tools is free of malware"*
+> and Windows SmartScreen shows a blue *"Windows protected your PC"* prompt.
+>
+> **This is expected for an unsigned open-source preview — it is not a virus
+> warning and does not mean the download is corrupted.** The entire source is
+> public and auditable, and every release artifact's SHA256 is published so you
+> can verify the file you downloaded is exactly the one we built (see below).
+> Signing & notarization are tracked in [issue #116](https://github.com/Bliveren/image2tools/issues/116);
+> once done, these warnings will disappear.
+
+Follow the one-time steps below to open the app.
 
 **macOS** — if Gatekeeper blocks the app, either right-click the app and choose **Open** twice, or clear the quarantine attribute:
 
@@ -321,7 +336,20 @@ Image2Tools is released under the [MIT License](./LICENSE).
 | macOS（Apple 芯片） | `Image2Tools-<版本>-mac-arm64.dmg` | 临时签名，未经 Apple 公证 |
 | Windows（x64） | `Image2Tools-Setup.exe` | NSIS 安装程序 |
 
-这些是未签名的预览版，系统可能在首次打开时弹出安全提示。这属于正常现象，并不代表应用不安全——源码完全公开可审计，你也可以用下方 SHA256 校验每个安装包。
+> ### ⚠️ 为什么系统会提示"无法验证开发者"
+>
+> Image2Tools 预览版**尚未取得 Apple Developer ID 签名和 Windows 代码签名证书**
+> （这些是需要付费购买的商业证书，预览阶段暂未采购）。因此首次打开时，macOS
+> Gatekeeper 会提示类似*"无法验证 Image2Tools 是否包含恶意软件"*，Windows
+> SmartScreen 会弹出蓝色的*"Windows 已保护你的电脑"*窗口。
+>
+> **这是未签名开源预览版的正常现象，既不是病毒警告，也不代表安装包损坏。**
+> 本项目源码完全公开可审计，每个发布安装包都附带 SHA256，你可以校验下载到的
+> 文件与我们构建的完全一致（见下方）。签名与公证进度见
+> [issue #116](https://github.com/Bliveren/image2tools/issues/116)，完成后这些
+> 提示将不再出现。
+
+按下面的一次性步骤即可正常打开应用。
 
 **macOS** — 若 Gatekeeper 拦截，可右键应用选择 **打开** 两次，或清除隔离属性：
 
