@@ -192,7 +192,7 @@
       "evidence": {
         "verifiedAt": "2026-06-16T02:52:06.000Z",
         "commit": "0b4d78f5d90aff285b7cb4801c66e01f912173a8",
-        "environment": "macOS 26.5.1 arm64 local release build plus GitHub Actions Windows release workflow 27590031396; package version 0.2.2; unsigned/ad-hoc preview artifacts published to the v0.2.2 GitHub prerelease: Image2Tools-0.2.2-mac-arm64.dmg (darwin/arm64) and Image2Tools-Setup.exe (win32/x64).",
+        "environment": "macOS 26.5.1 arm64 local release build plus GitHub Actions Windows release workflow 27734145491; package version 0.2.2; unsigned/ad-hoc preview artifacts published to the v0.2.2 GitHub prerelease: Image2Tools-0.2.2-mac-arm64.dmg (darwin/arm64) and Image2Tools-Setup.exe (win32/x64).",
         "commands": [
           "node scripts/update-manifest-asset.mjs --file release/Image2Tools-0.2.2-mac-arm64.dmg --platform darwin --arch arm64 --url https://github.com/Bliveren/image2tools/releases/download/v0.2.2/Image2Tools-0.2.2-mac-arm64.dmg",
           "gh release download v0.2.2 --pattern Image2Tools-Setup.exe --dir /tmp/v022dl --clobber",
@@ -212,7 +212,7 @@
             "description": "Update manifest with darwin/arm64 dmg and win32/x64 installer asset URLs, sha256, and sizeBytes for the unsigned v0.2.2 preview."
           }
         ],
-        "summary": "Update manifest assets populated for the unsigned v0.2.2 preview. The darwin dmg entry was generated from the locally built and mac-release-verified artifact (sha256 d4f8974..., 114859171 bytes). The win32 installer entry was generated from the exact v0.2.2 GitHub release asset uploaded by workflow run 27590031396 (sha256 0fc55c5..., 98328122 bytes). Both release asset URLs return HTTP 200. The app updater verifies downloaded size and SHA-256 before opening. Note: these are unsigned/ad-hoc preview artifacts, not Developer ID signed/notarized builds."
+        "summary": "Update manifest assets populated for the unsigned v0.2.2 preview. The darwin dmg entry was generated from the locally built and mac-release-verified artifact (sha256 d4f8974..., 114859171 bytes). The win32 installer entry was generated from the exact v0.2.2 GitHub release asset re-published by the tag-triggered Windows release workflow run 27734145491 (sha256 59b0eed..., 98328196 bytes). Both release asset URLs return HTTP 200. The app updater verifies downloaded size and SHA-256 before opening. Note: these are unsigned/ad-hoc preview artifacts, not Developer ID signed/notarized builds."
       }
     }
   ]
