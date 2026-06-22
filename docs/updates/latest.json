@@ -15,8 +15,8 @@
       "platform": "win32",
       "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.2/Image2Tools-Setup.exe",
       "fileName": "Image2Tools-Setup.exe",
-      "sha256": "59b0eeda4924fc17fb71d792eda2b556a28039cb17fb512febb04e2db9cd315b",
-      "sizeBytes": 98328196,
+      "sha256": "e25e92b6c7dbd4da2621fffd1c8db9664232b054cbd79b6ca0b06d381043db61",
+      "sizeBytes": 98328195,
       "arch": "x64"
     }
   ]
