@@ -56,7 +56,8 @@ describe("renderer multi-model smoke", () => {
   });
 
   it("disables all launch buttons before an API key is saved", async () => {
-    await renderApp(snapshot({ config: providerConfig({ apiKeySaved: false, discoveredModels: [] }) }));
+    const defaultConfig = providerConfig({ apiKeySaved: false, discoveredModels: [] });
+    await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
 
     expect(launchButton("GPT Image 2").disabled).toBe(true);
     expect(launchButton("Nano Banana 3").disabled).toBe(true);
@@ -81,16 +82,18 @@ describe("renderer multi-model smoke", () => {
   });
 
   it("enables only GPT Image 2 for OpenAI discovery without enabling General", async () => {
+    const defaultConfig = providerConfig({
+      apiKeySaved: true,
+      discoveredModels: [
+        { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
+        { id: "gpt-4.1", providerKind: "openai" }
+      ],
+      lastModelDiscoveryAt: now
+    });
     await renderApp(
       snapshot({
-        config: providerConfig({
-          apiKeySaved: true,
-          discoveredModels: [
-            { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
-            { id: "gpt-4.1", providerKind: "openai" }
-          ],
-          lastModelDiscoveryAt: now
-        })
+        providers: [defaultConfig],
+        activeProviderId: defaultConfig.id
       })
     );
 
@@ -126,16 +129,18 @@ describe("renderer multi-model smoke", () => {
   });
 
   it("enables OpenAI General prompt-only fallback for non-focused image models", async () => {
+    const defaultConfig = providerConfig({
+      apiKeySaved: true,
+      discoveredModels: [
+        { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
+        { id: "dall-e-3", providerKind: "openai" }
+      ],
+      lastModelDiscoveryAt: now
+    });
     const bridge = await renderApp(
       snapshot({
-        config: providerConfig({
-          apiKeySaved: true,
-          discoveredModels: [
-            { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
-            { id: "dall-e-3", providerKind: "openai" }
-          ],
-          lastModelDiscoveryAt: now
-        })
+        providers: [defaultConfig],
+        activeProviderId: defaultConfig.id
       })
     );
 
@@ -161,20 +166,22 @@ describe("renderer multi-model smoke", () => {
   });
 
   it("enables focused launches from discovered API models instead of the selected provider", async () => {
+    const defaultConfig = providerConfig({
+      kind: "openai",
+      name: "OpenAI",
+      baseURL: "https://gateway.example.com/v1",
+      apiKeySaved: true,
+      discoveredModels: [
+        { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
+        { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
+        { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini", displayName: "Gemini 3 Pro Image" }
+      ],
+      lastModelDiscoveryAt: now
+    });
     const bridge = await renderApp(
       snapshot({
-        config: providerConfig({
-          kind: "openai",
-          name: "OpenAI",
-          baseURL: "https://gateway.example.com/v1",
-          apiKeySaved: true,
-          discoveredModels: [
-            { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
-            { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
-            { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini", displayName: "Gemini 3 Pro Image" }
-          ],
-          lastModelDiscoveryAt: now
-        })
+        providers: [defaultConfig],
+        activeProviderId: defaultConfig.id
       })
     );
 
@@ -222,7 +229,7 @@ describe("renderer multi-model smoke", () => {
       discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
       lastModelDiscoveryAt: now
     });
-    const bridge = await renderApp(snapshot({ config: geminiConfig, history: [geminiJob(0)] }));
+    const bridge = await renderApp(snapshot({ providers: [geminiConfig], activeProviderId: geminiConfig.id, history: [geminiJob(0)] }));
 
     await click(buttonByText("Discover models"));
     await click(launchButton("Nano Banana 3"));
@@ -239,19 +246,21 @@ describe("renderer multi-model smoke", () => {
   });
 
   it("shows Gemini upload rights reminder beside reference tools", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
     await renderApp(
       snapshot({
-        config: providerConfig({
-          kind: "gemini",
-          name: "Gemini",
-          baseURL: "https://generativelanguage.googleapis.com/v1beta",
-          apiKeySaved: true,
-          defaultModel: NANO_BANANA_3_MODEL_ID,
-          activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
-          activeModelId: NANO_BANANA_3_MODEL_ID,
-          discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
-          lastModelDiscoveryAt: now
-        })
+        providers: [defaultConfig],
+        activeProviderId: defaultConfig.id
       })
     );
 
@@ -262,22 +271,24 @@ describe("renderer multi-model smoke", () => {
   });
 
   it("enables Nano Banana 3 and Gemini General candidate without showing more than six collapsed history items", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [
+        { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
+        { id: "gemini-2.0-flash-preview-image-generation", providerKind: "gemini", displayName: "Gemini image fallback" }
+      ],
+      lastModelDiscoveryAt: now
+    });
     await renderApp(
       snapshot({
-        config: providerConfig({
-          kind: "gemini",
-          name: "Gemini",
-          baseURL: "https://generativelanguage.googleapis.com/v1beta",
-          apiKeySaved: true,
-          defaultModel: NANO_BANANA_3_MODEL_ID,
-          activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
-          activeModelId: NANO_BANANA_3_MODEL_ID,
-          discoveredModels: [
-            { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
-            { id: "gemini-2.0-flash-preview-image-generation", providerKind: "gemini", displayName: "Gemini image fallback" }
-          ],
-          lastModelDiscoveryAt: now
-        }),
+        providers: [defaultConfig],
+        activeProviderId: defaultConfig.id,
         history: Array.from({ length: 8 }, (_, index) => geminiJob(index))
       })
     );
@@ -296,16 +307,18 @@ describe("renderer multi-model smoke", () => {
   });
 
   it("keeps prompt text while switching models and resets incompatible General inputs", async () => {
+    const defaultConfig = providerConfig({
+      apiKeySaved: true,
+      discoveredModels: [
+        { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
+        { id: "dall-e-3", providerKind: "openai" }
+      ],
+      lastModelDiscoveryAt: now
+    });
     const bridge = await renderApp(
       snapshot({
-        config: providerConfig({
-          apiKeySaved: true,
-          discoveredModels: [
-            { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
-            { id: "dall-e-3", providerKind: "openai" }
-          ],
-          lastModelDiscoveryAt: now
-        })
+        providers: [defaultConfig],
+        activeProviderId: defaultConfig.id
       })
     );
     const promptInput = document.querySelector<HTMLTextAreaElement>("textarea")!;
@@ -361,26 +374,28 @@ describe("renderer multi-model smoke", () => {
   });
 
   it("keeps compact controls and history from overflowing their layout contracts", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [
+        { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
+        {
+          id: "gemini-2.0-flash-preview-image-generation-with-a-very-long-display-name",
+          providerKind: "gemini",
+          displayName: "Gemini image fallback with a very long display name"
+        }
+      ],
+      lastModelDiscoveryAt: now
+    });
     await renderApp(
       snapshot({
-        config: providerConfig({
-          kind: "gemini",
-          name: "Gemini",
-          baseURL: "https://generativelanguage.googleapis.com/v1beta",
-          apiKeySaved: true,
-          defaultModel: NANO_BANANA_3_MODEL_ID,
-          activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
-          activeModelId: NANO_BANANA_3_MODEL_ID,
-          discoveredModels: [
-            { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
-            {
-              id: "gemini-2.0-flash-preview-image-generation-with-a-very-long-display-name",
-              providerKind: "gemini",
-              displayName: "Gemini image fallback with a very long display name"
-            }
-          ],
-          lastModelDiscoveryAt: now
-        }),
+        providers: [defaultConfig],
+        activeProviderId: defaultConfig.id,
         history: Array.from({ length: 10 }, (_, index) => geminiJob(index))
       })
     );
@@ -489,27 +504,36 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     message: "not configured"
   };
 
+  const activeConfig = () => currentSnapshot.providers.find(p => p.id === currentSnapshot.activeProviderId) ?? currentSnapshot.providers[0];
+
   return {
     getSnapshot: vi.fn(async () => currentSnapshot),
     saveConfig: vi.fn(async (input) => {
+      const config = activeConfig();
       const nextConfig: ProviderConfig = {
-        ...currentSnapshot.config,
-        kind: input.kind ?? currentSnapshot.config.kind,
+        ...config,
+        kind: input.kind ?? config.kind,
         baseURL: input.baseURL,
         defaultModel: input.defaultModel,
         defaultSize: input.defaultSize,
         defaultQuality: input.defaultQuality,
         timeoutMs: input.timeoutMs,
-        activeLaunchId: input.activeLaunchId ?? currentSnapshot.config.activeLaunchId,
-        activeModelId: input.activeModelId ?? currentSnapshot.config.activeModelId,
-        apiKeySaved: currentSnapshot.config.apiKeySaved || Boolean(input.apiKey?.trim()),
+        activeLaunchId: input.activeLaunchId ?? config.activeLaunchId,
+        activeModelId: input.activeModelId ?? config.activeModelId,
+        apiKeySaved: config.apiKeySaved || Boolean(input.apiKey?.trim()),
         updatedAt: now
       };
-      currentSnapshot = { ...currentSnapshot, config: nextConfig };
+      currentSnapshot = {
+        ...currentSnapshot,
+        providers: currentSnapshot.providers.map(p => p.id === currentSnapshot.activeProviderId ? nextConfig : p)
+      };
       return nextConfig;
     }),
-    discoverModels: vi.fn(async () => currentSnapshot.config),
-    clearApiKey: vi.fn(async () => ({ ...initialSnapshot.config, apiKeySaved: false, discoveredModels: [] })),
+    discoverModels: vi.fn(async () => activeConfig()),
+    clearApiKey: vi.fn(async () => {
+      const config = activeConfig();
+      return { ...config, apiKeySaved: false, discoveredModels: [] };
+    }),
     testConnection: vi.fn(async () => ({ ok: true, message: "ok" })),
     saveDraft: vi.fn(async (input) => ({ ...input, activeLaunchId: input.activeLaunchId ?? input.params.launchId, activeModelId: input.activeModelId ?? input.params.model, updatedAt: now }) as WorkspaceDraft),
     clearDraft: vi.fn(async () => undefined),
@@ -518,7 +542,7 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     importImages: vi.fn(async () => []),
     selectMask: vi.fn(async () => null),
     runJob: vi.fn(async (request) => {
-      const job = jobFromRequest(request, currentSnapshot.config);
+      const job = jobFromRequest(request, activeConfig());
       currentSnapshot = { ...currentSnapshot, history: [job, ...currentSnapshot.history] };
       return job;
     }),
@@ -528,7 +552,10 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     downloadAndInstallUpdate: vi.fn(async () => ({ version: "0.0.0", filePath: "/tmp/update", message: "opened" })),
     deleteJob: vi.fn(async () => initialSnapshot.history),
     clearHistory: vi.fn(async () => []),
-    onJobEvent: vi.fn(() => () => undefined)
+    onJobEvent: vi.fn(() => () => undefined),
+    addProvider: vi.fn(async () => currentSnapshot),
+    switchProvider: vi.fn(async () => currentSnapshot),
+    deleteProvider: vi.fn(async () => currentSnapshot)
   };
 }
 
@@ -554,9 +581,11 @@ function jobFromRequest(request: RunJobRequest, config: ProviderConfig): Generat
 }
 
 function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
+  const defaultConfig = providerConfig();
   return {
     appVersion: "0.1.0",
-    config: providerConfig(),
+    providers: [defaultConfig],
+    activeProviderId: defaultConfig.id,
     history: [],
     ...patch
   };

@@ -171,7 +171,8 @@ const fallbackConfig: ProviderConfig = {
 
 const fallbackSnapshot: AppSnapshot = {
   appVersion: "0.0.0",
-  config: fallbackConfig,
+  providers: [fallbackConfig],
+  activeProviderId: fallbackConfig.id,
   history: []
 };
 
@@ -662,6 +663,7 @@ export function App() {
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const zoomSurfaceRef = useRef<HTMLDivElement | null>(null);
 
+  const activeConfig = snapshot.providers.find(p => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
   const sourceAsset = inputAssets[0];
   const sourcePreview = assetSource(sourceAsset);
   const maskPreview = maskDataUrl ?? assetSource(maskAsset);
@@ -693,13 +695,13 @@ export function App() {
   const usesExactMask = activeInpaintCapability === "exact-mask";
   const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
   const previewZoomPercent = Math.round(previewZoom * 100);
-  const apiKeyPlaceholder = snapshot.config.apiKeyPreview ?? (snapshot.config.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
-  const launchButtons = useMemo(() => getLaunchButtonStates(snapshot.config, copy), [copy, snapshot.config]);
-  const activeLaunchDisplay = launchButtons.find((button) => button.launchId === snapshot.config.activeLaunchId)?.displayName ?? modelLabelFromId(snapshot.config.activeModelId);
+  const apiKeyPlaceholder = activeConfig.apiKeyPreview ?? (activeConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
+  const launchButtons = useMemo(() => getLaunchButtonStates(activeConfig, copy), [copy, activeConfig]);
+  const activeLaunchDisplay = launchButtons.find((button) => button.launchId === activeConfig.activeLaunchId)?.displayName ?? modelLabelFromId(activeConfig.activeModelId);
   const connectionLabel = connectionStatusLabel(connectionCheck, copy);
   const connectionTitle = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : connectionLabel;
   const connectionErrorText = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : null;
-  const discoveryText = discoverySummary(snapshot.config, copy);
+  const discoveryText = discoverySummary(activeConfig, copy);
   const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
   const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
 
@@ -737,7 +739,7 @@ export function App() {
     return null;
   }, [copy, generalParams, inputAssets.length, maskCheck, openAIParams, requestMode, usesExactMask]);
 
-  const launchRuntimeError = runtimeSelectionError(params, snapshot.config, copy);
+  const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, prompt), copy) ?? modeError;
   const canRun = !validationError && !isRunning;
 
@@ -834,7 +836,7 @@ export function App() {
 
   useEffect(() => {
     if (!bridge) return;
-    if (!snapshot.config.apiKeySaved) {
+    if (!activeConfig.apiKeySaved) {
       hasAutoTestedConnectionRef.current = false;
       setConnectionCheck({ status: "idle" });
       return;
@@ -842,7 +844,7 @@ export function App() {
     if (hasAutoTestedConnectionRef.current) return;
     hasAutoTestedConnectionRef.current = true;
     void runConnectionTest({ silent: true });
-  }, [bridge, snapshot.config.apiKeySaved, snapshot.config.updatedAt]);
+  }, [bridge, activeConfig.apiKeySaved, activeConfig.updatedAt]);
 
   useEffect(() => {
     if (!bridge || !hasRestoredDraft || !hasUserChangedDraft) return;
@@ -917,11 +919,12 @@ export function App() {
     try {
       const next = await bridge.getSnapshot();
       setSnapshot(next);
-      setProviderKind(next.config.kind);
-      setBaseURL(next.config.baseURL);
-      syncParamsToConfig(next.config);
+      const nextActiveConfig = next.providers.find(p => p.id === next.activeProviderId) ?? next.providers[0];
+      setProviderKind(nextActiveConfig.kind);
+      setBaseURL(nextActiveConfig.baseURL);
+      syncParamsToConfig(nextActiveConfig);
       if (!hasRestoredDraft) {
-        restoreDraft(next.draft, next.config);
+        restoreDraft(next.draft, nextActiveConfig);
       }
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
@@ -930,7 +933,7 @@ export function App() {
     }
   }
 
-  function restoreDraft(draft?: WorkspaceDraft, config = snapshot.config) {
+  function restoreDraft(draft?: WorkspaceDraft, config = activeConfig) {
     setHasRestoredDraft(true);
     if (!draft) return;
     const restoredParams = normalizeParamsForOutputCount(draft.params);
@@ -965,7 +968,7 @@ export function App() {
     markDraftChanged();
     setParams((current) =>
       normalizeOpenAIParamsForOutputCount({
-        ...(isOpenAIImageParams(current) ? current : createOpenAIParams("", current, snapshot.config)),
+        ...(isOpenAIImageParams(current) ? current : createOpenAIParams("", current, activeConfig)),
         ...patch,
         providerKind: "openai",
         launchId: GPT_IMAGE_2_LAUNCH_ID
@@ -976,7 +979,7 @@ export function App() {
   function updateGeminiParams(patch: GeminiParamPatch) {
     markDraftChanged();
     setParams((current) => ({
-      ...(isGeminiImageParams(current) ? current : createGeminiParams("", current, snapshot.config)),
+      ...(isGeminiImageParams(current) ? current : createGeminiParams("", current, activeConfig)),
       ...patch,
       providerKind: "gemini",
       launchId: NANO_BANANA_3_LAUNCH_ID
@@ -990,7 +993,10 @@ export function App() {
   }
 
   function applyConfig(config: ProviderConfig) {
-    setSnapshot((current) => ({ ...current, config }));
+    setSnapshot((current) => {
+      const nextProviders = current.providers.map(p => p.id === current.activeProviderId ? config : p);
+      return { ...current, providers: nextProviders };
+    });
     setProviderKind(config.kind);
     setBaseURL(config.baseURL);
   }
@@ -1015,16 +1021,16 @@ export function App() {
     }
     setIsSavingConfig(true);
     try {
-      const providerChanged = providerKind !== snapshot.config.kind;
+      const providerChanged = providerKind !== activeConfig.kind;
       const config = await bridge.saveConfig({
         apiKey: apiKey.trim() ? apiKey : undefined,
         baseURL,
-        defaultModel: defaultModelForConfigSave(providerKind, params, snapshot.config),
-        defaultSize: defaultSizeForConfigSave(params, snapshot.config),
-        defaultQuality: defaultQualityForConfigSave(params, snapshot.config),
+        defaultModel: defaultModelForConfigSave(providerKind, params, activeConfig),
+        defaultSize: defaultSizeForConfigSave(params, activeConfig),
+        defaultQuality: defaultQualityForConfigSave(params, activeConfig),
         timeoutMs: params.timeoutMs,
-        activeLaunchId: providerChanged ? undefined : snapshot.config.activeLaunchId,
-        activeModelId: providerChanged ? undefined : snapshot.config.activeModelId
+        activeLaunchId: providerChanged ? undefined : activeConfig.activeLaunchId,
+        activeModelId: providerChanged ? undefined : activeConfig.activeModelId
       });
       applyConfig(config);
       syncParamsToConfig(config);
@@ -1066,7 +1072,7 @@ export function App() {
   async function launchModel(button: LaunchButtonState) {
     if (!bridge || !button.available) return;
     const launchProvider = button.providerKind;
-    const launchConfig = snapshot.config;
+    const launchConfig = activeConfig;
     const nextParams = createLaunchParams(button.launchId, button.modelId, params, launchProvider, launchConfig);
     setParams(nextParams);
     if (isGeneralImageParams(nextParams)) {
@@ -1082,10 +1088,10 @@ export function App() {
     setIsSavingConfig(true);
     try {
       const config = await bridge.saveConfig({
-        baseURL: snapshot.config.baseURL,
-        defaultModel: defaultModelForConfigSave(snapshot.config.kind, nextParams, snapshot.config),
-        defaultSize: defaultSizeForConfigSave(nextParams, snapshot.config),
-        defaultQuality: defaultQualityForConfigSave(nextParams, snapshot.config),
+        baseURL: activeConfig.baseURL,
+        defaultModel: defaultModelForConfigSave(activeConfig.kind, nextParams, activeConfig),
+        defaultSize: defaultSizeForConfigSave(nextParams, activeConfig),
+        defaultQuality: defaultQualityForConfigSave(nextParams, activeConfig),
         timeoutMs: nextParams.timeoutMs,
         activeLaunchId: button.launchId,
         activeModelId: button.modelId
@@ -1101,10 +1107,10 @@ export function App() {
 
   async function selectLaunchModel(launchId: FocusedLaunchId, selectedModel: LaunchModelOption) {
     if (!bridge || !selectedModel.id) return;
-    const modelOptions = getLaunchModelOptions(snapshot.config, launchId);
+    const modelOptions = getLaunchModelOptions(activeConfig, launchId);
     const isAvailable = modelOptions.some((model) => model.id === selectedModel.id && model.providerKind === selectedModel.providerKind);
     if (!isAvailable) return;
-    const nextParams = createLaunchParams(launchId, selectedModel.id, params, selectedModel.providerKind, snapshot.config);
+    const nextParams = createLaunchParams(launchId, selectedModel.id, params, selectedModel.providerKind, activeConfig);
     setParams(nextParams);
     if (isGeneralImageParams(nextParams)) {
       if (!generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
@@ -1119,10 +1125,10 @@ export function App() {
     setIsSavingConfig(true);
     try {
       const config = await bridge.saveConfig({
-        baseURL: snapshot.config.baseURL,
-        defaultModel: defaultModelForConfigSave(snapshot.config.kind, nextParams, snapshot.config),
-        defaultSize: defaultSizeForConfigSave(nextParams, snapshot.config),
-        defaultQuality: defaultQualityForConfigSave(nextParams, snapshot.config),
+        baseURL: activeConfig.baseURL,
+        defaultModel: defaultModelForConfigSave(activeConfig.kind, nextParams, activeConfig),
+        defaultSize: defaultSizeForConfigSave(nextParams, activeConfig),
+        defaultQuality: defaultQualityForConfigSave(nextParams, activeConfig),
         timeoutMs: nextParams.timeoutMs,
         activeLaunchId: launchId,
         activeModelId: selectedModel.id
@@ -1137,7 +1143,7 @@ export function App() {
     }
   }
 
-  async function runConnectionTest({ silent = false, apiKeySaved = snapshot.config.apiKeySaved }: { silent?: boolean; apiKeySaved?: boolean } = {}) {
+  async function runConnectionTest({ silent = false, apiKeySaved = activeConfig.apiKeySaved }: { silent?: boolean; apiKeySaved?: boolean } = {}) {
     if (!bridge) {
       if (!silent) setNotice({ kind: "error", text: copy.notices.bridgeTestConnection });
       return;
@@ -1417,8 +1423,13 @@ export function App() {
     updateCustomSizeFromParams(reusedParams, setCustomSize);
     setProviderKind(job.providerKind);
     setBaseURL(defaultBaseURLForProvider(job.providerKind, baseURL));
-    if (job.providerKind === snapshot.config.kind) {
-      setSnapshot((current) => ({ ...current, config: patchConfigActiveLaunch(current.config, job) }));
+    if (job.providerKind === activeConfig.kind) {
+      setSnapshot((current) => {
+        const nextProviders = current.providers.map(p =>
+          p.id === current.activeProviderId ? patchConfigActiveLaunch(p, job) : p
+        );
+        return { ...current, providers: nextProviders };
+      });
     }
     setInputAssets(job.inputAssets);
     setMaskAsset(isGeneralImageParams(reusedParams) ? null : job.maskAsset ?? null);
@@ -1624,7 +1635,7 @@ export function App() {
       <span>{copy.model}</span>
       <strong>{generalParams?.model || copy.generalFallback}</strong>
       <span>{copy.provider}</span>
-      <strong>{providerLabelFromKind(generalParams?.providerKind ?? snapshot.config.kind)}</strong>
+      <strong>{providerLabelFromKind(generalParams?.providerKind ?? activeConfig.kind)}</strong>
     </>
   );
   const advancedControls = openAIParams ? (
@@ -1893,15 +1904,15 @@ export function App() {
               {isSavingConfig ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
               {copy.save}
             </button>
-            <button type="button" className="ghost" onClick={clearApiKey} disabled={isClearingApiKey || !snapshot.config.apiKeySaved}>
+            <button type="button" className="ghost" onClick={clearApiKey} disabled={isClearingApiKey || !activeConfig.apiKeySaved}>
               {isClearingApiKey ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />}
               {copy.clearKey}
             </button>
           </div>
           <div className="config-status">
-            <span className={snapshot.config.apiKeySaved ? "dot ok" : "dot"} />
-            {snapshot.config.apiKeySaved ? copy.keySaved : copy.noKeySaved}
-            {snapshot.config.apiKeySaved && (
+            <span className={activeConfig.apiKeySaved ? "dot ok" : "dot"} />
+            {activeConfig.apiKeySaved ? copy.keySaved : copy.noKeySaved}
+            {activeConfig.apiKeySaved && (
               <span className="provider-chip-inline" title={copy.providerAutoDetected}>
                 {providerLabelFromKind(providerKind)}
               </span>
@@ -1909,11 +1920,11 @@ export function App() {
           </div>
           {connectionErrorText && <p className="inline-check error config-error-detail">{connectionErrorText}</p>}
           <div className="discovery-row">
-            <button type="button" className="secondary discover-button" onClick={discoverModels} disabled={!bridge || isDiscoveringModels || !snapshot.config.apiKeySaved}>
+            <button type="button" className="secondary discover-button" onClick={discoverModels} disabled={!bridge || isDiscoveringModels || !activeConfig.apiKeySaved}>
               {isDiscoveringModels ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
               {isDiscoveringModels ? copy.discoveringModels : copy.discoverModels}
             </button>
-            <span className="model-discovery-summary" data-kind={snapshot.config.lastModelDiscoveryError ? "error" : "info"} title={snapshot.config.lastModelDiscoveryError ?? discoveryText}>
+            <span className="model-discovery-summary" data-kind={activeConfig.lastModelDiscoveryError ? "error" : "info"} title={activeConfig.lastModelDiscoveryError ?? discoveryText}>
               {discoveryText}
             </span>
           </div>
@@ -1929,12 +1940,12 @@ export function App() {
           </div>
           <div className="launch-strip" aria-label={copy.launchModels}>
             {launchButtons.map((button) => {
-              const modelOptions = getLaunchModelOptions(snapshot.config, button.launchId);
+              const modelOptions = getLaunchModelOptions(activeConfig, button.launchId);
               const hasModelMenu = button.available && modelOptions.length > 1;
               const activeModelOption =
-                modelOptions.find((model) => model.id === snapshot.config.activeModelId && model.providerKind === button.providerKind) ??
+                modelOptions.find((model) => model.id === activeConfig.activeModelId && model.providerKind === button.providerKind) ??
                 modelOptions.find((model) => model.id === button.modelId && model.providerKind === button.providerKind);
-              const isActive = snapshot.config.activeLaunchId === button.launchId;
+              const isActive = activeConfig.activeLaunchId === button.launchId;
               return (
                 <div key={button.launchId} className="launch-item">
                   <button
@@ -1958,7 +1969,7 @@ export function App() {
                   {hasModelMenu && openLaunchMenuId === button.launchId && (
                     <div className="launch-model-menu" role="listbox" aria-label={`${button.displayName} ${copy.model}`}>
                       {modelOptions.map((model) => {
-                        const isSelected = snapshot.config.activeLaunchId === button.launchId && snapshot.config.activeModelId === model.id && params.providerKind === model.providerKind;
+                        const isSelected = activeConfig.activeLaunchId === button.launchId && activeConfig.activeModelId === model.id && params.providerKind === model.providerKind;
                         return (
                           <button
                             key={`${model.providerKind}:${model.id}`}
