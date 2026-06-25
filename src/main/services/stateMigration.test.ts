@@ -37,7 +37,7 @@ describe("state migration", () => {
     });
 
     expect(migrated.version).toBe(STATE_VERSION);
-    expect(migrated.config).toMatchObject({
+    expect(migrated.providers[0]).toMatchObject({
       id: "default",
       kind: "openai",
       name: "OpenAI",
@@ -52,6 +52,7 @@ describe("state migration", () => {
       encryptedApiKey: "plain:c2stdGVzdA==",
       encryption: "localFallback"
     });
+    expect(migrated.activeProviderId).toBe("default");
   });
 
   it("migrates v1 history jobs with provider and model metadata", () => {
@@ -94,6 +95,7 @@ describe("state migration", () => {
         launchId: "gpt-image-2"
       }
     });
+    expect(migrated.activeProviderId).toBe("provider_openai");
   });
 
   it("migrates v1 drafts with active launch and model defaults", () => {

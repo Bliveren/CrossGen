@@ -28,7 +28,7 @@ import {
   getModelDisplayName
 } from "../../shared/modelCatalog.js";
 
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 export const DEFAULT_OPENAI_PROVIDER_ID = "default";
 
 export interface StoredProviderConfig {
@@ -53,7 +53,8 @@ export interface StoredProviderConfig {
 
 export interface AppStateFile {
   version: number;
-  config: StoredProviderConfig;
+  providers: StoredProviderConfig[];
+  activeProviderId: string;
   history: GenerationJob[];
   draft?: WorkspaceDraft;
 }
@@ -76,9 +77,11 @@ export const defaultStoredConfig: StoredProviderConfig = {
 };
 
 export function getDefaultState(): AppStateFile {
+  const defaultProvider = { ...defaultStoredConfig, discoveredModels: [...defaultStoredConfig.discoveredModels] };
   return {
     version: STATE_VERSION,
-    config: { ...defaultStoredConfig, discoveredModels: [...defaultStoredConfig.discoveredModels] },
+    providers: [defaultProvider],
+    activeProviderId: defaultProvider.id,
     history: []
   };
 }
@@ -86,11 +89,31 @@ export function getDefaultState(): AppStateFile {
 export function normalizeState(parsed: unknown): AppStateFile {
   if (!isRecord(parsed)) return getDefaultState();
 
-  const config = normalizeStoredConfig(parsed.config);
+  // Handle migration from v1/v2 (single config) to v3 (multiple providers)
+  if ((parsed.version === 1 || parsed.version === 2) && isRecord(parsed.config)) {
+    const migratedProvider = normalizeStoredConfig(parsed.config);
+    return {
+      version: STATE_VERSION,
+      providers: [migratedProvider],
+      activeProviderId: migratedProvider.id,
+      history: Array.isArray(parsed.history) ? parsed.history.map((job) => normalizeGenerationJob(job, migratedProvider.id)) : [],
+      draft: normalizeWorkspaceDraft(parsed.draft)
+    };
+  }
+
+  // Handle v3 format
+  const providers = Array.isArray(parsed.providers) && parsed.providers.length > 0
+    ? parsed.providers.map((p) => normalizeStoredConfig(p))
+    : [{ ...defaultStoredConfig, discoveredModels: [...defaultStoredConfig.discoveredModels] }];
+
+  const activeProviderId = nonEmptyString(parsed.activeProviderId, providers[0].id);
+  const activeProvider = providers.find(p => p.id === activeProviderId) ?? providers[0];
+
   return {
     version: STATE_VERSION,
-    config,
-    history: Array.isArray(parsed.history) ? parsed.history.map((job) => normalizeGenerationJob(job, config.id)) : [],
+    providers,
+    activeProviderId: activeProvider.id,
+    history: Array.isArray(parsed.history) ? parsed.history.map((job) => normalizeGenerationJob(job, activeProvider.id)) : [],
     draft: normalizeWorkspaceDraft(parsed.draft)
   };
 }
