@@ -1,5 +1,27 @@
 # Image2Tools Release Notes
 
+## v0.2.3 (unsigned preview)
+
+Compatibility and UX patch release. Fixes aggregator streaming compatibility issues and adds image preview context menu.
+
+### Compatibility
+
+- **Disable streaming for all OpenAI jobs**: Aggregator endpoints reject SSE for `/images/generations` as well as edits. Streaming is now disabled globally to ensure compatibility with all providers. Partial previews provided minimal value in practice since results arrive as complete images.
+
+### Features
+
+- **Image preview context menu**: Right-click on preview images (main canvas or modal) to access:
+  - Save Image — quick download without toolbar
+  - Open Folder — open the asset's folder in Finder/Explorer
+  - Copy Prompt — copy the job's prompt to clipboard
+
+### Internal
+
+- Frontend adapted to support multi-provider backend architecture (v0.3.0 prep). UI remains single-provider; multi-provider selection is deferred to v0.3.0.
+- Updated state migration tests for v1/v2 → v3 compatibility.
+
+---
+
 ## v0.2.2 (unsigned preview)
 
 Experience and open-source presentation release on top of v0.2.1. Real

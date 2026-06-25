@@ -1,6 +1,6 @@
 {
   "name": "image2tools",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A multi-model desktop image workspace for GPT Image 2, Nano Banana 3, and compatible image providers.",
   "author": "Nowo, Corgnitor, and Image2Tools contributors",
   "license": "MIT",
