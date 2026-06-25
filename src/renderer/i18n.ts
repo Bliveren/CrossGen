@@ -144,6 +144,7 @@ export interface UiCopy {
   outputCanvas: string;
   download: string;
   openFolder: string;
+  saveImage: string;
   generatedResult: string;
   jobFailed: string;
   outputEmpty: string;
@@ -286,6 +287,7 @@ export const translations: Record<Language, UiCopy> = {
     outputCanvas: "Output canvas",
     download: "Download",
     openFolder: "Open folder",
+    saveImage: "Save image",
     generatedResult: "Generated result",
     jobFailed: "Job failed",
     outputEmpty: "Generated images and partial previews appear here.",
@@ -491,6 +493,7 @@ export const translations: Record<Language, UiCopy> = {
     outputCanvas: "输出画布",
     download: "下载",
     openFolder: "打开文件夹",
+    saveImage: "保存图片",
     generatedResult: "生成结果",
     jobFailed: "任务失败",
     outputEmpty: "生成图片和局部预览会显示在这里。",
