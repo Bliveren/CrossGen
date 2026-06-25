@@ -654,6 +654,7 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredWidth("image2tools.sidebarWidth", DEFAULT_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH));
   const [historyWidth, setHistoryWidth] = useState(() => readStoredWidth("image2tools.historyWidth", DEFAULT_HISTORY_WIDTH, MIN_HISTORY_WIDTH, MAX_HISTORY_WIDTH));
   const [resizingColumn, setResizingColumn] = useState<"sidebar" | "history" | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; assetId: string; jobPrompt: string } | null>(null);
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
@@ -1459,6 +1460,42 @@ export function App() {
     setPreviewPan({ x: 0, y: 0 });
   }
 
+  function handleImageContextMenu(event: React.MouseEvent, asset: ImageAsset | undefined, jobPrompt: string) {
+    event.preventDefault();
+    if (!asset) return;
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      assetId: asset.id,
+      jobPrompt
+    });
+  }
+
+  function closeContextMenu() {
+    setContextMenu(null);
+  }
+
+  async function handleContextMenuSaveImage() {
+    if (!contextMenu) return;
+    const asset = activeImage?.id === contextMenu.assetId ? activeImage : undefined;
+    closeContextMenu();
+    await downloadAsset(asset);
+  }
+
+  async function handleContextMenuOpenFolder() {
+    if (!contextMenu) return;
+    const asset = activeImage?.id === contextMenu.assetId ? activeImage : undefined;
+    closeContextMenu();
+    await openAssetFolder(asset);
+  }
+
+  async function handleContextMenuCopyPrompt() {
+    if (!contextMenu) return;
+    const prompt = contextMenu.jobPrompt;
+    closeContextMenu();
+    await copyPrompt(prompt, 'context:copy-prompt');
+  }
+
   useEffect(() => {
     const surface = zoomSurfaceRef.current;
     if (!surface || !activeImage) return;
@@ -1476,6 +1513,20 @@ export function App() {
     surface.addEventListener("wheel", onWheel, { passive: false });
     return () => surface.removeEventListener("wheel", onWheel);
   }, [activeImage]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClick = () => closeContextMenu();
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeContextMenu();
+    };
+    document.addEventListener('click', handleClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [contextMenu]);
 
   function handlePreviewPanStart(event: React.PointerEvent<HTMLDivElement>) {
     if (!activeImage || previewZoom <= 1) return;
@@ -2137,6 +2188,7 @@ export function App() {
                       alt={copy.generatedResult}
                       draggable={false}
                       style={{ width: `${previewZoom * 100}%`, transform: `translate(${previewPan.x}px, ${previewPan.y}px)` }}
+                      onContextMenu={(e) => handleImageContextMenu(e, activeImage, activeJob?.prompt ?? '')}
                     />
                   </div>
                   <div className="zoom-overlay">
@@ -2533,7 +2585,33 @@ export function App() {
           <button type="button" className="preview-modal-close icon-button" onClick={() => setIsPreviewOpen(false)} title={copy.cancel}>
             <X size={18} />
           </button>
-          <img src={activeImageSource} alt={copy.generatedResult} className="preview-modal-image" />
+          <img
+            src={activeImageSource}
+            alt={copy.generatedResult}
+            className="preview-modal-image"
+            onContextMenu={(e) => handleImageContextMenu(e, activeImage, activeJob?.prompt ?? '')}
+          />
+        </div>
+      )}
+      {contextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="context-menu-item" onClick={handleContextMenuSaveImage}>
+            <Download size={14} />
+            {copy.saveImage}
+          </div>
+          <div className="context-menu-item" onClick={handleContextMenuOpenFolder}>
+            <FolderOpen size={14} />
+            {copy.openFolder}
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-item" onClick={handleContextMenuCopyPrompt}>
+            <Clipboard size={14} />
+            {copy.copyPrompt}
+          </div>
         </div>
       )}
     </main>
