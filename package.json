@@ -60,6 +60,7 @@
       "category": "public.app-category.graphics-design",
       "icon": "build/icon.icns",
       "identity": "-",
+      "electronLanguages": ["en", "zh_CN"],
       "target": [
         "dmg",
         "zip"
