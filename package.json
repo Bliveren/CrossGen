@@ -21,7 +21,7 @@
     "package": "pnpm build && node scripts/electron-builder-pnpm.mjs",
     "package:dir": "pnpm build && node scripts/electron-builder-pnpm.mjs --dir",
     "package:mac": "pnpm build && node scripts/electron-builder-pnpm.mjs --mac -c.mac.notarize=false",
-    "package:mac:signed": "pnpm verify:signing-ready && pnpm build && node scripts/electron-builder-pnpm.mjs --mac -c.mac.identity=\"$CSC_NAME\" -c.mac.notarize=true",
+    "package:mac:signed": "pnpm verify:signing-ready && pnpm build && node scripts/electron-builder-pnpm.mjs --mac -c.mac.notarize=true",
     "package:win": "pnpm build && node scripts/electron-builder-pnpm.mjs --win",
     "preview": "vite preview --host 127.0.0.1",
     "start": "pnpm build:main && electron .",
