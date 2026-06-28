@@ -34,11 +34,12 @@ async function runElectronBuilder(args) {
   const wrapperDir = await mkdtemp(path.join(tmpdir(), "image2tools-pnpm-wrapper-"));
   await createPnpmWrapperScripts(wrapperDir, packageManagerSpec, process.platform, await resolvePnpmFallbackCommand());
 
-  // Inject mac.identity from CSC_NAME env var as a direct arg (no temp config needed)
+  // electron-builder expects just the name part, not the full cert type prefix
   const cscName = process.env.CSC_NAME;
   const isNotarize = args.includes("-c.mac.notarize=true");
-  const finalArgs = (isNotarize && cscName && !args.some(a => a.startsWith("-c.mac.identity")))
-    ? [...args, `-c.mac.identity=${cscName}`]
+  const identity = cscName ? cscName.replace(/^Developer ID Application:\s*/i, "") : null;
+  const finalArgs = (isNotarize && identity && !args.some(a => a.startsWith("-c.mac.identity")))
+    ? [...args, `-c.mac.identity=${identity}`]
     : [...args];
 
   // Use shell:false on macOS so special chars (spaces, parens) in identity are passed safely.
