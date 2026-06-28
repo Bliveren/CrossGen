@@ -34,24 +34,22 @@ async function runElectronBuilder(args) {
   const wrapperDir = await mkdtemp(path.join(tmpdir(), "image2tools-pnpm-wrapper-"));
   await createPnpmWrapperScripts(wrapperDir, packageManagerSpec, process.platform, await resolvePnpmFallbackCommand());
 
-  // If CSC_NAME is set and notarize=true requested, inject identity via temp JSON config
-  // to avoid shell quoting issues with spaces/parens in the identity string.
-  let tempConfigDir = null;
-  let finalArgs = [...args];
+  // Inject mac.identity from CSC_NAME env var as a direct arg (no temp config needed)
   const cscName = process.env.CSC_NAME;
   const isNotarize = args.includes("-c.mac.notarize=true");
-  if (isNotarize && cscName && !args.some(a => a.startsWith("-c.mac.identity"))) {
-    tempConfigDir = await mkdtemp(path.join(tmpdir(), "image2tools-eb-sign-"));
-    const configPath = path.join(tempConfigDir, "sign.json");
-    await writeFile(configPath, JSON.stringify({ mac: { identity: cscName } }));
-    finalArgs = [...args, "--config", configPath];
-  }
+  const finalArgs = (isNotarize && cscName && !args.some(a => a.startsWith("-c.mac.identity")))
+    ? [...args, `-c.mac.identity=${cscName}`]
+    : [...args];
+
+  // Use shell:false on macOS so special chars (spaces, parens) in identity are passed safely.
+  // Windows still needs shell:true because electron-builder is a .cmd file.
+  const useShell = process.platform === "win32";
 
   try {
     await new Promise((resolve, reject) => {
       const child = spawn("electron-builder", finalArgs, {
         env: withPrependedPath(wrapperDir, process.env, path.delimiter),
-        shell: true,
+        shell: useShell,
         stdio: "inherit"
       });
       child.on("error", reject);
@@ -60,7 +58,6 @@ async function runElectronBuilder(args) {
       });
     });
   } finally {
-    if (tempConfigDir) await rm(tempConfigDir, { force: true, recursive: true });
     await rm(wrapperDir, { force: true, recursive: true });
   }
 }
