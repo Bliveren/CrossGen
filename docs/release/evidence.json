@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "releaseVersion": "0.2.2",
-  "lastUpdated": "2026-06-16T08:53:28.000Z",
+  "releaseVersion": "0.2.3",
+  "lastUpdated": "2026-06-28T16:00:00.000Z",
   "gates": [
     {
       "id": "real-openai-api",

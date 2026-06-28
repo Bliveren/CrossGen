@@ -49,7 +49,7 @@ function completeLedger() {
   ];
   return {
     schemaVersion: 1,
-    releaseVersion: "0.2.2",
+    releaseVersion: "0.2.3",
     lastUpdated: "2026-06-09T12:00:00.000Z",
     gates: gateIds.map((id) => ({
       id,
