@@ -44,7 +44,8 @@ async function main() {
   const { mac: macConfig, scripts } = await readPackageBuildConfig();
   const signedPackageScript = String(scripts["package:mac:signed"] ?? "");
   const hasSignedPackageOverride =
-    signedPackageScript.includes("-c.mac.identity") && signedPackageScript.includes("-c.mac.notarize=true");
+    signedPackageScript.includes("-c.mac.notarize=true") &&
+    (signedPackageScript.includes("-c.mac.identity") || isSet("CSC_NAME"));
   if ((macConfig.identity === null || macConfig.identity === "-") && !hasSignedPackageOverride) {
     checks.push({
       ok: false,
