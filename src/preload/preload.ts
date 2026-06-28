@@ -11,6 +11,9 @@ import type {
 const bridge: AppBridge = {
   getSnapshot: () => ipcRenderer.invoke("app:getSnapshot"),
   saveConfig: (input: ProviderConfigInput) => ipcRenderer.invoke("config:save", input),
+  addProvider: (input: ProviderConfigInput) => ipcRenderer.invoke("provider:add", input),
+  switchProvider: (providerId: string) => ipcRenderer.invoke("provider:switch", providerId),
+  deleteProvider: (providerId: string) => ipcRenderer.invoke("provider:delete", providerId),
   discoverModels: () => ipcRenderer.invoke("config:discoverModels"),
   clearApiKey: () => ipcRenderer.invoke("config:clearApiKey"),
   testConnection: () => ipcRenderer.invoke("config:testConnection"),

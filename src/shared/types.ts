@@ -200,7 +200,8 @@ export interface ConnectionTestResult {
 
 export interface AppSnapshot {
   appVersion: string;
-  config: ProviderConfig;
+  providers: ProviderConfig[];
+  activeProviderId: string;
   history: GenerationJob[];
   draft?: WorkspaceDraft;
 }
@@ -260,6 +261,9 @@ export interface UpdateInstallResult {
 export interface AppBridge {
   getSnapshot: () => Promise<AppSnapshot>;
   saveConfig: (input: ProviderConfigInput) => Promise<ProviderConfig>;
+  addProvider: (input: ProviderConfigInput) => Promise<AppSnapshot>;
+  switchProvider: (providerId: string) => Promise<AppSnapshot>;
+  deleteProvider: (providerId: string) => Promise<AppSnapshot>;
   discoverModels: () => Promise<ProviderConfig>;
   clearApiKey: () => Promise<ProviderConfig>;
   testConnection: () => Promise<ConnectionTestResult>;

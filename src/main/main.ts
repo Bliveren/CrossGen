@@ -220,7 +220,8 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
   await ensureDir(app.getPath("userData"));
   const payload: AppStateFile = {
     version: STATE_VERSION,
-    config: state.config,
+    providers: state.providers,
+    activeProviderId: state.activeProviderId,
     history: state.history.slice(0, MAX_HISTORY),
     draft: state.draft
   };
@@ -309,7 +310,8 @@ function maskApiKeyPreview(apiKey: string): string {
 
 async function getApiKeyOrThrow(): Promise<string> {
   const state = await readState();
-  return getApiKeyForConfigOrThrow(state.config);
+  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
+  return getApiKeyForConfigOrThrow(activeProvider);
 }
 
 function getApiKeyForConfigOrThrow(config: StoredProviderConfig): string {
@@ -473,9 +475,11 @@ function sendJobEvent(event: JobProgressEvent): void {
 
 async function handleGetSnapshot(): Promise<AppSnapshot> {
   const state = await readState();
+  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
   return {
     appVersion: getAppVersion(),
-    config: toPublicConfig(state.config),
+    providers: state.providers.map(toPublicConfig),
+    activeProviderId: state.activeProviderId,
     history: state.history,
     draft: state.draft
   };
@@ -483,18 +487,13 @@ async function handleGetSnapshot(): Promise<AppSnapshot> {
 
 async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfigInput): Promise<ProviderConfig> {
   const state = await readState();
+  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
   const configValidation = validateProviderConfigInput(input);
   if (!configValidation.ok) {
     throw new Error(configValidation.message ?? "配置参数无效。");
   }
   const now = new Date().toISOString();
-  // The UI no longer submits a provider kind. We deliberately preserve the stored kind here
-  // (buildProviderConfigForSave keeps current.kind when input.kind is undefined) instead of
-  // guessing from the base URL: a URL-based guess that differs from the stored kind would trip
-  // buildProviderConfigForSave's "provider changed" path, silently wiping the saved key and
-  // pinning a stale launch. Provider reclassification is handled non-destructively by model
-  // discovery's inferredProviderKind below.
-  let nextConfig = buildProviderConfigForSave(state.config, input, now);
+  let nextConfig = buildProviderConfigForSave(activeProvider, input, now);
 
   if (input.apiKey !== undefined && input.apiKey.trim()) {
     const validation = validateApiKey(input.apiKey);
@@ -504,22 +503,115 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
     Object.assign(nextConfig, encryptApiKey(input.apiKey));
   }
 
-  // 有 key 即触发模型发现：新提交 key，或在已有 key 的情况下改了 base URL（换聚合器需重新分类）。
   const hasUsableApiKey = Boolean(nextConfig.encryptedApiKey);
-  const baseURLChanged = nextConfig.baseURL !== state.config.baseURL;
+  const baseURLChanged = nextConfig.baseURL !== activeProvider.baseURL;
   const submittedNewApiKey = input.apiKey !== undefined && input.apiKey.trim().length > 0;
   if (hasUsableApiKey && (submittedNewApiKey || baseURLChanged)) {
     nextConfig = await refreshModelDiscovery(nextConfig);
   }
 
-  await writeState({ ...state, config: nextConfig });
+  const nextProviders = state.providers.map(p => p.id === state.activeProviderId ? nextConfig : p);
+  await writeState({ ...state, providers: nextProviders });
   return toPublicConfig(nextConfig);
+}
+
+async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConfigInput): Promise<AppSnapshot> {
+  const state = await readState();
+  const configValidation = validateProviderConfigInput(input);
+  if (!configValidation.ok) {
+    throw new Error(configValidation.message ?? "配置参数无效。");
+  }
+
+  const now = new Date().toISOString();
+  const newId = `provider_${randomUUID()}`;
+  const kind = input.kind ?? "openai";
+
+  let newConfig: StoredProviderConfig = {
+    id: newId,
+    kind,
+    name: providerDisplayName(kind),
+    baseURL: input.baseURL,
+    enabled: true,
+    defaultModel: input.defaultModel,
+    defaultSize: input.defaultSize,
+    defaultQuality: input.defaultQuality,
+    timeoutMs: input.timeoutMs,
+    discoveredModels: [],
+    activeLaunchId: input.activeLaunchId ?? GPT_IMAGE_2_LAUNCH_ID,
+    activeModelId: input.activeModelId ?? input.defaultModel,
+    updatedAt: now,
+    encryption: "none"
+  };
+
+  if (input.apiKey !== undefined && input.apiKey.trim()) {
+    const validation = validateApiKey(input.apiKey);
+    if (!validation.ok) {
+      throw new Error(validation.message ?? "API Key 无效。");
+    }
+    Object.assign(newConfig, encryptApiKey(input.apiKey));
+    newConfig = await refreshModelDiscovery(newConfig);
+  }
+
+  const nextProviders = [...state.providers, newConfig];
+  const nextState = { ...state, providers: nextProviders, activeProviderId: newId };
+  await writeState(nextState);
+
+  return {
+    appVersion: getAppVersion(),
+    providers: nextProviders.map(toPublicConfig),
+    activeProviderId: newId,
+    history: state.history,
+    draft: state.draft
+  };
+}
+
+async function handleSwitchProvider(_event: IpcMainInvokeEvent, providerId: string): Promise<AppSnapshot> {
+  const state = await readState();
+  const provider = state.providers.find(p => p.id === providerId);
+
+  if (!provider) {
+    throw new Error(`Provider ${providerId} not found.`);
+  }
+
+  const nextState = { ...state, activeProviderId: providerId };
+  await writeState(nextState);
+
+  return {
+    appVersion: getAppVersion(),
+    providers: state.providers.map(toPublicConfig),
+    activeProviderId: providerId,
+    history: state.history,
+    draft: state.draft
+  };
+}
+
+async function handleDeleteProvider(_event: IpcMainInvokeEvent, providerId: string): Promise<AppSnapshot> {
+  const state = await readState();
+
+  if (state.providers.length <= 1) {
+    throw new Error("Cannot delete the last provider.");
+  }
+
+  const nextProviders = state.providers.filter(p => p.id !== providerId);
+  const nextActiveProviderId = state.activeProviderId === providerId ? nextProviders[0].id : state.activeProviderId;
+
+  const nextState = { ...state, providers: nextProviders, activeProviderId: nextActiveProviderId };
+  await writeState(nextState);
+
+  return {
+    appVersion: getAppVersion(),
+    providers: nextProviders.map(toPublicConfig),
+    activeProviderId: nextActiveProviderId,
+    history: state.history,
+    draft: state.draft
+  };
 }
 
 async function handleClearApiKey(): Promise<ProviderConfig> {
   const state = await readState();
+  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
   const nextConfig: StoredProviderConfig = {
-    ...state.config,
+    ...activeProvider,
     encryptedApiKey: undefined,
     encryption: "none",
     discoveredModels: [],
@@ -527,7 +619,8 @@ async function handleClearApiKey(): Promise<ProviderConfig> {
     lastModelDiscoveryError: undefined,
     updatedAt: new Date().toISOString()
   };
-  await writeState({ ...state, config: nextConfig });
+  const nextProviders = state.providers.map(p => p.id === state.activeProviderId ? nextConfig : p);
+  await writeState({ ...state, providers: nextProviders });
   return toPublicConfig(nextConfig);
 }
 
@@ -636,16 +729,20 @@ function selectActiveLaunchForDiscovery(
 
 async function handleDiscoverModels(): Promise<ProviderConfig> {
   const state = await readState();
-  const nextConfig = await refreshModelDiscovery(state.config);
-  await writeState({ ...state, config: nextConfig });
+  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
+  const nextConfig = await refreshModelDiscovery(activeProvider);
+  const nextProviders = state.providers.map(p => p.id === state.activeProviderId ? nextConfig : p);
+  await writeState({ ...state, providers: nextProviders });
   return toPublicConfig(nextConfig);
 }
 
 async function handleTestConnection(): Promise<ConnectionTestResult> {
   try {
     const state = await readState();
-    const nextConfig = await refreshModelDiscovery(state.config);
-    await writeState({ ...state, config: nextConfig });
+    const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
+    const nextConfig = await refreshModelDiscovery(activeProvider);
+    const nextProviders = state.providers.map(p => p.id === state.activeProviderId ? nextConfig : p);
+    await writeState({ ...state, providers: nextProviders });
     if (nextConfig.lastModelDiscoveryError) {
       return {
         ok: false,
@@ -717,13 +814,14 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   }
 
   const state = await readState();
-  if (!canRunRequestWithConfig(normalizedRequest, state.config)) {
+  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
+  if (!canRunRequestWithConfig(normalizedRequest, activeProvider)) {
     throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
   }
   const apiKey = await getApiKeyOrThrow();
   const { inputs, mask } = await resolveRequestInputs(normalizedRequest);
   const startedAt = Date.now();
-  let job = createJob(normalizedRequest, state.config, inputs, mask);
+  let job = createJob(normalizedRequest, activeProvider, inputs, mask);
   await upsertJob(job);
 
   job = {
@@ -735,7 +833,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   sendJobEvent({ jobId: job.id, type: "started" });
 
   try {
-    job = await adapter.runJob(job, apiKey, state.config, {
+    job = await adapter.runJob(job, apiKey, activeProvider, {
       fetch,
       imagesDir: getImagesDir(),
       ensureDir,
@@ -942,6 +1040,9 @@ function pathsOwnedByJob(job: GenerationJob): string[] {
 function registerIpcHandlers(): void {
   ipcMain.handle("app:getSnapshot", handleGetSnapshot);
   ipcMain.handle("config:save", handleSaveConfig);
+  ipcMain.handle("provider:add", handleAddProvider);
+  ipcMain.handle("provider:switch", handleSwitchProvider);
+  ipcMain.handle("provider:delete", handleDeleteProvider);
   ipcMain.handle("config:discoverModels", handleDiscoverModels);
   ipcMain.handle("config:clearApiKey", handleClearApiKey);
   ipcMain.handle("config:testConnection", handleTestConnection);
