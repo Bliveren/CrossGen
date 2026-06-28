@@ -61,6 +61,7 @@
       "icon": "build/icon.icns",
       "identity": "-",
       "electronLanguages": ["en", "zh_CN"],
+      "timestamp": "http://timestamp.digicert.com",
       "target": [
         "dmg",
         "zip"
