@@ -61,7 +61,7 @@
       "icon": "build/icon.icns",
       "identity": "-",
       "electronLanguages": ["en", "zh_CN"],
-      "timestamp": "http://timestamp.digicert.com",
+      "timestamp": "http://timestamp.apple.com/ts01",
       "target": [
         "dmg",
         "zip"
