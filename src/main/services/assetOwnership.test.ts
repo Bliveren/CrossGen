@@ -7,7 +7,9 @@ import { DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
 import {
   assertKnownOutputPath,
   assertManagedRegularFile,
+  assertManagedRegularFileInRoots,
   collectOwnedJobFilePaths,
+  resolveManagedFileName,
   normalizeManagedAssetPath
 } from "./assetOwnership";
 
@@ -107,5 +109,57 @@ describe("asset ownership checks", () => {
     };
 
     expect(collectOwnedJobFilePaths(imagesDir, job)).toEqual([path.resolve(resultPath), path.resolve(maskPath)]);
+  });
+
+  it("does not collect gallery files when cleaning up a job", () => {
+    const imagesDir = path.join(os.tmpdir(), "image2tools", "images");
+    const galleryDir = path.join(os.tmpdir(), "image2tools", "gallery");
+    const job = {
+      ...makeJob(imagesDir, path.join(imagesDir, "result.png")),
+      outputs: [
+        {
+          ...makeJob(imagesDir).outputs[0],
+          path: path.join(imagesDir, "result.png")
+        },
+        {
+          ...makeJob(imagesDir, path.join(galleryDir, "gallery.png")).outputs[0],
+          path: path.join(galleryDir, "gallery.png")
+        }
+      ]
+    };
+
+    expect(collectOwnedJobFilePaths(imagesDir, job)).toEqual([path.resolve(path.join(imagesDir, "result.png"))]);
+  });
+
+  it("resolves managed file names inside a root directory", () => {
+    const root = path.join(os.tmpdir(), "image2tools", "gallery");
+    expect(resolveManagedFileName(root, "sample.png")).toBe(path.resolve(root, "sample.png"));
+    expect(() => resolveManagedFileName(root, "../escape.png")).toThrow("管理目录");
+  });
+
+  it.skipIf(process.platform === "win32")("checks managed files across multiple roots", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-assets-"));
+    const imagesDir = path.join(tmpDir, "images");
+    const galleryDir = path.join(tmpDir, "gallery");
+    await mkdir(imagesDir);
+    await mkdir(galleryDir);
+    const filePath = path.join(galleryDir, "gallery.png");
+    await writeFile(filePath, "gallery");
+
+    await expect(assertManagedRegularFileInRoots([imagesDir, galleryDir], filePath)).resolves.toBe(path.resolve(filePath));
+  });
+
+  it.skipIf(process.platform === "win32")("rejects gallery symlinks that resolve outside multiple managed roots", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-assets-"));
+    const imagesDir = path.join(tmpDir, "images");
+    const galleryDir = path.join(tmpDir, "gallery");
+    await mkdir(imagesDir);
+    await mkdir(galleryDir);
+    const outsidePath = path.join(tmpDir, "outside.png");
+    const linkPath = path.join(galleryDir, "linked.png");
+    await writeFile(outsidePath, "secret");
+    await import("node:fs/promises").then((fs) => fs.symlink(outsidePath, linkPath));
+
+    await expect(assertManagedRegularFileInRoots([imagesDir, galleryDir], linkPath)).rejects.toThrow("管理目录");
   });
 });

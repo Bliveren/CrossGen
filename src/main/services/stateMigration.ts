@@ -1,6 +1,7 @@
 import type {
   DiscoveredModel,
   FocusedLaunchId,
+  GalleryAsset,
   GenerationJob,
   ImageParams,
   ImageQuality,
@@ -58,6 +59,7 @@ export interface AppStateFile {
   activeProviderId: string;
   history: GenerationJob[];
   promptTemplates: PromptTemplate[];
+  galleryAssets: GalleryAsset[];
   draft?: WorkspaceDraft;
 }
 
@@ -85,7 +87,8 @@ export function getDefaultState(): AppStateFile {
     providers: [defaultProvider],
     activeProviderId: defaultProvider.id,
     history: [],
-    promptTemplates: []
+    promptTemplates: [],
+    galleryAssets: []
   };
 }
 
@@ -101,6 +104,7 @@ export function normalizeState(parsed: unknown): AppStateFile {
       activeProviderId: migratedProvider.id,
       history: Array.isArray(parsed.history) ? parsed.history.map((job) => normalizeGenerationJob(job, migratedProvider.id)) : [],
       promptTemplates: normalizePromptTemplates(parsed.promptTemplates),
+      galleryAssets: normalizeGalleryAssets(parsed.galleryAssets),
       draft: normalizeWorkspaceDraft(parsed.draft)
     };
   }
@@ -119,6 +123,7 @@ export function normalizeState(parsed: unknown): AppStateFile {
     activeProviderId: activeProvider.id,
     history: Array.isArray(parsed.history) ? parsed.history.map((job) => normalizeGenerationJob(job, activeProvider.id)) : [],
     promptTemplates: normalizePromptTemplates(parsed.promptTemplates),
+    galleryAssets: normalizeGalleryAssets(parsed.galleryAssets),
     draft: normalizeWorkspaceDraft(parsed.draft)
   };
 }
@@ -193,6 +198,47 @@ function normalizePromptTemplates(value: unknown): PromptTemplate[] {
       }
     ];
   });
+}
+
+function normalizeGalleryAssets(value: unknown): GalleryAsset[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const id = nonEmptyString(item.id, "");
+    const fileName = nonEmptyString(item.fileName, "");
+    const safeFileName = pathSafeFileName(fileName);
+    const originalName = nonEmptyString(item.originalName, fileName);
+    const mimeType = nonEmptyString(item.mimeType, "");
+    const sizeBytes = typeof item.sizeBytes === "number" && Number.isFinite(item.sizeBytes) && item.sizeBytes >= 0 ? item.sizeBytes : -1;
+    if (!id || !fileName || safeFileName !== fileName || !mimeType || sizeBytes < 0 || seen.has(id)) return [];
+    seen.add(id);
+    const createdAt = nonEmptyString(item.createdAt, new Date(0).toISOString());
+    const updatedAt = nonEmptyString(item.updatedAt, createdAt);
+    return [
+      {
+        id,
+        fileName: safeFileName,
+        originalName,
+        mimeType,
+        sizeBytes,
+        width: boundedOptionalInteger(item.width),
+        height: boundedOptionalInteger(item.height),
+        tags: normalizeStringList(item.tags),
+        source: item.source === "result" ? "result" : "import",
+        createdAt,
+        updatedAt
+      }
+    ];
+  });
+}
+
+function pathSafeFileName(value: string): string {
+  return value.replace(/[\\/]/g, "").trim();
+}
+
+function boundedOptionalInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 function normalizeStringList(value: unknown): string[] {

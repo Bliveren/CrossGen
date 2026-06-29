@@ -143,6 +143,20 @@ export interface ImageAsset {
   createdAt: string;
 }
 
+export interface GalleryAsset {
+  id: string;
+  fileName: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
+  tags: string[];
+  source: "import" | "result";
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UsageDetails {
   total_tokens?: number;
   input_tokens?: number;
@@ -205,6 +219,7 @@ export interface AppSnapshot {
   activeProviderId: string;
   history: GenerationJob[];
   promptTemplates: PromptTemplate[];
+  galleryAssets: GalleryAsset[];
   draft?: WorkspaceDraft;
 }
 
@@ -299,6 +314,12 @@ export interface AppBridge {
   deleteTemplate: (id: string) => Promise<void>;
   importTemplates: () => Promise<{ imported: number; skipped: number }>;
   exportTemplates: (templateIds?: string[]) => Promise<string | null>;
+  listGallery: () => Promise<GalleryAsset[]>;
+  importToGallery: (paths?: string[]) => Promise<GalleryAsset[]>;
+  addHistoryAssetToGallery: (assetPath: string) => Promise<GalleryAsset>;
+  updateGalleryAsset: (id: string, patch: { tags?: string[] }) => Promise<GalleryAsset>;
+  removeGalleryAsset: (id: string) => Promise<GalleryAsset[]>;
+  pickGalleryAsset: (id: string) => Promise<InputAsset>;
   selectImages: () => Promise<InputAsset[]>;
   getDroppedFilePaths: (files: File[]) => string[];
   importImages: (paths: string[]) => Promise<InputAsset[]>;

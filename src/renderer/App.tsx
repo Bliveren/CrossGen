@@ -51,6 +51,7 @@ import {
 import type {
   AppSnapshot,
   FocusedLaunchId,
+  GalleryAsset,
   GeneralImageParams,
   GenerationJob,
   GeminiAspectRatio,
@@ -179,7 +180,8 @@ const fallbackSnapshot: AppSnapshot = {
   providers: [fallbackConfig],
   activeProviderId: fallbackConfig.id,
   history: [],
-  promptTemplates: []
+  promptTemplates: [],
+  galleryAssets: []
 };
 
 function getBridge() {
@@ -670,6 +672,11 @@ export function App() {
   const [templateBody, setTemplateBody] = useState("");
   const [templateTags, setTemplateTags] = useState("");
   const [templateCategory, setTemplateCategory] = useState("");
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [gallerySearch, setGallerySearch] = useState("");
+  const [galleryTagFilter, setGalleryTagFilter] = useState("");
+  const [editingGalleryId, setEditingGalleryId] = useState<string | null>(null);
+  const [galleryTagsInput, setGalleryTagsInput] = useState("");
   const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
   const [brushSize, setBrushSize] = useState(72);
   const [isPainting, setIsPainting] = useState(false);
@@ -771,6 +778,20 @@ export function App() {
       return haystack.includes(query);
     });
   }, [snapshot.promptTemplates, templateSearch, templateTagFilter]);
+  const galleryTagsAvailable = useMemo(() => {
+    const tags = new Set<string>();
+    snapshot.galleryAssets.forEach((asset) => asset.tags.forEach((tag) => tags.add(tag)));
+    return [...tags].sort((a, b) => a.localeCompare(b));
+  }, [snapshot.galleryAssets]);
+  const filteredGalleryAssets = useMemo(() => {
+    const query = gallerySearch.trim().toLowerCase();
+    return snapshot.galleryAssets.filter((asset) => {
+      if (galleryTagFilter && !asset.tags.includes(galleryTagFilter)) return false;
+      if (!query) return true;
+      const haystack = `${asset.originalName} ${asset.fileName} ${asset.tags.join(" ")}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [gallerySearch, galleryTagFilter, snapshot.galleryAssets]);
   const hasHistoryOverflow = filteredHistory.length > HISTORY_COLLAPSED_LIMIT;
   const visibleHistory = isHistoryExpanded ? filteredHistory : filteredHistory.slice(0, HISTORY_COLLAPSED_LIMIT);
   const isSearchingHistory = historySearch.trim().length > 0;
@@ -1106,6 +1127,77 @@ export function App() {
     try {
       const filePath = await bridge.exportTemplates();
       if (filePath) setNotice({ kind: "success", text: copy.templateExported(filePath) });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  function galleryAssetPath(asset: GalleryAsset): string {
+    return `image2tools-asset://image?gallery=${encodeURIComponent(asset.fileName)}`;
+  }
+
+  async function importToGallery() {
+    if (!bridge) return;
+    try {
+      const assets = await bridge.importToGallery();
+      if (assets.length > 0) {
+        setSnapshot((current) => ({ ...current, galleryAssets: [...assets, ...current.galleryAssets] }));
+      }
+      setNotice({ kind: "success", text: copy.galleryImported(assets.length) });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function addHistoryAssetToGallery(asset?: ImageAsset) {
+    if (!bridge || !asset) return;
+    try {
+      const galleryAsset = await bridge.addHistoryAssetToGallery(asset.path);
+      setSnapshot((current) => ({ ...current, galleryAssets: [galleryAsset, ...current.galleryAssets] }));
+      setNotice({ kind: "success", text: copy.galleryAdded });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function pickGalleryAsset(asset: GalleryAsset) {
+    if (!bridge) return;
+    try {
+      const inputAsset = await bridge.pickGalleryAsset(asset.id);
+      addInputAssets([inputAsset]);
+      setNotice({ kind: "success", text: copy.galleryPicked(asset.originalName) });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  function editGalleryTags(asset: GalleryAsset) {
+    setEditingGalleryId(asset.id);
+    setGalleryTagsInput(asset.tags.join(", "));
+  }
+
+  async function saveGalleryTags(asset: GalleryAsset) {
+    if (!bridge) return;
+    try {
+      const updated = await bridge.updateGalleryAsset(asset.id, {
+        tags: galleryTagsInput.split(",").map((tag) => tag.trim()).filter(Boolean)
+      });
+      setSnapshot((current) => ({ ...current, galleryAssets: current.galleryAssets.map((item) => item.id === asset.id ? updated : item) }));
+      setEditingGalleryId(null);
+      setGalleryTagsInput("");
+      setNotice({ kind: "success", text: copy.galleryUpdated });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function removeGalleryAsset(asset: GalleryAsset) {
+    if (!bridge) return;
+    if (!window.confirm(copy.galleryDeleteConfirm(asset.originalName))) return;
+    try {
+      const galleryAssets = await bridge.removeGalleryAsset(asset.id);
+      setSnapshot((current) => ({ ...current, galleryAssets }));
+      setNotice({ kind: "success", text: copy.galleryDeleted });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -2515,6 +2607,70 @@ export function App() {
           )}
         </section>
 
+        <section className="tool-section gallery-section">
+          <button type="button" className="section-toggle" onClick={() => setIsGalleryOpen((current) => !current)}>
+            <span className="section-toggle-label">
+              <ImagePlus size={16} />
+              <span>{copy.gallery}</span>
+            </span>
+            <span className="section-toggle-state">
+              {snapshot.galleryAssets.length}
+              {isGalleryOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            </span>
+          </button>
+          {isGalleryOpen && (
+            <div className="gallery-panel">
+              <div className="gallery-toolbar">
+                <input value={gallerySearch} onChange={(event) => setGallerySearch(event.target.value)} placeholder={copy.gallerySearch} />
+                <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)}>
+                  <option value="">{copy.galleryAllTags}</option>
+                  {galleryTagsAvailable.map((tag) => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+                <button type="button" className="icon-button" onClick={() => void importToGallery()} title={copy.galleryImport}>
+                  <FileUp size={15} />
+                </button>
+              </div>
+              <div className="gallery-grid">
+                {filteredGalleryAssets.length === 0 && (
+                  <p className="empty-inline">{snapshot.galleryAssets.length === 0 ? copy.galleryEmpty : copy.galleryNoMatch}</p>
+                )}
+                {filteredGalleryAssets.map((asset) => (
+                  <article key={asset.id} className="gallery-item">
+                    <button type="button" className="gallery-thumb" onClick={() => void pickGalleryAsset(asset)} title={copy.galleryChoose}>
+                      <img src={galleryAssetPath(asset)} alt={asset.originalName} />
+                    </button>
+                    <div className="gallery-meta">
+                      <strong title={asset.originalName}>{asset.originalName}</strong>
+                      {editingGalleryId === asset.id ? (
+                        <div className="gallery-tag-editor">
+                          <input value={galleryTagsInput} onChange={(event) => setGalleryTagsInput(event.target.value)} placeholder={copy.templateTags} />
+                          <button type="button" className="icon-button" onClick={() => void saveGalleryTags(asset)} title={copy.gallerySaveTags}>
+                            <Save size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="template-tags">
+                          {asset.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="gallery-actions">
+                      <button type="button" className="icon-button" onClick={() => editGalleryTags(asset)} title={copy.galleryEditTags}>
+                        <SlidersHorizontal size={15} />
+                      </button>
+                      <button type="button" className="icon-button ghost danger" onClick={() => void removeGalleryAsset(asset)} title={copy.delete}>
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
         <section className="tool-section">
           <button type="button" className="section-toggle" onClick={() => setShowAdvanced((current) => !current)}>
             <span className="section-toggle-label">
@@ -2759,6 +2915,10 @@ export function App() {
                   <button type="button" className="secondary" onClick={selectImages}>
                     <ImagePlus size={16} />
                     {copy.addReferences}
+                  </button>
+                  <button type="button" className="secondary" onClick={() => setIsGalleryOpen(true)} disabled={snapshot.galleryAssets.length === 0}>
+                    <ImagePlus size={16} />
+                    {copy.galleryChoose}
                   </button>
                   {!isGeneralMode && (
                     <button type="button" className="secondary" onClick={selectMask}>
@@ -3018,6 +3178,16 @@ export function App() {
                     >
                       <Download size={15} />
                       <span>{result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={result ? "history-action-button" : "history-action-button"}
+                      disabled={!result}
+                      onClick={() => void addHistoryAssetToGallery(result)}
+                      title={copy.galleryAddHistory}
+                    >
+                      <ImagePlus size={15} />
+                      <span>{copy.galleryAddHistory}</span>
                     </button>
                     <button type="button" className="history-action-button danger" onClick={() => deleteJob(job.id)} title={copy.delete}>
                       <Trash2 size={15} />

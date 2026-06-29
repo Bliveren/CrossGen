@@ -109,6 +109,25 @@ describe("state migration", () => {
     expect(migrated.promptTemplates).toEqual([]);
   });
 
+  it("adds empty gallery assets when old state has none", () => {
+    const migrated = normalizeState({
+      version: 2,
+      config: {
+        id: "legacy-provider",
+        baseURL: "https://api.openai.com/v1",
+        defaultModel: "gpt-image-2",
+        defaultSize: "auto",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        updatedAt: "2026-01-02T03:04:05.000Z",
+        encryption: "none"
+      },
+      history: []
+    });
+
+    expect(migrated.galleryAssets).toEqual([]);
+  });
+
   it("normalizes prompt templates and filters malformed records", () => {
     const migrated = normalizeState({
       version: 3,
@@ -149,6 +168,61 @@ describe("state migration", () => {
         body: "Clean product photo",
         tags: ["product"],
         category: "commerce",
+        createdAt: "2026-01-02T03:04:05.000Z",
+        updatedAt: "2026-01-02T03:04:06.000Z"
+      }
+    ]);
+  });
+
+  it("normalizes gallery assets and filters malformed records", () => {
+    const migrated = normalizeState({
+      version: 3,
+      providers: [
+        {
+          id: "default",
+          baseURL: "https://api.openai.com/v1",
+          defaultModel: "gpt-image-2",
+          defaultSize: "auto",
+          defaultQuality: "auto",
+          timeoutMs: 120000,
+          updatedAt: "2026-01-02T03:04:05.000Z",
+          encryption: "none"
+        }
+      ],
+      activeProviderId: "default",
+      history: [],
+      galleryAssets: [
+        {
+          id: "gallery-1",
+          fileName: "gallery.png",
+          originalName: " Gallery Source.png ",
+          mimeType: "image/png",
+          sizeBytes: 2048,
+          width: 512,
+          height: 512,
+          tags: ["product", " product ", "", 42],
+          source: "result",
+          createdAt: "2026-01-02T03:04:05.000Z",
+          updatedAt: "2026-01-02T03:04:06.000Z"
+        },
+        { id: "gallery-1", fileName: "duplicate.png", mimeType: "image/png", sizeBytes: 1 },
+        { id: "escape", fileName: "../escape.png", mimeType: "image/png", sizeBytes: 1 },
+        { id: "bad-mime", fileName: "bad.png", mimeType: "", sizeBytes: 1 },
+        { id: "bad-size", fileName: "bad-size.png", mimeType: "image/png", sizeBytes: -1 }
+      ]
+    });
+
+    expect(migrated.galleryAssets).toEqual([
+      {
+        id: "gallery-1",
+        fileName: "gallery.png",
+        originalName: "Gallery Source.png",
+        mimeType: "image/png",
+        sizeBytes: 2048,
+        width: 512,
+        height: 512,
+        tags: ["product"],
+        source: "result",
         createdAt: "2026-01-02T03:04:05.000Z",
         updatedAt: "2026-01-02T03:04:06.000Z"
       }

@@ -151,6 +151,22 @@ export interface UiCopy {
   templateApplied: (title: string) => string;
   templateImported: (imported: number, skipped: number) => string;
   templateExported: (filePath: string) => string;
+  gallery: string;
+  gallerySearch: string;
+  galleryAllTags: string;
+  galleryImport: string;
+  galleryChoose: string;
+  galleryAddHistory: string;
+  galleryEditTags: string;
+  gallerySaveTags: string;
+  galleryEmpty: string;
+  galleryNoMatch: string;
+  galleryDeleteConfirm: (name: string) => string;
+  galleryImported: (count: number) => string;
+  galleryAdded: string;
+  galleryPicked: (name: string) => string;
+  galleryUpdated: string;
+  galleryDeleted: string;
   size: string;
   aspectRatio: string;
   resolution: string;
@@ -331,6 +347,22 @@ export const translations: Record<Language, UiCopy> = {
     templateApplied: (title: string) => `Template "${title}" filled into the prompt.`,
     templateImported: (imported: number, skipped: number) => `${imported} template${imported === 1 ? "" : "s"} imported${skipped ? `, ${skipped} skipped` : ""}.`,
     templateExported: (filePath: string) => `Templates exported to ${filePath}`,
+    gallery: "Reference Gallery",
+    gallerySearch: "Search Gallery",
+    galleryAllTags: "All",
+    galleryImport: "Import to Gallery",
+    galleryChoose: "Choose from Gallery",
+    galleryAddHistory: "Add to Gallery",
+    galleryEditTags: "Edit tags",
+    gallerySaveTags: "Save tags",
+    galleryEmpty: "No Gallery images yet.",
+    galleryNoMatch: "No matching Gallery images.",
+    galleryDeleteConfirm: (name: string) => `Delete Gallery image "${name}"?`,
+    galleryImported: (count: number) => `${count} image${count === 1 ? "" : "s"} imported to Gallery.`,
+    galleryAdded: "Added to Gallery.",
+    galleryPicked: (name: string) => `${name} added as a reference.`,
+    galleryUpdated: "Gallery tags updated.",
+    galleryDeleted: "Gallery image deleted.",
     size: "Size",
     aspectRatio: "Aspect ratio",
     resolution: "Resolution",
@@ -574,6 +606,22 @@ export const translations: Record<Language, UiCopy> = {
     templateApplied: (title: string) => `已将模板“${title}”填入提示词。`,
     templateImported: (imported: number, skipped: number) => `已导入 ${imported} 个模板${skipped ? `，跳过 ${skipped} 个` : ""}。`,
     templateExported: (filePath: string) => `模板已导出到 ${filePath}`,
+    gallery: "参考图 Gallery",
+    gallerySearch: "搜索 Gallery",
+    galleryAllTags: "全部",
+    galleryImport: "导入 Gallery",
+    galleryChoose: "从 Gallery 选择",
+    galleryAddHistory: "加入 Gallery",
+    galleryEditTags: "编辑标签",
+    gallerySaveTags: "保存标签",
+    galleryEmpty: "暂无 Gallery 图片。",
+    galleryNoMatch: "没有匹配的 Gallery 图片。",
+    galleryDeleteConfirm: (name: string) => `确认删除 Gallery 图片“${name}”？`,
+    galleryImported: (count: number) => `已导入 ${count} 张图片到 Gallery。`,
+    galleryAdded: "已加入 Gallery。",
+    galleryPicked: (name: string) => `已将 ${name} 加入参考图。`,
+    galleryUpdated: "Gallery 标签已更新。",
+    galleryDeleted: "Gallery 图片已删除。",
     size: "尺寸",
     aspectRatio: "画面比例",
     resolution: "分辨率",

@@ -791,6 +791,79 @@ label {
   gap: 5px;
 }
 
+.gallery-panel {
+  display: grid;
+  gap: 9px;
+}
+
+.gallery-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(82px, 0.5fr) 36px;
+  align-items: center;
+  gap: 7px;
+}
+
+.gallery-grid {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.gallery-item {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  gap: 8px;
+  border: 1px solid #d6d0c3;
+  border-radius: 7px;
+  background: #fffdf8;
+  padding: 7px;
+}
+
+.gallery-thumb {
+  width: 64px;
+  height: 64px;
+  min-height: 64px;
+  overflow: hidden;
+  border: 1px solid #d6d0c3;
+  background: #f4f1ea;
+  padding: 0;
+}
+
+.gallery-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gallery-meta {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  gap: 6px;
+}
+
+.gallery-meta strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #2d2924;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-actions {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+
+.gallery-tag-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 5px;
+}
+
 .dot {
   width: 8px;
   height: 8px;

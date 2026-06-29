@@ -17,6 +17,7 @@ import type {
   AppSnapshot,
   ConnectionTestResult,
   DownloadRequest,
+  GalleryAsset,
   GenerationJob,
   InputAsset,
   JobProgressEvent,
@@ -56,7 +57,7 @@ import { fetchWithTimeout } from "./services/openaiImage.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
-import { assertKnownOutputPath, assertManagedRegularFile, collectOwnedJobFilePaths, normalizeManagedAssetPath } from "./services/assetOwnership.js";
+import { assertKnownOutputPath, assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
 import { verifyUpdateAssetBytes } from "./services/updateInstallerVerification.js";
@@ -124,14 +125,25 @@ function registerAssetProtocol(): void {
   protocol.handle(ASSET_PROTOCOL, async (request) => {
     const url = new URL(request.url);
     const assetPath = url.searchParams.get("path") ?? "";
-    const normalized = normalizeManagedAssetPath(getImagesDir(), assetPath);
+    const galleryFileName = url.searchParams.get("gallery");
+    let normalized: string | null = null;
+
+    try {
+      normalized = galleryFileName
+        ? resolveManagedFileName(getGalleryDir(), galleryFileName)
+        : normalizeManagedAssetPath(getImagesDir(), assetPath);
+    } catch {
+      return new Response("Forbidden", { status: 403 });
+    }
 
     if (!normalized) {
       return new Response("Forbidden", { status: 403 });
     }
 
     try {
-      const safePath = await assertManagedRegularFile(getImagesDir(), normalized);
+      const safePath = galleryFileName
+        ? await assertManagedRegularFile(getGalleryDir(), normalized)
+        : await assertManagedRegularFileInRoots([getImagesDir()], normalized);
       const content = await fs.readFile(safePath);
       const mimeType = mimeTypeForFile(safePath);
       return new Response(new Blob([content], { type: mimeType }), {
@@ -157,6 +169,10 @@ function getBackupStatePath(): string {
 
 function getImagesDir(): string {
   return path.join(app.getPath("userData"), "images");
+}
+
+function getGalleryDir(): string {
+  return path.join(app.getPath("userData"), "gallery");
 }
 
 function toPublicConfig(config: StoredProviderConfig): ProviderConfig {
@@ -227,6 +243,7 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
     activeProviderId: state.activeProviderId,
     history: state.history.slice(0, MAX_HISTORY),
     promptTemplates: state.promptTemplates,
+    galleryAssets: state.galleryAssets,
     draft: state.draft
   };
   const statePath = getStatePath();
@@ -486,6 +503,7 @@ async function handleGetSnapshot(): Promise<AppSnapshot> {
     activeProviderId: state.activeProviderId,
     history: state.history,
     promptTemplates: state.promptTemplates,
+    galleryAssets: state.galleryAssets,
     draft: state.draft
   };
 }
@@ -568,6 +586,7 @@ async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConf
     activeProviderId: newId,
     history: state.history,
     promptTemplates: state.promptTemplates,
+    galleryAssets: state.galleryAssets,
     draft: state.draft
   };
 }
@@ -589,6 +608,7 @@ async function handleSwitchProvider(_event: IpcMainInvokeEvent, providerId: stri
     activeProviderId: providerId,
     history: state.history,
     promptTemplates: state.promptTemplates,
+    galleryAssets: state.galleryAssets,
     draft: state.draft
   };
 }
@@ -612,6 +632,7 @@ async function handleDeleteProvider(_event: IpcMainInvokeEvent, providerId: stri
     activeProviderId: nextActiveProviderId,
     history: state.history,
     promptTemplates: state.promptTemplates,
+    galleryAssets: state.galleryAssets,
     draft: state.draft
   };
 }
@@ -799,6 +820,108 @@ async function handleExportTemplates(_event: IpcMainInvokeEvent, templateIds?: s
   };
   await fs.writeFile(result.filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   return result.filePath;
+}
+
+function galleryFileNameFor(sourcePath: string): string {
+  const ext = path.extname(sourcePath).toLowerCase() || ".png";
+  return `${Date.now()}-${randomUUID()}${ext}`;
+}
+
+async function createGalleryAssetFromFile(sourcePath: string, source: GalleryAsset["source"], now: string): Promise<GalleryAsset> {
+  await ensureDir(getGalleryDir());
+  const stat = await fs.stat(sourcePath);
+  if (!stat.isFile()) throw new Error("Gallery 只能导入图片文件。");
+  const fileName = galleryFileNameFor(sourcePath);
+  const targetPath = resolveManagedFileName(getGalleryDir(), fileName);
+  await fs.copyFile(sourcePath, targetPath);
+  return {
+    id: `gallery_${randomUUID()}`,
+    fileName,
+    originalName: path.basename(sourcePath),
+    mimeType: mimeTypeForFile(sourcePath),
+    sizeBytes: stat.size,
+    tags: [],
+    source,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+async function handleListGallery(): Promise<GalleryAsset[]> {
+  const state = await readState();
+  return state.galleryAssets;
+}
+
+async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[]): Promise<GalleryAsset[]> {
+  let sourcePaths = Array.isArray(paths) ? paths : [];
+  if (sourcePaths.length === 0) {
+    const result = await dialog.showOpenDialog({
+      title: "导入参考图到 Gallery",
+      properties: ["openFile", "multiSelections"],
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }]
+    });
+    if (result.canceled) return [];
+    sourcePaths = result.filePaths;
+  }
+  const now = new Date().toISOString();
+  const imported: GalleryAsset[] = [];
+  for (const sourcePath of sourcePaths) {
+    if (!IMAGE_EXTENSIONS.has(path.extname(sourcePath).toLowerCase())) continue;
+    imported.push(await createGalleryAssetFromFile(sourcePath, "import", now));
+  }
+  if (imported.length === 0) return [];
+  const state = await readState();
+  await writeState({ ...state, galleryAssets: [...imported, ...state.galleryAssets] });
+  return imported;
+}
+
+async function handleAddHistoryAssetToGallery(_event: IpcMainInvokeEvent, assetPath: string): Promise<GalleryAsset> {
+  const state = await readState();
+  const sourcePath = assertKnownOutputPath(getImagesDir(), state.history, assetPath);
+  const asset = await createGalleryAssetFromFile(sourcePath, "result", new Date().toISOString());
+  await writeState({ ...state, galleryAssets: [asset, ...state.galleryAssets] });
+  return asset;
+}
+
+async function handleUpdateGalleryAsset(_event: IpcMainInvokeEvent, id: string, patch: { tags?: string[] }): Promise<GalleryAsset> {
+  const state = await readState();
+  const asset = state.galleryAssets.find((item) => item.id === id);
+  if (!asset) throw new Error("Gallery 资源不存在。");
+  const updated: GalleryAsset = {
+    ...asset,
+    tags: normalizeTemplateTags(patch.tags),
+    updatedAt: new Date().toISOString()
+  };
+  await writeState({ ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) });
+  return updated;
+}
+
+async function handleRemoveGalleryAsset(_event: IpcMainInvokeEvent, id: string): Promise<GalleryAsset[]> {
+  const state = await readState();
+  const asset = state.galleryAssets.find((item) => item.id === id);
+  const galleryAssets = state.galleryAssets.filter((item) => item.id !== id);
+  await writeState({ ...state, galleryAssets });
+  if (asset) {
+    const filePath = resolveManagedFileName(getGalleryDir(), asset.fileName);
+    await fs.unlink(filePath).catch(() => undefined);
+  }
+  return galleryAssets;
+}
+
+async function handlePickGalleryAsset(_event: IpcMainInvokeEvent, id: string): Promise<InputAsset> {
+  const state = await readState();
+  const asset = state.galleryAssets.find((item) => item.id === id);
+  if (!asset) throw new Error("Gallery 资源不存在。");
+  const filePath = await assertManagedRegularFile(getGalleryDir(), resolveManagedFileName(getGalleryDir(), asset.fileName));
+  return {
+    id: asset.id,
+    name: asset.originalName,
+    path: filePath,
+    mimeType: asset.mimeType,
+    sizeBytes: asset.sizeBytes,
+    width: asset.width,
+    height: asset.height
+  };
 }
 
 async function refreshModelDiscovery(config: StoredProviderConfig): Promise<StoredProviderConfig> {
@@ -1207,6 +1330,12 @@ function registerIpcHandlers(): void {
   ipcMain.handle("templates:delete", handleDeleteTemplate);
   ipcMain.handle("templates:import", handleImportTemplates);
   ipcMain.handle("templates:export", handleExportTemplates);
+  ipcMain.handle("gallery:list", handleListGallery);
+  ipcMain.handle("gallery:import", handleImportToGallery);
+  ipcMain.handle("gallery:addHistoryAsset", handleAddHistoryAssetToGallery);
+  ipcMain.handle("gallery:update", handleUpdateGalleryAsset);
+  ipcMain.handle("gallery:remove", handleRemoveGalleryAsset);
+  ipcMain.handle("gallery:pick", handlePickGalleryAsset);
   ipcMain.handle("dialog:selectImages", handleSelectImages);
   ipcMain.handle("dialog:importImages", handleImportImages);
   ipcMain.handle("dialog:selectMask", handleSelectMask);

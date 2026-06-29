@@ -6,6 +6,7 @@ import type {
   AppBridge,
   AppSnapshot,
   GenerationJob,
+  GalleryAsset,
   ImageAsset,
   RunJobRequest,
   ProviderConfig,
@@ -357,6 +358,76 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).not.toContain("Product shot");
   });
 
+  it("picks a Gallery image as a reference asset", async () => {
+    const asset = galleryAsset("gallery-product.png", { tags: ["product"] });
+    const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
+
+    await click(buttonByText("Reference Gallery", ".section-toggle"));
+    await click(document.querySelector<HTMLButtonElement>(".gallery-thumb")!);
+
+    expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(asset.id);
+    expect(document.body.textContent).toContain("gallery-product.png added as a reference.");
+    expect(document.querySelector(".asset-tile")?.textContent).toContain("gallery-product.png");
+
+    await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "edit",
+        inputPaths: [`/tmp/gallery/${asset.fileName}`]
+      })
+    );
+  });
+
+  it("adds a history result to Gallery", async () => {
+    const result = imageAsset("history-result.png");
+    const job = geminiJob(0, { outputs: [result] });
+    const bridge = await renderApp(snapshot({ history: [job] }));
+
+    await click(buttonByText("Add to Gallery", ".history-action-button"));
+
+    expect(bridge.addHistoryAssetToGallery).toHaveBeenCalledWith(result.path);
+    expect(document.body.textContent).toContain("Added to Gallery.");
+
+    await click(buttonByText("Reference Gallery", ".section-toggle"));
+    expect(document.body.textContent).toContain("history.png");
+  });
+
+  it("edits Gallery tags and updates the visible filter state", async () => {
+    const asset = galleryAsset("gallery-tags.png", { tags: ["old"] });
+    const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
+
+    await click(buttonByText("Reference Gallery", ".section-toggle"));
+    await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[title="Edit tags"]')!);
+    await changeInput(document.querySelector<HTMLInputElement>(".gallery-tag-editor input")!, "product, hero");
+    await click(document.querySelector<HTMLButtonElement>('.gallery-tag-editor button[title="Save tags"]')!);
+
+    expect(bridge.updateGalleryAsset).toHaveBeenCalledWith(asset.id, { tags: ["product", "hero"] });
+    expect(document.body.textContent).toContain("Gallery tags updated.");
+    expect(document.body.textContent).toContain("product");
+    expect(document.body.textContent).toContain("hero");
+  });
+
+  it("confirms before deleting a Gallery image", async () => {
+    const asset = galleryAsset("gallery-delete.png");
+    const bridge = await renderApp(snapshot({ galleryAssets: [asset], history: [geminiJob(0)] }));
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    await click(buttonByText("Reference Gallery", ".section-toggle"));
+    expect(document.querySelectorAll(".history-item")).toHaveLength(1);
+    await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[title="Delete"]')!);
+
+    expect(confirmSpy).toHaveBeenCalledWith('Delete Gallery image "gallery-delete.png"?');
+    expect(bridge.removeGalleryAsset).not.toHaveBeenCalled();
+
+    confirmSpy.mockReturnValue(true);
+    await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[title="Delete"]')!);
+
+    expect(bridge.removeGalleryAsset).toHaveBeenCalledWith(asset.id);
+    expect(document.body.textContent).not.toContain("gallery-delete.png");
+    expect(document.querySelectorAll(".history-item")).toHaveLength(1);
+  });
+
   it("can discover models, select Nano Banana 3, and run through the Electron bridge", async () => {
     const geminiConfig = providerConfig({
       kind: "gemini",
@@ -703,6 +774,37 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     }),
     importTemplates: vi.fn(async () => ({ imported: 0, skipped: 0 })),
     exportTemplates: vi.fn(async () => "/tmp/templates.json"),
+    listGallery: vi.fn(async () => currentSnapshot.galleryAssets),
+    importToGallery: vi.fn(async () => {
+      const asset = galleryAsset("imported.png");
+      currentSnapshot = { ...currentSnapshot, galleryAssets: [asset, ...currentSnapshot.galleryAssets] };
+      return [asset];
+    }),
+    addHistoryAssetToGallery: vi.fn(async () => {
+      const asset = galleryAsset("history.png", { source: "result" });
+      currentSnapshot = { ...currentSnapshot, galleryAssets: [asset, ...currentSnapshot.galleryAssets] };
+      return asset;
+    }),
+    updateGalleryAsset: vi.fn(async (id, patch) => {
+      const asset = currentSnapshot.galleryAssets.find((item) => item.id === id) ?? galleryAsset("missing.png", { id });
+      const updated = { ...asset, tags: patch.tags ?? asset.tags, updatedAt: now };
+      currentSnapshot = { ...currentSnapshot, galleryAssets: currentSnapshot.galleryAssets.map((item) => item.id === id ? updated : item) };
+      return updated;
+    }),
+    removeGalleryAsset: vi.fn(async (id) => {
+      currentSnapshot = { ...currentSnapshot, galleryAssets: currentSnapshot.galleryAssets.filter((item) => item.id !== id) };
+      return currentSnapshot.galleryAssets;
+    }),
+    pickGalleryAsset: vi.fn(async (id) => {
+      const asset = currentSnapshot.galleryAssets.find((item) => item.id === id) ?? galleryAsset("picked.png", { id });
+      return {
+        id: asset.id,
+        name: asset.originalName,
+        path: `/tmp/gallery/${asset.fileName}`,
+        mimeType: asset.mimeType,
+        sizeBytes: asset.sizeBytes
+      };
+    }),
     selectImages: vi.fn(async () => []),
     getDroppedFilePaths: vi.fn(() => []),
     importImages: vi.fn(async () => []),
@@ -787,6 +889,7 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     activeProviderId: defaultConfig.id,
     history: [],
     promptTemplates: [],
+    galleryAssets: [],
     ...patch
   };
 }
@@ -848,6 +951,21 @@ function imageAsset(fileName: string, jobId = "job_gemini_0"): ImageAsset {
     mimeType: "image/png",
     sourceType: "result",
     createdAt: now
+  };
+}
+
+function galleryAsset(fileName: string, patch: Partial<GalleryAsset> = {}): GalleryAsset {
+  return {
+    id: `gallery_${fileName}`,
+    fileName,
+    originalName: fileName,
+    mimeType: "image/png",
+    sizeBytes: 1024,
+    tags: [],
+    source: "import",
+    createdAt: now,
+    updatedAt: now,
+    ...patch
   };
 }
 

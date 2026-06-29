@@ -63,6 +63,35 @@ export async function assertManagedRegularFile(imagesDir: string, assetPath: str
   return normalized;
 }
 
+export async function assertManagedRegularFileInRoots(managedRoots: string[], assetPath: string): Promise<string> {
+  for (const root of managedRoots) {
+    const normalized = normalizeManagedAssetPath(root, assetPath);
+    if (!normalized) continue;
+    const realRoot = await fs.realpath(root);
+    const realAssetPath = await fs.realpath(normalized);
+    if (!normalizeManagedAssetPath(realRoot, realAssetPath)) {
+      throw new Error(NOT_MANAGED_MESSAGE);
+    }
+    const stat = await fs.stat(realAssetPath);
+    if (!stat.isFile()) {
+      throw new Error("无法下载：资源不是文件。");
+    }
+    return normalized;
+  }
+  throw new Error(NOT_MANAGED_MESSAGE);
+}
+
+export function resolveManagedFileName(rootDir: string, fileName: string): string {
+  if (!fileName.trim() || fileName.includes("/") || fileName.includes("\\") || path.isAbsolute(fileName)) {
+    throw new Error(NOT_MANAGED_MESSAGE);
+  }
+  const resolved = path.resolve(rootDir, fileName);
+  if (!normalizeManagedAssetPath(rootDir, resolved)) {
+    throw new Error(NOT_MANAGED_MESSAGE);
+  }
+  return resolved;
+}
+
 export function collectOwnedJobFilePaths(imagesDir: string, job: GenerationJob): string[] {
   const ownedPaths: string[] = [];
 
