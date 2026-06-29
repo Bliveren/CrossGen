@@ -43,6 +43,10 @@ export function assertKnownOutputPath(imagesDir: string, history: GenerationJob[
   return normalized;
 }
 
+export async function assertKnownRegularOutputPath(imagesDir: string, history: GenerationJob[], assetPath: string): Promise<string> {
+  return assertManagedRegularFile(imagesDir, assertKnownOutputPath(imagesDir, history, assetPath));
+}
+
 export async function assertManagedRegularFile(imagesDir: string, assetPath: string): Promise<string> {
   const normalized = normalizeManagedAssetPath(imagesDir, assetPath);
   if (!normalized) {

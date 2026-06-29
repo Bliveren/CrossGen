@@ -397,6 +397,9 @@ export function validateInputAssetShape(asset: unknown): ValidationResult {
   if (asset.dataUrl !== undefined && typeof asset.dataUrl !== "string") {
     return { ok: false, message: "输入资源数据无效。" };
   }
+  if (asset.previewUrl !== undefined && typeof asset.previewUrl !== "string") {
+    return { ok: false, message: "输入资源预览地址无效。" };
+  }
   if (asset.width !== undefined && (!isInteger(asset.width) || asset.width < 1)) {
     return { ok: false, message: "输入资源宽度无效。" };
   }

@@ -6,6 +6,7 @@ import type { GenerationJob } from "../../shared/types";
 import { DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
 import {
   assertKnownOutputPath,
+  assertKnownRegularOutputPath,
   assertManagedRegularFile,
   assertManagedRegularFileInRoots,
   collectOwnedJobFilePaths,
@@ -82,6 +83,20 @@ describe("asset ownership checks", () => {
     await import("node:fs/promises").then((fs) => fs.symlink(outsidePath, linkPath));
 
     await expect(assertManagedRegularFile(imagesDir, linkPath)).rejects.toThrow("管理目录");
+  });
+
+  it.skipIf(process.platform === "win32")("rejects known history outputs that are symlinks outside the managed images directory", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-assets-"));
+    const imagesDir = path.join(tmpDir, "images");
+    await mkdir(imagesDir);
+    const outsidePath = path.join(tmpDir, "outside.png");
+    const linkPath = path.join(imagesDir, "history-linked.png");
+    await writeFile(outsidePath, "secret");
+    await import("node:fs/promises").then((fs) => fs.symlink(outsidePath, linkPath));
+    const job = makeJob(imagesDir, linkPath);
+
+    expect(assertKnownOutputPath(imagesDir, [job], linkPath)).toBe(path.resolve(linkPath));
+    await expect(assertKnownRegularOutputPath(imagesDir, [job], linkPath)).rejects.toThrow("管理目录");
   });
 
   it("collects only generated files and locally persisted masks owned by a job", () => {
