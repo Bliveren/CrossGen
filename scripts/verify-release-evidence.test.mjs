@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 const scriptPath = path.resolve("scripts/verify-release-evidence.mjs");
 const execFileAsync = promisify(execFile);
-const checklistFiles = ["TODO.md", "CHECKLIST.md", "MULTI_MODEL_CHECKLIST.md"];
+const checklistFiles = ["TODO.md", "CHECKLIST.md", "MULTI_MODEL_CHECKLIST.md", "docs/plans/v0.3.0-plan.md"];
 
 async function run(args, options = {}) {
   try {
@@ -49,7 +49,7 @@ function completeLedger() {
   ];
   return {
     schemaVersion: 1,
-    releaseVersion: "0.2.3",
+    releaseVersion: "0.3.0",
     lastUpdated: "2026-06-09T12:00:00.000Z",
     gates: gateIds.map((id) => ({
       id,
@@ -63,18 +63,19 @@ function completeLedger() {
 }
 
 describe("release evidence verifier", () => {
-  it("validates the staged release evidence ledger", async () => {
+  it("validates the staged v0.3.0 release-prep evidence ledger", async () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 6/6 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated:");
+    expect(result.stdout).toContain("Pending required gate(s):");
   });
 
-  it("passes --require-complete because all gates are passed", async () => {
+  it("fails --require-complete while staged v0.3.0 release gates are pending", async () => {
     const result = await run(["--require-complete"]);
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 6/6 required gate(s) passed.");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Required release evidence gates are not passed");
   });
 
   it("fails --require-complete when a required gate is still pending", async () => {
@@ -164,20 +165,21 @@ describe("release evidence verifier", () => {
       };
       await writeFile(path.join(docsReleaseDir, "evidence.json"), JSON.stringify(ledger, null, 2));
 
-      const checklistPath = path.join(tempRoot, "TODO.md");
+      const guardedItem = "macOS：`pnpm package:mac:signed` 产出 signed/notarized dmg/zip";
+      const checklistPath = path.join(tempRoot, "docs/plans/v0.3.0-plan.md");
       const checklist = await readFile(checklistPath, "utf8");
       await writeFile(
         checklistPath,
         checklist.replace(
-          "- [ ] 完成签名、公证并补充正式分发资产 URL / hash / size 证据",
-          "- [x] 完成签名、公证并补充正式分发资产 URL / hash / size 证据"
+          `- [ ] ${guardedItem}`,
+          `- [x] ${guardedItem}`
         )
       );
 
       const result = await run([], { cwd: tempRoot });
 
       expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain("完成签名、公证并补充正式分发资产 URL / hash / size 证据");
+      expect(result.stderr).toContain(guardedItem);
       expect(result.stderr).toContain("macos-signed-notarized");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
@@ -187,6 +189,8 @@ describe("release evidence verifier", () => {
 
 async function copyChecklistFixture(tempRoot) {
   for (const file of checklistFiles) {
-    await copyFile(path.resolve(file), path.join(tempRoot, file));
+    const destination = path.join(tempRoot, file);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await copyFile(path.resolve(file), destination);
   }
 }

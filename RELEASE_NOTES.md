@@ -1,5 +1,41 @@
 # Image2Tools Release Notes
 
+## v0.3.0 (release candidate)
+
+Productivity release focused on multi-API management and reusable prompt workflows.
+
+### Multi-API management
+
+- Save multiple API access profiles for OpenAI, Gemini, and OpenAI-compatible Custom endpoints.
+- Switch API profiles without re-entering keys, Base URLs, model discovery results, or model-specific launch settings.
+- Keep API connectivity and model discovery scoped to the active API profile so GPT Image 2, Nano Banana 3, and General launch availability follows the models exposed by the selected key.
+- Preserve the current prompt and references while switching profiles; incompatible model states show validation guidance instead of silently clearing user work.
+
+### Prompt workflow
+
+- Add a local prompt template library with search, tags, categories, edit/delete, and JSON import/export.
+- Add a managed reference Gallery. Imported images are copied into the app's user data directory, can be tagged/searched, and can be reused as references without exposing arbitrary local file paths to the renderer.
+- Add prompt chips: `@` inserts a Gallery reference, `~` expands a saved template, and `#` adds a color value. Jobs still submit the same stable backend contract: plain text `prompt` plus `inputAssets` and params.
+- History reuse intentionally degrades back to plain text prompt content, keeping older jobs compatible without storing renderer-specific chip schema.
+
+### Safety and compatibility
+
+- State v3 is extended with optional `promptTemplates` and `galleryAssets` arrays without a destructive state-version bump.
+- Gallery previews use the managed `image2tools-asset://` protocol and filename-only Gallery reads; symlink escape and malformed migration cases are covered by tests.
+- Prompt-template and Gallery IPC are kept behind the existing main/preload boundary, with renderer smoke coverage for creation, import/export, Gallery selection, deletion confirmation, and chip serialization.
+
+### Release gates
+
+- Automatic validation required before final release:
+  - `pnpm build`
+  - `pnpm verify:mock-api`
+  - `pnpm verify:mock-gemini-api`
+  - `pnpm verify:mock-model-discovery`
+  - `pnpm verify:release-evidence`
+- Final publication is still gated by v0.3.0 macOS signed/notarized artifacts, Windows installer validation, v0.3.0 update manifest assets, and refreshed real API acceptance evidence.
+
+---
+
 ## v0.2.3 (unsigned preview)
 
 Compatibility and UX patch release. Fixes aggregator streaming compatibility issues and adds image preview context menu.

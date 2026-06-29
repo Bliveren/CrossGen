@@ -52,33 +52,10 @@ Download the latest installer from the [Releases page](https://github.com/Bliver
 
 | Platform | File | Notes |
 | --- | --- | --- |
-| macOS (Apple Silicon) | `Image2Tools-<version>-mac-arm64.dmg` | ad-hoc signed, not Apple-notarized |
-| Windows (x64) | `Image2Tools-Setup.exe` | NSIS installer |
+| macOS (Apple Silicon) | `Image2Tools-<version>-mac-arm64.dmg` | Developer ID signed and Apple-notarized when published from the signed release pipeline |
+| Windows (x64) | `Image2Tools-Setup.exe` | NSIS installer; SmartScreen reputation may still appear on early open-source builds |
 
-> ### ⚠️ Why your OS shows an "unverified developer" warning
->
-> Image2Tools preview builds are **not yet signed with an Apple Developer ID or a
-> Windows code-signing certificate** (commercial paid certificates we haven't
-> purchased for this preview). Because of that, on first launch macOS Gatekeeper
-> says something like *"Apple could not verify Image2Tools is free of malware"*
-> and Windows SmartScreen shows a blue *"Windows protected your PC"* prompt.
->
-> **This is expected for an unsigned open-source preview — it is not a virus
-> warning and does not mean the download is corrupted.** The entire source is
-> public and auditable, and every release artifact's SHA256 is published so you
-> can verify the file you downloaded is exactly the one we built (see below).
-> Signing & notarization are tracked in [issue #116](https://github.com/Bliveren/image2tools/issues/116);
-> once done, these warnings will disappear.
-
-Follow the one-time steps below to open the app.
-
-**macOS** — if Gatekeeper blocks the app, either right-click the app and choose **Open** twice, or clear the quarantine attribute:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Image2Tools.app
-```
-
-**Windows** — if SmartScreen shows a blue prompt, click **More info** → **Run anyway**.
+If macOS or Windows shows a first-run security prompt, verify the SHA256 below and open the app through the system's normal confirmation flow. The source is public and each release artifact's SHA256 is published so the downloaded file can be checked against the built artifact.
 
 **Verify the download (optional).** Compare the SHA256 of your downloaded file against the value published in [`docs/updates/latest.json`](./docs/updates/latest.json):
 
@@ -93,18 +70,22 @@ Get-FileHash .\Image2Tools-Setup.exe -Algorithm SHA256
 
 Image2Tools is an easy-to-use, all-in-one desktop tool for AI image generation management. The current main branch supports GPT Image 2 through the OpenAI Image API, the app's Nano Banana 3 launch target through Gemini image models such as `gemini-3.1-flash-image` and `gemini-3-pro-image`, and a minimal General launch mode for discovered non-focused image models.
 
-The app is built for non-developers, individual creators, product teams, and internal AI workflow builders who need a simple desktop tool instead of a cloud workspace or account system. The latest UI separates model configuration, launch-model selection, model-specific parameters, local history, draft recovery, and update management so API setup, model discovery, generation, reuse, and desktop updates stay in one local workflow.
+The app is built for non-developers, individual creators, product teams, and internal AI workflow builders who need a simple desktop tool instead of a cloud workspace or account system. The latest UI separates API access management, launch-model selection, model-specific parameters, prompt templates, a managed reference Gallery, local history, draft recovery, and update management so setup, model discovery, generation, reuse, and desktop updates stay in one local workflow.
 
 ## Features
 
 | Area | Capability |
 | --- | --- |
-| Model configuration | OpenAI, Gemini, and OpenAI-compatible Custom setup with Base URL/API Key storage, saved key preview, automatic connection checks, and friendly failure hints. |
+| Multi-API management | Save, switch, and delete multiple OpenAI, Gemini, and OpenAI-compatible Custom API access profiles without re-entering keys or model discovery results. |
+| Model configuration | Per-API Base URL/API Key storage, saved key preview, automatic connection checks, and friendly failure hints. |
 | Model discovery | Detects models exposed by the configured API and uses discovered provider/model metadata instead of relying only on the selected provider label. |
 | Launch models | GPT Image 2, Nano Banana 3, and General launch buttons with availability reasons plus concrete discovered-model choices inside each launch button. |
 | GPT Image 2 | Text-to-image, single/multi-image editing, exact-mask inpainting, streaming partial previews, and validated OpenAI Image API parameters. |
 | Nano Banana 3 | Gemini `generateContent` image generation, reference-image editing, guided-region editing, aspect ratio, resolution, Thinking, and Search grounding controls. |
 | General | Minimal fallback for discovered non-focused image models: Gemini supports prompt and reference images, while OpenAI and Custom use a prompt-only OpenAI-compatible generation contract. |
+| Prompt templates | Local template library with search, tags, categories, edit/delete, and JSON import/export. |
+| Reference Gallery | Managed local reference-image library with import, tagging, search, history-to-Gallery reuse, and filename-only safe previews. |
+| Prompt chips | `@` inserts a Gallery reference, `~` expands a template, and `#` adds a color value while the backend still receives plain text plus input assets. |
 | Local history | Generated assets are saved in Electron user data with provider/model chips and can be reused, opened, downloaded, or cleared after explicit confirmation. |
 | Workspace recovery | Draft prompt, parameters, references, masks, and brush size are autosaved. |
 | Bilingual UI | In-app language switch supports English and Simplified Chinese through localStorage. |
@@ -113,12 +94,24 @@ The app is built for non-developers, individual creators, product teams, and int
 
 ## Product Flow
 
-1. Configure the API provider, Base URL, and API Key. The app automatically tests the saved connection on startup and after config changes.
-2. Run model discovery and pick GPT Image 2, Nano Banana 3, or General from the launch-model area.
-3. If multiple compatible concrete models are discovered under a launch family, open the launch button menu and choose the exact model to run.
-4. Choose Generate, Edit, or Inpaint/Guided Region where the selected model supports it.
-5. Tune model-specific parameters. GPT Image 2 exposes OpenAI Image API controls and streaming; Nano Banana 3 exposes Gemini image controls; General stays minimal.
-6. Download results, open the local output folder, or reuse history prompts with their provider/model context.
+1. Add one or more API access profiles with provider type, Base URL, and API Key. The app automatically tests the active profile on startup and after config changes.
+2. Run model discovery for each profile and switch between profiles when you need a different key, endpoint, or model inventory.
+3. Pick GPT Image 2, Nano Banana 3, or General from the launch-model area. If multiple compatible concrete models are discovered under a launch family, open the launch button menu and choose the exact model to run.
+4. Compose the prompt with plain text, saved templates, managed Gallery references, and color chips.
+5. Choose Generate, Edit, or Inpaint/Guided Region where the selected model supports it, then tune model-specific parameters.
+6. Download results, open the local output folder, save outputs back into the Gallery, or reuse history prompts with their provider/model context.
+
+## Multi-API Management
+
+Image2Tools can keep several API access profiles side by side. Each profile has its own provider type, Base URL, saved-key state, discovered model list, connection status, and selected concrete model. Switching profiles updates the model configuration, launch model, and parameter areas without requiring the user to paste keys again.
+
+Model availability is based on what the active API actually exposes. For example, an OpenAI-compatible aggregator key can enable both GPT Image 2 and Nano Banana 3 if discovery returns compatible models for both launch families.
+
+## Prompt Workflow
+
+The prompt workflow is local-first. Templates store reusable prompt text with tags and optional categories. The Gallery copies imported references into the app-managed user data directory and only exposes filename-based preview URLs, so the renderer never needs arbitrary local file paths.
+
+Prompt chips keep composition fast without changing provider contracts. `@` adds a Gallery reference to `inputAssets`, `~` expands a saved template into the final prompt, and `#` inserts a color value. Before a job starts, the composer serializes everything to the existing backend shape: plain text `prompt`, `inputAssets`, and model params.
 
 ## Open Source Status
 
@@ -333,31 +326,10 @@ Image2Tools is released under the [MIT License](./LICENSE).
 
 | 平台 | 文件 | 说明 |
 | --- | --- | --- |
-| macOS（Apple 芯片） | `Image2Tools-<版本>-mac-arm64.dmg` | 临时签名，未经 Apple 公证 |
-| Windows（x64） | `Image2Tools-Setup.exe` | NSIS 安装程序 |
+| macOS（Apple 芯片） | `Image2Tools-<版本>-mac-arm64.dmg` | 通过签名发布流水线产出时为 Developer ID 签名并完成 Apple 公证 |
+| Windows（x64） | `Image2Tools-Setup.exe` | NSIS 安装程序；早期开源版本仍可能出现 SmartScreen 声誉提示 |
 
-> ### ⚠️ 为什么系统会提示"无法验证开发者"
->
-> Image2Tools 预览版**尚未取得 Apple Developer ID 签名和 Windows 代码签名证书**
-> （这些是需要付费购买的商业证书，预览阶段暂未采购）。因此首次打开时，macOS
-> Gatekeeper 会提示类似*"无法验证 Image2Tools 是否包含恶意软件"*，Windows
-> SmartScreen 会弹出蓝色的*"Windows 已保护你的电脑"*窗口。
->
-> **这是未签名开源预览版的正常现象，既不是病毒警告，也不代表安装包损坏。**
-> 本项目源码完全公开可审计，每个发布安装包都附带 SHA256，你可以校验下载到的
-> 文件与我们构建的完全一致（见下方）。签名与公证进度见
-> [issue #116](https://github.com/Bliveren/image2tools/issues/116)，完成后这些
-> 提示将不再出现。
-
-按下面的一次性步骤即可正常打开应用。
-
-**macOS** — 若 Gatekeeper 拦截，可右键应用选择 **打开** 两次，或清除隔离属性：
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Image2Tools.app
-```
-
-**Windows** — 若出现 SmartScreen 蓝色提示，点击 **更多信息** → **仍要运行**。
+如果 macOS 或 Windows 首次运行时出现系统安全确认，请先按下方 SHA256 校验下载文件，再通过系统提供的正常确认流程打开。项目源码公开可审计，每个发布安装包都会附带 SHA256，便于确认下载文件与构建产物一致。
 
 **校验下载（可选）。** 将下载文件的 SHA256 与 [`docs/updates/latest.json`](./docs/updates/latest.json) 中发布的值比对：
 
@@ -372,18 +344,22 @@ Get-FileHash .\Image2Tools-Setup.exe -Algorithm SHA256
 
 Image2Tools 是一个方便易用的一站式AI生图管理工具。当前 main 分支支持通过 OpenAI Image API 使用 GPT Image 2，通过 Gemini 图片模型（如 `gemini-3.1-flash-image` 和 `gemini-3-pro-image`）使用应用内的 Nano Banana 3 启动入口，并为应用探测到的非重点图片模型提供最小 General 兜底模式。
 
-适合非开发人员、个人创作者、产品团队、AI 应用工程团队和需要轻量图像工作台的内部工具场景。最新版界面把模型配置、启动模型选择、模型专属参数、本地历史、草稿恢复和升级管理拆开，让 API 配置、模型探测、生成、复用和桌面更新集中在一个本地工作流里完成。
+适合非开发人员、个人创作者、产品团队、AI 应用工程团队和需要轻量图像工作台的内部工具场景。最新版界面把 API 接入管理、启动模型选择、模型专属参数、提示词模板、受管参考图 Gallery、本地历史、草稿恢复和升级管理拆开，让配置、模型探测、生成、复用和桌面更新集中在一个本地工作流里完成。
 
 ## 功能亮点
 
 | 模块 | 能力 |
 | --- | --- |
-| 模型配置 | OpenAI、Gemini 与 OpenAI 兼容 Custom 配置，支持 Base URL/API Key 本地保存、Key 脱敏预览、自动联通测试和友好的失败原因提示。 |
+| 多 API 管理 | 保存、切换和删除多个 OpenAI、Gemini 与 OpenAI 兼容 Custom API 接入，不需要反复输入 Key 或重新探测模型。 |
+| 模型配置 | 每个 API 接入独立保存 Base URL/API Key、Key 脱敏预览、自动联通测试和友好的失败原因提示。 |
 | 模型探测 | 基于用户配置的 API 探测可用模型，并使用探测到的 provider/model 信息匹配功能，而不是只依赖用户选择的服务商标签。 |
 | 启动模型 | GPT Image 2、Nano Banana 3、General 启动按钮，根据探测结果显示可用性原因，并把具体可运行模型折叠到对应启动按钮内选择。 |
 | GPT Image 2 | 文生图、单图/多图编辑、精确 mask 局部重绘、流式局部预览和 OpenAI Image API 参数校验。 |
 | Nano Banana 3 | Gemini `generateContent` 图片生成、参考图编辑、引导式区域编辑、画面比例、分辨率、Thinking 和 Search grounding 控件。 |
 | General | 针对探测到的非重点图片模型提供最小兜底；Gemini 支持 prompt 与参考图，OpenAI 和 Custom 使用 OpenAI 兼容的纯提示词生成契约。 |
+| 提示词模板 | 本地模板库支持搜索、标签、分类、编辑删除和 JSON 导入导出。 |
+| 参考图 Gallery | 受管本地参考图库，支持导入、打标签、搜索、历史结果加入 Gallery，并用文件名级安全预览。 |
+| Prompt chips | `@` 插入 Gallery 参考图，`~` 展开模板，`#` 加入色值，同时后端仍接收纯文本 prompt 和 input assets。 |
 | 本地历史 | 输出资产保存在 Electron user data，历史条目显示 provider/model，可下载、打开目录、复用 prompt；清空全部历史前需要二次确认。 |
 | 草稿恢复 | 自动保存 prompt、参数、参考图、mask 和画笔大小。 |
 | 双语界面 | 应用内支持 English / 简体中文切换，语言选择保存在 localStorage。 |
@@ -392,12 +368,24 @@ Image2Tools 是一个方便易用的一站式AI生图管理工具。当前 main 
 
 ## 产品流程
 
-1. 配置 API 服务商、Base URL 与 API Key。应用会在保存后和下次启动时自动测试联通状态。
-2. 执行模型探测，并在启动模型区选择 GPT Image 2、Nano Banana 3 或 General。
-3. 如果某个启动模型下探测到多个具体模型，打开启动按钮内的下拉菜单，选择实际要运行的模型。
-4. 根据模型能力选择生成、编辑或局部重绘 / 引导式区域编辑。
-5. 调整模型专属参数：GPT Image 2 显示 OpenAI Image API 与 streaming 控件，Nano Banana 3 显示 Gemini 图片参数，General 保持最小能力。
-6. 下载结果、打开本地输出目录，或从历史记录复用带有 provider/model 上下文的 prompt。
+1. 添加一个或多个 API 接入，配置服务商类型、Base URL 与 API Key。应用会在保存后和下次启动时自动测试当前接入的联通状态。
+2. 对每个 API 接入执行模型探测，需要不同 Key、端点或模型库存时直接切换接入。
+3. 在启动模型区选择 GPT Image 2、Nano Banana 3 或 General。如果某个启动模型下探测到多个具体模型，打开启动按钮内的下拉菜单，选择实际要运行的模型。
+4. 使用纯文本、已保存模板、Gallery 参考图和色值 chip 组合 prompt。
+5. 根据模型能力选择生成、编辑或局部重绘 / 引导式区域编辑，并调整模型专属参数。
+6. 下载结果、打开本地输出目录、把结果加入 Gallery，或从历史记录复用带有 provider/model 上下文的 prompt。
+
+## 多 API 管理
+
+Image2Tools 可以同时保存多个 API 接入。每个接入都有独立的服务商类型、Base URL、Key 保存状态、模型探测结果、连接状态和具体模型选择。切换接入后，模型配置、启动模型和参数区会随之更新，不需要用户重新粘贴 Key。
+
+模型功能是否可启动基于当前 API 实际探测到的模型决定。例如，同一个 OpenAI 兼容聚合站 Key 如果同时暴露 GPT Image 2 与 Gemini 图片模型，就可以同时启用 GPT Image 2 与 Nano Banana 3 启动入口。
+
+## 提示词工作流
+
+提示词工作流坚持本地优先。模板库保存可复用的 prompt 文本、标签和分类。Gallery 会把导入参考图复制到应用受管目录，并只通过文件名级预览 URL 暴露给 renderer，避免任意本地路径读取。
+
+Prompt chips 用来提升组合效率，但不改变 provider 契约。`@` 会把 Gallery 参考图加入 `inputAssets`，`~` 会把模板展开进最终 prompt，`#` 会插入色值。任务启动前，composer 会统一序列化为现有后端结构：纯文本 `prompt`、`inputAssets` 和模型参数。
 
 ## MIT 开源状态
 
