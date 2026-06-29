@@ -67,14 +67,14 @@ describe("release evidence verifier", () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated: 6/6 required gate(s) passed.");
   });
 
-  it("passes --require-complete because the only pending gate is non-blocking", async () => {
+  it("passes --require-complete because all gates are passed", async () => {
     const result = await run(["--require-complete"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated: 6/6 required gate(s) passed.");
   });
 
   it("fails --require-complete when a required gate is still pending", async () => {
@@ -148,7 +148,21 @@ describe("release evidence verifier", () => {
 
       const docsReleaseDir = path.join(tempRoot, "docs", "release");
       await mkdir(docsReleaseDir, { recursive: true });
-      await copyFile(path.resolve("docs/release/evidence.json"), path.join(docsReleaseDir, "evidence.json"));
+
+      // Use a synthetic evidence with macos-signed-notarized still pending
+      const ledger = completeLedger();
+      const signingGate = ledger.gates.find((gate) => gate.id === "macos-signed-notarized");
+      signingGate.status = "pending";
+      signingGate.evidence = {
+        verifiedAt: null,
+        commit: null,
+        environment: null,
+        commands: [],
+        references: [{ label: "tracker", url: "https://github.com/Bliveren/image2tools/issues/3" }],
+        artifacts: [],
+        summary: "Pending signing and notarization."
+      };
+      await writeFile(path.join(docsReleaseDir, "evidence.json"), JSON.stringify(ledger, null, 2));
 
       const checklistPath = path.join(tempRoot, "TODO.md");
       const checklist = await readFile(checklistPath, "utf8");
