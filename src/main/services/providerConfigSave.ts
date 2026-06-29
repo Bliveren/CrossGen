@@ -26,6 +26,7 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
   const hasNewApiKey = input.apiKey !== undefined && input.apiKey.trim().length > 0;
   const defaultModel = defaultModelForProvider(kind, input.defaultModel);
   const baseURL = normalizeBaseURL(input.baseURL || defaultBaseURLForProvider(kind, current.baseURL));
+  const name = input.name?.trim() || (providerChanged ? providerDisplayName(kind) : current.name);
   const discoveryInvalidated = providerChanged || baseURL !== current.baseURL;
   const requestedLaunchId = input.activeLaunchId;
   const activeLaunchId = activeLaunchForProvider(kind, requestedLaunchId ?? (providerChanged ? undefined : current.activeLaunchId));
@@ -33,7 +34,7 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
   const nextConfig: StoredProviderConfig = {
     ...current,
     kind,
-    name: providerDisplayName(kind),
+    name,
     baseURL,
     defaultModel,
     defaultSize: input.defaultSize.trim() || DEFAULT_IMAGE_PARAMS.size,

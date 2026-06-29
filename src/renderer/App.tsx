@@ -21,6 +21,7 @@ import {
   Search,
   SlidersHorizontal,
   Trash2,
+  Plus,
   Wand2,
   X,
   ZoomIn,
@@ -241,6 +242,19 @@ function providerLabelFromKind(value: string): string {
   if (value === "gemini") return "Gemini";
   if (value === "custom") return "Custom";
   return value;
+}
+
+function apiAccessDisplayName(config: ProviderConfig, fallback: string): string {
+  return config.name.trim() || providerLabelFromKind(config.kind) || fallback;
+}
+
+function summarizeBaseURL(value: string): string {
+  try {
+    const url = new URL(value);
+    return `${url.host}${url.pathname === "/" ? "" : url.pathname}`.replace(/\/$/, "");
+  } catch {
+    return value.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  }
 }
 
 function defaultBaseURLForProvider(kind: ProviderKind, currentBaseURL: string): string {
@@ -611,8 +625,14 @@ export function App() {
   const [params, setParams] = useState<ImageParams>(DEFAULT_IMAGE_PARAMS);
   const modeLabels = useMemo(() => modeLabelsForParams(copy, params), [copy, params]);
   const [apiKey, setApiKey] = useState("");
-  const [providerKind, setProviderKind] = useState<ProviderKind>("openai");
+  const [apiAccessName, setApiAccessName] = useState("OpenAI");
   const [baseURL, setBaseURL] = useState(DEFAULT_BASE_URL);
+  const [isApiAccessOpen, setIsApiAccessOpen] = useState(false);
+  const [isAddingApiAccess, setIsAddingApiAccess] = useState(false);
+  const [newApiAccessKind, setNewApiAccessKind] = useState<ProviderKind>("openai");
+  const [newApiAccessName, setNewApiAccessName] = useState("");
+  const [newApiAccessBaseURL, setNewApiAccessBaseURL] = useState(DEFAULT_BASE_URL);
+  const [newApiAccessKey, setNewApiAccessKey] = useState("");
   const [customSize, setCustomSize] = useState("2048x1152");
   const [inputAssets, setInputAssets] = useState<InputAsset[]>([]);
   const [maskAsset, setMaskAsset] = useState<InputAsset | null>(null);
@@ -919,11 +939,7 @@ export function App() {
     setIsLoadingSnapshot(true);
     try {
       const next = await bridge.getSnapshot();
-      setSnapshot(next);
-      const nextActiveConfig = next.providers.find(p => p.id === next.activeProviderId) ?? next.providers[0];
-      setProviderKind(nextActiveConfig.kind);
-      setBaseURL(nextActiveConfig.baseURL);
-      syncParamsToConfig(nextActiveConfig);
+      const nextActiveConfig = applySnapshot(next);
       if (!hasRestoredDraft) {
         restoreDraft(next.draft, nextActiveConfig);
       }
@@ -943,8 +959,7 @@ export function App() {
     setPrompt(draft.prompt);
     setParams(restoredParams);
     updateCustomSizeFromParams(restoredParams, setCustomSize);
-    setProviderKind(restoredParams.providerKind);
-    setBaseURL(defaultBaseURLForProvider(restoredParams.providerKind, config.baseURL));
+    setBaseURL(config.baseURL);
     setInputAssets(draft.inputAssets);
     setMaskAsset(isGeneralImageParams(restoredParams) ? null : draft.maskAsset ?? null);
     setMaskDataUrl(isGeneralImageParams(restoredParams) ? null : draft.maskDataUrl ?? null);
@@ -993,12 +1008,22 @@ export function App() {
     }
   }
 
+  function applySnapshot(next: AppSnapshot): ProviderConfig {
+    setSnapshot(next);
+    const nextActiveConfig = next.providers.find(p => p.id === next.activeProviderId) ?? next.providers[0];
+    setApiAccessName(apiAccessDisplayName(nextActiveConfig, copy.apiAccessUntitled));
+    setBaseURL(nextActiveConfig.baseURL);
+    setApiKey("");
+    syncParamsToConfig(nextActiveConfig);
+    return nextActiveConfig;
+  }
+
   function applyConfig(config: ProviderConfig) {
     setSnapshot((current) => {
       const nextProviders = current.providers.map(p => p.id === current.activeProviderId ? config : p);
       return { ...current, providers: nextProviders };
     });
-    setProviderKind(config.kind);
+    setApiAccessName(apiAccessDisplayName(config, copy.apiAccessUntitled));
     setBaseURL(config.baseURL);
   }
 
@@ -1015,6 +1040,21 @@ export function App() {
     setConnectionCheck({ status: "idle" });
   }
 
+  async function persistCurrentDraft() {
+    if (!bridge) return;
+    await bridge.saveDraft({
+      activeLaunchId: params.launchId,
+      activeModelId: params.model,
+      mode: requestMode,
+      prompt,
+      params,
+      inputAssets,
+      maskAsset: maskAsset ?? undefined,
+      maskDataUrl: maskDataUrl ?? undefined,
+      brushSize
+    });
+  }
+
   async function saveConfig() {
     if (!bridge) {
       setNotice({ kind: "error", text: copy.notices.bridgeSaveConfig });
@@ -1022,16 +1062,18 @@ export function App() {
     }
     setIsSavingConfig(true);
     try {
-      const providerChanged = providerKind !== activeConfig.kind;
+      const configKind = activeConfig.kind;
       const config = await bridge.saveConfig({
+        kind: configKind,
+        name: apiAccessName.trim() || providerLabelFromKind(configKind),
         apiKey: apiKey.trim() ? apiKey : undefined,
         baseURL,
-        defaultModel: defaultModelForConfigSave(providerKind, params, activeConfig),
+        defaultModel: defaultModelForConfigSave(configKind, params, activeConfig),
         defaultSize: defaultSizeForConfigSave(params, activeConfig),
         defaultQuality: defaultQualityForConfigSave(params, activeConfig),
         timeoutMs: params.timeoutMs,
-        activeLaunchId: providerChanged ? undefined : activeConfig.activeLaunchId,
-        activeModelId: providerChanged ? undefined : activeConfig.activeModelId
+        activeLaunchId: activeConfig.activeLaunchId,
+        activeModelId: activeConfig.activeModelId
       });
       applyConfig(config);
       syncParamsToConfig(config);
@@ -1045,6 +1087,98 @@ export function App() {
         await runConnectionTest({ silent: false, apiKeySaved: config.apiKeySaved });
       } else {
         setConnectionCheck({ status: "idle" });
+      }
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsSavingConfig(false);
+    }
+  }
+
+  function changeNewApiAccessKind(kind: ProviderKind) {
+    setNewApiAccessKind(kind);
+    setNewApiAccessBaseURL(defaultBaseURLForProvider(kind, kind === "custom" ? newApiAccessBaseURL : baseURL));
+    setNewApiAccessName((current) => current || providerLabelFromKind(kind));
+  }
+
+  async function switchApiAccess(providerId: string) {
+    if (!bridge || providerId === activeConfig.id) {
+      setIsApiAccessOpen(false);
+      return;
+    }
+    try {
+      await persistCurrentDraft();
+      const next = await bridge.switchProvider(providerId);
+      const nextActiveConfig = applySnapshot(next);
+      hasAutoTestedConnectionRef.current = false;
+      setConnectionCheck({ status: "idle" });
+      setIsApiAccessOpen(false);
+      setNotice({ kind: "success", text: copy.apiAccessSwitched(apiAccessDisplayName(nextActiveConfig, copy.apiAccessUntitled)) });
+      if (nextActiveConfig.apiKeySaved) {
+        hasAutoTestedConnectionRef.current = true;
+        await runConnectionTest({ silent: true, apiKeySaved: nextActiveConfig.apiKeySaved });
+      }
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function addApiAccess() {
+    if (!bridge) return;
+    setIsSavingConfig(true);
+    try {
+      await persistCurrentDraft();
+      const defaultModel = defaultModelForProvider(newApiAccessKind);
+      const next = await bridge.addProvider({
+        kind: newApiAccessKind,
+        name: newApiAccessName.trim() || providerLabelFromKind(newApiAccessKind),
+        apiKey: newApiAccessKey.trim() || undefined,
+        baseURL: newApiAccessBaseURL,
+        defaultModel,
+        defaultSize: DEFAULT_IMAGE_PARAMS.size,
+        defaultQuality: DEFAULT_IMAGE_PARAMS.quality,
+        timeoutMs: params.timeoutMs,
+        activeLaunchId: defaultLaunchForProvider(newApiAccessKind),
+        activeModelId: defaultModel
+      });
+      const nextActiveConfig = applySnapshot(next);
+      setNewApiAccessKind("openai");
+      setNewApiAccessName("");
+      setNewApiAccessBaseURL(DEFAULT_BASE_URL);
+      setNewApiAccessKey("");
+      setIsAddingApiAccess(false);
+      setIsApiAccessOpen(true);
+      hasAutoTestedConnectionRef.current = false;
+      setConnectionCheck({ status: "idle" });
+      setNotice({ kind: "success", text: copy.apiAccessAdded });
+      if (nextActiveConfig.apiKeySaved) {
+        hasAutoTestedConnectionRef.current = true;
+        await runConnectionTest({ silent: true, apiKeySaved: nextActiveConfig.apiKeySaved });
+      }
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsSavingConfig(false);
+    }
+  }
+
+  async function deleteApiAccess(config: ProviderConfig) {
+    if (!bridge || snapshot.providers.length <= 1) return;
+    const name = apiAccessDisplayName(config, copy.apiAccessUntitled);
+    if (!window.confirm(copy.confirmDeleteApiAccess(name))) return;
+    setIsSavingConfig(true);
+    try {
+      if (config.id === activeConfig.id) {
+        await persistCurrentDraft();
+      }
+      const next = await bridge.deleteProvider(config.id);
+      const nextActiveConfig = applySnapshot(next);
+      hasAutoTestedConnectionRef.current = false;
+      setConnectionCheck({ status: "idle" });
+      setNotice({ kind: "success", text: copy.apiAccessDeleted });
+      if (nextActiveConfig.apiKeySaved) {
+        hasAutoTestedConnectionRef.current = true;
+        await runConnectionTest({ silent: true, apiKeySaved: nextActiveConfig.apiKeySaved });
       }
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
@@ -1422,8 +1556,7 @@ export function App() {
     setPrompt(job.prompt);
     setParams(reusedParams);
     updateCustomSizeFromParams(reusedParams, setCustomSize);
-    setProviderKind(job.providerKind);
-    setBaseURL(defaultBaseURLForProvider(job.providerKind, baseURL));
+    setBaseURL(activeConfig.baseURL);
     if (job.providerKind === activeConfig.kind) {
       setSnapshot((current) => {
         const nextProviders = current.providers.map(p =>
@@ -1902,6 +2035,113 @@ export function App() {
           </div>
         </section>
 
+        <section className="tool-section api-access-section">
+          <div className="section-title config-title">
+            <div className="section-title-label">
+              <KeyRound size={16} />
+              <h2>{copy.apiAccess}</h2>
+            </div>
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => setIsApiAccessOpen((current) => !current)}
+              aria-expanded={isApiAccessOpen}
+              title={copy.apiAccessList}
+            >
+              {isApiAccessOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+          </div>
+          <button
+            type="button"
+            className="api-access-current"
+            onClick={() => setIsApiAccessOpen((current) => !current)}
+            aria-expanded={isApiAccessOpen}
+          >
+            <span>
+              <strong>{apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}</strong>
+              <small>{providerLabelFromKind(activeConfig.kind)} · {activeConfig.apiKeySaved ? copy.keySaved : copy.noKeySaved}</small>
+            </span>
+            {isApiAccessOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          {isApiAccessOpen && (
+            <div className="api-access-panel">
+              <div className="api-access-list" aria-label={copy.apiAccessList}>
+                {snapshot.providers.map((config) => {
+                  const isActive = config.id === activeConfig.id;
+                  const canDelete = snapshot.providers.length > 1;
+                  return (
+                    <div key={config.id} className={isActive ? "api-access-item active" : "api-access-item"}>
+                      <button
+                        type="button"
+                        className="api-access-item-main"
+                        onClick={() => void switchApiAccess(config.id)}
+                        disabled={isSavingConfig}
+                        title={copy.switchApiAccess}
+                      >
+                        <span className="api-access-item-title">{apiAccessDisplayName(config, copy.apiAccessUntitled)}</span>
+                        <span className="api-access-item-meta">
+                          {providerLabelFromKind(config.kind)} · {summarizeBaseURL(config.baseURL)}
+                        </span>
+                        <span className="api-access-item-key">
+                          <span className={config.apiKeySaved ? "dot ok" : "dot"} />
+                          {config.apiKeySaved ? copy.keySaved : copy.noKeySaved}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button ghost danger"
+                        onClick={() => void deleteApiAccess(config)}
+                        disabled={!canDelete || isSavingConfig}
+                        title={canDelete ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <button type="button" className="secondary" onClick={() => setIsAddingApiAccess((current) => !current)}>
+                <Plus size={16} />
+                {copy.addApiAccess}
+              </button>
+              {isAddingApiAccess && (
+                <div className="api-access-add-form">
+                  <label>
+                    {copy.apiAccessKind}
+                    <select value={newApiAccessKind} onChange={(event) => changeNewApiAccessKind(event.target.value as ProviderKind)}>
+                      <option value="openai">OpenAI</option>
+                      <option value="gemini">Gemini</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                  </label>
+                  <label>
+                    {copy.apiAccessName}
+                    <input value={newApiAccessName} onChange={(event) => setNewApiAccessName(event.target.value)} placeholder={providerLabelFromKind(newApiAccessKind)} />
+                  </label>
+                  <label>
+                    {copy.baseURL}
+                    <input value={newApiAccessBaseURL} onChange={(event) => setNewApiAccessBaseURL(event.target.value)} />
+                  </label>
+                  <label>
+                    {copy.apiKey}
+                    <input type="password" autoComplete="off" value={newApiAccessKey} onChange={(event) => setNewApiAccessKey(event.target.value)} placeholder={copy.pasteApiKey} />
+                  </label>
+                  <div className="button-row">
+                    <button type="button" onClick={addApiAccess} disabled={isSavingConfig}>
+                      {isSavingConfig ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
+                      {isSavingConfig ? copy.addingApiAccess : copy.addApiAccess}
+                    </button>
+                    <button type="button" className="ghost" onClick={() => setIsAddingApiAccess(false)}>
+                      <X size={16} />
+                      {copy.cancel}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
         <form
           className="tool-section model-config-section"
           onSubmit={(event) => {
@@ -1927,6 +2167,16 @@ export function App() {
               {connectionLabel}
             </span>
           </div>
+          <label>
+            {copy.apiAccessName}
+            <input
+              value={apiAccessName}
+              onChange={(event) => {
+                setApiAccessName(event.target.value);
+              }}
+              placeholder={providerLabelFromKind(activeConfig.kind)}
+            />
+          </label>
           <label>
             {copy.apiKey}
             <input
@@ -1965,7 +2215,7 @@ export function App() {
             {activeConfig.apiKeySaved ? copy.keySaved : copy.noKeySaved}
             {activeConfig.apiKeySaved && (
               <span className="provider-chip-inline" title={copy.providerAutoDetected}>
-                {providerLabelFromKind(providerKind)}
+                {providerLabelFromKind(activeConfig.kind)}
               </span>
             )}
           </div>

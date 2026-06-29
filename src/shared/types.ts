@@ -67,6 +67,7 @@ export interface ProviderConfig {
 
 export interface ProviderConfigInput {
   kind?: ProviderKind;
+  name?: string;
   apiKey?: string;
   baseURL: string;
   defaultModel: string;

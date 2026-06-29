@@ -55,6 +55,41 @@ describe("state migration", () => {
     expect(migrated.activeProviderId).toBe("default");
   });
 
+  it("migrates v2 single config to providers[0]", () => {
+    const migrated = normalizeState({
+      version: 2,
+      config: {
+        id: "legacy-provider",
+        kind: "gemini",
+        name: "Legacy Gemini",
+        baseURL: "https://generativelanguage.googleapis.com/v1beta",
+        enabled: true,
+        defaultModel: "gemini-3.1-flash-image",
+        defaultSize: "auto",
+        defaultQuality: "auto",
+        timeoutMs: 180000,
+        discoveredModels: [{ id: "gemini-3.1-flash-image", providerKind: "gemini" }],
+        activeLaunchId: "nano-banana-3",
+        activeModelId: "gemini-3.1-flash-image",
+        updatedAt: "2026-01-02T03:04:05.000Z",
+        encryption: "none"
+      },
+      history: []
+    });
+
+    expect(migrated.version).toBe(STATE_VERSION);
+    expect(migrated.providers).toHaveLength(1);
+    expect(migrated.providers[0]).toMatchObject({
+      id: "legacy-provider",
+      kind: "gemini",
+      name: "Legacy Gemini",
+      activeLaunchId: "nano-banana-3",
+      activeModelId: "gemini-3.1-flash-image",
+      discoveredModels: [{ id: "gemini-3.1-flash-image", providerKind: "gemini" }]
+    });
+    expect(migrated.activeProviderId).toBe("legacy-provider");
+  });
+
   it("migrates v1 history jobs with provider and model metadata", () => {
     const migrated = normalizeState({
       version: 1,

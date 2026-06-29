@@ -526,10 +526,10 @@ async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConf
   const newId = `provider_${randomUUID()}`;
   const kind = input.kind ?? "openai";
 
-  let newConfig: StoredProviderConfig = {
+  const baseConfig: StoredProviderConfig = {
     id: newId,
     kind,
-    name: providerDisplayName(kind),
+    name: input.name?.trim() || providerDisplayName(kind),
     baseURL: input.baseURL,
     enabled: true,
     defaultModel: input.defaultModel,
@@ -542,6 +542,7 @@ async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConf
     updatedAt: now,
     encryption: "none"
   };
+  let newConfig = buildProviderConfigForSave(baseConfig, input, now);
 
   if (input.apiKey !== undefined && input.apiKey.trim()) {
     const validation = validateApiKey(input.apiKey);

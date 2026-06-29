@@ -76,6 +76,21 @@ export interface UiCopy {
   tagline: string;
   provider: string;
   providerLabel: string;
+  apiAccess: string;
+  apiAccessName: string;
+  apiAccessList: string;
+  addApiAccess: string;
+  addingApiAccess: string;
+  switchApiAccess: string;
+  deleteApiAccess: string;
+  deleteLastApiAccessDisabled: string;
+  confirmDeleteApiAccess: (name: string) => string;
+  apiAccessAdded: string;
+  apiAccessDeleted: string;
+  apiAccessSwitched: (name: string) => string;
+  apiAccessUntitled: string;
+  apiAccessKind: string;
+  apiAccessBaseURLSummary: string;
   providerAutoDetected: string;
   apiKey: string;
   baseURL: string;
@@ -219,6 +234,21 @@ export const translations: Record<Language, UiCopy> = {
     tagline: "An easy-to-use, all-in-one AI image generation management tool.",
     provider: "Model config",
     providerLabel: "Provider",
+    apiAccess: "API access",
+    apiAccessName: "Access name",
+    apiAccessList: "Saved API access",
+    addApiAccess: "Add API access",
+    addingApiAccess: "Adding",
+    switchApiAccess: "Switch API access",
+    deleteApiAccess: "Delete API access",
+    deleteLastApiAccessDisabled: "At least one API access must remain.",
+    confirmDeleteApiAccess: (name: string) => `Delete API access "${name}"? Saved key and model discovery for this access will be removed.`,
+    apiAccessAdded: "API access added.",
+    apiAccessDeleted: "API access deleted.",
+    apiAccessSwitched: (name: string) => `Switched to ${name}.`,
+    apiAccessUntitled: "Untitled API access",
+    apiAccessKind: "API type",
+    apiAccessBaseURLSummary: "Base URL",
     providerAutoDetected: "Auto-detected from API",
     apiKey: "API Key",
     baseURL: "Base URL",
@@ -425,6 +455,21 @@ export const translations: Record<Language, UiCopy> = {
     tagline: "方便易用的一站式AI生图管理工具。",
     provider: "模型配置",
     providerLabel: "服务商",
+    apiAccess: "API 接入",
+    apiAccessName: "接入名称",
+    apiAccessList: "已保存 API 接入",
+    addApiAccess: "添加 API 接入",
+    addingApiAccess: "添加中",
+    switchApiAccess: "切换 API 接入",
+    deleteApiAccess: "删除 API 接入",
+    deleteLastApiAccessDisabled: "至少需要保留一个 API 接入。",
+    confirmDeleteApiAccess: (name: string) => `确认删除 API 接入“${name}”？该接入保存的 Key 和模型探测结果会一并移除。`,
+    apiAccessAdded: "API 接入已添加。",
+    apiAccessDeleted: "API 接入已删除。",
+    apiAccessSwitched: (name: string) => `已切换到 ${name}。`,
+    apiAccessUntitled: "未命名 API 接入",
+    apiAccessKind: "API 类型",
+    apiAccessBaseURLSummary: "Base URL",
     providerAutoDetected: "已根据 API 自动识别",
     apiKey: "API Key",
     baseURL: "Base URL",

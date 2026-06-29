@@ -217,6 +217,112 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("guidance");
   });
 
+  it("keeps the single API access path working", async () => {
+    const bridge = await renderApp(snapshot());
+
+    expect(document.body.textContent).toContain("API access");
+    expect(document.body.textContent).toContain("OpenAI · Key saved");
+
+    await changeInput(inputByLabel("Access name"), "Primary gateway");
+    await click(buttonByText("Save"));
+
+    expect(bridge.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ name: "Primary gateway" }));
+  });
+
+  it("adds a second API access and switches to it automatically", async () => {
+    const bridge = await renderApp(snapshot());
+
+    await click(apiAccessCurrentButton());
+    await click(buttonByText("Add API access"));
+    const addForm = apiAccessAddForm();
+    await changeSelect(selectByLabel("API type", addForm), "gemini");
+    await changeInput(inputByLabel("Access name", addForm), "Gemini gateway");
+    await changeInput(inputByLabel("API Key", addForm), "gemini-test-key");
+    await click(buttonByText("Add API access", ".api-access-add-form button"));
+
+    expect(bridge.addProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "gemini",
+        name: "Gemini gateway",
+        baseURL: "https://generativelanguage.googleapis.com/v1beta",
+        activeLaunchId: NANO_BANANA_3_LAUNCH_ID
+      })
+    );
+    expect(document.body.textContent).toContain("Gemini gateway");
+    expect(buttonByText("Nano Banana 3", ".launch-button").disabled).toBe(true);
+  });
+
+  it("switches API access and derives launch availability from the selected access discovery", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }]
+    });
+    const bridge = await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
+
+    expect(launchButton("GPT Image 2").disabled).toBe(false);
+    expect(launchButton("Nano Banana 3").disabled).toBe(true);
+
+    await click(apiAccessCurrentButton());
+    await click(buttonByText("Gemini access", ".api-access-item-main"));
+
+    expect(bridge.saveDraft).toHaveBeenCalled();
+    expect(bridge.switchProvider).toHaveBeenCalledWith("gemini-access");
+    expect(launchButton("GPT Image 2").disabled).toBe(true);
+    expect(launchButton("Nano Banana 3").disabled).toBe(false);
+  });
+
+  it("deletes inactive API access without changing the active workspace", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta"
+    });
+    const bridge = await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    await click(apiAccessCurrentButton());
+    const geminiItem = [...document.querySelectorAll<HTMLElement>(".api-access-item")].find((item) => item.textContent?.includes("Gemini access"))!;
+    await click(geminiItem.querySelector<HTMLButtonElement>(".icon-button")!);
+
+    expect(bridge.deleteProvider).toHaveBeenCalledWith("gemini-access");
+    expect(launchButton("GPT Image 2").disabled).toBe(false);
+    expect(document.body.textContent).not.toContain("Gemini access");
+  });
+
+  it("deletes active API access and switches to the remaining access", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }]
+    });
+    const bridge = await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: geminiConfig.id }));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    await click(apiAccessCurrentButton());
+    const geminiItem = [...document.querySelectorAll<HTMLElement>(".api-access-item")].find((item) => item.textContent?.includes("Gemini access"))!;
+    await click(geminiItem.querySelector<HTMLButtonElement>(".icon-button")!);
+
+    expect(bridge.saveDraft).toHaveBeenCalled();
+    expect(bridge.deleteProvider).toHaveBeenCalledWith("gemini-access");
+    expect(document.body.textContent).toContain("OpenAI access");
+    expect(launchButton("GPT Image 2").disabled).toBe(false);
+  });
+
   it("can discover models, select Nano Banana 3, and run through the Electron bridge", async () => {
     const geminiConfig = providerConfig({
       kind: "gemini",
@@ -513,6 +619,7 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
       const nextConfig: ProviderConfig = {
         ...config,
         kind: input.kind ?? config.kind,
+        name: input.name ?? config.name,
         baseURL: input.baseURL,
         defaultModel: input.defaultModel,
         defaultSize: input.defaultSize,
@@ -553,9 +660,42 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     deleteJob: vi.fn(async () => initialSnapshot.history),
     clearHistory: vi.fn(async () => []),
     onJobEvent: vi.fn(() => () => undefined),
-    addProvider: vi.fn(async () => currentSnapshot),
-    switchProvider: vi.fn(async () => currentSnapshot),
-    deleteProvider: vi.fn(async () => currentSnapshot)
+    addProvider: vi.fn(async (input) => {
+      const kind = input.kind ?? "openai";
+      const newProvider = providerConfig({
+        id: `provider-${currentSnapshot.providers.length + 1}`,
+        kind,
+        name: input.name || (kind === "gemini" ? "Gemini" : kind === "custom" ? "Custom" : "OpenAI"),
+        baseURL: input.baseURL,
+        defaultModel: input.defaultModel,
+        defaultSize: input.defaultSize,
+        defaultQuality: input.defaultQuality,
+        timeoutMs: input.timeoutMs,
+        apiKeySaved: Boolean(input.apiKey?.trim()),
+        discoveredModels: [],
+        activeLaunchId: input.activeLaunchId ?? (kind === "gemini" ? NANO_BANANA_3_LAUNCH_ID : GPT_IMAGE_2_LAUNCH_ID),
+        activeModelId: input.activeModelId ?? input.defaultModel
+      });
+      currentSnapshot = {
+        ...currentSnapshot,
+        providers: [...currentSnapshot.providers, newProvider],
+        activeProviderId: newProvider.id
+      };
+      return currentSnapshot;
+    }),
+    switchProvider: vi.fn(async (providerId: string) => {
+      currentSnapshot = { ...currentSnapshot, activeProviderId: providerId };
+      return currentSnapshot;
+    }),
+    deleteProvider: vi.fn(async (providerId: string) => {
+      const providers = currentSnapshot.providers.filter((provider) => provider.id !== providerId);
+      currentSnapshot = {
+        ...currentSnapshot,
+        providers,
+        activeProviderId: currentSnapshot.activeProviderId === providerId ? providers[0].id : currentSnapshot.activeProviderId
+      };
+      return currentSnapshot;
+    })
   };
 }
 
@@ -659,6 +799,12 @@ function launchModelOption(name: string): HTMLButtonElement {
   return buttonByText(name, ".launch-model-option");
 }
 
+function apiAccessCurrentButton(): HTMLButtonElement {
+  const button = document.querySelector<HTMLButtonElement>(".api-access-current");
+  if (!button) throw new Error("Current API access button was not found.");
+  return button;
+}
+
 function buttonByText(text: string, selector = "button"): HTMLButtonElement {
   const button = [...document.querySelectorAll<HTMLButtonElement>(selector)].find((item) => item.textContent?.includes(text));
   if (!button) throw new Error(`Button containing "${text}" was not found.`);
@@ -687,11 +833,33 @@ async function changeInput(input: HTMLInputElement, value: string) {
   });
 }
 
-function inputByLabel(labelText: string): HTMLInputElement {
-  const label = [...document.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(labelText));
+async function changeSelect(select: HTMLSelectElement, value: string) {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
+    setter?.call(select, value);
+    select.dispatchEvent(new Event("input", { bubbles: true }));
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+function inputByLabel(labelText: string, root: ParentNode = document): HTMLInputElement {
+  const label = [...root.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(labelText));
   const input = label?.querySelector<HTMLInputElement>("input");
   if (!input) throw new Error(`Input labeled "${labelText}" was not found.`);
   return input;
+}
+
+function selectByLabel(labelText: string, root: ParentNode = document): HTMLSelectElement {
+  const label = [...root.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(labelText));
+  const select = label?.querySelector<HTMLSelectElement>("select");
+  if (!select) throw new Error(`Select labeled "${labelText}" was not found.`);
+  return select;
+}
+
+function apiAccessAddForm(): HTMLElement {
+  const form = document.querySelector<HTMLElement>(".api-access-add-form");
+  if (!form) throw new Error("API access add form was not found.");
+  return form;
 }
 
 async function keyDown(element: HTMLElement, key: string, init: KeyboardEventInit = {}) {
