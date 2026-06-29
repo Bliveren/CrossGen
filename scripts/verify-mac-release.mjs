@@ -2,11 +2,12 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { selectDmgFile } from "./release-artifact-selection.mjs";
 
 const execFileAsync = promisify(execFile);
 const releaseDir = path.resolve("release");
-const dmgPattern = /^Image2Tools-.*-mac-.*\.dmg$/;
 const appName = "Image2Tools.app";
 const processName = "Image2Tools";
 const appExecutable = "Contents/MacOS/Image2Tools";
@@ -24,15 +25,19 @@ async function run(command, args, options = {}) {
   });
 }
 
+async function readPackageVersion() {
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  return typeof packageJson.version === "string" ? packageJson.version : "";
+}
+
 async function findDmg() {
   const entries = await readdir(releaseDir, { withFileTypes: true });
-  const candidates = entries
-    .filter((entry) => entry.isFile() && dmgPattern.test(entry.name))
-    .map((entry) => path.join(releaseDir, entry.name));
-  if (candidates.length !== 1) {
-    throw new Error(`Expected one Image2Tools macOS dmg, found ${candidates.length}: ${candidates.join(", ") || "none"}`);
-  }
-  return candidates[0];
+  const packageVersion = await readPackageVersion();
+  return selectDmgFile(
+    entries.map((entry) => ({ name: entry.name, isFile: entry.isFile() })),
+    packageVersion,
+    releaseDir
+  );
 }
 
 function parseMountPoint(output) {
@@ -223,7 +228,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}
