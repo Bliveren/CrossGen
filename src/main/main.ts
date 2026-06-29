@@ -57,7 +57,7 @@ import { fetchWithTimeout } from "./services/openaiImage.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
-import { assertKnownOutputPath, assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
+import { assertKnownOutputPath, assertKnownRegularOutputPath, assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
 import { verifyUpdateAssetBytes } from "./services/updateInstallerVerification.js";
@@ -877,7 +877,7 @@ async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[
 
 async function handleAddHistoryAssetToGallery(_event: IpcMainInvokeEvent, assetPath: string): Promise<GalleryAsset> {
   const state = await readState();
-  const sourcePath = assertKnownOutputPath(getImagesDir(), state.history, assetPath);
+  const sourcePath = await assertKnownRegularOutputPath(getImagesDir(), state.history, assetPath);
   const asset = await createGalleryAssetFromFile(sourcePath, "result", new Date().toISOString());
   await writeState({ ...state, galleryAssets: [asset, ...state.galleryAssets] });
   return asset;
@@ -919,6 +919,7 @@ async function handlePickGalleryAsset(_event: IpcMainInvokeEvent, id: string): P
     path: filePath,
     mimeType: asset.mimeType,
     sizeBytes: asset.sizeBytes,
+    previewUrl: `${ASSET_PROTOCOL}://image?gallery=${encodeURIComponent(asset.fileName)}`,
     width: asset.width,
     height: asset.height
   };

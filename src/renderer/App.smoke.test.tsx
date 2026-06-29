@@ -368,6 +368,7 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(asset.id);
     expect(document.body.textContent).toContain("gallery-product.png added as a reference.");
     expect(document.querySelector(".asset-tile")?.textContent).toContain("gallery-product.png");
+    expect(document.querySelector<HTMLImageElement>(".asset-tile img")?.src).toBe(`image2tools-asset://image?gallery=${asset.fileName}`);
 
     await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
 
@@ -605,7 +606,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Show fewer");
   });
 
-  it("keeps prompt text while switching models and resets incompatible General inputs", async () => {
+  it("keeps prompt text and reference inputs while switching to incompatible General mode", async () => {
     const defaultConfig = providerConfig({
       apiKeySaved: true,
       discoveredModels: [
@@ -614,22 +615,36 @@ describe("renderer multi-model smoke", () => {
       ],
       lastModelDiscoveryAt: now
     });
+    const referenceAsset = galleryAsset("general-reference.png");
     const bridge = await renderApp(
       snapshot({
         providers: [defaultConfig],
-        activeProviderId: defaultConfig.id
+        activeProviderId: defaultConfig.id,
+        galleryAssets: [referenceAsset]
       })
     );
     const promptInput = document.querySelector<HTMLTextAreaElement>("textarea")!;
     const originalPrompt = promptInput.value;
+    vi.mocked(bridge.pickGalleryAsset).mockResolvedValueOnce({
+      id: referenceAsset.id,
+      name: referenceAsset.originalName,
+      path: `/tmp/gallery/${referenceAsset.fileName}`,
+      mimeType: referenceAsset.mimeType,
+      sizeBytes: referenceAsset.sizeBytes,
+      previewUrl: `image2tools-asset://image?gallery=${referenceAsset.fileName}`
+    });
 
     await click(buttonByText("Image to image", ".mode-tab"));
+    await click(buttonByText("Reference Gallery", ".section-toggle"));
+    await click(document.querySelector<HTMLButtonElement>(".gallery-thumb")!);
+    await flushAsync();
     await click(launchButton("General"));
 
     expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(originalPrompt);
-    expect(buttonByText("Generate", ".primary-run").disabled).toBe(false);
+    expect(document.body.textContent).toContain("general-reference.png");
+    expect(document.querySelector<HTMLImageElement>(".asset-tile img")?.src).toBe(`image2tools-asset://image?gallery=${referenceAsset.fileName}`);
+    expect(buttonByText("Generate", ".primary-run").disabled).toBe(true);
     expect(document.body.textContent).toContain("prompt-only generation");
-    expect(document.body.textContent).not.toContain("Add references");
     expect(bridge.saveConfig).toHaveBeenLastCalledWith(
       expect.objectContaining({
         activeLaunchId: "general",
@@ -890,7 +905,8 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
         name: asset.originalName,
         path: `/tmp/gallery/${asset.fileName}`,
         mimeType: asset.mimeType,
-        sizeBytes: asset.sizeBytes
+        sizeBytes: asset.sizeBytes,
+        previewUrl: `image2tools-asset://image?gallery=${asset.fileName}`
       };
     }),
     selectImages: vi.fn(async () => []),

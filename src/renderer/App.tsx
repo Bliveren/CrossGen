@@ -192,6 +192,7 @@ function getBridge() {
 
 function assetSource(asset?: ImageAsset | InputAsset | null): string | undefined {
   if (!asset) return undefined;
+  if ("previewUrl" in asset && asset.previewUrl) return asset.previewUrl;
   if ("dataUrl" in asset && asset.dataUrl) return asset.dataUrl;
   if ("fileName" in asset && asset.path) return `image2tools-asset://image?path=${encodeURIComponent(asset.path)}`;
   if (asset.path) return `file://${encodeURI(asset.path)}`;
@@ -743,7 +744,7 @@ export function App() {
       : hasMask
         ? "inpaint"
         : "edit";
-  const showReferenceTools = generalParams ? generalAllowsReferences : tabMode === "img2img";
+  const showReferenceTools = generalParams ? generalAllowsReferences || effectiveInputAssets.length > 0 : tabMode === "img2img";
   const generalModeNotice = generalParams ? generalRuntimeNotice(generalParams.providerKind, copy) : copy.generalRuntimeUnsupported;
   const activeInpaintCapability = inpaintCapabilityForParams(params);
   const usesExactMask = activeInpaintCapability === "exact-mask";
@@ -897,25 +898,11 @@ export function App() {
 
   useEffect(() => {
     if (!generalParams) return;
-    if (!generalFallbackSupportsReferenceImages(generalParams.providerKind)) {
-      if (inputAssets.length > 0) {
-        setInputAssets([]);
-      }
-      if (promptTokens.some((token) => token.type === "asset")) {
-        setPromptTokens((current) => current.filter((token) => token.type !== "asset"));
-        setPromptTokenAssets({});
-      }
-      if (maskAsset || maskDataUrl) {
-        setMaskAsset(null);
-        setMaskDataUrl(null);
-      }
-      return;
-    }
     if (maskAsset || maskDataUrl) {
       setMaskAsset(null);
       setMaskDataUrl(null);
     }
-  }, [generalParams, inputAssets.length, maskAsset, maskDataUrl, promptTokens]);
+  }, [generalParams, maskAsset, maskDataUrl]);
 
   useEffect(() => {
     void refreshSnapshot();
@@ -1472,11 +1459,6 @@ export function App() {
     const nextParams = createLaunchParams(button.launchId, button.modelId, params, launchProvider, launchConfig);
     setParams(nextParams);
     if (isGeneralImageParams(nextParams)) {
-      if (!generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
-        setTabMode("text2img");
-        setInputAssets([]);
-        clearPromptChips();
-      }
       setMaskAsset(null);
       setMaskDataUrl(null);
     }
@@ -1510,11 +1492,6 @@ export function App() {
     const nextParams = createLaunchParams(launchId, selectedModel.id, params, selectedModel.providerKind, activeConfig);
     setParams(nextParams);
     if (isGeneralImageParams(nextParams)) {
-      if (!generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
-        setTabMode("text2img");
-        setInputAssets([]);
-        clearPromptChips();
-      }
       setMaskAsset(null);
       setMaskDataUrl(null);
     }

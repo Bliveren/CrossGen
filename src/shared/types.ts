@@ -127,6 +127,7 @@ export interface InputAsset {
   mimeType: string;
   sizeBytes: number;
   dataUrl?: string;
+  previewUrl?: string;
   width?: number;
   height?: number;
 }
