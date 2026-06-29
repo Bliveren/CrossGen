@@ -1,22 +1,22 @@
 {
-  "version": "0.2.2",
-  "pubDate": "2026-06-16T02:35:00.000Z",
-  "notes": "Unsigned preview release. Reworks the result viewer into a dedicated image preview (mouse-wheel zoom that no longer scrolls the panel, double-click full preview, drag-to-pan), collapses provider info to an inline chip, adds history newest/oldest sorting with drag-to-reference, and OS drag-and-drop image upload. Fixes drag-drop path resolution for Electron 39 (webUtils.getPathForFile) and the Windows in-app updater timeout/process blocking. macOS artifacts are ad-hoc signed and not Apple-notarized; Gatekeeper may warn on first launch.",
+  "version": "0.2.3",
+  "pubDate": "2026-06-29T10:01:00.000Z",
+  "notes": "Compatibility and UX patch. Disables OpenAI streaming globally to fix aggregator compatibility. Adds right-click context menu on image preview (Save Image, Open Folder, Copy Prompt). macOS build is Developer ID signed and Apple-notarized.",
   "assets": [
     {
       "platform": "darwin",
-      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.2/Image2Tools-0.2.2-mac-arm64.dmg",
-      "fileName": "Image2Tools-0.2.2-mac-arm64.dmg",
-      "sha256": "d4f8974ef14f86562aa7917888633cbe4dfd21f75b72d43e40469a3c159e23a0",
-      "sizeBytes": 114859171,
+      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.3/Image2Tools-0.2.3-mac-arm64.dmg",
+      "fileName": "Image2Tools-0.2.3-mac-arm64.dmg",
+      "sha256": "fd915bc2fed1127819a0a039d29f6ab844454acc47a196fa857d07b45d3b3229",
+      "sizeBytes": 103620614,
       "arch": "arm64"
     },
     {
       "platform": "win32",
-      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.2/Image2Tools-Setup.exe",
+      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.3/Image2Tools-Setup.exe",
       "fileName": "Image2Tools-Setup.exe",
-      "sha256": "e25e92b6c7dbd4da2621fffd1c8db9664232b054cbd79b6ca0b06d381043db61",
-      "sizeBytes": 98328195,
+      "sha256": "",
+      "sizeBytes": 0,
       "arch": "x64"
     }
   ]

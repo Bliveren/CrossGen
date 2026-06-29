@@ -78,8 +78,8 @@
     {
       "id": "macos-signed-notarized",
       "title": "Signed and notarized macOS release package",
-      "required": false,
-      "status": "pending",
+      "required": true,
+      "status": "passed",
       "acceptanceCriteria": [
         "Developer ID signing readiness passes without exposing secret values.",
         "package:mac:signed produces signed and notarized macOS artifacts.",
@@ -87,18 +87,28 @@
         "The artifact intended for distribution is the same artifact used for update manifest metadata."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-06-29T10:01:00.000Z",
+        "commit": "a7bc7678972a885b5866ddb16d8fcde6b5ea49b9",
+        "environment": "macOS arm64; package version 0.2.3; Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7); Apple notarytool.",
+        "commands": [
+          "pnpm package:mac:signed",
+          "spctl -a -vv release/mac-arm64/Image2Tools.app"
+        ],
         "references": [
           {
             "label": "Signed and notarized macOS distribution tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/3"
           }
         ],
-        "artifacts": [],
-        "summary": "Non-blocking enhancement gate. Image2Tools ships as an unsigned/ad-hoc-signed preview; macOS Gatekeeper bypass (xattr -dr com.apple.quarantine) is documented in README and RELEASE_NOTES. Developer ID signing and Apple notarization remain a tracked future improvement, but their absence does NOT block a release: this gate is intentionally marked required=false so release readiness does not depend on signing/notarization credentials. Flip to required=true once a Developer ID identity and notarization are in place."
+        "artifacts": [
+          {
+            "kind": "release-artifact",
+            "path": "release/Image2Tools-0.2.3-mac-arm64.dmg",
+            "public": false,
+            "description": "Developer ID signed and Apple-notarized DMG. spctl verdict: accepted, source=Notarized Developer ID."
+          }
+        ],
+        "summary": "v0.2.3 macOS DMG signed with Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7) and Apple-notarized via notarytool. spctl -a -vv reports 'accepted, source=Notarized Developer ID'. Timestamp: Jun 29, 2026 at 17:01:24."
       }
     },
     {
