@@ -1345,6 +1345,44 @@ label {
   gap: 10px;
 }
 
+.prompt-composer {
+  display: grid;
+  gap: 8px;
+}
+
+.prompt-token-toolbar {
+  display: grid;
+  grid-template-columns: 58px 58px minmax(86px, 1fr);
+  gap: 7px;
+}
+
+.prompt-token-toolbar select,
+.prompt-token-toolbar input {
+  height: 34px;
+}
+
+.prompt-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prompt-chip {
+  min-height: 28px;
+  max-width: 100%;
+  border: 1px solid rgba(31, 111, 97, 0.24);
+  background: rgba(31, 111, 97, 0.1);
+  color: #1f6f61;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.prompt-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .primary-run {
   min-width: 138px;
 }

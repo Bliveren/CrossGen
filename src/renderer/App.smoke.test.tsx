@@ -379,6 +379,54 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("keeps plain text prompt submissions unchanged", async () => {
+    const bridge = await renderApp(snapshot());
+
+    await changeTextArea(textAreaByLabel("Prompt"), "Plain prompt only");
+    await click(buttonByText("Generate", ".primary-run"));
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: "Plain prompt only",
+        inputPaths: []
+      })
+    );
+  });
+
+  it("serializes Gallery, template, and color prompt chips before running", async () => {
+    const gallery = galleryAsset("chip-gallery.png");
+    const template = {
+      id: "template-chip",
+      title: "Studio light",
+      body: "softbox lighting",
+      tags: ["studio"],
+      createdAt: now,
+      updatedAt: now
+    };
+    const bridge = await renderApp(snapshot({ galleryAssets: [gallery], promptTemplates: [template] }));
+
+    await changeTextArea(textAreaByLabel("Prompt"), "Product hero");
+    await changeSelect(selectByTitle("@ Gallery"), gallery.id);
+    await changeSelect(selectByTitle("~ Template"), template.id);
+    await changeInput(inputByAriaLabel("Color chip"), "#0f6");
+    await keyDown(inputByAriaLabel("Color chip"), "Enter");
+
+    expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(gallery.id);
+    expect(document.body.textContent).toContain("@ chip-gallery.png");
+    expect(document.body.textContent).toContain("~ Studio light");
+    expect(document.body.textContent).toContain("#0F6");
+
+    await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "edit",
+        prompt: "Product hero\n\nsoftbox lighting\n\n#0F6",
+        inputPaths: [`/tmp/gallery/${gallery.fileName}`]
+      })
+    );
+  });
+
   it("adds a history result to Gallery", async () => {
     const result = imageAsset("history-result.png");
     const job = geminiJob(0, { outputs: [result] });
@@ -1042,6 +1090,12 @@ function inputByPlaceholder(placeholder: string): HTMLInputElement {
   return input;
 }
 
+function inputByAriaLabel(label: string): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+  if (!input) throw new Error(`Input with aria-label "${label}" was not found.`);
+  return input;
+}
+
 function textAreaByLabel(labelText: string, root: ParentNode = document): HTMLTextAreaElement {
   const label = [...root.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(labelText));
   const textarea = label?.querySelector<HTMLTextAreaElement>("textarea");
@@ -1053,6 +1107,12 @@ function selectByLabel(labelText: string, root: ParentNode = document): HTMLSele
   const label = [...root.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(labelText));
   const select = label?.querySelector<HTMLSelectElement>("select");
   if (!select) throw new Error(`Select labeled "${labelText}" was not found.`);
+  return select;
+}
+
+function selectByTitle(title: string): HTMLSelectElement {
+  const select = [...document.querySelectorAll<HTMLSelectElement>("select")].find((item) => item.title === title);
+  if (!select) throw new Error(`Select titled "${title}" was not found.`);
   return select;
 }
 

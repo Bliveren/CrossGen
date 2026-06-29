@@ -87,7 +87,9 @@ import {
   isPotentialGeneralImageModel,
   normalizeModelId
 } from "../shared/modelCatalog";
+import { PromptComposer } from "./PromptComposer";
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
+import { serializePromptTokens, type PromptToken } from "./promptTokens";
 
 type NoticeKind = "info" | "success" | "error";
 
@@ -629,6 +631,8 @@ export function App() {
   const [snapshot, setSnapshot] = useState<AppSnapshot>(fallbackSnapshot);
   const [tabMode, setTabMode] = useState<TabMode>("text2img");
   const [prompt, setPrompt] = useState("A clean product photo of a matte black travel mug on a brushed steel counter");
+  const [promptTokens, setPromptTokens] = useState<PromptToken[]>([]);
+  const [promptTokenAssets, setPromptTokenAssets] = useState<Record<string, InputAsset>>({});
   const [params, setParams] = useState<ImageParams>(DEFAULT_IMAGE_PARAMS);
   const modeLabels = useMemo(() => modeLabelsForParams(copy, params), [copy, params]);
   const [apiKey, setApiKey] = useState("");
@@ -705,7 +709,16 @@ export function App() {
   const zoomSurfaceRef = useRef<HTMLDivElement | null>(null);
 
   const activeConfig = snapshot.providers.find(p => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
-  const sourceAsset = inputAssets[0];
+  const serializedPromptPreview = useMemo(
+    () => serializePromptTokens([{ type: "text", text: prompt }, ...promptTokens], { resolveAsset: resolvePromptTokenAsset }),
+    [prompt, promptTokenAssets, promptTokens]
+  );
+  const effectivePrompt = serializedPromptPreview.prompt;
+  const effectiveInputAssets = useMemo(
+    () => dedupeAssets([...inputAssets, ...serializedPromptPreview.inputAssets]),
+    [inputAssets, serializedPromptPreview.inputAssets]
+  );
+  const sourceAsset = effectiveInputAssets[0];
   const sourcePreview = assetSource(sourceAsset);
   const maskPreview = maskDataUrl ?? assetSource(maskAsset);
   const activeResults = getResultAssets(activeJob);
@@ -722,7 +735,7 @@ export function App() {
   // 内部 WorkMode 由 UI 的 tabMode 推导：text2img→generate；img2img 有蒙版→inpaint，否则→edit。
   // General 模式仍按既有规则（支持参考图且已选图→edit，否则 generate）。
   const requestMode: WorkMode = generalParams
-    ? generalAllowsReferences && inputAssets.length > 0
+    ? generalAllowsReferences && effectiveInputAssets.length > 0
       ? "edit"
       : "generate"
     : tabMode === "text2img"
@@ -797,20 +810,20 @@ export function App() {
   const isSearchingHistory = historySearch.trim().length > 0;
 
   const modeError = useMemo(() => {
-    if (generalParams && !generalFallbackSupportsReferenceImages(generalParams.providerKind) && inputAssets.length > 0) {
+    if (generalParams && !generalFallbackSupportsReferenceImages(generalParams.providerKind) && effectiveInputAssets.length > 0) {
       return copy.validation.generalPromptOnly;
     }
-    if (requestMode === "edit" && inputAssets.length === 0) return copy.validation.addReference;
-    if (requestMode === "inpaint" && inputAssets.length === 0) return copy.validation.addSource;
-    if (openAIParams && requestMode !== "generate" && inputAssets.length > MAX_GPT_IMAGE_INPUTS) {
+    if (requestMode === "edit" && effectiveInputAssets.length === 0) return copy.validation.addReference;
+    if (requestMode === "inpaint" && effectiveInputAssets.length === 0) return copy.validation.addSource;
+    if (openAIParams && requestMode !== "generate" && effectiveInputAssets.length > MAX_GPT_IMAGE_INPUTS) {
       return copy.validation.maxInputs(MAX_GPT_IMAGE_INPUTS);
     }
     if (usesExactMask && requestMode === "inpaint" && maskCheck && !maskCheck.ok) return maskCheck.message;
     return null;
-  }, [copy, generalParams, inputAssets.length, maskCheck, openAIParams, requestMode, usesExactMask]);
+  }, [copy, effectiveInputAssets.length, generalParams, maskCheck, openAIParams, requestMode, usesExactMask]);
 
   const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
-  const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, prompt), copy) ?? modeError;
+  const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, effectivePrompt), copy) ?? modeError;
   const canRun = !validationError && !isRunning;
 
   useEffect(() => {
@@ -888,6 +901,10 @@ export function App() {
       if (inputAssets.length > 0) {
         setInputAssets([]);
       }
+      if (promptTokens.some((token) => token.type === "asset")) {
+        setPromptTokens((current) => current.filter((token) => token.type !== "asset"));
+        setPromptTokenAssets({});
+      }
       if (maskAsset || maskDataUrl) {
         setMaskAsset(null);
         setMaskDataUrl(null);
@@ -898,7 +915,7 @@ export function App() {
       setMaskAsset(null);
       setMaskDataUrl(null);
     }
-  }, [generalParams, inputAssets.length, maskAsset, maskDataUrl]);
+  }, [generalParams, inputAssets.length, maskAsset, maskDataUrl, promptTokens]);
 
   useEffect(() => {
     void refreshSnapshot();
@@ -924,9 +941,9 @@ export function App() {
           activeLaunchId: params.launchId,
           activeModelId: params.model,
           mode: requestMode,
-          prompt,
+          prompt: effectivePrompt,
           params,
-          inputAssets,
+          inputAssets: effectiveInputAssets,
           maskAsset: maskAsset ?? undefined,
           maskDataUrl: maskDataUrl ?? undefined,
           brushSize
@@ -936,7 +953,7 @@ export function App() {
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [bridge, brushSize, hasRestoredDraft, hasUserChangedDraft, inputAssets, maskAsset, maskDataUrl, requestMode, params, prompt]);
+  }, [bridge, brushSize, effectiveInputAssets, effectivePrompt, hasRestoredDraft, hasUserChangedDraft, maskAsset, maskDataUrl, requestMode, params]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -970,7 +987,7 @@ export function App() {
     }
 
     let cancelled = false;
-    inspectMask(source, mask, copy, maskAsset?.mimeType ?? mimeTypeFromDataUrl(mask) ?? "image/png", inputAssets[0]?.mimeType)
+    inspectMask(source, mask, copy, maskAsset?.mimeType ?? mimeTypeFromDataUrl(mask) ?? "image/png", effectiveInputAssets[0]?.mimeType)
       .then((result) => {
         if (!cancelled) setMaskCheck(result);
       })
@@ -981,7 +998,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [copy, inputAssets, maskAsset?.mimeType, maskPreview, requestMode, sourcePreview, usesExactMask]);
+  }, [copy, effectiveInputAssets, maskAsset?.mimeType, maskPreview, requestMode, sourcePreview, usesExactMask]);
 
   async function refreshSnapshot() {
     if (!bridge) return;
@@ -1006,6 +1023,7 @@ export function App() {
     // 兼容 v0.2.0 旧 draft（仅存 WorkMode）：generate→text2img；edit/inpaint→img2img。
     setTabMode(tabModeForWorkMode(draft.mode));
     setPrompt(draft.prompt);
+    clearPromptChips();
     setParams(restoredParams);
     updateCustomSizeFromParams(restoredParams, setCustomSize);
     setBaseURL(config.baseURL);
@@ -1021,6 +1039,7 @@ export function App() {
     if (!bridge) return;
     try {
       await bridge.clearDraft();
+      clearPromptChips();
       setDraftUpdatedAt(null);
       setHasUserChangedDraft(false);
       setNotice({ kind: "success", text: copy.notices.draftCleared });
@@ -1035,6 +1054,11 @@ export function App() {
     setTemplateBody("");
     setTemplateTags("");
     setTemplateCategory("");
+  }
+
+  function clearPromptChips() {
+    setPromptTokens([]);
+    setPromptTokenAssets({});
   }
 
   function editTemplate(template: PromptTemplate) {
@@ -1098,7 +1122,7 @@ export function App() {
         mode: requestMode,
         prompt: template.body,
         params,
-        inputAssets,
+        inputAssets: effectiveInputAssets,
         maskAsset: maskAsset ?? undefined,
         maskDataUrl: maskDataUrl ?? undefined,
         brushSize
@@ -1165,6 +1189,20 @@ export function App() {
     try {
       const inputAsset = await bridge.pickGalleryAsset(asset.id);
       addInputAssets([inputAsset]);
+      setNotice({ kind: "success", text: copy.galleryPicked(asset.originalName) });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function addGalleryPromptToken(asset: GalleryAsset) {
+    if (!bridge) return;
+    try {
+      const inputAsset = await bridge.pickGalleryAsset(asset.id);
+      setPromptTokenAssets((current) => ({ ...current, [asset.id]: inputAsset }));
+      setPromptTokens((current) => [...current, { type: "asset", galleryAssetId: asset.id, label: asset.originalName }]);
+      markDraftChanged();
+      if (tabMode === "text2img") setTabMode("img2img");
       setNotice({ kind: "success", text: copy.galleryPicked(asset.originalName) });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
@@ -1269,9 +1307,9 @@ export function App() {
       activeLaunchId: params.launchId,
       activeModelId: params.model,
       mode: requestMode,
-      prompt,
+      prompt: effectivePrompt,
       params,
-      inputAssets,
+      inputAssets: effectiveInputAssets,
       maskAsset: maskAsset ?? undefined,
       maskDataUrl: maskDataUrl ?? undefined,
       brushSize
@@ -1437,6 +1475,7 @@ export function App() {
       if (!generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
         setTabMode("text2img");
         setInputAssets([]);
+        clearPromptChips();
       }
       setMaskAsset(null);
       setMaskDataUrl(null);
@@ -1474,6 +1513,7 @@ export function App() {
       if (!generalFallbackSupportsReferenceImages(nextParams.providerKind)) {
         setTabMode("text2img");
         setInputAssets([]);
+        clearPromptChips();
       }
       setMaskAsset(null);
       setMaskDataUrl(null);
@@ -1572,9 +1612,9 @@ export function App() {
         activeLaunchId: params.launchId,
         activeModelId: params.model,
         mode: requestMode,
-        prompt,
+        prompt: effectivePrompt,
         params,
-        inputAssets,
+        inputAssets: effectiveInputAssets,
         maskAsset: maskAsset ?? undefined,
         maskDataUrl: maskDataUrl ?? undefined,
         brushSize
@@ -1688,8 +1728,8 @@ export function App() {
       const requestParams = normalizeParamsForOutputCount(params);
       const job = await bridge.runJob({
         mode: requestMode,
-        prompt,
-        inputPaths: requestMode === "generate" ? [] : inputAssets.map((asset) => asset.path),
+        prompt: effectivePrompt,
+        inputPaths: requestMode === "generate" ? [] : effectiveInputAssets.map((asset) => asset.path),
         maskPath: requestMode === "inpaint" && !maskDataUrl ? maskAsset?.path : undefined,
         maskDataUrl: requestMode === "inpaint" && maskDataUrl ? maskDataUrl : undefined,
         params: requestParams
@@ -1702,6 +1742,7 @@ export function App() {
       setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? copy.notices.actionFinished(modeLabels[requestMode].action) });
       if (job.status === "succeeded") {
         await bridge.clearDraft();
+        clearPromptChips();
         setDraftUpdatedAt(null);
         setHasUserChangedDraft(false);
       }
@@ -1777,6 +1818,7 @@ export function App() {
     const reusedParams = normalizeParamsForOutputCount(job.params);
     setTabMode(tabModeForWorkMode(job.mode));
     setPrompt(job.prompt);
+    clearPromptChips();
     setParams(reusedParams);
     updateCustomSizeFromParams(reusedParams, setCustomSize);
     setBaseURL(activeConfig.baseURL);
@@ -1794,6 +1836,10 @@ export function App() {
     setActiveJob(job);
     setHasUserChangedDraft(true);
     setNotice({ kind: "info", text: paramsNotice(reusedParams, copy.notices.jobLoaded, copy) });
+  }
+
+  function resolvePromptTokenAsset(galleryAssetId: string): InputAsset | undefined {
+    return promptTokenAssets[galleryAssetId];
   }
 
   function removeInputAsset(assetId: string) {
@@ -1982,7 +2028,7 @@ export function App() {
     const canvas = maskCanvasRef.current;
     if (canvas && paintedDuringStrokeRef.current) {
       markDraftChanged();
-      setMaskDataUrl(canvas.toDataURL(maskMimeTypeForSource(inputAssets[0]?.mimeType)));
+      setMaskDataUrl(canvas.toDataURL(maskMimeTypeForSource(sourceAsset?.mimeType)));
       setMaskAsset(null);
     }
   }
@@ -2886,22 +2932,23 @@ export function App() {
 
           <section className="input-panel">
             <div className="prompt-block">
-              <label>
-                {copy.prompt}
-                <textarea
-                  value={prompt}
-                  onChange={(event) => {
-                    markDraftChanged();
-                    setPrompt(event.target.value);
-                  }}
-                />
-              </label>
+              <PromptComposer
+                label={copy.prompt}
+                value={prompt}
+                tokens={promptTokens}
+                templates={snapshot.promptTemplates}
+                galleryAssets={snapshot.galleryAssets}
+                onChange={setPrompt}
+                onTokensChange={setPromptTokens}
+                onGalleryAssetToken={(asset) => void addGalleryPromptToken(asset)}
+                onDirty={markDraftChanged}
+              />
               <div className="run-row">
                 <button type="button" className="primary-run" onClick={runJob} disabled={!canRun}>
                   {isRunning ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
                   {isRunning ? copy.running : modeLabels[requestMode].action}
                 </button>
-                <button type="button" className={buttonFeedbackClass("copy:prompt", "secondary")} onClick={() => copyPrompt(prompt)}>
+                <button type="button" className={buttonFeedbackClass("copy:prompt", "secondary")} onClick={() => copyPrompt(effectivePrompt)}>
                   <Clipboard size={16} />
                   {buttonFeedback["copy:prompt"] ? copy.clicked : copy.copy}
                 </button>
