@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   Clipboard,
   Download,
+  FileDown,
+  FileUp,
   Eraser,
   FolderOpen,
   ImagePlus,
@@ -62,6 +64,8 @@ import type {
   InputAsset,
   ModerationMode,
   OpenAIImageParams,
+  PromptTemplate,
+  PromptTemplateInput,
   ProviderConfig,
   ProviderKind,
   WorkMode,
@@ -174,7 +178,8 @@ const fallbackSnapshot: AppSnapshot = {
   appVersion: "0.0.0",
   providers: [fallbackConfig],
   activeProviderId: fallbackConfig.id,
-  history: []
+  history: [],
+  promptTemplates: []
 };
 
 function getBridge() {
@@ -657,6 +662,14 @@ export function App() {
   const [historySearch, setHistorySearch] = useState("");
   const [historySort, setHistorySort] = useState<"newest" | "oldest">("newest");
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [templateTagFilter, setTemplateTagFilter] = useState("");
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateTitle, setTemplateTitle] = useState("");
+  const [templateBody, setTemplateBody] = useState("");
+  const [templateTags, setTemplateTags] = useState("");
+  const [templateCategory, setTemplateCategory] = useState("");
   const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
   const [brushSize, setBrushSize] = useState(72);
   const [isPainting, setIsPainting] = useState(false);
@@ -743,6 +756,21 @@ export function App() {
     }
     return sorted;
   }, [historySearch, historySort, snapshot.history]);
+  const templateTagsAvailable = useMemo(() => {
+    const tags = new Set<string>();
+    snapshot.promptTemplates.forEach((template) => template.tags.forEach((tag) => tags.add(tag)));
+    return [...tags].sort((a, b) => a.localeCompare(b));
+  }, [snapshot.promptTemplates]);
+  const filteredTemplates = useMemo(() => {
+    const query = templateSearch.trim().toLowerCase();
+    return snapshot.promptTemplates.filter((template) => {
+      const matchesTag = !templateTagFilter || template.tags.includes(templateTagFilter);
+      if (!matchesTag) return false;
+      if (!query) return true;
+      const haystack = `${template.title} ${template.body} ${template.tags.join(" ")} ${template.category ?? ""}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [snapshot.promptTemplates, templateSearch, templateTagFilter]);
   const hasHistoryOverflow = filteredHistory.length > HISTORY_COLLAPSED_LIMIT;
   const visibleHistory = isHistoryExpanded ? filteredHistory : filteredHistory.slice(0, HISTORY_COLLAPSED_LIMIT);
   const isSearchingHistory = historySearch.trim().length > 0;
@@ -975,6 +1003,109 @@ export function App() {
       setDraftUpdatedAt(null);
       setHasUserChangedDraft(false);
       setNotice({ kind: "success", text: copy.notices.draftCleared });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  function resetTemplateForm() {
+    setEditingTemplateId(null);
+    setTemplateTitle("");
+    setTemplateBody("");
+    setTemplateTags("");
+    setTemplateCategory("");
+  }
+
+  function editTemplate(template: PromptTemplate) {
+    setEditingTemplateId(template.id);
+    setTemplateTitle(template.title);
+    setTemplateBody(template.body);
+    setTemplateTags(template.tags.join(", "));
+    setTemplateCategory(template.category ?? "");
+    setIsTemplatesOpen(true);
+  }
+
+  function templateInputFromForm(): PromptTemplateInput {
+    return {
+      title: templateTitle,
+      body: templateBody,
+      tags: templateTags.split(",").map((tag) => tag.trim()).filter(Boolean),
+      category: templateCategory.trim() || undefined
+    };
+  }
+
+  async function saveTemplateFromForm() {
+    if (!bridge) return;
+    try {
+      const template = await bridge.saveTemplate(templateInputFromForm(), editingTemplateId ?? undefined);
+      setSnapshot((current) => {
+        const exists = current.promptTemplates.some((item) => item.id === template.id);
+        return {
+          ...current,
+          promptTemplates: exists
+            ? current.promptTemplates.map((item) => (item.id === template.id ? template : item))
+            : [template, ...current.promptTemplates]
+        };
+      });
+      resetTemplateForm();
+      setNotice({ kind: "success", text: copy.templateSaved });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function deleteTemplate(template: PromptTemplate) {
+    if (!bridge) return;
+    if (!window.confirm(copy.templateDeleteConfirm(template.title))) return;
+    try {
+      await bridge.deleteTemplate(template.id);
+      setSnapshot((current) => ({ ...current, promptTemplates: current.promptTemplates.filter((item) => item.id !== template.id) }));
+      if (editingTemplateId === template.id) resetTemplateForm();
+      setNotice({ kind: "success", text: copy.templateDeleted });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function applyTemplate(template: PromptTemplate) {
+    setPrompt(template.body);
+    setHasUserChangedDraft(true);
+    try {
+      await bridge?.saveDraft({
+        activeLaunchId: params.launchId,
+        activeModelId: params.model,
+        mode: requestMode,
+        prompt: template.body,
+        params,
+        inputAssets,
+        maskAsset: maskAsset ?? undefined,
+        maskDataUrl: maskDataUrl ?? undefined,
+        brushSize
+      });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+      return;
+    }
+    setNotice({ kind: "success", text: copy.templateApplied(template.title) });
+  }
+
+  async function importTemplates() {
+    if (!bridge) return;
+    try {
+      const result = await bridge.importTemplates();
+      const importedTemplates = await bridge.listTemplates();
+      setSnapshot((current) => ({ ...current, promptTemplates: importedTemplates }));
+      setNotice({ kind: "success", text: copy.templateImported(result.imported, result.skipped) });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function exportTemplates() {
+    if (!bridge) return;
+    try {
+      const filePath = await bridge.exportTemplates();
+      if (filePath) setNotice({ kind: "success", text: copy.templateExported(filePath) });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -2293,6 +2424,95 @@ export function App() {
               );
             })}
           </div>
+        </section>
+
+        <section className="tool-section template-section">
+          <button type="button" className="section-toggle" onClick={() => setIsTemplatesOpen((current) => !current)}>
+            <span className="section-toggle-label">
+              <Clipboard size={16} />
+              <span>{copy.promptTemplates}</span>
+            </span>
+            <span className="section-toggle-state">
+              {snapshot.promptTemplates.length}
+              {isTemplatesOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            </span>
+          </button>
+          {isTemplatesOpen && (
+            <div className="template-panel">
+              <div className="template-toolbar">
+                <input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} placeholder={copy.templateSearch} />
+                <select value={templateTagFilter} onChange={(event) => setTemplateTagFilter(event.target.value)}>
+                  <option value="">{copy.templateAllTags}</option>
+                  {templateTagsAvailable.map((tag) => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+                <button type="button" className="icon-button" onClick={() => void importTemplates()} title={copy.templateImport}>
+                  <FileUp size={15} />
+                </button>
+                <button type="button" className="icon-button" onClick={() => void exportTemplates()} title={copy.templateExport} disabled={snapshot.promptTemplates.length === 0}>
+                  <FileDown size={15} />
+                </button>
+              </div>
+              <div className="template-editor">
+                <label>
+                  {copy.templateTitle}
+                  <input value={templateTitle} onChange={(event) => setTemplateTitle(event.target.value)} placeholder={copy.templateNew} />
+                </label>
+                <label>
+                  {copy.templateBody}
+                  <textarea value={templateBody} onChange={(event) => setTemplateBody(event.target.value)} placeholder={copy.prompt} />
+                </label>
+                <label>
+                  {copy.templateTags}
+                  <input value={templateTags} onChange={(event) => setTemplateTags(event.target.value)} placeholder="portrait, product, style" />
+                </label>
+                <label>
+                  {copy.templateCategory}
+                  <input value={templateCategory} onChange={(event) => setTemplateCategory(event.target.value)} placeholder={copy.templateCategory} />
+                </label>
+                <div className="button-row">
+                  <button type="button" onClick={() => void saveTemplateFromForm()} disabled={!templateTitle.trim() || !templateBody.trim()}>
+                    <Save size={16} />
+                    {editingTemplateId ? copy.templateUpdate : copy.templateSave}
+                  </button>
+                  <button type="button" className="ghost" onClick={resetTemplateForm}>
+                    <X size={16} />
+                    {copy.clear}
+                  </button>
+                </div>
+              </div>
+              <div className="template-list">
+                {filteredTemplates.length === 0 && (
+                  <p className="empty-inline">{snapshot.promptTemplates.length === 0 ? copy.templateEmpty : copy.templateNoMatch}</p>
+                )}
+                {filteredTemplates.map((template) => (
+                  <article key={template.id} className="template-item">
+                    <div className="template-item-main">
+                      <strong>{template.title}</strong>
+                      <p>{template.body}</p>
+                      {template.tags.length > 0 && (
+                        <div className="template-tags">
+                          {template.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="template-actions">
+                      <button type="button" className="icon-button" onClick={() => void applyTemplate(template)} title={copy.templateUse}>
+                        <Clipboard size={15} />
+                      </button>
+                      <button type="button" className="icon-button" onClick={() => editTemplate(template)} title={copy.templateEdit}>
+                        <SlidersHorizontal size={15} />
+                      </button>
+                      <button type="button" className="icon-button ghost danger" onClick={() => void deleteTemplate(template)} title={copy.delete}>
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="tool-section">

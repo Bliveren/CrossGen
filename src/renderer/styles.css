@@ -699,6 +699,98 @@ label {
   color: #2d6e60;
 }
 
+.template-panel,
+.template-editor,
+.template-list {
+  display: grid;
+  gap: 9px;
+}
+
+.template-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(86px, 0.55fr) 36px 36px;
+  gap: 7px;
+  align-items: center;
+}
+
+.template-editor {
+  border: 1px solid #ded7c9;
+  border-radius: 7px;
+  background: rgba(255, 253, 248, 0.64);
+  padding: 10px;
+}
+
+.template-editor textarea {
+  min-height: 86px;
+}
+
+.template-list {
+  max-height: 340px;
+  overflow: auto;
+}
+
+.template-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  border: 1px solid #d6d0c3;
+  border-radius: 7px;
+  background: #fffdf8;
+  padding: 9px;
+}
+
+.template-item-main {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.template-item-main strong,
+.template-item-main p {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.template-item-main strong {
+  color: #2d2924;
+  font-size: 13px;
+}
+
+.template-item-main p {
+  display: -webkit-box;
+  color: #6f655a;
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.template-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.template-tags span {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(31, 111, 97, 0.22);
+  border-radius: 999px;
+  background: rgba(31, 111, 97, 0.1);
+  color: #1f6f61;
+  padding: 1px 7px;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-actions {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+
 .dot {
   width: 8px;
   height: 8px;

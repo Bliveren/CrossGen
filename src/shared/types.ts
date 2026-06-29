@@ -204,6 +204,7 @@ export interface AppSnapshot {
   providers: ProviderConfig[];
   activeProviderId: string;
   history: GenerationJob[];
+  promptTemplates: PromptTemplate[];
   draft?: WorkspaceDraft;
 }
 
@@ -228,6 +229,29 @@ export interface WorkspaceDraft extends WorkspaceDraftInput {
   activeLaunchId: FocusedLaunchId;
   activeModelId: string;
   updatedAt: string;
+}
+
+export interface PromptTemplate {
+  id: string;
+  title: string;
+  body: string;
+  tags: string[];
+  category?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptTemplateInput {
+  title: string;
+  body: string;
+  tags?: string[];
+  category?: string;
+}
+
+export interface TemplateExportFormat {
+  schemaVersion: 1;
+  exportedAt: string;
+  templates: PromptTemplate[];
 }
 
 export type UpdatePlatform = "darwin" | "win32" | "linux" | "all";
@@ -270,6 +294,11 @@ export interface AppBridge {
   testConnection: () => Promise<ConnectionTestResult>;
   saveDraft: (input: WorkspaceDraftInput) => Promise<WorkspaceDraft>;
   clearDraft: () => Promise<void>;
+  listTemplates: () => Promise<PromptTemplate[]>;
+  saveTemplate: (input: PromptTemplateInput, templateId?: string) => Promise<PromptTemplate>;
+  deleteTemplate: (id: string) => Promise<void>;
+  importTemplates: () => Promise<{ imported: number; skipped: number }>;
+  exportTemplates: (templateIds?: string[]) => Promise<string | null>;
   selectImages: () => Promise<InputAsset[]>;
   getDroppedFilePaths: (files: File[]) => string[];
   importImages: (paths: string[]) => Promise<InputAsset[]>;

@@ -323,6 +323,40 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("GPT Image 2").disabled).toBe(false);
   });
 
+  it("creates, searches, filters, applies, and deletes prompt templates", async () => {
+    const bridge = await renderApp(snapshot());
+
+    await click(buttonByText("Prompt templates", ".section-toggle"));
+    await changeInput(inputByLabel("Title"), "Product shot");
+    await changeTextArea(textAreaByLabel("Template prompt"), "A crisp product shot on a steel table");
+    await changeInput(inputByLabel("Tags"), "product, studio");
+    await click(buttonByText("Save template"));
+
+    expect(bridge.saveTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Product shot",
+        body: "A crisp product shot on a steel table",
+        tags: ["product", "studio"]
+      }),
+      undefined
+    );
+    expect(document.body.textContent).toContain("Product shot");
+
+    await changeInput(inputByPlaceholder("Search templates"), "steel");
+    expect(document.body.textContent).toContain("Product shot");
+    await changeSelect(document.querySelector<HTMLSelectElement>(".template-toolbar select")!, "studio");
+    expect(document.body.textContent).toContain("Product shot");
+
+    await click(document.querySelector<HTMLButtonElement>('.template-actions button[title="Use template"]')!);
+    expect(textAreaByLabel("Prompt").value).toBe("A crisp product shot on a steel table");
+    expect(bridge.saveDraft).toHaveBeenCalled();
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await click(document.querySelector<HTMLButtonElement>('.template-actions button[title="Delete"]')!);
+    expect(bridge.deleteTemplate).toHaveBeenCalledWith("template-1");
+    expect(document.body.textContent).not.toContain("Product shot");
+  });
+
   it("can discover models, select Nano Banana 3, and run through the Electron bridge", async () => {
     const geminiConfig = providerConfig({
       kind: "gemini",
@@ -644,6 +678,31 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     testConnection: vi.fn(async () => ({ ok: true, message: "ok" })),
     saveDraft: vi.fn(async (input) => ({ ...input, activeLaunchId: input.activeLaunchId ?? input.params.launchId, activeModelId: input.activeModelId ?? input.params.model, updatedAt: now }) as WorkspaceDraft),
     clearDraft: vi.fn(async () => undefined),
+    listTemplates: vi.fn(async () => currentSnapshot.promptTemplates),
+    saveTemplate: vi.fn(async (input, templateId) => {
+      const existing = templateId ? currentSnapshot.promptTemplates.find((template) => template.id === templateId) : undefined;
+      const template = {
+        id: existing?.id ?? `template-${currentSnapshot.promptTemplates.length + 1}`,
+        title: input.title.trim(),
+        body: input.body.trim(),
+        tags: input.tags ?? [],
+        category: input.category,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now
+      };
+      currentSnapshot = {
+        ...currentSnapshot,
+        promptTemplates: existing
+          ? currentSnapshot.promptTemplates.map((item) => (item.id === existing.id ? template : item))
+          : [template, ...currentSnapshot.promptTemplates]
+      };
+      return template;
+    }),
+    deleteTemplate: vi.fn(async (id) => {
+      currentSnapshot = { ...currentSnapshot, promptTemplates: currentSnapshot.promptTemplates.filter((template) => template.id !== id) };
+    }),
+    importTemplates: vi.fn(async () => ({ imported: 0, skipped: 0 })),
+    exportTemplates: vi.fn(async () => "/tmp/templates.json"),
     selectImages: vi.fn(async () => []),
     getDroppedFilePaths: vi.fn(() => []),
     importImages: vi.fn(async () => []),
@@ -727,6 +786,7 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     providers: [defaultConfig],
     activeProviderId: defaultConfig.id,
     history: [],
+    promptTemplates: [],
     ...patch
   };
 }
@@ -833,6 +893,15 @@ async function changeInput(input: HTMLInputElement, value: string) {
   });
 }
 
+async function changeTextArea(textarea: HTMLTextAreaElement, value: string) {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+    setter?.call(textarea, value);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    textarea.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
 async function changeSelect(select: HTMLSelectElement, value: string) {
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
@@ -847,6 +916,19 @@ function inputByLabel(labelText: string, root: ParentNode = document): HTMLInput
   const input = label?.querySelector<HTMLInputElement>("input");
   if (!input) throw new Error(`Input labeled "${labelText}" was not found.`);
   return input;
+}
+
+function inputByPlaceholder(placeholder: string): HTMLInputElement {
+  const input = [...document.querySelectorAll<HTMLInputElement>("input")].find((item) => item.placeholder === placeholder);
+  if (!input) throw new Error(`Input with placeholder "${placeholder}" was not found.`);
+  return input;
+}
+
+function textAreaByLabel(labelText: string, root: ParentNode = document): HTMLTextAreaElement {
+  const label = [...root.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(labelText));
+  const textarea = label?.querySelector<HTMLTextAreaElement>("textarea");
+  if (!textarea) throw new Error(`Textarea labeled "${labelText}" was not found.`);
+  return textarea;
 }
 
 function selectByLabel(labelText: string, root: ParentNode = document): HTMLSelectElement {

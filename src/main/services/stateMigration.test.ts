@@ -90,6 +90,71 @@ describe("state migration", () => {
     expect(migrated.activeProviderId).toBe("legacy-provider");
   });
 
+  it("adds empty prompt templates when old state has none", () => {
+    const migrated = normalizeState({
+      version: 2,
+      config: {
+        id: "legacy-provider",
+        baseURL: "https://api.openai.com/v1",
+        defaultModel: "gpt-image-2",
+        defaultSize: "auto",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        updatedAt: "2026-01-02T03:04:05.000Z",
+        encryption: "none"
+      },
+      history: []
+    });
+
+    expect(migrated.promptTemplates).toEqual([]);
+  });
+
+  it("normalizes prompt templates and filters malformed records", () => {
+    const migrated = normalizeState({
+      version: 3,
+      providers: [
+        {
+          id: "default",
+          baseURL: "https://api.openai.com/v1",
+          defaultModel: "gpt-image-2",
+          defaultSize: "auto",
+          defaultQuality: "auto",
+          timeoutMs: 120000,
+          updatedAt: "2026-01-02T03:04:05.000Z",
+          encryption: "none"
+        }
+      ],
+      activeProviderId: "default",
+      history: [],
+      promptTemplates: [
+        {
+          id: "template-1",
+          title: " Product ",
+          body: " Clean product photo ",
+          tags: ["product", " product ", "", 42],
+          category: "commerce",
+          createdAt: "2026-01-02T03:04:05.000Z",
+          updatedAt: "2026-01-02T03:04:06.000Z"
+        },
+        { id: "template-1", title: "Duplicate", body: "Duplicate body" },
+        { id: "bad-title", title: "", body: "Missing title" },
+        { id: "bad-body", title: "Missing body", body: "" }
+      ]
+    });
+
+    expect(migrated.promptTemplates).toEqual([
+      {
+        id: "template-1",
+        title: "Product",
+        body: "Clean product photo",
+        tags: ["product"],
+        category: "commerce",
+        createdAt: "2026-01-02T03:04:05.000Z",
+        updatedAt: "2026-01-02T03:04:06.000Z"
+      }
+    ]);
+  });
+
   it("migrates v1 history jobs with provider and model metadata", () => {
     const migrated = normalizeState({
       version: 1,

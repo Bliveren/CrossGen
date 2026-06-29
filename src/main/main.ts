@@ -20,9 +20,12 @@ import type {
   GenerationJob,
   InputAsset,
   JobProgressEvent,
+  PromptTemplate,
+  PromptTemplateInput,
   ProviderConfig,
   ProviderConfigInput,
   RunJobRequest,
+  TemplateExportFormat,
   UpdateCheckResult,
   UpdateInstallResult,
   WorkspaceDraft,
@@ -223,6 +226,7 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
     providers: state.providers,
     activeProviderId: state.activeProviderId,
     history: state.history.slice(0, MAX_HISTORY),
+    promptTemplates: state.promptTemplates,
     draft: state.draft
   };
   const statePath = getStatePath();
@@ -481,6 +485,7 @@ async function handleGetSnapshot(): Promise<AppSnapshot> {
     providers: state.providers.map(toPublicConfig),
     activeProviderId: state.activeProviderId,
     history: state.history,
+    promptTemplates: state.promptTemplates,
     draft: state.draft
   };
 }
@@ -562,6 +567,7 @@ async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConf
     providers: nextProviders.map(toPublicConfig),
     activeProviderId: newId,
     history: state.history,
+    promptTemplates: state.promptTemplates,
     draft: state.draft
   };
 }
@@ -582,6 +588,7 @@ async function handleSwitchProvider(_event: IpcMainInvokeEvent, providerId: stri
     providers: state.providers.map(toPublicConfig),
     activeProviderId: providerId,
     history: state.history,
+    promptTemplates: state.promptTemplates,
     draft: state.draft
   };
 }
@@ -604,6 +611,7 @@ async function handleDeleteProvider(_event: IpcMainInvokeEvent, providerId: stri
     providers: nextProviders.map(toPublicConfig),
     activeProviderId: nextActiveProviderId,
     history: state.history,
+    promptTemplates: state.promptTemplates,
     draft: state.draft
   };
 }
@@ -648,6 +656,151 @@ async function handleClearDraft(): Promise<void> {
   await writeState({ ...state, draft: undefined });
 }
 
+function normalizePromptTemplateInput(input: PromptTemplateInput): Required<Pick<PromptTemplateInput, "title" | "body" | "tags">> & Pick<PromptTemplateInput, "category"> {
+  const title = input.title.trim();
+  const body = input.body.trim();
+  if (!title) throw new Error("模板标题不能为空。");
+  if (!body) throw new Error("模板正文不能为空。");
+  return {
+    title,
+    body,
+    tags: normalizeTemplateTags(input.tags),
+    category: input.category?.trim() || undefined
+  };
+}
+
+function normalizeTemplateTags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (typeof item !== "string") return [];
+    const tag = item.trim();
+    if (!tag || seen.has(tag)) return [];
+    seen.add(tag);
+    return [tag];
+  });
+}
+
+function normalizeImportedTemplate(value: unknown, now: string): PromptTemplate | null {
+  if (!value || typeof value !== "object") return null;
+  const input = value as Record<string, unknown>;
+  if (typeof input.title !== "string" || typeof input.body !== "string") return null;
+  try {
+    const normalized = normalizePromptTemplateInput({
+      title: input.title,
+      body: input.body,
+      tags: normalizeTemplateTags(input.tags),
+      category: typeof input.category === "string" ? input.category : undefined
+    });
+    const createdAt = typeof input.createdAt === "string" && input.createdAt.trim() ? input.createdAt.trim() : now;
+    const updatedAt = typeof input.updatedAt === "string" && input.updatedAt.trim() ? input.updatedAt.trim() : createdAt;
+    return {
+      id: typeof input.id === "string" && input.id.trim() ? input.id.trim() : `template_${randomUUID()}`,
+      ...normalized,
+      createdAt,
+      updatedAt
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function handleListTemplates(): Promise<PromptTemplate[]> {
+  const state = await readState();
+  return state.promptTemplates;
+}
+
+async function handleSaveTemplate(_event: IpcMainInvokeEvent, input: PromptTemplateInput, templateId?: string): Promise<PromptTemplate> {
+  const state = await readState();
+  const normalized = normalizePromptTemplateInput(input);
+  const now = new Date().toISOString();
+  const existing = templateId ? state.promptTemplates.find((template) => template.id === templateId) : undefined;
+  const template: PromptTemplate = {
+    id: existing?.id ?? `template_${randomUUID()}`,
+    ...normalized,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+  const promptTemplates = existing
+    ? state.promptTemplates.map((item) => (item.id === existing.id ? template : item))
+    : [template, ...state.promptTemplates];
+  await writeState({ ...state, promptTemplates });
+  return template;
+}
+
+async function handleDeleteTemplate(_event: IpcMainInvokeEvent, id: string): Promise<void> {
+  const state = await readState();
+  await writeState({ ...state, promptTemplates: state.promptTemplates.filter((template) => template.id !== id) });
+}
+
+async function handleImportTemplates(): Promise<{ imported: number; skipped: number }> {
+  const result = await dialog.showOpenDialog({
+    title: "导入提示词模板",
+    properties: ["openFile"],
+    filters: [{ name: "JSON", extensions: ["json"] }]
+  });
+  if (result.canceled || !result.filePaths[0]) return { imported: 0, skipped: 0 };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await fs.readFile(result.filePaths[0], "utf8"));
+  } catch {
+    throw new Error("模板 JSON 无法解析。");
+  }
+
+  if (!parsed || typeof parsed !== "object" || (parsed as TemplateExportFormat).schemaVersion !== 1 || !Array.isArray((parsed as TemplateExportFormat).templates)) {
+    throw new Error("模板 JSON 格式不受支持。");
+  }
+
+  const state = await readState();
+  const now = new Date().toISOString();
+  const existingIds = new Set(state.promptTemplates.map((template) => template.id));
+  const imported: PromptTemplate[] = [];
+  let skipped = 0;
+
+  for (const rawTemplate of (parsed as TemplateExportFormat).templates) {
+    const template = normalizeImportedTemplate(rawTemplate, now);
+    if (!template) {
+      skipped += 1;
+      continue;
+    }
+    let id = template.id;
+    if (existingIds.has(id)) {
+      id = `template_${randomUUID()}`;
+    }
+    existingIds.add(id);
+    imported.push({ ...template, id });
+  }
+
+  if (imported.length > 0) {
+    await writeState({ ...state, promptTemplates: [...imported, ...state.promptTemplates] });
+  }
+
+  return { imported: imported.length, skipped };
+}
+
+async function handleExportTemplates(_event: IpcMainInvokeEvent, templateIds?: string[]): Promise<string | null> {
+  const state = await readState();
+  const selectedIds = new Set(Array.isArray(templateIds) ? templateIds : []);
+  const templates = selectedIds.size > 0
+    ? state.promptTemplates.filter((template) => selectedIds.has(template.id))
+    : state.promptTemplates;
+  const result = await dialog.showSaveDialog({
+    title: "导出提示词模板",
+    defaultPath: `image2tools-prompt-templates-${new Date().toISOString().slice(0, 10)}.json`,
+    filters: [{ name: "JSON", extensions: ["json"] }]
+  });
+  if (result.canceled || !result.filePath) return null;
+
+  const payload: TemplateExportFormat = {
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    templates
+  };
+  await fs.writeFile(result.filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  return result.filePath;
+}
+
 async function refreshModelDiscovery(config: StoredProviderConfig): Promise<StoredProviderConfig> {
   const apiKey = getApiKeyForConfigOrThrow(config);
   try {
@@ -663,7 +816,7 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
     return {
       ...config,
       kind,
-      name: providerDisplayName(kind),
+      name: config.name || providerDisplayName(kind),
       defaultModel: activeSelection.defaultModel,
       activeLaunchId: activeSelection.activeLaunchId,
       activeModelId: activeSelection.activeModelId,
@@ -1049,6 +1202,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle("config:testConnection", handleTestConnection);
   ipcMain.handle("draft:save", handleSaveDraft);
   ipcMain.handle("draft:clear", handleClearDraft);
+  ipcMain.handle("templates:list", handleListTemplates);
+  ipcMain.handle("templates:save", handleSaveTemplate);
+  ipcMain.handle("templates:delete", handleDeleteTemplate);
+  ipcMain.handle("templates:import", handleImportTemplates);
+  ipcMain.handle("templates:export", handleExportTemplates);
   ipcMain.handle("dialog:selectImages", handleSelectImages);
   ipcMain.handle("dialog:importImages", handleImportImages);
   ipcMain.handle("dialog:selectMask", handleSelectMask);

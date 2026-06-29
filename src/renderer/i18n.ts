@@ -129,6 +129,28 @@ export interface UiCopy {
   parameters: string;
   hide: string;
   show: string;
+  promptTemplates: string;
+  templateTitle: string;
+  templateBody: string;
+  templateTags: string;
+  templateCategory: string;
+  templateSearch: string;
+  templateAllTags: string;
+  templateNew: string;
+  templateSave: string;
+  templateUpdate: string;
+  templateEdit: string;
+  templateUse: string;
+  templateImport: string;
+  templateExport: string;
+  templateEmpty: string;
+  templateNoMatch: string;
+  templateDeleteConfirm: (title: string) => string;
+  templateSaved: string;
+  templateDeleted: string;
+  templateApplied: (title: string) => string;
+  templateImported: (imported: number, skipped: number) => string;
+  templateExported: (filePath: string) => string;
   size: string;
   aspectRatio: string;
   resolution: string;
@@ -287,6 +309,28 @@ export const translations: Record<Language, UiCopy> = {
     parameters: "Parameters",
     hide: "Hide",
     show: "Show",
+    promptTemplates: "Prompt templates",
+    templateTitle: "Title",
+    templateBody: "Template prompt",
+    templateTags: "Tags",
+    templateCategory: "Category",
+    templateSearch: "Search templates",
+    templateAllTags: "All",
+    templateNew: "New template",
+    templateSave: "Save template",
+    templateUpdate: "Update template",
+    templateEdit: "Edit template",
+    templateUse: "Use template",
+    templateImport: "Import templates",
+    templateExport: "Export templates",
+    templateEmpty: "No templates yet.",
+    templateNoMatch: "No matching templates.",
+    templateDeleteConfirm: (title: string) => `Delete template "${title}"?`,
+    templateSaved: "Template saved.",
+    templateDeleted: "Template deleted.",
+    templateApplied: (title: string) => `Template "${title}" filled into the prompt.`,
+    templateImported: (imported: number, skipped: number) => `${imported} template${imported === 1 ? "" : "s"} imported${skipped ? `, ${skipped} skipped` : ""}.`,
+    templateExported: (filePath: string) => `Templates exported to ${filePath}`,
     size: "Size",
     aspectRatio: "Aspect ratio",
     resolution: "Resolution",
@@ -508,6 +552,28 @@ export const translations: Record<Language, UiCopy> = {
     parameters: "参数配置",
     hide: "收起",
     show: "展开",
+    promptTemplates: "提示词模板",
+    templateTitle: "标题",
+    templateBody: "模板提示词",
+    templateTags: "标签",
+    templateCategory: "分类",
+    templateSearch: "搜索模板",
+    templateAllTags: "全部",
+    templateNew: "新建模板",
+    templateSave: "保存模板",
+    templateUpdate: "更新模板",
+    templateEdit: "编辑模板",
+    templateUse: "填入模板",
+    templateImport: "导入模板",
+    templateExport: "导出模板",
+    templateEmpty: "暂无模板。",
+    templateNoMatch: "没有匹配的模板。",
+    templateDeleteConfirm: (title: string) => `确认删除模板“${title}”？`,
+    templateSaved: "模板已保存。",
+    templateDeleted: "模板已删除。",
+    templateApplied: (title: string) => `已将模板“${title}”填入提示词。`,
+    templateImported: (imported: number, skipped: number) => `已导入 ${imported} 个模板${skipped ? `，跳过 ${skipped} 个` : ""}。`,
+    templateExported: (filePath: string) => `模板已导出到 ${filePath}`,
     size: "尺寸",
     aspectRatio: "画面比例",
     resolution: "分辨率",

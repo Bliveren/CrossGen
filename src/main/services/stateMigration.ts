@@ -5,6 +5,7 @@ import type {
   ImageParams,
   ImageQuality,
   OpenAIImageParams,
+  PromptTemplate,
   ProviderKind,
   WorkspaceDraft
 } from "../../shared/types.js";
@@ -56,6 +57,7 @@ export interface AppStateFile {
   providers: StoredProviderConfig[];
   activeProviderId: string;
   history: GenerationJob[];
+  promptTemplates: PromptTemplate[];
   draft?: WorkspaceDraft;
 }
 
@@ -82,7 +84,8 @@ export function getDefaultState(): AppStateFile {
     version: STATE_VERSION,
     providers: [defaultProvider],
     activeProviderId: defaultProvider.id,
-    history: []
+    history: [],
+    promptTemplates: []
   };
 }
 
@@ -97,6 +100,7 @@ export function normalizeState(parsed: unknown): AppStateFile {
       providers: [migratedProvider],
       activeProviderId: migratedProvider.id,
       history: Array.isArray(parsed.history) ? parsed.history.map((job) => normalizeGenerationJob(job, migratedProvider.id)) : [],
+      promptTemplates: normalizePromptTemplates(parsed.promptTemplates),
       draft: normalizeWorkspaceDraft(parsed.draft)
     };
   }
@@ -114,6 +118,7 @@ export function normalizeState(parsed: unknown): AppStateFile {
     providers,
     activeProviderId: activeProvider.id,
     history: Array.isArray(parsed.history) ? parsed.history.map((job) => normalizeGenerationJob(job, activeProvider.id)) : [],
+    promptTemplates: normalizePromptTemplates(parsed.promptTemplates),
     draft: normalizeWorkspaceDraft(parsed.draft)
   };
 }
@@ -161,6 +166,44 @@ function normalizeDiscoveredModels(value: unknown, fallbackKind: ProviderKind): 
         raw: item.raw
       }
     ];
+  });
+}
+
+function normalizePromptTemplates(value: unknown): PromptTemplate[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const id = nonEmptyString(item.id, "");
+    const title = nonEmptyString(item.title, "");
+    const body = nonEmptyString(item.body, "");
+    if (!id || !title || !body || seen.has(id)) return [];
+    seen.add(id);
+    const createdAt = nonEmptyString(item.createdAt, new Date(0).toISOString());
+    const updatedAt = nonEmptyString(item.updatedAt, createdAt);
+    return [
+      {
+        id,
+        title,
+        body,
+        tags: normalizeStringList(item.tags),
+        category: optionalString(item.category),
+        createdAt,
+        updatedAt
+      }
+    ];
+  });
+}
+
+function normalizeStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (typeof item !== "string") return [];
+    const normalized = item.trim();
+    if (!normalized || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [normalized];
   });
 }
 
