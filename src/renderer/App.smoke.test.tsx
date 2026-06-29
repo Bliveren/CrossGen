@@ -427,6 +427,46 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("creates prompt chips from @, ~, and # triggers in the prompt input", async () => {
+    const gallery = galleryAsset("trigger-gallery.png");
+    const template = {
+      id: "template-trigger",
+      title: "Trigger template",
+      body: "cinematic backlight",
+      tags: ["cinematic"],
+      createdAt: now,
+      updatedAt: now
+    };
+    const bridge = await renderApp(snapshot({ galleryAssets: [gallery], promptTemplates: [template] }));
+    const promptInput = textAreaByLabel("Prompt");
+
+    await changeTextArea(promptInput, "Product hero @trigger");
+    expect(document.body.textContent).toContain("trigger-gallery.png");
+    await keyDown(promptInput, "Enter");
+
+    await changeTextArea(promptInput, `${promptInput.value} ~trigger`);
+    expect(document.body.textContent).toContain("Trigger template");
+    await keyDown(promptInput, "Enter");
+
+    await changeTextArea(promptInput, `${promptInput.value} #abc`);
+    await keyDown(promptInput, "Enter");
+
+    expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(gallery.id);
+    expect(document.body.textContent).toContain("@ trigger-gallery.png");
+    expect(document.body.textContent).toContain("~ Trigger template");
+    expect(document.body.textContent).toContain("#ABC");
+
+    await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "edit",
+        prompt: "Product hero\n\ncinematic backlight\n\n#ABC",
+        inputPaths: [`/tmp/gallery/${gallery.fileName}`]
+      })
+    );
+  });
+
   it("adds a history result to Gallery", async () => {
     const result = imageAsset("history-result.png");
     const job = geminiJob(0, { outputs: [result] });
