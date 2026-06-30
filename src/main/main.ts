@@ -348,7 +348,13 @@ function getApiKeyForConfigOrThrow(config: StoredProviderConfig): string {
 }
 
 function normalizeError(error: unknown): string {
-  if (error instanceof Error) return redactLikelySecrets(error.message);
+  if (error instanceof Error) {
+    const message = redactLikelySecrets(error.message);
+    if (error.cause instanceof Error) {
+      return `${message}: ${redactLikelySecrets(error.cause.message)}`;
+    }
+    return message;
+  }
   return redactLikelySecrets(String(error));
 }
 

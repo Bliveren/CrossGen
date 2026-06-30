@@ -388,17 +388,34 @@ function imageSourceFromResponsePart(part: Record<string, unknown>): GeminiImage
 }
 
 function imageSourcesFromText(text: string): GeminiImageSource[] {
-  return [...text.matchAll(dataImageUrlPattern())].map((match) => {
+  const sources: GeminiImageSource[] = [];
+
+  // 1. 内嵌 base64 data URL：data:image/png;base64,...
+  for (const match of text.matchAll(dataImageUrlPattern())) {
     const mimeType = normalizeGeminiResponseMimeType(match[1], "image/png");
-    return {
+    sources.push({
       mimeType,
       data: `data:${mimeType};base64,${match[2] ?? ""}`
-    };
-  });
+    });
+  }
+
+  // 2. Markdown 图片链接：![...](https://...png)
+  //    部分聚合站会把图片 URL 嵌在 text part 里而不是用 inlineData
+  for (const match of text.matchAll(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/gi)) {
+    const url = match[1];
+    if (!url) continue;
+    const fallbackMimeType = mimeTypeFromUrl(url) ?? "image/png";
+    sources.push({ mimeType: fallbackMimeType, data: "", url });
+  }
+
+  return sources;
 }
 
 function textPartForMetadata(text: string): string {
-  return text.trim().replace(dataImageUrlPattern(), (_match, mimeType: string) => `data:${mimeType};base64,[image data omitted]`);
+  return text
+    .trim()
+    .replace(dataImageUrlPattern(), (_match, mimeType: string) => `data:${mimeType};base64,[image data omitted]`)
+    .replace(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/gi, "[image url omitted]");
 }
 
 function dataImageUrlPattern(): RegExp {
