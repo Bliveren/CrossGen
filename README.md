@@ -32,6 +32,7 @@
 ## What Is Image2Tools
 
 Image2Tools is an easy-to-use desktop tool for managing AI image generation and editing workflows. It currently focuses on GPT Image 2, Gemini-backed image models such as Nano Banana 3, and OpenAI-compatible custom image providers.
+<img width="1721" height="1154" alt="image" src="https://github.com/user-attachments/assets/e3810a38-4604-47b8-8cb8-46d073bdb252" />
 
 Version `0.2.3` turns the app into a cleaner production workspace:
 
