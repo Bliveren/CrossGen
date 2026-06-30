@@ -1,5 +1,18 @@
 # Image2Tools Release Notes
 
+## v0.2.4
+
+Bugfix release for saved model configurations and Gemini image sizing.
+
+### Fixes
+
+- **Saved configurations are now unified with Model config**: the saved list shows every local configuration, including the current one, so a newly saved model configuration is immediately visible and can be selected later.
+- **Configuration terminology is consistent**: the left rail now uses "Saved configurations", "Configuration name", and "Add configuration" instead of separating model config from API access wording.
+- **Add configuration stays in the model configuration flow**: added configurations are created, saved, selected as current, and shown in the same saved-configuration list used for switching.
+- **Gemini image size controls are sent through the Gemini image config field**: Gemini and Gemini General requests now send `generationConfig.imageConfig.aspectRatio` and `imageSize`, so selections such as `1:1` are passed to Gemini 3 Pro Image instead of being ignored.
+
+---
+
 ## v0.2.3
 
 Compatibility, release, and configuration UI patch release. Fixes aggregator streaming compatibility issues, adds image preview context menu, and restores the multi-API configuration experience before the final v0.2.3 package.

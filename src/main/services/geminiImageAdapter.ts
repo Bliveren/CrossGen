@@ -39,11 +39,9 @@ export interface GeminiGenerateContentBody {
   }>;
   generationConfig: {
     responseModalities: ["TEXT", "IMAGE"];
-    responseFormat: {
-      image: {
-        aspectRatio: GeminiImageParams["aspectRatio"];
-        imageSize: "512" | "1K" | "2K" | "4K";
-      };
+    imageConfig: {
+      aspectRatio: GeminiImageParams["aspectRatio"];
+      imageSize: "512" | "1K" | "2K" | "4K";
     };
     thinkingConfig?: {
       thinkingBudget: 0;
@@ -113,11 +111,9 @@ export function buildGeminiGenerateContentBody(
 ): GeminiGenerateContentBody {
   const generationConfig: GeminiGenerateContentBody["generationConfig"] = {
     responseModalities: ["TEXT", "IMAGE"],
-    responseFormat: {
-      image: {
-        aspectRatio: params.aspectRatio,
-        imageSize: geminiImageSizeForResolution(params.resolution)
-      }
+    imageConfig: {
+      aspectRatio: params.aspectRatio,
+      imageSize: geminiImageSizeForResolution(params.resolution)
     }
   };
 

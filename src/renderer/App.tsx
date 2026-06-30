@@ -827,7 +827,7 @@ export function App() {
   const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, effectivePrompt), copy) ?? modeError;
   const canRun = !validationError && !isRunning;
-  const inactiveApiConfigs = snapshot.providers.filter((config) => config.id !== activeConfig.id);
+  const savedApiConfigs = snapshot.providers;
   const canDeleteActiveApiAccess = snapshot.providers.length > 1;
 
   useEffect(() => {
@@ -1354,7 +1354,6 @@ export function App() {
 
   async function switchApiAccess(providerId: string) {
     if (!bridge || providerId === activeConfig.id) {
-      setIsSavedApiAccessOpen(false);
       return;
     }
     try {
@@ -2419,26 +2418,28 @@ export function App() {
                 <span>{copy.apiAccessList}</span>
               </span>
               <span className="section-toggle-state">
-                {inactiveApiConfigs.length}
+                {savedApiConfigs.length}
                 {isSavedApiAccessOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               </span>
             </button>
             {isSavedApiAccessOpen && (
               <div className="api-access-panel">
                 <div className="api-access-list" aria-label={copy.apiAccessList}>
-                  {inactiveApiConfigs.length === 0 && (
+                  {savedApiConfigs.length === 0 && (
                     <p className="empty-inline">{copy.deleteLastApiAccessDisabled}</p>
                   )}
-                  {inactiveApiConfigs.map((config) => {
+                  {savedApiConfigs.map((config) => {
                     const canDelete = snapshot.providers.length > 1;
+                    const isActiveConfig = config.id === activeConfig.id;
                     return (
-                      <div key={config.id} className="api-access-item">
+                      <div key={config.id} className={isActiveConfig ? "api-access-item active" : "api-access-item"}>
                         <button
                           type="button"
                           className="api-access-item-main"
                           onClick={() => void switchApiAccess(config.id)}
                           disabled={isSavingConfig}
-                          title={copy.switchApiAccess}
+                          title={isActiveConfig ? copy.currentApiAccess : copy.switchApiAccess}
+                          aria-current={isActiveConfig ? "true" : undefined}
                         >
                           <span className="api-access-item-title">{apiAccessDisplayName(config, copy.apiAccessUntitled)}</span>
                           <span className="api-access-item-meta">
@@ -2447,6 +2448,7 @@ export function App() {
                           <span className="api-access-item-key">
                             <span className={config.apiKeySaved ? "dot ok" : "dot"} />
                             {config.apiKeySaved ? copy.keySaved : copy.noKeySaved}
+                            {isActiveConfig ? ` · ${copy.currentApiAccess}` : ""}
                           </span>
                         </button>
                         <button
