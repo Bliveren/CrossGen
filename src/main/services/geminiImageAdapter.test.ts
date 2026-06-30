@@ -124,11 +124,9 @@ describe("Gemini image adapter", () => {
       ],
       generationConfig: {
         responseModalities: ["TEXT", "IMAGE"],
-        responseFormat: {
-          image: {
-            aspectRatio: "16:9",
-            imageSize: "2K"
-          }
+        imageConfig: {
+          aspectRatio: "16:9",
+          imageSize: "2K"
         },
         thinkingConfig: {
           thinkingBudget: 0
@@ -177,7 +175,7 @@ describe("Gemini image adapter", () => {
       contents: [{ role: "user", parts: [{ text: "Make a clean product render" }] }],
       generationConfig: {
         responseModalities: ["TEXT", "IMAGE"],
-        responseFormat: { image: { aspectRatio: "1:1", imageSize: "1K" } }
+        imageConfig: { aspectRatio: "1:1", imageSize: "1K" }
       }
     });
     expect(result.status).toBe("succeeded");

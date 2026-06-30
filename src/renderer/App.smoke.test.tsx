@@ -228,22 +228,26 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Key saved · 1 model discovered");
 
     await click(apiAccessCurrentButton());
-    await changeInput(inputByLabel("Access name"), "Primary gateway");
+    await changeInput(inputByLabel("Configuration name"), "Primary gateway");
     await click(buttonByText("Save"));
 
     expect(bridge.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ name: "Primary gateway" }));
+    await openSavedApiAccess();
+    expect(document.querySelectorAll(".api-access-item").length).toBe(1);
+    expect(document.body.textContent).toContain("Primary gateway");
+    expect(document.body.textContent).toContain("Current configuration");
   });
 
   it("adds a second API access and switches to it automatically", async () => {
     const bridge = await renderApp(snapshot());
 
     await openSavedApiAccess();
-    await click(buttonByText("Add API access"));
+    await click(buttonByText("Add configuration"));
     const addForm = apiAccessAddForm();
-    await changeSelect(selectByLabel("API type", addForm), "gemini");
-    await changeInput(inputByLabel("Access name", addForm), "Gemini gateway");
+    await changeSelect(selectByLabel("Configuration type", addForm), "gemini");
+    await changeInput(inputByLabel("Configuration name", addForm), "Gemini gateway");
     await changeInput(inputByLabel("API Key", addForm), "gemini-test-key");
-    await click(buttonByText("Add API access", ".api-access-add-form button"));
+    await click(buttonByText("Add configuration", ".api-access-add-form button"));
 
     expect(bridge.addProvider).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -254,6 +258,8 @@ describe("renderer multi-model smoke", () => {
       })
     );
     expect(document.body.textContent).toContain("Gemini gateway");
+    expect(document.querySelectorAll(".api-access-item").length).toBe(2);
+    expect(document.body.textContent).toContain("Current configuration");
     expect(buttonByText("Nano Banana 3", ".launch-button").disabled).toBe(true);
   });
 
@@ -319,7 +325,7 @@ describe("renderer multi-model smoke", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     await click(apiAccessCurrentButton());
-    const activeDeleteButton = [...document.querySelectorAll<HTMLButtonElement>(".api-config-detail button")].find((button) => button.title === "Delete API access")!;
+    const activeDeleteButton = [...document.querySelectorAll<HTMLButtonElement>(".api-config-detail button")].find((button) => button.title === "Delete configuration")!;
     await click(activeDeleteButton);
 
     expect(bridge.saveDraft).toHaveBeenCalled();
@@ -1107,7 +1113,7 @@ function apiAccessCurrentButton(): HTMLButtonElement {
 }
 
 async function openSavedApiAccess() {
-  await click(buttonByText("Saved API access", ".compact-toggle"));
+  await click(buttonByText("Saved configurations", ".compact-toggle"));
 }
 
 async function openTemplateDialog() {
