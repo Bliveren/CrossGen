@@ -100,7 +100,6 @@ jobs:
       - name: Verify Windows package
         env:
           IMAGE2TOOLS_WINDOWS_VERIFY_MODE: full-install
-          IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS: /S /currentuser /D=${{ runner.temp }}\image2tools-ci-check-${{ github.run_id }}
         run: pnpm verify:release:windows
 
   linux-package:
