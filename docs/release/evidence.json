@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.4",
-  "lastUpdated": "2026-06-30T16:17:47.000Z",
+  "lastUpdated": "2026-06-30T18:04:08.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -82,21 +82,23 @@
       "status": "passed",
       "acceptanceCriteria": [
         "Developer ID signing is performed without exposing secret values.",
-        "macOS artifacts are built from the v0.2.3 application-code release commit.",
-        "codesign verification passes against the signed artifact.",
+        "macOS artifacts are built from the v0.2.4 application-code release commit.",
+        "codesign verification passes against the signed app extracted from the release ZIP artifact.",
         "macOS release verification passes against the signed artifact.",
         "Notarization status is recorded accurately when Apple notary credentials are unavailable."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T16:06:11.000Z",
-        "commit": "9374a4f1220f7f3e05b5c3a87a738181c7f9213e",
-        "environment": "macOS 26.5.1 arm64; package version 0.2.3; Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7); Apple notarization credentials unset.",
+        "verifiedAt": "2026-06-30T17:27:11.000Z",
+        "commit": "8c05309273f73e5bae1dce893c47a4b049c7356e",
+        "environment": "macOS 26.5.1 arm64; package version 0.2.4; Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7); Apple notarization credentials unset.",
         "commands": [
-          "PATH=\"$PWD/node_modules/.bin:$PATH\" node scripts/electron-builder-pnpm.mjs --mac -c.mac.notarize=false -c.mac.identity='Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)'",
-          "codesign --display --verbose=4 release/mac-arm64/Image2Tools.app",
-          "codesign --verify --deep --strict --verbose=2 release/mac-arm64/Image2Tools.app",
-          "spctl -a -vv release/mac-arm64/Image2Tools.app",
-          "pnpm verify:release:mac"
+          "gh release download v0.2.4 --pattern Image2Tools-0.2.4-mac-arm64.zip --dir /tmp/image2tools-v024-mac-check --clobber",
+          "shasum -a 256 /tmp/image2tools-v024-mac-check/Image2Tools-0.2.4-mac-arm64.zip",
+          "wc -c /tmp/image2tools-v024-mac-check/Image2Tools-0.2.4-mac-arm64.zip",
+          "ditto -x -k /tmp/image2tools-v024-mac-check/Image2Tools-0.2.4-mac-arm64.zip /tmp/image2tools-v024-mac-check/unzip",
+          "codesign --display --verbose=4 /tmp/image2tools-v024-mac-check/unzip/Image2Tools.app",
+          "codesign --verify --deep --strict --verbose=2 /tmp/image2tools-v024-mac-check/unzip/Image2Tools.app",
+          "spctl -a -vv /tmp/image2tools-v024-mac-check/unzip/Image2Tools.app"
         ],
         "references": [
           {
@@ -107,12 +109,18 @@
         "artifacts": [
           {
             "kind": "release-artifact",
-            "path": "release/Image2Tools-0.2.3-mac-arm64.dmg",
+            "path": "release/Image2Tools-0.2.4-mac-arm64.dmg",
             "public": false,
-            "description": "Developer ID signed, unnotarized DMG uploaded to the v0.2.3 release. SHA256 39e70367c1bf6dbce01b254ea673e21476d4d7644bbfb40c30dad79c0df1d8f2; 103460585 bytes."
+            "description": "Developer ID signed, unnotarized DMG uploaded to the v0.2.4 release. SHA256 4931076a2cd8d6d69c0afcdd7c17d20286d0bd1906fcde501be7bdfe9b1dad34; 103470128 bytes."
+          },
+          {
+            "kind": "release-artifact",
+            "path": "release/Image2Tools-0.2.4-mac-arm64.zip",
+            "public": false,
+            "description": "Developer ID signed, unnotarized ZIP uploaded to the v0.2.4 release and verified locally after download. SHA256 bc404095e9ca39dbd91b01009a3043fd336032d92333ff78e44c88352f03c008; 99182264 bytes."
           }
         ],
-        "summary": "v0.2.3 macOS DMG was rebuilt from application-code commit 9374a4f, signed with Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7), and verified with codesign plus pnpm verify:release:mac. spctl reports 'rejected, source=Unnotarized Developer ID' because Apple notarization credentials are not configured in this shell; no notarization was attempted. The documentation sync commit only records final asset metadata and README updates."
+        "summary": "v0.2.4 macOS DMG and ZIP were rebuilt from application-code release commit 8c05309 and uploaded to the v0.2.4 release. GitHub records the DMG as SHA256 4931076a2cd8d6d69c0afcdd7c17d20286d0bd1906fcde501be7bdfe9b1dad34 with size 103470128 bytes and the ZIP as SHA256 bc404095e9ca39dbd91b01009a3043fd336032d92333ff78e44c88352f03c008 with size 99182264 bytes. The downloaded ZIP was extracted and codesign verified the app as Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7). spctl reports rejected, source=Unnotarized Developer ID, so the asset is signed but not Apple-notarized."
       }
     },
     {
@@ -127,13 +135,13 @@
         "Download and open-folder behavior are checked on native Windows."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T16:14:30.000Z",
-        "commit": "9374a4f1220f7f3e05b5c3a87a738181c7f9213e",
-        "environment": "Native Windows 11 Pro 10.0.26100 x64 shell; package version 0.2.3; artifacts release\\Image2Tools-Setup.exe and release\\win-unpacked\\Image2Tools.exe.",
+        "verifiedAt": "2026-06-30T18:01:41.000Z",
+        "commit": "b08b7b4a0aeaf0f8e7126711bff88031c98b16a7",
+        "environment": "GitHub Actions Windows runner plus prior Native Windows 11 Pro 10.0.26100 x64 shell evidence; package version 0.2.4; release asset Image2Tools-Setup.exe.",
         "commands": [
-          "corepack pnpm@10.25.0 package:win",
-          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; $env:IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS='/S /currentuser /D=C:\\work\\image2tools-release-check-v023-ui-polish-2'; corepack pnpm@10.25.0 verify:release:windows",
-          "Packaged app bridge acceptance: configure loopback mock OpenAI and Gemini endpoints, generate managed outputs, invoke downloadAsset through the native Save dialog, and invoke openAssetFolder with Explorer directory verification."
+          "GitHub Actions CI run 28464934988 / Windows package job 84363052155: package Windows app and verify Windows package in full-install mode.",
+          "GitHub Actions Release Windows run 28464953780 / job 84362218974: package Windows app, run package-smoke verification, and publish GitHub Release asset.",
+          "Prior native Windows packaged-app bridge acceptance remains applicable for unchanged download/open-folder IPC: configure loopback mock OpenAI and Gemini endpoints, generate managed outputs, invoke downloadAsset through the native Save dialog, and invoke openAssetFolder with Explorer directory verification."
         ],
         "references": [
           {
@@ -143,19 +151,25 @@
         ],
         "artifacts": [
           {
-            "kind": "evidence-note",
-            "path": "docs/release/windows-full-install-2026-06-10.md",
+            "kind": "ci-run",
+            "path": "https://github.com/Bliveren/image2tools/actions/runs/28464934988",
             "public": true,
-            "description": "Redacted Windows full-install verifier result."
+            "description": "0.2.4 CI run with successful Windows full-install package verification."
+          },
+          {
+            "kind": "release-run",
+            "path": "https://github.com/Bliveren/image2tools/actions/runs/28464953780",
+            "public": true,
+            "description": "0.2.4 Windows release workflow that published the GitHub Release installer asset."
           },
           {
             "kind": "evidence-note",
             "path": "docs/release/windows-native-download-open-folder-2026-06-10.md",
             "public": true,
-            "description": "Native Windows packaged-app download and open-folder acceptance evidence."
+            "description": "Prior native Windows packaged-app download and open-folder acceptance evidence for unchanged platform IPC behavior."
           }
         ],
-        "summary": "Windows native release evidence passed for the v0.2.3 UI polish rebuild: package:win completed, the unpacked app launched and showed a main window, the NSIS installer completed a full silent current-user install into a fresh verification directory, the installed app launched and showed a main window, and silent uninstall passed. The rebuilt installer SHA256 is e458d3a3000d27d2a02690e6fcefdaaad1b3da9fe0b34668794fc3c596817ec9 and size is 98680385 bytes."
+        "summary": "0.2.4 Windows packaging passed on GitHub Actions: CI run 28464934988 completed the Windows package job 84363052155, including full-install verification, and Release Windows run 28464953780 published the installer after package-smoke verification. The uploaded v0.2.4 installer was downloaded and verified as SHA256 26ace9c524736036806a52059e5bed649faddecb0284b2c348c68d57ef51e5a5 with size 98680455 bytes. Native download/open-folder behavior remains covered by the prior Windows native evidence because 0.2.4 only changes saved configuration UI, Gemini imageConfig sizing, and Windows workflow packaging metadata."
       }
     },
     {
@@ -205,15 +219,15 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T16:17:47.000Z",
-        "commit": "9374a4f1220f7f3e05b5c3a87a738181c7f9213e",
-        "environment": "macOS 26.5.1 arm64 local release build plus Native Windows 11 Pro 10.0.26100 x64 rebuild; package version 0.2.3; darwin/arm64 DMG and win32/x64 installer published to the v0.2.3 GitHub release.",
+        "verifiedAt": "2026-06-30T18:04:08.000Z",
+        "commit": "b08b7b4a0aeaf0f8e7126711bff88031c98b16a7",
+        "environment": "macOS 26.5.1 arm64 local shell plus GitHub Actions Windows runner; package version 0.2.4; darwin/arm64 DMG and win32/x64 installer published to the v0.2.4 GitHub release.",
         "commands": [
-          "shasum -a 256 release/Image2Tools-0.2.3-mac-arm64.dmg",
-          "corepack pnpm@10.25.0 package:win",
-          "Get-FileHash -Algorithm SHA256 -LiteralPath .\\release\\Image2Tools-Setup.exe",
-          "gh release download v0.2.3 --pattern Image2Tools-Setup.exe --dir C:\\work\\image2tools-release-download-v023-ui-polish --clobber",
-          "Get-FileHash -Algorithm SHA256 -LiteralPath C:\\work\\image2tools-release-download-v023-ui-polish\\Image2Tools-Setup.exe"
+          "gh release view v0.2.4 --json assets,url,publishedAt,tagName,targetCommitish",
+          "gh release download v0.2.4 --pattern Image2Tools-Setup.exe --dir /tmp/image2tools-v024-check --clobber",
+          "shasum -a 256 /tmp/image2tools-v024-check/Image2Tools-Setup.exe",
+          "wc -c /tmp/image2tools-v024-check/Image2Tools-Setup.exe",
+          "pnpm verify:release-evidence"
         ],
         "references": [
           {
@@ -221,8 +235,8 @@
             "url": "https://github.com/Bliveren/image2tools/issues/103"
           },
           {
-            "label": "Image2Tools v0.2.3 GitHub release",
-            "url": "https://github.com/Bliveren/image2tools/releases/tag/v0.2.3"
+            "label": "Image2Tools v0.2.4 GitHub release",
+            "url": "https://github.com/Bliveren/image2tools/releases/tag/v0.2.4"
           }
         ],
         "artifacts": [
@@ -230,10 +244,10 @@
             "kind": "update-manifest",
             "path": "docs/updates/latest.json",
             "public": true,
-            "description": "Update manifest with darwin/arm64 DMG and win32/x64 installer asset URLs, SHA256, and sizeBytes for v0.2.3."
+            "description": "Update manifest with darwin/arm64 DMG and win32/x64 installer asset URLs, SHA256, and sizeBytes for v0.2.4."
           }
         ],
-        "summary": "Update manifest assets populated for v0.2.3 from the current release artifacts. Darwin DMG: SHA256 39e70367c1bf6dbce01b254ea673e21476d4d7644bbfb40c30dad79c0df1d8f2, 103460585 bytes. Windows installer: SHA256 e458d3a3000d27d2a02690e6fcefdaaad1b3da9fe0b34668794fc3c596817ec9, 98680385 bytes. Both entries point at HTTPS GitHub release download URLs and the app updater verifies downloaded size and SHA-256 before opening."
+        "summary": "Update manifest assets populated for v0.2.4 from the current release artifacts. Darwin DMG: SHA256 4931076a2cd8d6d69c0afcdd7c17d20286d0bd1906fcde501be7bdfe9b1dad34, 103470128 bytes. Windows installer: SHA256 26ace9c524736036806a52059e5bed649faddecb0284b2c348c68d57ef51e5a5, 98680455 bytes. Both entries point at HTTPS GitHub release download URLs and the app updater verifies downloaded size and SHA-256 before opening."
       }
     }
   ]
