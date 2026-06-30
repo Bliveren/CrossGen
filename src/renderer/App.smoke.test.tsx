@@ -53,6 +53,7 @@ describe("renderer multi-model smoke", () => {
     await renderAppWithoutBridge();
 
     expect(document.body.textContent).toContain("Browser preview: Electron IPC is unavailable.");
+    await click(apiAccessCurrentButton());
     expect(buttonByText("Discover models").disabled).toBe(true);
   });
 
@@ -75,6 +76,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Connected");
 
     vi.mocked(bridge.testConnection).mockClear();
+    await click(apiAccessCurrentButton());
     await click(buttonByText("Save"));
     await flushAsync();
 
@@ -221,9 +223,11 @@ describe("renderer multi-model smoke", () => {
   it("keeps the single API access path working", async () => {
     const bridge = await renderApp(snapshot());
 
-    expect(document.body.textContent).toContain("API access");
-    expect(document.body.textContent).toContain("OpenAI · Key saved");
+    expect(document.body.textContent).toContain("Model config");
+    expect(document.body.textContent).toContain("OpenAI · api.openai.com/v1");
+    expect(document.body.textContent).toContain("Key saved · 1 model discovered");
 
+    await click(apiAccessCurrentButton());
     await changeInput(inputByLabel("Access name"), "Primary gateway");
     await click(buttonByText("Save"));
 
@@ -233,7 +237,7 @@ describe("renderer multi-model smoke", () => {
   it("adds a second API access and switches to it automatically", async () => {
     const bridge = await renderApp(snapshot());
 
-    await click(apiAccessCurrentButton());
+    await openSavedApiAccess();
     await click(buttonByText("Add API access"));
     const addForm = apiAccessAddForm();
     await changeSelect(selectByLabel("API type", addForm), "gemini");
@@ -270,7 +274,7 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("GPT Image 2").disabled).toBe(false);
     expect(launchButton("Nano Banana 3").disabled).toBe(true);
 
-    await click(apiAccessCurrentButton());
+    await openSavedApiAccess();
     await click(buttonByText("Gemini access", ".api-access-item-main"));
 
     expect(bridge.saveDraft).toHaveBeenCalled();
@@ -290,7 +294,7 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
-    await click(apiAccessCurrentButton());
+    await openSavedApiAccess();
     const geminiItem = [...document.querySelectorAll<HTMLElement>(".api-access-item")].find((item) => item.textContent?.includes("Gemini access"))!;
     await click(geminiItem.querySelector<HTMLButtonElement>(".icon-button")!);
 
@@ -315,8 +319,8 @@ describe("renderer multi-model smoke", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     await click(apiAccessCurrentButton());
-    const geminiItem = [...document.querySelectorAll<HTMLElement>(".api-access-item")].find((item) => item.textContent?.includes("Gemini access"))!;
-    await click(geminiItem.querySelector<HTMLButtonElement>(".icon-button")!);
+    const activeDeleteButton = [...document.querySelectorAll<HTMLButtonElement>(".api-config-detail button")].find((button) => button.title === "Delete API access")!;
+    await click(activeDeleteButton);
 
     expect(bridge.saveDraft).toHaveBeenCalled();
     expect(bridge.deleteProvider).toHaveBeenCalledWith("gemini-access");
@@ -327,7 +331,7 @@ describe("renderer multi-model smoke", () => {
   it("creates, searches, filters, applies, and deletes prompt templates", async () => {
     const bridge = await renderApp(snapshot());
 
-    await click(buttonByText("Prompt templates", ".section-toggle"));
+    await openTemplateDialog();
     await changeInput(inputByLabel("Title"), "Product shot");
     await changeTextArea(textAreaByLabel("Template prompt"), "A crisp product shot on a steel table");
     await changeInput(inputByLabel("Tags"), "product, studio");
@@ -362,7 +366,7 @@ describe("renderer multi-model smoke", () => {
     const asset = galleryAsset("gallery-product.png", { tags: ["product"] });
     const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
 
-    await click(buttonByText("Reference Gallery", ".section-toggle"));
+    await openGalleryRail();
     await click(document.querySelector<HTMLButtonElement>(".gallery-thumb")!);
 
     expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(asset.id);
@@ -380,6 +384,24 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("drags a Gallery image from the right rail into the reference area", async () => {
+    const asset = galleryAsset("gallery-drag.png", { tags: ["product"] });
+    const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    await openGalleryRail();
+
+    const dragTransfer = dataTransferStub();
+    await dispatchDragEvent(document.querySelector<HTMLButtonElement>(".gallery-thumb")!, "dragstart", dragTransfer);
+    expect(dragTransfer.setData).toHaveBeenCalledWith("application/x-image2tools-gallery-id", asset.id);
+
+    const dropTransfer = dataTransferStub({ "application/x-image2tools-gallery-id": asset.id });
+    await dispatchDragEvent(document.querySelector<HTMLElement>(".reference-grid")!, "drop", dropTransfer);
+
+    expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(asset.id);
+    expect(document.querySelector(".asset-tile")?.textContent).toContain("gallery-drag.png");
+  });
+
   it("keeps plain text prompt submissions unchanged", async () => {
     const bridge = await renderApp(snapshot());
 
@@ -394,7 +416,7 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
-  it("serializes Gallery, template, and color prompt chips before running", async () => {
+  it("serializes Gallery and template prompt chips before running", async () => {
     const gallery = galleryAsset("chip-gallery.png");
     const template = {
       id: "template-chip",
@@ -407,28 +429,27 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot({ galleryAssets: [gallery], promptTemplates: [template] }));
 
     await changeTextArea(textAreaByLabel("Prompt"), "Product hero");
-    await changeSelect(selectByTitle("@ Gallery"), gallery.id);
-    await changeSelect(selectByTitle("~ Template"), template.id);
-    await changeInput(inputByAriaLabel("Color chip"), "#0f6");
-    await keyDown(inputByAriaLabel("Color chip"), "Enter");
+    await changeTextArea(textAreaByLabel("Prompt"), "Product hero @chip");
+    await keyDown(textAreaByLabel("Prompt"), "Enter");
+    await changeTextArea(textAreaByLabel("Prompt"), `${textAreaByLabel("Prompt").value} ~studio`);
+    await keyDown(textAreaByLabel("Prompt"), "Enter");
 
     expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(gallery.id);
     expect(document.body.textContent).toContain("@ chip-gallery.png");
     expect(document.body.textContent).toContain("~ Studio light");
-    expect(document.body.textContent).toContain("#0F6");
 
     await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
 
     expect(bridge.runJob).toHaveBeenCalledWith(
       expect.objectContaining({
         mode: "edit",
-        prompt: "Product hero\n\nsoftbox lighting\n\n#0F6",
+        prompt: "Product hero\n\nsoftbox lighting",
         inputPaths: [`/tmp/gallery/${gallery.fileName}`]
       })
     );
   });
 
-  it("creates prompt chips from @, ~, and # triggers in the prompt input", async () => {
+  it("creates prompt chips from @ and ~ triggers in the prompt input", async () => {
     const gallery = galleryAsset("trigger-gallery.png");
     const template = {
       id: "template-trigger",
@@ -449,20 +470,16 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Trigger template");
     await keyDown(promptInput, "Enter");
 
-    await changeTextArea(promptInput, `${promptInput.value} #abc`);
-    await keyDown(promptInput, "Enter");
-
     expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(gallery.id);
     expect(document.body.textContent).toContain("@ trigger-gallery.png");
     expect(document.body.textContent).toContain("~ Trigger template");
-    expect(document.body.textContent).toContain("#ABC");
 
     await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
 
     expect(bridge.runJob).toHaveBeenCalledWith(
       expect.objectContaining({
         mode: "edit",
-        prompt: "Product hero\n\ncinematic backlight\n\n#ABC",
+        prompt: "Product hero\n\ncinematic backlight",
         inputPaths: [`/tmp/gallery/${gallery.fileName}`]
       })
     );
@@ -478,7 +495,7 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.addHistoryAssetToGallery).toHaveBeenCalledWith(result.path);
     expect(document.body.textContent).toContain("Added to Gallery.");
 
-    await click(buttonByText("Reference Gallery", ".section-toggle"));
+    await openGalleryRail();
     expect(document.body.textContent).toContain("history.png");
   });
 
@@ -486,7 +503,7 @@ describe("renderer multi-model smoke", () => {
     const asset = galleryAsset("gallery-tags.png", { tags: ["old"] });
     const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
 
-    await click(buttonByText("Reference Gallery", ".section-toggle"));
+    await openGalleryRail();
     await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[title="Edit tags"]')!);
     await changeInput(document.querySelector<HTMLInputElement>(".gallery-tag-editor input")!, "product, hero");
     await click(document.querySelector<HTMLButtonElement>('.gallery-tag-editor button[title="Save tags"]')!);
@@ -502,8 +519,8 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot({ galleryAssets: [asset], history: [geminiJob(0)] }));
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
 
-    await click(buttonByText("Reference Gallery", ".section-toggle"));
-    expect(document.querySelectorAll(".history-item")).toHaveLength(1);
+    await openGalleryRail();
+    expect(buttonByText("Recent jobs", ".right-rail-tabs button").textContent).toContain("1");
     await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[title="Delete"]')!);
 
     expect(confirmSpy).toHaveBeenCalledWith('Delete Gallery image "gallery-delete.png"?');
@@ -514,6 +531,7 @@ describe("renderer multi-model smoke", () => {
 
     expect(bridge.removeGalleryAsset).toHaveBeenCalledWith(asset.id);
     expect(document.body.textContent).not.toContain("gallery-delete.png");
+    await click(buttonByText("Recent jobs", ".right-rail-tabs button"));
     expect(document.querySelectorAll(".history-item")).toHaveLength(1);
   });
 
@@ -531,6 +549,7 @@ describe("renderer multi-model smoke", () => {
     });
     const bridge = await renderApp(snapshot({ providers: [geminiConfig], activeProviderId: geminiConfig.id, history: [geminiJob(0)] }));
 
+    await click(apiAccessCurrentButton());
     await click(buttonByText("Discover models"));
     await click(launchButton("Nano Banana 3"));
     await click(buttonByText("Generate", ".primary-run"));
@@ -635,7 +654,7 @@ describe("renderer multi-model smoke", () => {
     });
 
     await click(buttonByText("Image to image", ".mode-tab"));
-    await click(buttonByText("Reference Gallery", ".section-toggle"));
+    await openGalleryRail();
     await click(document.querySelector<HTMLButtonElement>(".gallery-thumb")!);
     await flushAsync();
     await click(launchButton("General"));
@@ -1087,6 +1106,18 @@ function apiAccessCurrentButton(): HTMLButtonElement {
   return button;
 }
 
+async function openSavedApiAccess() {
+  await click(buttonByText("Saved API access", ".compact-toggle"));
+}
+
+async function openTemplateDialog() {
+  await click(buttonByText("Prompt templates", ".prompt-template-button"));
+}
+
+async function openGalleryRail() {
+  await click(buttonByText("Reference Gallery", ".right-rail-tabs button"));
+}
+
 function buttonByText(text: string, selector = "button"): HTMLButtonElement {
   const button = [...document.querySelectorAll<HTMLButtonElement>(selector)].find((item) => item.textContent?.includes(text));
   if (!button) throw new Error(`Button containing "${text}" was not found.`);
@@ -1146,12 +1177,6 @@ function inputByPlaceholder(placeholder: string): HTMLInputElement {
   return input;
 }
 
-function inputByAriaLabel(label: string): HTMLInputElement {
-  const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
-  if (!input) throw new Error(`Input with aria-label "${label}" was not found.`);
-  return input;
-}
-
 function textAreaByLabel(labelText: string, root: ParentNode = document): HTMLTextAreaElement {
   const label = [...root.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(labelText));
   const textarea = label?.querySelector<HTMLTextAreaElement>("textarea");
@@ -1166,12 +1191,6 @@ function selectByLabel(labelText: string, root: ParentNode = document): HTMLSele
   return select;
 }
 
-function selectByTitle(title: string): HTMLSelectElement {
-  const select = [...document.querySelectorAll<HTMLSelectElement>("select")].find((item) => item.title === title);
-  if (!select) throw new Error(`Select titled "${title}" was not found.`);
-  return select;
-}
-
 function apiAccessAddForm(): HTMLElement {
   const form = document.querySelector<HTMLElement>(".api-access-add-form");
   if (!form) throw new Error("API access add form was not found.");
@@ -1182,6 +1201,39 @@ async function keyDown(element: HTMLElement, key: string, init: KeyboardEventIni
   await act(async () => {
     element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, ...init }));
   });
+}
+
+async function dispatchDragEvent(element: HTMLElement, type: string, dataTransfer: DataTransfer) {
+  await act(async () => {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+    element.dispatchEvent(event);
+    await Promise.resolve();
+  });
+}
+
+function dataTransferStub(initial: Record<string, string> = {}) {
+  const values = new Map(Object.entries(initial));
+  const transfer = {
+    dropEffect: "none",
+    effectAllowed: "all",
+    files: [] as unknown as FileList,
+    items: [] as unknown as DataTransferItemList,
+    types: Object.keys(initial),
+    clearData: vi.fn((format?: string) => {
+      if (format) {
+        values.delete(format);
+      } else {
+        values.clear();
+      }
+    }),
+    getData: vi.fn((format: string) => values.get(format) ?? ""),
+    setData: vi.fn((format: string, data: string) => {
+      values.set(format, data);
+    }),
+    setDragImage: vi.fn()
+  };
+  return transfer as typeof transfer & DataTransfer;
 }
 
 function separatorByLabel(label: string): HTMLElement {

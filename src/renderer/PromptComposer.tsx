@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { ImagePlus, Palette, ScrollText, X } from "lucide-react";
 import type { GalleryAsset, PromptTemplate } from "../shared/types";
-import { normalizeHexColor, type PromptToken } from "./promptTokens";
+import { type PromptToken } from "./promptTokens";
 
 interface PromptComposerProps {
   label: string;
@@ -64,22 +64,8 @@ export function PromptComposer({
     addToken({ type: "template", templateId: template.id, title: template.title, body: template.body });
   }
 
-  function addColorChip(color: string, startIndex?: number) {
-    if (startIndex !== undefined) {
-      replaceTrailingPromptTrigger(stripTrailingPromptTrigger(startIndex));
-    }
-    addToken({ type: "color", value: color });
-  }
-
   function handlePromptKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter") {
-      const colorTrigger = getTrailingColorTrigger(value);
-      if (colorTrigger) {
-        event.preventDefault();
-        addColorChip(colorTrigger.color, colorTrigger.startIndex);
-        return;
-      }
-
       const firstPromptOption = promptTrigger?.options[0];
       if (promptTrigger && firstPromptOption) {
         event.preventDefault();
@@ -126,48 +112,6 @@ export function PromptComposer({
           ))}
         </div>
       )}
-      <div className="prompt-token-toolbar" aria-label="Prompt chips">
-        <select
-          value=""
-          onChange={(event) => {
-            const asset = galleryAssets.find((item) => item.id === event.target.value);
-            if (asset) chooseGalleryAsset(asset);
-            event.currentTarget.value = "";
-          }}
-          title="@ Gallery"
-        >
-          <option value="">@</option>
-          {galleryAssets.map((asset) => (
-            <option key={asset.id} value={asset.id}>{asset.originalName}</option>
-          ))}
-        </select>
-        <select
-          value=""
-          onChange={(event) => {
-            const template = templates.find((item) => item.id === event.target.value);
-            if (template) chooseTemplate(template);
-            event.currentTarget.value = "";
-          }}
-          title="~ Template"
-        >
-          <option value="">~</option>
-          {templates.map((template) => (
-            <option key={template.id} value={template.id}>{template.title}</option>
-          ))}
-        </select>
-        <input
-          aria-label="Color chip"
-          placeholder="#RRGGBB"
-          onKeyDown={(event) => {
-            if (event.key !== "Enter") return;
-            event.preventDefault();
-            const color = normalizeHexColor(event.currentTarget.value);
-            if (!color) return;
-            addColorChip(color);
-            event.currentTarget.value = "";
-          }}
-        />
-      </div>
       {tokens.length > 0 && (
         <div className="prompt-chip-row">
           {tokens.map((token, index) => (
@@ -227,17 +171,6 @@ function getTrailingPromptTrigger(value: string, galleryAssets: GalleryAsset[], 
     options: templates
       .filter((template) => matchesTemplateQuery(template, query))
       .slice(0, 6)
-  };
-}
-
-function getTrailingColorTrigger(value: string): { startIndex: number; color: string } | null {
-  const match = /(^|[\s])(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})$/.exec(value);
-  if (!match) return null;
-  const color = normalizeHexColor(match[2]);
-  if (!color) return null;
-  return {
-    startIndex: match.index + match[1].length,
-    color
   };
 }
 

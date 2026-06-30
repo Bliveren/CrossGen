@@ -639,7 +639,8 @@ export function App() {
   const [apiKey, setApiKey] = useState("");
   const [apiAccessName, setApiAccessName] = useState("OpenAI");
   const [baseURL, setBaseURL] = useState(DEFAULT_BASE_URL);
-  const [isApiAccessOpen, setIsApiAccessOpen] = useState(false);
+  const [isActiveApiConfigOpen, setIsActiveApiConfigOpen] = useState(false);
+  const [isSavedApiAccessOpen, setIsSavedApiAccessOpen] = useState(false);
   const [isAddingApiAccess, setIsAddingApiAccess] = useState(false);
   const [newApiAccessKind, setNewApiAccessKind] = useState<ProviderKind>("openai");
   const [newApiAccessName, setNewApiAccessName] = useState("");
@@ -677,7 +678,7 @@ export function App() {
   const [templateBody, setTemplateBody] = useState("");
   const [templateTags, setTemplateTags] = useState("");
   const [templateCategory, setTemplateCategory] = useState("");
-  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [rightRailView, setRightRailView] = useState<"history" | "gallery">("history");
   const [gallerySearch, setGallerySearch] = useState("");
   const [galleryTagFilter, setGalleryTagFilter] = useState("");
   const [editingGalleryId, setEditingGalleryId] = useState<string | null>(null);
@@ -826,6 +827,8 @@ export function App() {
   const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, effectivePrompt), copy) ?? modeError;
   const canRun = !validationError && !isRunning;
+  const inactiveApiConfigs = snapshot.providers.filter((config) => config.id !== activeConfig.id);
+  const canDeleteActiveApiAccess = snapshot.providers.length > 1;
 
   useEffect(() => {
     window.localStorage.setItem("image2tools.language", language);
@@ -1351,7 +1354,7 @@ export function App() {
 
   async function switchApiAccess(providerId: string) {
     if (!bridge || providerId === activeConfig.id) {
-      setIsApiAccessOpen(false);
+      setIsSavedApiAccessOpen(false);
       return;
     }
     try {
@@ -1360,7 +1363,7 @@ export function App() {
       const nextActiveConfig = applySnapshot(next);
       hasAutoTestedConnectionRef.current = false;
       setConnectionCheck({ status: "idle" });
-      setIsApiAccessOpen(false);
+      setIsSavedApiAccessOpen(false);
       setNotice({ kind: "success", text: copy.apiAccessSwitched(apiAccessDisplayName(nextActiveConfig, copy.apiAccessUntitled)) });
       if (nextActiveConfig.apiKeySaved) {
         hasAutoTestedConnectionRef.current = true;
@@ -1395,7 +1398,8 @@ export function App() {
       setNewApiAccessBaseURL(DEFAULT_BASE_URL);
       setNewApiAccessKey("");
       setIsAddingApiAccess(false);
-      setIsApiAccessOpen(true);
+      setIsSavedApiAccessOpen(true);
+      setIsActiveApiConfigOpen(true);
       hasAutoTestedConnectionRef.current = false;
       setConnectionCheck({ status: "idle" });
       setNotice({ kind: "success", text: copy.apiAccessAdded });
@@ -1651,6 +1655,14 @@ export function App() {
       return;
     }
     if (!bridge) return;
+    const galleryId = event.dataTransfer.getData("application/x-image2tools-gallery-id");
+    if (galleryId) {
+      const asset = snapshot.galleryAssets.find((item) => item.id === galleryId);
+      if (asset) {
+        await pickGalleryAsset(asset);
+      }
+      return;
+    }
     const files = Array.from(event.dataTransfer.files ?? []);
     const paths = bridge
       .getDroppedFilePaths(files)
@@ -2281,115 +2293,8 @@ export function App() {
           </div>
         </section>
 
-        <section className="tool-section api-access-section">
-          <div className="section-title config-title">
-            <div className="section-title-label">
-              <KeyRound size={16} />
-              <h2>{copy.apiAccess}</h2>
-            </div>
-            <button
-              type="button"
-              className="icon-button"
-              onClick={() => setIsApiAccessOpen((current) => !current)}
-              aria-expanded={isApiAccessOpen}
-              title={copy.apiAccessList}
-            >
-              {isApiAccessOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-          </div>
-          <button
-            type="button"
-            className="api-access-current"
-            onClick={() => setIsApiAccessOpen((current) => !current)}
-            aria-expanded={isApiAccessOpen}
-          >
-            <span>
-              <strong>{apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}</strong>
-              <small>{providerLabelFromKind(activeConfig.kind)} · {activeConfig.apiKeySaved ? copy.keySaved : copy.noKeySaved}</small>
-            </span>
-            {isApiAccessOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </button>
-          {isApiAccessOpen && (
-            <div className="api-access-panel">
-              <div className="api-access-list" aria-label={copy.apiAccessList}>
-                {snapshot.providers.map((config) => {
-                  const isActive = config.id === activeConfig.id;
-                  const canDelete = snapshot.providers.length > 1;
-                  return (
-                    <div key={config.id} className={isActive ? "api-access-item active" : "api-access-item"}>
-                      <button
-                        type="button"
-                        className="api-access-item-main"
-                        onClick={() => void switchApiAccess(config.id)}
-                        disabled={isSavingConfig}
-                        title={copy.switchApiAccess}
-                      >
-                        <span className="api-access-item-title">{apiAccessDisplayName(config, copy.apiAccessUntitled)}</span>
-                        <span className="api-access-item-meta">
-                          {providerLabelFromKind(config.kind)} · {summarizeBaseURL(config.baseURL)}
-                        </span>
-                        <span className="api-access-item-key">
-                          <span className={config.apiKeySaved ? "dot ok" : "dot"} />
-                          {config.apiKeySaved ? copy.keySaved : copy.noKeySaved}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-button ghost danger"
-                        onClick={() => void deleteApiAccess(config)}
-                        disabled={!canDelete || isSavingConfig}
-                        title={canDelete ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-              <button type="button" className="secondary" onClick={() => setIsAddingApiAccess((current) => !current)}>
-                <Plus size={16} />
-                {copy.addApiAccess}
-              </button>
-              {isAddingApiAccess && (
-                <div className="api-access-add-form">
-                  <label>
-                    {copy.apiAccessKind}
-                    <select value={newApiAccessKind} onChange={(event) => changeNewApiAccessKind(event.target.value as ProviderKind)}>
-                      <option value="openai">OpenAI</option>
-                      <option value="gemini">Gemini</option>
-                      <option value="custom">Custom</option>
-                    </select>
-                  </label>
-                  <label>
-                    {copy.apiAccessName}
-                    <input value={newApiAccessName} onChange={(event) => setNewApiAccessName(event.target.value)} placeholder={providerLabelFromKind(newApiAccessKind)} />
-                  </label>
-                  <label>
-                    {copy.baseURL}
-                    <input value={newApiAccessBaseURL} onChange={(event) => setNewApiAccessBaseURL(event.target.value)} />
-                  </label>
-                  <label>
-                    {copy.apiKey}
-                    <input type="password" autoComplete="off" value={newApiAccessKey} onChange={(event) => setNewApiAccessKey(event.target.value)} placeholder={copy.pasteApiKey} />
-                  </label>
-                  <div className="button-row">
-                    <button type="button" onClick={addApiAccess} disabled={isSavingConfig}>
-                      {isSavingConfig ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
-                      {isSavingConfig ? copy.addingApiAccess : copy.addApiAccess}
-                    </button>
-                    <button type="button" className="ghost" onClick={() => setIsAddingApiAccess(false)}>
-                      <X size={16} />
-                      {copy.cancel}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
         <form
-          className="tool-section model-config-section"
+          className="tool-section model-config-section api-access-section"
           onSubmit={(event) => {
             event.preventDefault();
             void saveConfig();
@@ -2413,67 +2318,190 @@ export function App() {
               {connectionLabel}
             </span>
           </div>
-          <label>
-            {copy.apiAccessName}
-            <input
-              value={apiAccessName}
-              onChange={(event) => {
-                setApiAccessName(event.target.value);
-              }}
-              placeholder={providerLabelFromKind(activeConfig.kind)}
-            />
-          </label>
-          <label>
-            {copy.apiKey}
-            <input
-              type="password"
-              autoComplete="off"
-              value={apiKey}
-              onChange={(event) => {
-                resetConnectionCheckForConfigEdit();
-                setApiKey(event.target.value);
-              }}
-              placeholder={apiKeyPlaceholder}
-            />
-          </label>
-          <label>
-            {copy.baseURL}
-            <input
-              value={baseURL}
-              onChange={(event) => {
-                resetConnectionCheckForConfigEdit();
-                setBaseURL(event.target.value);
-              }}
-            />
-          </label>
-          <div className="button-row">
-            <button type="button" onClick={saveConfig} disabled={isSavingConfig}>
-              {isSavingConfig ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-              {copy.save}
-            </button>
-            <button type="button" className="ghost" onClick={clearApiKey} disabled={isClearingApiKey || !activeConfig.apiKeySaved}>
-              {isClearingApiKey ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />}
-              {copy.clearKey}
-            </button>
-          </div>
-          <div className="config-status">
-            <span className={activeConfig.apiKeySaved ? "dot ok" : "dot"} />
-            {activeConfig.apiKeySaved ? copy.keySaved : copy.noKeySaved}
-            {activeConfig.apiKeySaved && (
-              <span className="provider-chip-inline" title={copy.providerAutoDetected}>
-                {providerLabelFromKind(activeConfig.kind)}
-              </span>
-            )}
-          </div>
-          {connectionErrorText && <p className="inline-check error config-error-detail">{connectionErrorText}</p>}
-          <div className="discovery-row">
-            <button type="button" className="secondary discover-button" onClick={discoverModels} disabled={!bridge || isDiscoveringModels || !activeConfig.apiKeySaved}>
-              {isDiscoveringModels ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
-              {isDiscoveringModels ? copy.discoveringModels : copy.discoverModels}
-            </button>
-            <span className="model-discovery-summary" data-kind={activeConfig.lastModelDiscoveryError ? "error" : "info"} title={activeConfig.lastModelDiscoveryError ?? discoveryText}>
-              {discoveryText}
+
+          <button
+            type="button"
+            className="api-access-current"
+            onClick={() => setIsActiveApiConfigOpen((current) => !current)}
+            aria-expanded={isActiveApiConfigOpen}
+          >
+            <span>
+              <strong>{apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}</strong>
+              <small>{providerLabelFromKind(activeConfig.kind)} · {summarizeBaseURL(activeConfig.baseURL)}</small>
+              <small>
+                {activeConfig.apiKeySaved ? copy.keySaved : copy.noKeySaved} · {discoveryText}
+              </small>
             </span>
+            {isActiveApiConfigOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+
+          {isActiveApiConfigOpen && (
+            <div className="api-config-detail">
+              <label>
+                {copy.apiAccessName}
+                <input
+                  value={apiAccessName}
+                  onChange={(event) => {
+                    setApiAccessName(event.target.value);
+                  }}
+                  placeholder={providerLabelFromKind(activeConfig.kind)}
+                />
+              </label>
+              <label>
+                {copy.apiKey}
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={apiKey}
+                  onChange={(event) => {
+                    resetConnectionCheckForConfigEdit();
+                    setApiKey(event.target.value);
+                  }}
+                  placeholder={apiKeyPlaceholder}
+                />
+              </label>
+              <label>
+                {copy.baseURL}
+                <input
+                  value={baseURL}
+                  onChange={(event) => {
+                    resetConnectionCheckForConfigEdit();
+                    setBaseURL(event.target.value);
+                  }}
+                />
+              </label>
+              <div className="button-row">
+                <button type="button" onClick={saveConfig} disabled={isSavingConfig}>
+                  {isSavingConfig ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                  {copy.save}
+                </button>
+                <button type="button" className="ghost" onClick={clearApiKey} disabled={isClearingApiKey || !activeConfig.apiKeySaved}>
+                  {isClearingApiKey ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />}
+                  {copy.clearKey}
+                </button>
+                <button
+                  type="button"
+                  className="ghost danger"
+                  onClick={() => void deleteApiAccess(activeConfig)}
+                  disabled={!canDeleteActiveApiAccess || isSavingConfig}
+                  title={canDeleteActiveApiAccess ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
+                >
+                  <Trash2 size={16} />
+                  {copy.deleteApiAccess}
+                </button>
+              </div>
+              <div className="config-status">
+                <span className={activeConfig.apiKeySaved ? "dot ok" : "dot"} />
+                {activeConfig.apiKeySaved ? copy.keySaved : copy.noKeySaved}
+                {activeConfig.apiKeySaved && (
+                  <span className="provider-chip-inline" title={copy.providerAutoDetected}>
+                    {providerLabelFromKind(activeConfig.kind)}
+                  </span>
+                )}
+              </div>
+              {connectionErrorText && <p className="inline-check error config-error-detail">{connectionErrorText}</p>}
+              <div className="discovery-row">
+                <button type="button" className="secondary discover-button" onClick={discoverModels} disabled={!bridge || isDiscoveringModels || !activeConfig.apiKeySaved}>
+                  {isDiscoveringModels ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
+                  {isDiscoveringModels ? copy.discoveringModels : copy.discoverModels}
+                </button>
+                <span className="model-discovery-summary" data-kind={activeConfig.lastModelDiscoveryError ? "error" : "info"} title={activeConfig.lastModelDiscoveryError ?? discoveryText}>
+                  {discoveryText}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="saved-api-access-panel">
+            <button type="button" className="section-toggle compact-toggle" onClick={() => setIsSavedApiAccessOpen((current) => !current)}>
+              <span className="section-toggle-label">
+                <KeyRound size={16} />
+                <span>{copy.apiAccessList}</span>
+              </span>
+              <span className="section-toggle-state">
+                {inactiveApiConfigs.length}
+                {isSavedApiAccessOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              </span>
+            </button>
+            {isSavedApiAccessOpen && (
+              <div className="api-access-panel">
+                <div className="api-access-list" aria-label={copy.apiAccessList}>
+                  {inactiveApiConfigs.length === 0 && (
+                    <p className="empty-inline">{copy.deleteLastApiAccessDisabled}</p>
+                  )}
+                  {inactiveApiConfigs.map((config) => {
+                    const canDelete = snapshot.providers.length > 1;
+                    return (
+                      <div key={config.id} className="api-access-item">
+                        <button
+                          type="button"
+                          className="api-access-item-main"
+                          onClick={() => void switchApiAccess(config.id)}
+                          disabled={isSavingConfig}
+                          title={copy.switchApiAccess}
+                        >
+                          <span className="api-access-item-title">{apiAccessDisplayName(config, copy.apiAccessUntitled)}</span>
+                          <span className="api-access-item-meta">
+                            {providerLabelFromKind(config.kind)} · {summarizeBaseURL(config.baseURL)}
+                          </span>
+                          <span className="api-access-item-key">
+                            <span className={config.apiKeySaved ? "dot ok" : "dot"} />
+                            {config.apiKeySaved ? copy.keySaved : copy.noKeySaved}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button ghost danger"
+                          onClick={() => void deleteApiAccess(config)}
+                          disabled={!canDelete || isSavingConfig}
+                          title={canDelete ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button type="button" className="secondary" onClick={() => setIsAddingApiAccess((current) => !current)}>
+                  <Plus size={16} />
+                  {copy.addApiAccess}
+                </button>
+                {isAddingApiAccess && (
+                  <div className="api-access-add-form">
+                    <label>
+                      {copy.apiAccessKind}
+                      <select value={newApiAccessKind} onChange={(event) => changeNewApiAccessKind(event.target.value as ProviderKind)}>
+                        <option value="openai">OpenAI</option>
+                        <option value="gemini">Gemini</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                    </label>
+                    <label>
+                      {copy.apiAccessName}
+                      <input value={newApiAccessName} onChange={(event) => setNewApiAccessName(event.target.value)} placeholder={providerLabelFromKind(newApiAccessKind)} />
+                    </label>
+                    <label>
+                      {copy.baseURL}
+                      <input value={newApiAccessBaseURL} onChange={(event) => setNewApiAccessBaseURL(event.target.value)} />
+                    </label>
+                    <label>
+                      {copy.apiKey}
+                      <input type="password" autoComplete="off" value={newApiAccessKey} onChange={(event) => setNewApiAccessKey(event.target.value)} placeholder={copy.pasteApiKey} />
+                    </label>
+                    <div className="button-row">
+                      <button type="button" onClick={addApiAccess} disabled={isSavingConfig}>
+                        {isSavingConfig ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
+                        {isSavingConfig ? copy.addingApiAccess : copy.addApiAccess}
+                      </button>
+                      <button type="button" className="ghost" onClick={() => setIsAddingApiAccess(false)}>
+                        <X size={16} />
+                        {copy.cancel}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </form>
 
@@ -2539,159 +2567,6 @@ export function App() {
               );
             })}
           </div>
-        </section>
-
-        <section className="tool-section template-section">
-          <button type="button" className="section-toggle" onClick={() => setIsTemplatesOpen((current) => !current)}>
-            <span className="section-toggle-label">
-              <Clipboard size={16} />
-              <span>{copy.promptTemplates}</span>
-            </span>
-            <span className="section-toggle-state">
-              {snapshot.promptTemplates.length}
-              {isTemplatesOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-            </span>
-          </button>
-          {isTemplatesOpen && (
-            <div className="template-panel">
-              <div className="template-toolbar">
-                <input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} placeholder={copy.templateSearch} />
-                <select value={templateTagFilter} onChange={(event) => setTemplateTagFilter(event.target.value)}>
-                  <option value="">{copy.templateAllTags}</option>
-                  {templateTagsAvailable.map((tag) => (
-                    <option key={tag} value={tag}>{tag}</option>
-                  ))}
-                </select>
-                <button type="button" className="icon-button" onClick={() => void importTemplates()} title={copy.templateImport}>
-                  <FileUp size={15} />
-                </button>
-                <button type="button" className="icon-button" onClick={() => void exportTemplates()} title={copy.templateExport} disabled={snapshot.promptTemplates.length === 0}>
-                  <FileDown size={15} />
-                </button>
-              </div>
-              <div className="template-editor">
-                <label>
-                  {copy.templateTitle}
-                  <input value={templateTitle} onChange={(event) => setTemplateTitle(event.target.value)} placeholder={copy.templateNew} />
-                </label>
-                <label>
-                  {copy.templateBody}
-                  <textarea value={templateBody} onChange={(event) => setTemplateBody(event.target.value)} placeholder={copy.prompt} />
-                </label>
-                <label>
-                  {copy.templateTags}
-                  <input value={templateTags} onChange={(event) => setTemplateTags(event.target.value)} placeholder="portrait, product, style" />
-                </label>
-                <label>
-                  {copy.templateCategory}
-                  <input value={templateCategory} onChange={(event) => setTemplateCategory(event.target.value)} placeholder={copy.templateCategory} />
-                </label>
-                <div className="button-row">
-                  <button type="button" onClick={() => void saveTemplateFromForm()} disabled={!templateTitle.trim() || !templateBody.trim()}>
-                    <Save size={16} />
-                    {editingTemplateId ? copy.templateUpdate : copy.templateSave}
-                  </button>
-                  <button type="button" className="ghost" onClick={resetTemplateForm}>
-                    <X size={16} />
-                    {copy.clear}
-                  </button>
-                </div>
-              </div>
-              <div className="template-list">
-                {filteredTemplates.length === 0 && (
-                  <p className="empty-inline">{snapshot.promptTemplates.length === 0 ? copy.templateEmpty : copy.templateNoMatch}</p>
-                )}
-                {filteredTemplates.map((template) => (
-                  <article key={template.id} className="template-item">
-                    <div className="template-item-main">
-                      <strong>{template.title}</strong>
-                      <p>{template.body}</p>
-                      {template.tags.length > 0 && (
-                        <div className="template-tags">
-                          {template.tags.map((tag) => <span key={tag}>{tag}</span>)}
-                        </div>
-                      )}
-                    </div>
-                    <div className="template-actions">
-                      <button type="button" className="icon-button" onClick={() => void applyTemplate(template)} title={copy.templateUse}>
-                        <Clipboard size={15} />
-                      </button>
-                      <button type="button" className="icon-button" onClick={() => editTemplate(template)} title={copy.templateEdit}>
-                        <SlidersHorizontal size={15} />
-                      </button>
-                      <button type="button" className="icon-button ghost danger" onClick={() => void deleteTemplate(template)} title={copy.delete}>
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="tool-section gallery-section">
-          <button type="button" className="section-toggle" onClick={() => setIsGalleryOpen((current) => !current)}>
-            <span className="section-toggle-label">
-              <ImagePlus size={16} />
-              <span>{copy.gallery}</span>
-            </span>
-            <span className="section-toggle-state">
-              {snapshot.galleryAssets.length}
-              {isGalleryOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-            </span>
-          </button>
-          {isGalleryOpen && (
-            <div className="gallery-panel">
-              <div className="gallery-toolbar">
-                <input value={gallerySearch} onChange={(event) => setGallerySearch(event.target.value)} placeholder={copy.gallerySearch} />
-                <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)}>
-                  <option value="">{copy.galleryAllTags}</option>
-                  {galleryTagsAvailable.map((tag) => (
-                    <option key={tag} value={tag}>{tag}</option>
-                  ))}
-                </select>
-                <button type="button" className="icon-button" onClick={() => void importToGallery()} title={copy.galleryImport}>
-                  <FileUp size={15} />
-                </button>
-              </div>
-              <div className="gallery-grid">
-                {filteredGalleryAssets.length === 0 && (
-                  <p className="empty-inline">{snapshot.galleryAssets.length === 0 ? copy.galleryEmpty : copy.galleryNoMatch}</p>
-                )}
-                {filteredGalleryAssets.map((asset) => (
-                  <article key={asset.id} className="gallery-item">
-                    <button type="button" className="gallery-thumb" onClick={() => void pickGalleryAsset(asset)} title={copy.galleryChoose}>
-                      <img src={galleryAssetPath(asset)} alt={asset.originalName} />
-                    </button>
-                    <div className="gallery-meta">
-                      <strong title={asset.originalName}>{asset.originalName}</strong>
-                      {editingGalleryId === asset.id ? (
-                        <div className="gallery-tag-editor">
-                          <input value={galleryTagsInput} onChange={(event) => setGalleryTagsInput(event.target.value)} placeholder={copy.templateTags} />
-                          <button type="button" className="icon-button" onClick={() => void saveGalleryTags(asset)} title={copy.gallerySaveTags}>
-                            <Save size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="template-tags">
-                          {asset.tags.map((tag) => <span key={tag}>{tag}</span>)}
-                        </div>
-                      )}
-                    </div>
-                    <div className="gallery-actions">
-                      <button type="button" className="icon-button" onClick={() => editGalleryTags(asset)} title={copy.galleryEditTags}>
-                        <SlidersHorizontal size={15} />
-                      </button>
-                      <button type="button" className="icon-button ghost danger" onClick={() => void removeGalleryAsset(asset)} title={copy.delete}>
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-          )}
         </section>
 
         <section className="tool-section">
@@ -2920,6 +2795,11 @@ export function App() {
                 onGalleryAssetToken={(asset) => void addGalleryPromptToken(asset)}
                 onDirty={markDraftChanged}
               />
+              <button type="button" className="prompt-template-button secondary" onClick={() => setIsTemplatesOpen(true)}>
+                <Clipboard size={16} />
+                <span>{copy.promptTemplates}</span>
+                <small>{snapshot.promptTemplates.length}</small>
+              </button>
               <div className="run-row">
                 <button type="button" className="primary-run" onClick={runJob} disabled={!canRun}>
                   {isRunning ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
@@ -2940,7 +2820,7 @@ export function App() {
                     <ImagePlus size={16} />
                     {copy.addReferences}
                   </button>
-                  <button type="button" className="secondary" onClick={() => setIsGalleryOpen(true)} disabled={snapshot.galleryAssets.length === 0}>
+                  <button type="button" className="secondary" onClick={() => setRightRailView("gallery")} disabled={snapshot.galleryAssets.length === 0}>
                     <ImagePlus size={16} />
                     {copy.galleryChoose}
                   </button>
@@ -3078,152 +2958,344 @@ export function App() {
         onKeyDown={(event) => resizeHandleKeyDown("history", event)}
       />
 
-      <aside className="history">
-        <header className="history-header">
-          <div>
-            <p className="eyebrow">{copy.history}</p>
-            <h2>{copy.recentJobs}</h2>
-          </div>
+      <aside className="history right-rail">
+        <div className="right-rail-tabs" role="tablist" aria-label={copy.history}>
           <button
             type="button"
-            className="icon-button"
-            onClick={() => setIsClearHistoryConfirmOpen(true)}
-            disabled={snapshot.history.length === 0}
-            title={copy.clearAllHistoryTooltip}
+            role="tab"
+            aria-selected={rightRailView === "history"}
+            className={rightRailView === "history" ? "active" : undefined}
+            onClick={() => setRightRailView("history")}
           >
-            <Trash2 size={16} />
-          </button>
-        </header>
-
-        <label className="search-box">
-          <Search size={15} />
-          <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder={copy.searchPrompt} />
-        </label>
-
-        <div className="history-sort">
-          <ArrowDownUp size={14} />
-          <button
-            type="button"
-            className={historySort === "newest" ? "history-sort-option active" : "history-sort-option"}
-            onClick={() => setHistorySort("newest")}
-          >
-            {copy.sortNewest}
+            <RefreshCw size={15} />
+            <span>{copy.recentJobs}</span>
+            <small>{snapshot.history.length}</small>
           </button>
           <button
             type="button"
-            className={historySort === "oldest" ? "history-sort-option active" : "history-sort-option"}
-            onClick={() => setHistorySort("oldest")}
+            role="tab"
+            aria-selected={rightRailView === "gallery"}
+            className={rightRailView === "gallery" ? "active" : undefined}
+            onClick={() => setRightRailView("gallery")}
           >
-            {copy.sortOldest}
+            <ImagePlus size={15} />
+            <span>{copy.gallery}</span>
+            <small>{snapshot.galleryAssets.length}</small>
           </button>
         </div>
 
-        {(isSearchingHistory || hasHistoryOverflow) && (
-          <div className="history-list-status">
-            {isSearchingHistory && <span>{copy.historyMatchCount(filteredHistory.length)}</span>}
-            {hasHistoryOverflow && (
-              <button type="button" className="history-expand-button ghost" onClick={() => setIsHistoryExpanded((current) => !current)}>
-                {isHistoryExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                <span>{isHistoryExpanded ? copy.collapseHistory : copy.showAllHistory(filteredHistory.length)}</span>
+        {rightRailView === "history" ? (
+          <div className="right-rail-panel history-panel" role="tabpanel">
+            <header className="history-header">
+              <div>
+                <p className="eyebrow">{copy.history}</p>
+                <h2>{copy.recentJobs}</h2>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setIsClearHistoryConfirmOpen(true)}
+                disabled={snapshot.history.length === 0}
+                title={copy.clearAllHistoryTooltip}
+              >
+                <Trash2 size={16} />
               </button>
-            )}
-          </div>
-        )}
+            </header>
 
-        <div className="history-list">
-          {filteredHistory.length === 0 ? (
-            <div className="history-empty">{copy.noJobsYet}</div>
-          ) : (
-            visibleHistory.map((job) => {
-              const result = getBestResult(job);
-              const jobError = getJobError(job);
-              const modelDetails = getHistoryModelDetails(job);
-              const paramsSummary = isOpenAIImageParams(job.params) ? `${job.params.size} · ${job.params.quality}` : modelDetails.modelDisplayName;
-              return (
-                <article key={job.id} className={activeJob?.id === job.id ? "history-item active" : "history-item"}>
+            <label className="search-box">
+              <Search size={15} />
+              <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder={copy.searchPrompt} />
+            </label>
+
+            <div className="history-sort">
+              <ArrowDownUp size={14} />
+              <button
+                type="button"
+                className={historySort === "newest" ? "history-sort-option active" : "history-sort-option"}
+                onClick={() => setHistorySort("newest")}
+              >
+                {copy.sortNewest}
+              </button>
+              <button
+                type="button"
+                className={historySort === "oldest" ? "history-sort-option active" : "history-sort-option"}
+                onClick={() => setHistorySort("oldest")}
+              >
+                {copy.sortOldest}
+              </button>
+            </div>
+
+            {(isSearchingHistory || hasHistoryOverflow) && (
+              <div className="history-list-status">
+                {isSearchingHistory && <span>{copy.historyMatchCount(filteredHistory.length)}</span>}
+                {hasHistoryOverflow && (
+                  <button type="button" className="history-expand-button ghost" onClick={() => setIsHistoryExpanded((current) => !current)}>
+                    {isHistoryExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                    <span>{isHistoryExpanded ? copy.collapseHistory : copy.showAllHistory(filteredHistory.length)}</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="history-list">
+              {filteredHistory.length === 0 ? (
+                <div className="history-empty">{copy.noJobsYet}</div>
+              ) : (
+                visibleHistory.map((job) => {
+                  const result = getBestResult(job);
+                  const jobError = getJobError(job);
+                  const modelDetails = getHistoryModelDetails(job);
+                  const paramsSummary = isOpenAIImageParams(job.params) ? `${job.params.size} · ${job.params.quality}` : modelDetails.modelDisplayName;
+                  return (
+                    <article key={job.id} className={activeJob?.id === job.id ? "history-item active" : "history-item"}>
+                      <button
+                        type="button"
+                        className="history-preview"
+                        onClick={() => setActiveJob(job)}
+                        title={jobError ?? job.status}
+                        aria-label={jobError ? `${copy.jobFailed}: ${jobError}` : `${copy.openJob}: ${job.status}`}
+                      >
+                        {result ? (
+                          <img
+                            src={assetSource(result)}
+                            alt={copy.historyResult}
+                            draggable={Boolean(result.path)}
+                            onDragStart={(event) => {
+                              if (!result.path) return;
+                              event.dataTransfer.setData("application/x-image2tools-asset", result.path);
+                              event.dataTransfer.effectAllowed = "copy";
+                            }}
+                          />
+                        ) : (
+                          <span>{job.status}</span>
+                        )}
+                      </button>
+                      <div className="history-copy">
+                        <div className="history-meta">
+                          <strong>{modeLabels[job.mode].title}</strong>
+                          <span>{formatDate(job.createdAt)}</span>
+                        </div>
+                        <div className="history-chip-row" aria-label={copy.model}>
+                          <span className="history-chip model-chip" title={modelDetails.modelTitle}>
+                            {modelDetails.modelDisplayName}
+                          </span>
+                          {modelDetails.providerDisplayName && (
+                            <span className="history-chip provider-chip" title={modelDetails.providerTitle ?? modelDetails.providerDisplayName}>
+                              {modelDetails.providerDisplayName}
+                            </span>
+                          )}
+                        </div>
+                        <p>{job.prompt}</p>
+                        <small>
+                          {job.status} · {paramsSummary} · {formatDuration(job.durationMs)}
+                        </small>
+                        {jobError && <p className="history-error">{jobError}</p>}
+                      </div>
+                      <div className="history-actions">
+                        <button type="button" className={buttonFeedbackClass(`reuse:${job.id}`, "history-action-button")} onClick={() => reuseJob(job)} title={copy.reuse}>
+                          <RefreshCw size={15} />
+                          <span>{buttonFeedback[`reuse:${job.id}`] ? copy.clicked : copy.reuse}</span>
+                        </button>
+                        <button type="button" className={buttonFeedbackClass(`copy:${job.id}`, "history-action-button")} onClick={() => copyPrompt(job.prompt, `copy:${job.id}`)} title={copy.copyPrompt}>
+                          <Clipboard size={15} />
+                          <span>{buttonFeedback[`copy:${job.id}`] ? copy.clicked : copy.copy}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={result ? buttonFeedbackClass(`download:${result.id}`, "history-action-button") : "history-action-button"}
+                          disabled={!result}
+                          onClick={() => downloadAsset(result)}
+                          title={copy.download}
+                        >
+                          <Download size={15} />
+                          <span>{result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={result ? "history-action-button" : "history-action-button"}
+                          disabled={!result}
+                          onClick={() => void addHistoryAssetToGallery(result)}
+                          title={copy.galleryAddHistory}
+                        >
+                          <ImagePlus size={15} />
+                          <span>{copy.galleryAddHistory}</span>
+                        </button>
+                        <button type="button" className="history-action-button danger" onClick={() => deleteJob(job.id)} title={copy.delete}>
+                          <Trash2 size={15} />
+                          <span>{copy.delete}</span>
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="right-rail-panel gallery-panel" role="tabpanel">
+            <header className="history-header">
+              <div>
+                <p className="eyebrow">{copy.gallery}</p>
+                <h2>{copy.gallery}</h2>
+              </div>
+              <button type="button" className="icon-button" onClick={() => void importToGallery()} title={copy.galleryImport}>
+                <FileUp size={15} />
+              </button>
+            </header>
+            <div className="gallery-toolbar">
+              <input value={gallerySearch} onChange={(event) => setGallerySearch(event.target.value)} placeholder={copy.gallerySearch} />
+              <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)}>
+                <option value="">{copy.galleryAllTags}</option>
+                {galleryTagsAvailable.map((tag) => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+            </div>
+            <div className="gallery-grid">
+              {filteredGalleryAssets.length === 0 && (
+                <p className="history-empty">{snapshot.galleryAssets.length === 0 ? copy.galleryEmpty : copy.galleryNoMatch}</p>
+              )}
+              {filteredGalleryAssets.map((asset) => (
+                <article key={asset.id} className="gallery-item">
                   <button
                     type="button"
-                    className="history-preview"
-                    onClick={() => setActiveJob(job)}
-                    title={jobError ?? job.status}
-                    aria-label={jobError ? `${copy.jobFailed}: ${jobError}` : `${copy.openJob}: ${job.status}`}
+                    className="gallery-thumb"
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData("application/x-image2tools-gallery-id", asset.id);
+                      event.dataTransfer.effectAllowed = "copy";
+                    }}
+                    onClick={() => void pickGalleryAsset(asset)}
+                    title={copy.galleryChoose}
                   >
-                    {result ? (
-                      <img
-                        src={assetSource(result)}
-                        alt={copy.historyResult}
-                        draggable={Boolean(result.path)}
-                        onDragStart={(event) => {
-                          if (!result.path) return;
-                          event.dataTransfer.setData("application/x-image2tools-asset", result.path);
-                          event.dataTransfer.effectAllowed = "copy";
-                        }}
-                      />
-                    ) : (
-                      <span>{job.status}</span>
-                    )}
+                    <img src={galleryAssetPath(asset)} alt={asset.originalName} draggable={false} />
                   </button>
-                  <div className="history-copy">
-                    <div className="history-meta">
-                      <strong>{modeLabels[job.mode].title}</strong>
-                      <span>{formatDate(job.createdAt)}</span>
-                    </div>
-                    <div className="history-chip-row" aria-label={copy.model}>
-                      <span className="history-chip model-chip" title={modelDetails.modelTitle}>
-                        {modelDetails.modelDisplayName}
-                      </span>
-                      {modelDetails.providerDisplayName && (
-                        <span className="history-chip provider-chip" title={modelDetails.providerTitle ?? modelDetails.providerDisplayName}>
-                          {modelDetails.providerDisplayName}
-                        </span>
-                      )}
-                    </div>
-                    <p>{job.prompt}</p>
-                    <small>
-                      {job.status} · {paramsSummary} · {formatDuration(job.durationMs)}
-                    </small>
-                    {jobError && <p className="history-error">{jobError}</p>}
+                  <div className="gallery-meta">
+                    <strong title={asset.originalName}>{asset.originalName}</strong>
+                    {editingGalleryId === asset.id ? (
+                      <div className="gallery-tag-editor">
+                        <input value={galleryTagsInput} onChange={(event) => setGalleryTagsInput(event.target.value)} placeholder={copy.templateTags} />
+                        <button type="button" className="icon-button" onClick={() => void saveGalleryTags(asset)} title={copy.gallerySaveTags}>
+                          <Save size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="template-tags">
+                        {asset.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                      </div>
+                    )}
                   </div>
-                  <div className="history-actions">
-                    <button type="button" className={buttonFeedbackClass(`reuse:${job.id}`, "history-action-button")} onClick={() => reuseJob(job)} title={copy.reuse}>
-                      <RefreshCw size={15} />
-                      <span>{buttonFeedback[`reuse:${job.id}`] ? copy.clicked : copy.reuse}</span>
+                  <div className="gallery-actions">
+                    <button type="button" className="icon-button" onClick={() => editGalleryTags(asset)} title={copy.galleryEditTags}>
+                      <SlidersHorizontal size={15} />
                     </button>
-                    <button type="button" className={buttonFeedbackClass(`copy:${job.id}`, "history-action-button")} onClick={() => copyPrompt(job.prompt, `copy:${job.id}`)} title={copy.copyPrompt}>
-                      <Clipboard size={15} />
-                      <span>{buttonFeedback[`copy:${job.id}`] ? copy.clicked : copy.copy}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={result ? buttonFeedbackClass(`download:${result.id}`, "history-action-button") : "history-action-button"}
-                      disabled={!result}
-                      onClick={() => downloadAsset(result)}
-                      title={copy.download}
-                    >
-                      <Download size={15} />
-                      <span>{result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={result ? "history-action-button" : "history-action-button"}
-                      disabled={!result}
-                      onClick={() => void addHistoryAssetToGallery(result)}
-                      title={copy.galleryAddHistory}
-                    >
-                      <ImagePlus size={15} />
-                      <span>{copy.galleryAddHistory}</span>
-                    </button>
-                    <button type="button" className="history-action-button danger" onClick={() => deleteJob(job.id)} title={copy.delete}>
+                    <button type="button" className="icon-button ghost danger" onClick={() => void removeGalleryAsset(asset)} title={copy.delete}>
                       <Trash2 size={15} />
-                      <span>{copy.delete}</span>
                     </button>
                   </div>
                 </article>
-              );
-            })
-          )}
-        </div>
+              ))}
+            </div>
+          </div>
+        )}
       </aside>
+      {isTemplatesOpen && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsTemplatesOpen(false);
+          }}
+        >
+          <section className="template-dialog" role="dialog" aria-modal="true" aria-labelledby="prompt-template-dialog-title">
+            <header className="history-header">
+              <div>
+                <p className="eyebrow">{copy.promptTemplates}</p>
+                <h2 id="prompt-template-dialog-title">{copy.promptTemplates}</h2>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setIsTemplatesOpen(false)} title={copy.cancel}>
+                <X size={16} />
+              </button>
+            </header>
+            <div className="template-panel">
+              <div className="template-toolbar">
+                <input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} placeholder={copy.templateSearch} />
+                <select value={templateTagFilter} onChange={(event) => setTemplateTagFilter(event.target.value)}>
+                  <option value="">{copy.templateAllTags}</option>
+                  {templateTagsAvailable.map((tag) => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+                <button type="button" className="icon-button" onClick={() => void importTemplates()} title={copy.templateImport}>
+                  <FileUp size={15} />
+                </button>
+                <button type="button" className="icon-button" onClick={() => void exportTemplates()} title={copy.templateExport} disabled={snapshot.promptTemplates.length === 0}>
+                  <FileDown size={15} />
+                </button>
+              </div>
+              <div className="template-dialog-body">
+                <div className="template-editor">
+                  <label>
+                    {copy.templateTitle}
+                    <input value={templateTitle} onChange={(event) => setTemplateTitle(event.target.value)} placeholder={copy.templateNew} />
+                  </label>
+                  <label>
+                    {copy.templateBody}
+                    <textarea value={templateBody} onChange={(event) => setTemplateBody(event.target.value)} placeholder={copy.prompt} />
+                  </label>
+                  <label>
+                    {copy.templateTags}
+                    <input value={templateTags} onChange={(event) => setTemplateTags(event.target.value)} placeholder="portrait, product, style" />
+                  </label>
+                  <label>
+                    {copy.templateCategory}
+                    <input value={templateCategory} onChange={(event) => setTemplateCategory(event.target.value)} placeholder={copy.templateCategory} />
+                  </label>
+                  <div className="button-row">
+                    <button type="button" onClick={() => void saveTemplateFromForm()} disabled={!templateTitle.trim() || !templateBody.trim()}>
+                      <Save size={16} />
+                      {editingTemplateId ? copy.templateUpdate : copy.templateSave}
+                    </button>
+                    <button type="button" className="ghost" onClick={resetTemplateForm}>
+                      <X size={16} />
+                      {copy.clear}
+                    </button>
+                  </div>
+                </div>
+                <div className="template-list">
+                  {filteredTemplates.length === 0 && (
+                    <p className="empty-inline">{snapshot.promptTemplates.length === 0 ? copy.templateEmpty : copy.templateNoMatch}</p>
+                  )}
+                  {filteredTemplates.map((template) => (
+                    <article key={template.id} className="template-item">
+                      <div className="template-item-main">
+                        <strong>{template.title}</strong>
+                        <p>{template.body}</p>
+                        {template.tags.length > 0 && (
+                          <div className="template-tags">
+                            {template.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="template-actions">
+                        <button type="button" className="icon-button" onClick={() => void applyTemplate(template)} title={copy.templateUse}>
+                          <Clipboard size={15} />
+                        </button>
+                        <button type="button" className="icon-button" onClick={() => editTemplate(template)} title={copy.templateEdit}>
+                          <SlidersHorizontal size={15} />
+                        </button>
+                        <button type="button" className="icon-button ghost danger" onClick={() => void deleteTemplate(template)} title={copy.delete}>
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
       {isClearHistoryConfirmOpen && (
         <div
           className="modal-backdrop"
