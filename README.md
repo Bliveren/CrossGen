@@ -47,11 +47,7 @@ Image2Tools is for creators, operators, product teams, and internal AI workflow 
 
 ## Product Tour
 
-The screenshots below show the current `0.2.3` workspace. A typical demo prompt for the generation box is:
-
-```text
-站在森林前手握法杖的银发精灵族美女
-```
+The screenshots below show the current `0.2.3` workspace.
 
 <table>
 <tr>
