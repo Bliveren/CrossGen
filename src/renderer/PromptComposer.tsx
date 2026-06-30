@@ -9,6 +9,7 @@ interface PromptComposerProps {
   tokens: PromptToken[];
   templates: PromptTemplate[];
   galleryAssets: GalleryAsset[];
+  removeTokenLabel: string;
   onChange: (value: string) => void;
   onTokensChange: (tokens: PromptToken[]) => void;
   onGalleryAssetToken: (asset: GalleryAsset) => void;
@@ -21,6 +22,7 @@ export function PromptComposer({
   tokens,
   templates,
   galleryAssets,
+  removeTokenLabel,
   onChange,
   onTokensChange,
   onGalleryAssetToken,
@@ -115,7 +117,14 @@ export function PromptComposer({
       {tokens.length > 0 && (
         <div className="prompt-chip-row">
           {tokens.map((token, index) => (
-            <button key={`${token.type}-${index}`} type="button" className="prompt-chip" onClick={() => removeToken(index)} title="Remove chip">
+            <button
+              key={`${token.type}-${index}`}
+              type="button"
+              className="prompt-chip"
+              onClick={() => removeToken(index)}
+              aria-label={`${removeTokenLabel}: ${labelForToken(token)}`}
+              data-tooltip={removeTokenLabel}
+            >
               {iconForToken(token)}
               <span>{labelForToken(token)}</span>
               <X size={13} />

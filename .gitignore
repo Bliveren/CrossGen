@@ -19,5 +19,8 @@ output/
 .playwright-mcp/
 .playwright-cli/
 
+# local agent worktrees
+.claude/
+
 # product landing page lives in GitLab, not GitHub
 docs/products/

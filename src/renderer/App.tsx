@@ -2273,7 +2273,7 @@ export function App() {
     >
       <aside className="sidebar">
         <header className="brand-block">
-          <img className="brand-icon" src="./favicon.svg" alt="" />
+          <img className="brand-icon" src="./brand-logo.png" alt="" />
           <div>
             <h1>Image2Tools</h1>
             <p className="muted">{copy.tagline}</p>
@@ -2454,7 +2454,8 @@ export function App() {
                           className="icon-button ghost danger"
                           onClick={() => void deleteApiAccess(config)}
                           disabled={!canDelete || isSavingConfig}
-                          title={canDelete ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
+                          aria-label={canDelete ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
+                          data-tooltip={canDelete ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
                         >
                           <Trash2 size={15} />
                         </button>
@@ -2690,7 +2691,8 @@ export function App() {
                   className={activeImage ? buttonFeedbackClass(`download:${activeImage.id}`) : "icon-button"}
                   disabled={!activeImage}
                   onClick={() => downloadAsset(activeImage)}
-                  title={copy.download}
+                  aria-label={copy.download}
+                  data-tooltip={copy.download}
                 >
                   <Download size={17} />
                 </button>
@@ -2699,7 +2701,8 @@ export function App() {
                   className={activeImage ? buttonFeedbackClass(`folder:${activeImage.id}`) : "icon-button"}
                   disabled={!activeImage}
                   onClick={() => openAssetFolder(activeImage)}
-                  title={copy.openFolder}
+                  aria-label={copy.openFolder}
+                  data-tooltip={copy.openFolder}
                 >
                   <FolderOpen size={17} />
                 </button>
@@ -2727,14 +2730,14 @@ export function App() {
                     />
                   </div>
                   <div className="zoom-overlay">
-                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(-PREVIEW_ZOOM_STEP)} title={copy.zoomOut}>
+                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(-PREVIEW_ZOOM_STEP)} aria-label={copy.zoomOut} data-tooltip={copy.zoomOut}>
                       <ZoomOut size={16} />
                     </button>
                     <span className="zoom-readout" title={copy.zoomLevel}>{previewZoomPercent}%</span>
-                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(PREVIEW_ZOOM_STEP)} title={copy.zoomIn}>
+                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(PREVIEW_ZOOM_STEP)} aria-label={copy.zoomIn} data-tooltip={copy.zoomIn}>
                       <ZoomIn size={16} />
                     </button>
-                    <button type="button" className="icon-button" disabled={previewZoom === 1 && previewPan.x === 0 && previewPan.y === 0} onClick={resetPreviewView} title={copy.resetZoom}>
+                    <button type="button" className="icon-button" disabled={previewZoom === 1 && previewPan.x === 0 && previewPan.y === 0} onClick={resetPreviewView} aria-label={copy.resetZoom} data-tooltip={copy.resetZoom}>
                       <Maximize2 size={16} />
                     </button>
                   </div>
@@ -2790,25 +2793,28 @@ export function App() {
                 tokens={promptTokens}
                 templates={snapshot.promptTemplates}
                 galleryAssets={snapshot.galleryAssets}
+                removeTokenLabel={copy.removePromptChip}
                 onChange={setPrompt}
                 onTokensChange={setPromptTokens}
                 onGalleryAssetToken={(asset) => void addGalleryPromptToken(asset)}
                 onDirty={markDraftChanged}
               />
-              <button type="button" className="prompt-template-button secondary" onClick={() => setIsTemplatesOpen(true)}>
-                <Clipboard size={16} />
-                <span>{copy.promptTemplates}</span>
-                <small>{snapshot.promptTemplates.length}</small>
-              </button>
-              <div className="run-row">
-                <button type="button" className="primary-run" onClick={runJob} disabled={!canRun}>
-                  {isRunning ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
-                  {isRunning ? copy.running : modeLabels[requestMode].action}
-                </button>
-                <button type="button" className={buttonFeedbackClass("copy:prompt", "secondary")} onClick={() => copyPrompt(effectivePrompt)}>
-                  <Clipboard size={16} />
-                  {buttonFeedback["copy:prompt"] ? copy.clicked : copy.copy}
-                </button>
+              <div className="prompt-actions">
+                <div className="run-row">
+                  <button type="button" className="primary-run" onClick={runJob} disabled={!canRun}>
+                    {isRunning ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
+                    {isRunning ? copy.running : modeLabels[requestMode].action}
+                  </button>
+                  <button type="button" className="prompt-template-button secondary" onClick={() => setIsTemplatesOpen(true)}>
+                    <Clipboard size={16} />
+                    <span>{copy.promptTemplates}</span>
+                    <small>{snapshot.promptTemplates.length}</small>
+                  </button>
+                  <button type="button" className={buttonFeedbackClass("copy:prompt", "secondary")} onClick={() => copyPrompt(effectivePrompt)}>
+                    <Clipboard size={16} />
+                    {buttonFeedback["copy:prompt"] ? copy.clicked : copy.copyPrompt}
+                  </button>
+                </div>
               </div>
               {validationError && <p className="inline-check error">{validationError}</p>}
             </div>
@@ -2825,7 +2831,7 @@ export function App() {
                     {copy.galleryChoose}
                   </button>
                   {!isGeneralMode && (
-                    <button type="button" className="secondary" onClick={selectMask}>
+                    <button type="button" className="secondary tooltip-target" onClick={selectMask} aria-label={copy.uploadMaskTooltip} data-tooltip={copy.uploadMaskTooltip}>
                       <Paintbrush size={16} />
                       {copy.uploadMask}
                     </button>
@@ -2870,7 +2876,7 @@ export function App() {
                     inputAssets.map((asset, index) => (
                       <div key={asset.id} className="asset-tile">
                         {assetSource(asset) && <img src={assetSource(asset)} alt={asset.name} />}
-                        <button type="button" className="tile-remove" onClick={() => removeInputAsset(asset.id)} title={copy.delete}>
+                        <button type="button" className="tile-remove" onClick={() => removeInputAsset(asset.id)} aria-label={copy.delete} data-tooltip={copy.delete}>
                           <X size={14} />
                         </button>
                         <div>
@@ -2896,17 +2902,20 @@ export function App() {
                   </div>
                   <div className="brush-controls">
                     <Eraser size={16} />
-                    <input
-                      type="range"
-                      min="16"
-                      max="180"
-                      value={brushSize}
-                      onChange={(event) => {
-                        markDraftChanged();
-                        setBrushSize(Number(event.target.value));
-                      }}
-                    />
-                    <button type="button" className="icon-button" onClick={clearPaintedMask} title={copy.clearPaintedMask}>
+                    <span className="range-tooltip" data-tooltip={copy.maskBrushSize}>
+                      <input
+                        type="range"
+                        min="16"
+                        max="180"
+                        value={brushSize}
+                        aria-label={copy.maskBrushSize}
+                        onChange={(event) => {
+                          markDraftChanged();
+                          setBrushSize(Number(event.target.value));
+                        }}
+                      />
+                    </span>
+                    <button type="button" className="icon-button" onClick={clearPaintedMask} aria-label={copy.clearPaintedMask} data-tooltip={copy.clearPaintedMask}>
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -2988,15 +2997,16 @@ export function App() {
           <div className="right-rail-panel history-panel" role="tabpanel">
             <header className="history-header">
               <div>
-                <p className="eyebrow">{copy.history}</p>
                 <h2>{copy.recentJobs}</h2>
+                <p>{copy.recentJobsDescription}</p>
               </div>
               <button
                 type="button"
                 className="icon-button"
                 onClick={() => setIsClearHistoryConfirmOpen(true)}
                 disabled={snapshot.history.length === 0}
-                title={copy.clearAllHistoryTooltip}
+                aria-label={copy.clearAllHistoryTooltip}
+                data-tooltip={copy.clearAllHistoryTooltip}
               >
                 <Trash2 size={16} />
               </button>
@@ -3092,11 +3102,11 @@ export function App() {
                         {jobError && <p className="history-error">{jobError}</p>}
                       </div>
                       <div className="history-actions">
-                        <button type="button" className={buttonFeedbackClass(`reuse:${job.id}`, "history-action-button")} onClick={() => reuseJob(job)} title={copy.reuse}>
+                        <button type="button" className={buttonFeedbackClass(`reuse:${job.id}`, "history-action-button")} onClick={() => reuseJob(job)} aria-label={copy.reuse} data-tooltip={copy.reuse}>
                           <RefreshCw size={15} />
                           <span>{buttonFeedback[`reuse:${job.id}`] ? copy.clicked : copy.reuse}</span>
                         </button>
-                        <button type="button" className={buttonFeedbackClass(`copy:${job.id}`, "history-action-button")} onClick={() => copyPrompt(job.prompt, `copy:${job.id}`)} title={copy.copyPrompt}>
+                        <button type="button" className={buttonFeedbackClass(`copy:${job.id}`, "history-action-button")} onClick={() => copyPrompt(job.prompt, `copy:${job.id}`)} aria-label={copy.copyPrompt} data-tooltip={copy.copyPrompt}>
                           <Clipboard size={15} />
                           <span>{buttonFeedback[`copy:${job.id}`] ? copy.clicked : copy.copy}</span>
                         </button>
@@ -3105,7 +3115,8 @@ export function App() {
                           className={result ? buttonFeedbackClass(`download:${result.id}`, "history-action-button") : "history-action-button"}
                           disabled={!result}
                           onClick={() => downloadAsset(result)}
-                          title={copy.download}
+                          aria-label={copy.download}
+                          data-tooltip={copy.download}
                         >
                           <Download size={15} />
                           <span>{result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}</span>
@@ -3115,12 +3126,13 @@ export function App() {
                           className={result ? "history-action-button" : "history-action-button"}
                           disabled={!result}
                           onClick={() => void addHistoryAssetToGallery(result)}
-                          title={copy.galleryAddHistory}
+                          aria-label={copy.galleryAddHistory}
+                          data-tooltip={copy.galleryAddHistory}
                         >
                           <ImagePlus size={15} />
                           <span>{copy.galleryAddHistory}</span>
                         </button>
-                        <button type="button" className="history-action-button danger" onClick={() => deleteJob(job.id)} title={copy.delete}>
+                        <button type="button" className="history-action-button danger" onClick={() => deleteJob(job.id)} aria-label={copy.delete} data-tooltip={copy.delete}>
                           <Trash2 size={15} />
                           <span>{copy.delete}</span>
                         </button>
@@ -3135,10 +3147,10 @@ export function App() {
           <div className="right-rail-panel gallery-panel" role="tabpanel">
             <header className="history-header">
               <div>
-                <p className="eyebrow">{copy.gallery}</p>
                 <h2>{copy.gallery}</h2>
+                <p>{copy.galleryDescription}</p>
               </div>
-              <button type="button" className="icon-button" onClick={() => void importToGallery()} title={copy.galleryImport}>
+              <button type="button" className="icon-button" onClick={() => void importToGallery()} aria-label={copy.galleryImport} data-tooltip={copy.galleryImport}>
                 <FileUp size={15} />
               </button>
             </header>
@@ -3175,7 +3187,7 @@ export function App() {
                     {editingGalleryId === asset.id ? (
                       <div className="gallery-tag-editor">
                         <input value={galleryTagsInput} onChange={(event) => setGalleryTagsInput(event.target.value)} placeholder={copy.templateTags} />
-                        <button type="button" className="icon-button" onClick={() => void saveGalleryTags(asset)} title={copy.gallerySaveTags}>
+                        <button type="button" className="icon-button" onClick={() => void saveGalleryTags(asset)} aria-label={copy.gallerySaveTags} data-tooltip={copy.gallerySaveTags}>
                           <Save size={14} />
                         </button>
                       </div>
@@ -3186,10 +3198,10 @@ export function App() {
                     )}
                   </div>
                   <div className="gallery-actions">
-                    <button type="button" className="icon-button" onClick={() => editGalleryTags(asset)} title={copy.galleryEditTags}>
+                    <button type="button" className="icon-button" onClick={() => editGalleryTags(asset)} aria-label={copy.galleryEditTags} data-tooltip={copy.galleryEditTags}>
                       <SlidersHorizontal size={15} />
                     </button>
-                    <button type="button" className="icon-button ghost danger" onClick={() => void removeGalleryAsset(asset)} title={copy.delete}>
+                    <button type="button" className="icon-button ghost danger" onClick={() => void removeGalleryAsset(asset)} aria-label={copy.delete} data-tooltip={copy.delete}>
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -3210,10 +3222,10 @@ export function App() {
           <section className="template-dialog" role="dialog" aria-modal="true" aria-labelledby="prompt-template-dialog-title">
             <header className="history-header">
               <div>
-                <p className="eyebrow">{copy.promptTemplates}</p>
                 <h2 id="prompt-template-dialog-title">{copy.promptTemplates}</h2>
+                <p>{copy.promptTemplatesDescription}</p>
               </div>
-              <button type="button" className="icon-button" onClick={() => setIsTemplatesOpen(false)} title={copy.cancel}>
+              <button type="button" className="icon-button" onClick={() => setIsTemplatesOpen(false)} aria-label={copy.cancel} data-tooltip={copy.cancel}>
                 <X size={16} />
               </button>
             </header>
@@ -3226,10 +3238,10 @@ export function App() {
                     <option key={tag} value={tag}>{tag}</option>
                   ))}
                 </select>
-                <button type="button" className="icon-button" onClick={() => void importTemplates()} title={copy.templateImport}>
+                <button type="button" className="icon-button" onClick={() => void importTemplates()} aria-label={copy.templateImport} data-tooltip={copy.templateImport}>
                   <FileUp size={15} />
                 </button>
-                <button type="button" className="icon-button" onClick={() => void exportTemplates()} title={copy.templateExport} disabled={snapshot.promptTemplates.length === 0}>
+                <button type="button" className="icon-button" onClick={() => void exportTemplates()} disabled={snapshot.promptTemplates.length === 0} aria-label={copy.templateExport} data-tooltip={copy.templateExport}>
                   <FileDown size={15} />
                 </button>
               </div>
@@ -3278,13 +3290,13 @@ export function App() {
                         )}
                       </div>
                       <div className="template-actions">
-                        <button type="button" className="icon-button" onClick={() => void applyTemplate(template)} title={copy.templateUse}>
+                        <button type="button" className="icon-button" onClick={() => void applyTemplate(template)} aria-label={copy.templateUse} data-tooltip={copy.templateUse}>
                           <Clipboard size={15} />
                         </button>
-                        <button type="button" className="icon-button" onClick={() => editTemplate(template)} title={copy.templateEdit}>
+                        <button type="button" className="icon-button" onClick={() => editTemplate(template)} aria-label={copy.templateEdit} data-tooltip={copy.templateEdit}>
                           <SlidersHorizontal size={15} />
                         </button>
-                        <button type="button" className="icon-button ghost danger" onClick={() => void deleteTemplate(template)} title={copy.delete}>
+                        <button type="button" className="icon-button ghost danger" onClick={() => void deleteTemplate(template)} aria-label={copy.delete} data-tooltip={copy.delete}>
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -3329,7 +3341,7 @@ export function App() {
             if (event.target === event.currentTarget) setIsPreviewOpen(false);
           }}
         >
-          <button type="button" className="preview-modal-close icon-button" onClick={() => setIsPreviewOpen(false)} title={copy.cancel}>
+          <button type="button" className="preview-modal-close icon-button tooltip-below" onClick={() => setIsPreviewOpen(false)} aria-label={copy.cancel} data-tooltip={copy.cancel}>
             <X size={18} />
           </button>
           <img

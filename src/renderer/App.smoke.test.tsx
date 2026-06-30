@@ -352,12 +352,12 @@ describe("renderer multi-model smoke", () => {
     await changeSelect(document.querySelector<HTMLSelectElement>(".template-toolbar select")!, "studio");
     expect(document.body.textContent).toContain("Product shot");
 
-    await click(document.querySelector<HTMLButtonElement>('.template-actions button[title="Use template"]')!);
+    await click(document.querySelector<HTMLButtonElement>('.template-actions button[aria-label="Use template"]')!);
     expect(textAreaByLabel("Prompt").value).toBe("A crisp product shot on a steel table");
     expect(bridge.saveDraft).toHaveBeenCalled();
 
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    await click(document.querySelector<HTMLButtonElement>('.template-actions button[title="Delete"]')!);
+    await click(document.querySelector<HTMLButtonElement>('.template-actions button[aria-label="Delete"]')!);
     expect(bridge.deleteTemplate).toHaveBeenCalledWith("template-1");
     expect(document.body.textContent).not.toContain("Product shot");
   });
@@ -504,9 +504,9 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
 
     await openGalleryRail();
-    await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[title="Edit tags"]')!);
+    await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[aria-label="Edit tags"]')!);
     await changeInput(document.querySelector<HTMLInputElement>(".gallery-tag-editor input")!, "product, hero");
-    await click(document.querySelector<HTMLButtonElement>('.gallery-tag-editor button[title="Save tags"]')!);
+    await click(document.querySelector<HTMLButtonElement>('.gallery-tag-editor button[aria-label="Save tags"]')!);
 
     expect(bridge.updateGalleryAsset).toHaveBeenCalledWith(asset.id, { tags: ["product", "hero"] });
     expect(document.body.textContent).toContain("Gallery tags updated.");
@@ -521,13 +521,13 @@ describe("renderer multi-model smoke", () => {
 
     await openGalleryRail();
     expect(buttonByText("Recent jobs", ".right-rail-tabs button").textContent).toContain("1");
-    await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[title="Delete"]')!);
+    await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[aria-label="Delete"]')!);
 
     expect(confirmSpy).toHaveBeenCalledWith('Delete Gallery image "gallery-delete.png"?');
     expect(bridge.removeGalleryAsset).not.toHaveBeenCalled();
 
     confirmSpy.mockReturnValue(true);
-    await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[title="Delete"]')!);
+    await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[aria-label="Delete"]')!);
 
     expect(bridge.removeGalleryAsset).toHaveBeenCalledWith(asset.id);
     expect(document.body.textContent).not.toContain("gallery-delete.png");
@@ -743,7 +743,7 @@ describe("renderer multi-model smoke", () => {
 
   it("requires confirmation before clearing all history", async () => {
     const bridge = await renderApp(snapshot({ history: [geminiJob(0), geminiJob(1)] }));
-    const clearAllButton = document.querySelector<HTMLButtonElement>('button[title="Clear all history records"]')!;
+    const clearAllButton = document.querySelector<HTMLButtonElement>('button[aria-label="Clear all history records"]')!;
 
     expect(clearAllButton).toBeTruthy();
     await click(clearAllButton);
@@ -767,7 +767,7 @@ describe("renderer multi-model smoke", () => {
     const result = document.querySelector<HTMLImageElement>('img[alt="Generated result"]');
     expect(result?.src).toContain("image2tools-asset://image?path=");
 
-    const downloadButtons = [...document.querySelectorAll<HTMLButtonElement>('button[title="Download"]')].filter((button) => !button.disabled);
+    const downloadButtons = [...document.querySelectorAll<HTMLButtonElement>('button[aria-label="Download"]')].filter((button) => !button.disabled);
     expect(downloadButtons.length).toBeGreaterThan(0);
     await click(downloadButtons[0]);
 
@@ -1115,7 +1115,9 @@ async function openTemplateDialog() {
 }
 
 async function openGalleryRail() {
-  await click(buttonByText("Reference Gallery", ".right-rail-tabs button"));
+  const tab = document.querySelectorAll<HTMLButtonElement>(".right-rail-tabs button")[1];
+  if (!tab) throw new Error("Gallery rail tab was not found.");
+  await click(tab);
 }
 
 function buttonByText(text: string, selector = "button"): HTMLButtonElement {

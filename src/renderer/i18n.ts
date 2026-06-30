@@ -130,6 +130,7 @@ export interface UiCopy {
   hide: string;
   show: string;
   promptTemplates: string;
+  promptTemplatesDescription: string;
   templateTitle: string;
   templateBody: string;
   templateTags: string;
@@ -152,6 +153,7 @@ export interface UiCopy {
   templateImported: (imported: number, skipped: number) => string;
   templateExported: (filePath: string) => string;
   gallery: string;
+  galleryDescription: string;
   gallerySearch: string;
   galleryAllTags: string;
   galleryImport: string;
@@ -207,6 +209,7 @@ export interface UiCopy {
   addReferences: string;
   uploadRightsReminder: string;
   uploadMask: string;
+  uploadMaskTooltip: string;
   clear: string;
   noReferences: string;
   dropReferencesHint: string;
@@ -215,6 +218,7 @@ export interface UiCopy {
   mask: string;
   maskDescription: string;
   guidedRegionDescription: string;
+  maskBrushSize: string;
   clearPaintedMask: string;
   sourceForMask: string;
   addSourceForMask: string;
@@ -222,6 +226,7 @@ export interface UiCopy {
   model: string;
   history: string;
   recentJobs: string;
+  recentJobsDescription: string;
   clearHistory: string;
   clearAllHistoryTooltip: string;
   confirmClearHistoryTitle: string;
@@ -239,6 +244,7 @@ export interface UiCopy {
   historyResult: string;
   reuse: string;
   copyPrompt: string;
+  removePromptChip: string;
   delete: string;
   updates: string;
   currentVersion: string;
@@ -326,6 +332,7 @@ export const translations: Record<Language, UiCopy> = {
     hide: "Hide",
     show: "Show",
     promptTemplates: "Prompt templates",
+    promptTemplatesDescription: "Save and reuse prompt presets.",
     templateTitle: "Title",
     templateBody: "Template prompt",
     templateTags: "Tags",
@@ -347,7 +354,8 @@ export const translations: Record<Language, UiCopy> = {
     templateApplied: (title: string) => `Template "${title}" filled into the prompt.`,
     templateImported: (imported: number, skipped: number) => `${imported} template${imported === 1 ? "" : "s"} imported${skipped ? `, ${skipped} skipped` : ""}.`,
     templateExported: (filePath: string) => `Templates exported to ${filePath}`,
-    gallery: "Reference Gallery",
+    gallery: "Gallery",
+    galleryDescription: "Reference images ready for reuse.",
     gallerySearch: "Search Gallery",
     galleryAllTags: "All",
     galleryImport: "Import to Gallery",
@@ -403,6 +411,7 @@ export const translations: Record<Language, UiCopy> = {
     addReferences: "Add references",
     uploadRightsReminder: "Only upload images you have permission to use; selected references are sent to the active image provider.",
     uploadMask: "Upload mask",
+    uploadMaskTooltip: "Upload an existing mask image.",
     clear: "Clear",
     noReferences: "No reference images selected.",
     dropReferencesHint: "No reference images. Drag images here, drag a history result, or use Add references.",
@@ -411,6 +420,7 @@ export const translations: Record<Language, UiCopy> = {
     mask: "Mask",
     maskDescription: "Paint the area to replace. With multiple references, the mask applies to the first image.",
     guidedRegionDescription: "Use the painted or uploaded region as guidance for the first image.",
+    maskBrushSize: "Adjust mask brush size",
     clearPaintedMask: "Clear painted mask",
     sourceForMask: "Source for mask",
     addSourceForMask: "Add a source image to paint a mask.",
@@ -418,6 +428,7 @@ export const translations: Record<Language, UiCopy> = {
     model: "Model",
     history: "History",
     recentJobs: "Recent jobs",
+    recentJobsDescription: "Latest generated tasks and reusable outputs.",
     clearHistory: "Clear history",
     clearAllHistoryTooltip: "Clear all history records",
     confirmClearHistoryTitle: "Clear all history?",
@@ -435,6 +446,7 @@ export const translations: Record<Language, UiCopy> = {
     historyResult: "History result",
     reuse: "Reuse",
     copyPrompt: "Copy prompt",
+    removePromptChip: "Remove",
     delete: "Delete",
     updates: "Updates",
     currentVersion: "Current",
@@ -585,6 +597,7 @@ export const translations: Record<Language, UiCopy> = {
     hide: "收起",
     show: "展开",
     promptTemplates: "提示词模板",
+    promptTemplatesDescription: "保存并复用常用生图提示词。",
     templateTitle: "标题",
     templateBody: "模板提示词",
     templateTags: "标签",
@@ -606,22 +619,23 @@ export const translations: Record<Language, UiCopy> = {
     templateApplied: (title: string) => `已将模板“${title}”填入提示词。`,
     templateImported: (imported: number, skipped: number) => `已导入 ${imported} 个模板${skipped ? `，跳过 ${skipped} 个` : ""}。`,
     templateExported: (filePath: string) => `模板已导出到 ${filePath}`,
-    gallery: "参考图 Gallery",
-    gallerySearch: "搜索 Gallery",
+    gallery: "图库",
+    galleryDescription: "方便随时调用的参考图库。",
+    gallerySearch: "搜索图库",
     galleryAllTags: "全部",
-    galleryImport: "导入 Gallery",
-    galleryChoose: "从 Gallery 选择",
-    galleryAddHistory: "加入 Gallery",
+    galleryImport: "导入图库",
+    galleryChoose: "从图库选择",
+    galleryAddHistory: "加入图库",
     galleryEditTags: "编辑标签",
     gallerySaveTags: "保存标签",
-    galleryEmpty: "暂无 Gallery 图片。",
-    galleryNoMatch: "没有匹配的 Gallery 图片。",
-    galleryDeleteConfirm: (name: string) => `确认删除 Gallery 图片“${name}”？`,
-    galleryImported: (count: number) => `已导入 ${count} 张图片到 Gallery。`,
-    galleryAdded: "已加入 Gallery。",
+    galleryEmpty: "暂无图库图片。",
+    galleryNoMatch: "没有匹配的图库图片。",
+    galleryDeleteConfirm: (name: string) => `确认删除图库图片“${name}”？`,
+    galleryImported: (count: number) => `已导入 ${count} 张图片到图库。`,
+    galleryAdded: "已加入图库。",
     galleryPicked: (name: string) => `已将 ${name} 加入参考图。`,
-    galleryUpdated: "Gallery 标签已更新。",
-    galleryDeleted: "Gallery 图片已删除。",
+    galleryUpdated: "图库标签已更新。",
+    galleryDeleted: "图库图片已删除。",
     size: "尺寸",
     aspectRatio: "画面比例",
     resolution: "分辨率",
@@ -662,6 +676,7 @@ export const translations: Record<Language, UiCopy> = {
     addReferences: "添加参考图",
     uploadRightsReminder: "仅上传你有权使用的图片；已选择的参考图会发送给当前图片服务商。",
     uploadMask: "上传蒙版",
+    uploadMaskTooltip: "上传已有蒙版图片。",
     clear: "清除",
     noReferences: "未选择参考图。",
     dropReferencesHint: "暂无参考图。可拖拽图片到此处、拖入历史结果，或点击「添加参考图」。",
@@ -670,6 +685,7 @@ export const translations: Record<Language, UiCopy> = {
     mask: "蒙版",
     maskDescription: "涂抹需要替换的区域。多张参考图时，蒙版应用到第一张图片。",
     guidedRegionDescription: "将涂抹或上传的区域作为第一张图片的修改引导。",
+    maskBrushSize: "调整蒙版画笔大小",
     clearPaintedMask: "清除已绘制蒙版",
     sourceForMask: "蒙版源图",
     addSourceForMask: "添加源图后可绘制蒙版。",
@@ -677,6 +693,7 @@ export const translations: Record<Language, UiCopy> = {
     model: "模型",
     history: "历史",
     recentJobs: "最近任务",
+    recentJobsDescription: "最近生成的任务与可复用结果。",
     clearHistory: "清空历史",
     clearAllHistoryTooltip: "清空全部历史记录",
     confirmClearHistoryTitle: "确认清空全部历史？",
@@ -694,6 +711,7 @@ export const translations: Record<Language, UiCopy> = {
     historyResult: "历史结果",
     reuse: "复用",
     copyPrompt: "复制提示词",
+    removePromptChip: "移除",
     delete: "删除",
     updates: "升级",
     currentVersion: "当前版本",
