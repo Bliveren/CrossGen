@@ -32,7 +32,7 @@
 ## Image2Tools 是什么
 
 Image2Tools 是一个方便易用的 AI 生图与图片编辑桌面工具。当前版本聚焦 GPT Image 2、Gemini 支撑的图片模型能力，例如 Nano Banana 3，以及 OpenAI 兼容的自定义图片服务。
-
+<img width="1721" height="1154" alt="image" src="https://github.com/user-attachments/assets/e3810a38-4604-47b8-8cb8-46d073bdb252" />
 `0.2.3` 版本重点把工具整理成更清晰的生产工作台：
 
 - 多个 API 接入整合进模型配置模块统一管理。
