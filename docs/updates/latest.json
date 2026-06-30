@@ -1,14 +1,14 @@
 {
   "version": "0.2.3",
-  "pubDate": "2026-06-30T04:05:30.000Z",
+  "pubDate": "2026-06-30T16:06:11.000Z",
   "notes": "Compatibility and UX patch. Disables OpenAI streaming globally, adds image preview context menu, restores multi-API configuration UI, moves prompt templates into a dialog, and consolidates Reference Gallery into the right rail. macOS build is Developer ID signed but not Apple-notarized.",
   "assets": [
     {
       "platform": "darwin",
       "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.3/Image2Tools-0.2.3-mac-arm64.dmg",
       "fileName": "Image2Tools-0.2.3-mac-arm64.dmg",
-      "sha256": "7c30c38997a37821947661f3fa61dbeb3dca5c62b9e915d0aeecdacda8b6cc74",
-      "sizeBytes": 103622426,
+      "sha256": "39e70367c1bf6dbce01b254ea673e21476d4d7644bbfb40c30dad79c0df1d8f2",
+      "sizeBytes": 103460585,
       "arch": "arm64"
     },
     {

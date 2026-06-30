@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.3",
-  "lastUpdated": "2026-06-30T06:41:45.000Z",
+  "lastUpdated": "2026-06-30T16:06:11.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -88,9 +88,9 @@
         "Notarization status is recorded accurately when Apple notary credentials are unavailable."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T04:14:00.000Z",
-        "commit": "d133f44e74506e011b19e86db29ef9cb55c8d522",
-        "environment": "macOS 26.5 arm64; package version 0.2.3; Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7); Apple notarization credentials unset.",
+        "verifiedAt": "2026-06-30T16:06:11.000Z",
+        "commit": "9374a4f1220f7f3e05b5c3a87a738181c7f9213e",
+        "environment": "macOS 26.5.1 arm64; package version 0.2.3; Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7); Apple notarization credentials unset.",
         "commands": [
           "PATH=\"$PWD/node_modules/.bin:$PATH\" node scripts/electron-builder-pnpm.mjs --mac -c.mac.notarize=false -c.mac.identity='Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)'",
           "codesign --display --verbose=4 release/mac-arm64/Image2Tools.app",
@@ -109,10 +109,10 @@
             "kind": "release-artifact",
             "path": "release/Image2Tools-0.2.3-mac-arm64.dmg",
             "public": false,
-            "description": "Developer ID signed, unnotarized DMG uploaded to the v0.2.3 release. SHA256 7c30c38997a37821947661f3fa61dbeb3dca5c62b9e915d0aeecdacda8b6cc74; 103622426 bytes."
+            "description": "Developer ID signed, unnotarized DMG uploaded to the v0.2.3 release. SHA256 39e70367c1bf6dbce01b254ea673e21476d4d7644bbfb40c30dad79c0df1d8f2; 103460585 bytes."
           }
         ],
-        "summary": "v0.2.3 macOS DMG was rebuilt from application-code commit d133f44, signed with Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7), and verified with codesign plus pnpm verify:release:mac. spctl reports 'rejected, source=Unnotarized Developer ID' because Apple notarization credentials are not configured in this shell; no notarization was attempted. The later release-metadata sync commit only records final asset metadata and verifier expectations."
+        "summary": "v0.2.3 macOS DMG was rebuilt from application-code commit 9374a4f, signed with Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7), and verified with codesign plus pnpm verify:release:mac. spctl reports 'rejected, source=Unnotarized Developer ID' because Apple notarization credentials are not configured in this shell; no notarization was attempted. The documentation sync commit only records final asset metadata and README updates."
       }
     },
     {
@@ -205,9 +205,9 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T06:41:45.000Z",
+        "verifiedAt": "2026-06-30T16:06:11.000Z",
         "commit": "5461e41cd7f160e511df6b81639eccbf2dc2f7b7",
-        "environment": "macOS 26.5 arm64 local release build plus Native Windows 11 Pro 10.0.26100 x64 rebuild; package version 0.2.3; darwin/arm64 DMG and win32/x64 installer published to the v0.2.3 GitHub release.",
+        "environment": "macOS 26.5.1 arm64 local release build plus Native Windows 11 Pro 10.0.26100 x64 rebuild; package version 0.2.3; darwin/arm64 DMG and win32/x64 installer published to the v0.2.3 GitHub release.",
         "commands": [
           "shasum -a 256 release/Image2Tools-0.2.3-mac-arm64.dmg",
           "corepack pnpm@10.25.0 package:win",
@@ -233,7 +233,7 @@
             "description": "Update manifest with darwin/arm64 DMG and win32/x64 installer asset URLs, SHA256, and sizeBytes for v0.2.3."
           }
         ],
-        "summary": "Update manifest assets populated for v0.2.3 from the uploaded release artifacts. Darwin DMG: SHA256 7c30c38997a37821947661f3fa61dbeb3dca5c62b9e915d0aeecdacda8b6cc74, 103622426 bytes. Windows installer: SHA256 abcc7259d536a2c226357e438ca25f69cf8399aa98dc89834e5b6f40fdc044f1, 98339424 bytes. Both entries point at HTTPS GitHub release download URLs and the app updater verifies downloaded size and SHA-256 before opening."
+        "summary": "Update manifest assets populated for v0.2.3 from the current release artifacts. Darwin DMG: SHA256 39e70367c1bf6dbce01b254ea673e21476d4d7644bbfb40c30dad79c0df1d8f2, 103460585 bytes. Windows installer: SHA256 abcc7259d536a2c226357e438ca25f69cf8399aa98dc89834e5b6f40fdc044f1, 98339424 bytes. Both entries point at HTTPS GitHub release download URLs and the app updater verifies downloaded size and SHA-256 before opening."
       }
     }
   ]
