@@ -99,7 +99,7 @@ jobs:
 
       - name: Verify Windows package
         env:
-          IMAGE2TOOLS_WINDOWS_VERIFY_MODE: package-smoke
+          IMAGE2TOOLS_WINDOWS_VERIFY_MODE: full-install
         run: pnpm verify:release:windows
 
   linux-package:

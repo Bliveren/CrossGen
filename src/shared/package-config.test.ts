@@ -3,8 +3,8 @@ import packageJson from "../../package.json";
 import updateManifest from "../../docs/updates/latest.json";
 
 describe("package release configuration", () => {
-  it("stages the v0.2.3 multi-model release metadata", () => {
-    expect(packageJson.version).toBe("0.2.3");
+  it("stages the v0.2.4 bugfix release metadata", () => {
+    expect(packageJson.version).toBe("0.2.4");
     expect(packageJson.description).toContain("multi-model desktop image workspace");
     expect(packageJson.description).toContain("GPT Image 2");
     expect(packageJson.description).toContain("Nano Banana 3");
