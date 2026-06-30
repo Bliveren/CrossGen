@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.3",
-  "lastUpdated": "2026-06-30T16:06:11.000Z",
+  "lastUpdated": "2026-06-30T16:17:47.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -127,12 +127,12 @@
         "Download and open-folder behavior are checked on native Windows."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T06:36:00.000Z",
-        "commit": "5461e41cd7f160e511df6b81639eccbf2dc2f7b7",
+        "verifiedAt": "2026-06-30T16:14:30.000Z",
+        "commit": "9374a4f1220f7f3e05b5c3a87a738181c7f9213e",
         "environment": "Native Windows 11 Pro 10.0.26100 x64 shell; package version 0.2.3; artifacts release\\Image2Tools-Setup.exe and release\\win-unpacked\\Image2Tools.exe.",
         "commands": [
           "corepack pnpm@10.25.0 package:win",
-          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; $env:IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS='/S /currentuser /D=C:\\work\\image2tools-release-check-v023-repack'; corepack pnpm@10.25.0 verify:release:windows",
+          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; $env:IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS='/S /currentuser /D=C:\\work\\image2tools-release-check-v023-ui-polish-2'; corepack pnpm@10.25.0 verify:release:windows",
           "Packaged app bridge acceptance: configure loopback mock OpenAI and Gemini endpoints, generate managed outputs, invoke downloadAsset through the native Save dialog, and invoke openAssetFolder with Explorer directory verification."
         ],
         "references": [
@@ -155,7 +155,7 @@
             "description": "Native Windows packaged-app download and open-folder acceptance evidence."
           }
         ],
-        "summary": "Windows native release evidence passed for the rebuilt v0.2.3 package: package:win completed, the unpacked app launched and showed a main window, the NSIS installer completed a full silent current-user install into a fresh verification directory, the installed app launched and showed a main window, and silent uninstall passed. The rebuilt installer SHA256 is abcc7259d536a2c226357e438ca25f69cf8399aa98dc89834e5b6f40fdc044f1 and size is 98339424 bytes."
+        "summary": "Windows native release evidence passed for the v0.2.3 UI polish rebuild: package:win completed, the unpacked app launched and showed a main window, the NSIS installer completed a full silent current-user install into a fresh verification directory, the installed app launched and showed a main window, and silent uninstall passed. The rebuilt installer SHA256 is e458d3a3000d27d2a02690e6fcefdaaad1b3da9fe0b34668794fc3c596817ec9 and size is 98680385 bytes."
       }
     },
     {
@@ -205,15 +205,15 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T16:06:11.000Z",
-        "commit": "5461e41cd7f160e511df6b81639eccbf2dc2f7b7",
+        "verifiedAt": "2026-06-30T16:17:47.000Z",
+        "commit": "9374a4f1220f7f3e05b5c3a87a738181c7f9213e",
         "environment": "macOS 26.5.1 arm64 local release build plus Native Windows 11 Pro 10.0.26100 x64 rebuild; package version 0.2.3; darwin/arm64 DMG and win32/x64 installer published to the v0.2.3 GitHub release.",
         "commands": [
           "shasum -a 256 release/Image2Tools-0.2.3-mac-arm64.dmg",
           "corepack pnpm@10.25.0 package:win",
           "Get-FileHash -Algorithm SHA256 -LiteralPath .\\release\\Image2Tools-Setup.exe",
-          "gh release download v0.2.3 --pattern Image2Tools-Setup.exe --dir C:\\work\\image2tools-release-download-v023 --clobber",
-          "Get-FileHash -Algorithm SHA256 -LiteralPath C:\\work\\image2tools-release-download-v023\\Image2Tools-Setup.exe"
+          "gh release download v0.2.3 --pattern Image2Tools-Setup.exe --dir C:\\work\\image2tools-release-download-v023-ui-polish --clobber",
+          "Get-FileHash -Algorithm SHA256 -LiteralPath C:\\work\\image2tools-release-download-v023-ui-polish\\Image2Tools-Setup.exe"
         ],
         "references": [
           {
@@ -233,7 +233,7 @@
             "description": "Update manifest with darwin/arm64 DMG and win32/x64 installer asset URLs, SHA256, and sizeBytes for v0.2.3."
           }
         ],
-        "summary": "Update manifest assets populated for v0.2.3 from the current release artifacts. Darwin DMG: SHA256 39e70367c1bf6dbce01b254ea673e21476d4d7644bbfb40c30dad79c0df1d8f2, 103460585 bytes. Windows installer: SHA256 abcc7259d536a2c226357e438ca25f69cf8399aa98dc89834e5b6f40fdc044f1, 98339424 bytes. Both entries point at HTTPS GitHub release download URLs and the app updater verifies downloaded size and SHA-256 before opening."
+        "summary": "Update manifest assets populated for v0.2.3 from the current release artifacts. Darwin DMG: SHA256 39e70367c1bf6dbce01b254ea673e21476d4d7644bbfb40c30dad79c0df1d8f2, 103460585 bytes. Windows installer: SHA256 e458d3a3000d27d2a02690e6fcefdaaad1b3da9fe0b34668794fc3c596817ec9, 98680385 bytes. Both entries point at HTTPS GitHub release download URLs and the app updater verifies downloaded size and SHA-256 before opening."
       }
     }
   ]
