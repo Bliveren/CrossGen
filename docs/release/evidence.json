@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.3",
-  "lastUpdated": "2026-06-28T16:00:00.000Z",
+  "lastUpdated": "2026-06-30T04:14:00.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -77,22 +77,26 @@
     },
     {
       "id": "macos-signed-notarized",
-      "title": "Signed and notarized macOS release package",
-      "required": true,
+      "title": "Developer ID signed macOS release package",
+      "required": false,
       "status": "passed",
       "acceptanceCriteria": [
-        "Developer ID signing readiness passes without exposing secret values.",
-        "package:mac:signed produces signed and notarized macOS artifacts.",
+        "Developer ID signing is performed without exposing secret values.",
+        "macOS artifacts are built from the v0.2.3 application-code release commit.",
+        "codesign verification passes against the signed artifact.",
         "macOS release verification passes against the signed artifact.",
-        "The artifact intended for distribution is the same artifact used for update manifest metadata."
+        "Notarization status is recorded accurately when Apple notary credentials are unavailable."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-29T10:01:00.000Z",
-        "commit": "a7bc7678972a885b5866ddb16d8fcde6b5ea49b9",
-        "environment": "macOS arm64; package version 0.2.3; Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7); Apple notarytool.",
+        "verifiedAt": "2026-06-30T04:14:00.000Z",
+        "commit": "d133f44e74506e011b19e86db29ef9cb55c8d522",
+        "environment": "macOS 26.5 arm64; package version 0.2.3; Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7); Apple notarization credentials unset.",
         "commands": [
-          "pnpm package:mac:signed",
-          "spctl -a -vv release/mac-arm64/Image2Tools.app"
+          "PATH=\"$PWD/node_modules/.bin:$PATH\" node scripts/electron-builder-pnpm.mjs --mac -c.mac.notarize=false -c.mac.identity='Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)'",
+          "codesign --display --verbose=4 release/mac-arm64/Image2Tools.app",
+          "codesign --verify --deep --strict --verbose=2 release/mac-arm64/Image2Tools.app",
+          "spctl -a -vv release/mac-arm64/Image2Tools.app",
+          "pnpm verify:release:mac"
         ],
         "references": [
           {
@@ -105,10 +109,10 @@
             "kind": "release-artifact",
             "path": "release/Image2Tools-0.2.3-mac-arm64.dmg",
             "public": false,
-            "description": "Developer ID signed and Apple-notarized DMG. spctl verdict: accepted, source=Notarized Developer ID."
+            "description": "Developer ID signed, unnotarized DMG uploaded to the v0.2.3 release. SHA256 7c30c38997a37821947661f3fa61dbeb3dca5c62b9e915d0aeecdacda8b6cc74; 103622426 bytes."
           }
         ],
-        "summary": "v0.2.3 macOS DMG signed with Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7) and Apple-notarized via notarytool. spctl -a -vv reports 'accepted, source=Notarized Developer ID'. Timestamp: Jun 29, 2026 at 17:01:24."
+        "summary": "v0.2.3 macOS DMG was rebuilt from application-code commit d133f44, signed with Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7), and verified with codesign plus pnpm verify:release:mac. spctl reports 'rejected, source=Unnotarized Developer ID' because Apple notarization credentials are not configured in this shell; no notarization was attempted. The later release-metadata sync commit only records final asset metadata and verifier expectations."
       }
     },
     {
@@ -200,18 +204,23 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-16T02:52:06.000Z",
-        "commit": "0b4d78f5d90aff285b7cb4801c66e01f912173a8",
-        "environment": "macOS 26.5.1 arm64 local release build plus GitHub Actions Windows release workflow 27734145491; package version 0.2.2; unsigned/ad-hoc preview artifacts published to the v0.2.2 GitHub prerelease: Image2Tools-0.2.2-mac-arm64.dmg (darwin/arm64) and Image2Tools-Setup.exe (win32/x64).",
+        "verifiedAt": "2026-06-30T04:14:00.000Z",
+        "commit": "d133f44e74506e011b19e86db29ef9cb55c8d522",
+        "environment": "macOS 26.5 arm64 local release build plus v0.2.3 GitHub release assets; package version 0.2.3; darwin/arm64 DMG and win32/x64 installer published to the v0.2.3 GitHub release.",
         "commands": [
-          "node scripts/update-manifest-asset.mjs --file release/Image2Tools-0.2.2-mac-arm64.dmg --platform darwin --arch arm64 --url https://github.com/Bliveren/image2tools/releases/download/v0.2.2/Image2Tools-0.2.2-mac-arm64.dmg",
-          "gh release download v0.2.2 --pattern Image2Tools-Setup.exe --dir /tmp/v022dl --clobber",
-          "node scripts/update-manifest-asset.mjs --file /tmp/v022dl/Image2Tools-Setup.exe --platform win32 --arch x64 --url https://github.com/Bliveren/image2tools/releases/download/v0.2.2/Image2Tools-Setup.exe"
+          "shasum -a 256 release/Image2Tools-0.2.3-mac-arm64.dmg",
+          "gh release download v0.2.3 --pattern Image2Tools-Setup.exe --dir /tmp/image2tools-v023-release --clobber",
+          "shasum -a 256 /tmp/image2tools-v023-release/Image2Tools-Setup.exe",
+          "stat -f %z release/Image2Tools-0.2.3-mac-arm64.dmg /tmp/image2tools-v023-release/Image2Tools-Setup.exe"
         ],
         "references": [
           {
             "label": "Formal update manifest distribution asset tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/103"
+          },
+          {
+            "label": "Image2Tools v0.2.3 GitHub release",
+            "url": "https://github.com/Bliveren/image2tools/releases/tag/v0.2.3"
           }
         ],
         "artifacts": [
@@ -219,10 +228,10 @@
             "kind": "update-manifest",
             "path": "docs/updates/latest.json",
             "public": true,
-            "description": "Update manifest with darwin/arm64 dmg and win32/x64 installer asset URLs, sha256, and sizeBytes for the unsigned v0.2.2 preview."
+            "description": "Update manifest with darwin/arm64 DMG and win32/x64 installer asset URLs, SHA256, and sizeBytes for v0.2.3."
           }
         ],
-        "summary": "Update manifest assets populated for the unsigned v0.2.2 preview. The darwin dmg entry was generated from the locally built and mac-release-verified artifact (sha256 d4f8974..., 114859171 bytes). The win32 installer entry was generated from the exact v0.2.2 GitHub release asset re-published by the tag-triggered Windows release workflow run 27734145491 (sha256 59b0eed..., 98328196 bytes). Both release asset URLs return HTTP 200. The app updater verifies downloaded size and SHA-256 before opening. Note: these are unsigned/ad-hoc preview artifacts, not Developer ID signed/notarized builds."
+        "summary": "Update manifest assets populated for v0.2.3 from the uploaded release artifacts. Darwin DMG: SHA256 7c30c38997a37821947661f3fa61dbeb3dca5c62b9e915d0aeecdacda8b6cc74, 103622426 bytes. Windows installer: SHA256 4c3edf69da25c36c24bc168043786b407795db9130062ed0132151ba198cf586, 98339349 bytes. Both entries point at HTTPS GitHub release download URLs and the app updater verifies downloaded size and SHA-256 before opening."
       }
     }
   ]

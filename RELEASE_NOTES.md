@@ -1,8 +1,8 @@
 # Image2Tools Release Notes
 
-## v0.2.3 (unsigned preview)
+## v0.2.3
 
-Compatibility and UX patch release. Fixes aggregator streaming compatibility issues and adds image preview context menu.
+Compatibility, release, and configuration UI patch release. Fixes aggregator streaming compatibility issues, adds image preview context menu, and restores the multi-API configuration experience before the final v0.2.3 package.
 
 ### Compatibility
 
@@ -14,10 +14,20 @@ Compatibility and UX patch release. Fixes aggregator streaming compatibility iss
   - Save Image — quick download without toolbar
   - Open Folder — open the asset's folder in Finder/Explorer
   - Copy Prompt — copy the job's prompt to clipboard
+- **Integrated multi-API configuration UI**: API access now lives inside model configuration. The active API is shown as a compact card with access name, URL, key state, and discovered-model count; expanded details expose key/Base URL/save/clear/discover controls. Saved inactive API profiles stay folded and can be expanded to switch.
+- **Prompt template dialog**: Prompt templates are now opened from a single button below the prompt input instead of occupying left-rail space.
+- **Right-rail Reference Gallery**: Reference Gallery now sits beside Recent Jobs in the right rail, and gallery images can be dragged into the reference area.
+- **Prompt input cleanup**: Removed the unclear prompt chip dropdown controls and color-code entry field from below the prompt textarea.
+
+### Release Assets
+
+- macOS arm64 DMG/ZIP assets are Developer ID signed with `Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)` and verified with the macOS release verifier. They are not Apple-notarized in this rebuild because notarization credentials were not configured in the release shell.
+- Windows x64 installer is attached as `Image2Tools-Setup.exe`.
+- `docs/updates/latest.json` contains the final v0.2.3 macOS and Windows asset URLs, SHA256 hashes, and byte sizes.
 
 ### Internal
 
-- Frontend adapted to support multi-provider backend architecture (v0.3.0 prep). UI remains single-provider; multi-provider selection is deferred to v0.3.0.
+- Frontend adapted to support the multi-provider backend architecture with user-visible provider switching in model configuration.
 - Updated state migration tests for v1/v2 → v3 compatibility.
 
 ---

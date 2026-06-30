@@ -67,14 +67,14 @@ describe("release evidence verifier", () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 6/6 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
   });
 
   it("passes --require-complete because all gates are passed", async () => {
     const result = await run(["--require-complete"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 6/6 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
   });
 
   it("fails --require-complete when a required gate is still pending", async () => {

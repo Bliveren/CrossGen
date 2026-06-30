@@ -1,22 +1,22 @@
 {
   "version": "0.2.3",
-  "pubDate": "2026-06-29T10:01:00.000Z",
-  "notes": "Compatibility and UX patch. Disables OpenAI streaming globally to fix aggregator compatibility. Adds right-click context menu on image preview (Save Image, Open Folder, Copy Prompt). macOS build is Developer ID signed and Apple-notarized.",
+  "pubDate": "2026-06-30T04:05:30.000Z",
+  "notes": "Compatibility and UX patch. Disables OpenAI streaming globally, adds image preview context menu, restores multi-API configuration UI, moves prompt templates into a dialog, and consolidates Reference Gallery into the right rail. macOS build is Developer ID signed but not Apple-notarized.",
   "assets": [
     {
       "platform": "darwin",
       "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.3/Image2Tools-0.2.3-mac-arm64.dmg",
       "fileName": "Image2Tools-0.2.3-mac-arm64.dmg",
-      "sha256": "fd915bc2fed1127819a0a039d29f6ab844454acc47a196fa857d07b45d3b3229",
-      "sizeBytes": 103620614,
+      "sha256": "7c30c38997a37821947661f3fa61dbeb3dca5c62b9e915d0aeecdacda8b6cc74",
+      "sizeBytes": 103622426,
       "arch": "arm64"
     },
     {
       "platform": "win32",
       "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.3/Image2Tools-Setup.exe",
       "fileName": "Image2Tools-Setup.exe",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 1,
+      "sha256": "4c3edf69da25c36c24bc168043786b407795db9130062ed0132151ba198cf586",
+      "sizeBytes": 98339349,
       "arch": "x64"
     }
   ]
