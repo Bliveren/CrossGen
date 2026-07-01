@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.4",
-  "lastUpdated": "2026-07-01T01:23:25.000Z",
+  "lastUpdated": "2026-07-01T01:50:25.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -176,12 +176,18 @@
         "Download and open-folder behavior are checked on native Windows."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T18:01:41.000Z",
-        "commit": "b08b7b4a0aeaf0f8e7126711bff88031c98b16a7",
-        "environment": "GitHub Actions Windows runner plus prior Native Windows 11 Pro 10.0.26100 x64 shell evidence; package version 0.2.4; release asset Image2Tools-Setup.exe.",
+        "verifiedAt": "2026-07-01T01:50:25.000Z",
+        "commit": "7ef40a2647114b3e512fff13cfd28ea8fee3e497",
+        "environment": "Native Windows 11 Pro 10.0.26100 x64 shell on VMware; package version 0.2.4; release asset Image2Tools-Setup.exe.",
         "commands": [
-          "GitHub Actions CI run 28464934988 / Windows package job 84363052155: package Windows app and verify Windows package in full-install mode.",
-          "GitHub Actions Release Windows run 28464953780 / job 84362218974: package Windows app, run package-smoke verification, and publish GitHub Release asset.",
+          "git pull --ff-only origin main",
+          "pnpm package:win",
+          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; $env:IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS='/S /currentuser /D=C:\\work\\image2tools-release-check-v024-windows'; pnpm verify:release:windows",
+          "gh release upload v0.2.4 release/Image2Tools-Setup-v024-windows-20260701.exe --repo Bliveren/image2tools",
+          "gh api repos/Bliveren/image2tools/releases/assets/462390446 -X DELETE",
+          "gh api repos/Bliveren/image2tools/releases/assets/462719666 -X PATCH -f name=Image2Tools-Setup.exe",
+          "gh release download v0.2.4 --repo Bliveren/image2tools --pattern Image2Tools-Setup.exe --dir C:\\work\\image2tools-release-download-v024-windows --clobber",
+          "Get-FileHash -Algorithm SHA256 -LiteralPath C:\\work\\image2tools-release-download-v024-windows\\Image2Tools-Setup.exe",
           "Prior native Windows packaged-app bridge acceptance remains applicable for unchanged download/open-folder IPC: configure loopback mock OpenAI and Gemini endpoints, generate managed outputs, invoke downloadAsset through the native Save dialog, and invoke openAssetFolder with Explorer directory verification."
         ],
         "references": [
@@ -192,16 +198,16 @@
         ],
         "artifacts": [
           {
-            "kind": "ci-run",
-            "path": "https://github.com/Bliveren/image2tools/actions/runs/28464934988",
-            "public": true,
-            "description": "0.2.4 CI run with successful Windows full-install package verification."
+            "kind": "release-artifact",
+            "path": "release/Image2Tools-Setup.exe",
+            "public": false,
+            "description": "Native Windows installer rebuilt locally for v0.2.4 and verified in full-install mode before upload. SHA256 cf0e5514a17155d298181ba401537d1296cbb0531021491019126fc222f6350a; 98680474 bytes; Authenticode status NotSigned."
           },
           {
-            "kind": "release-run",
-            "path": "https://github.com/Bliveren/image2tools/actions/runs/28464953780",
+            "kind": "release-asset",
+            "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.4/Image2Tools-Setup.exe",
             "public": true,
-            "description": "0.2.4 Windows release workflow that published the GitHub Release installer asset."
+            "description": "GitHub Release Windows installer asset replaced with the locally verified v0.2.4 build. GitHub asset id 462719666; SHA256 cf0e5514a17155d298181ba401537d1296cbb0531021491019126fc222f6350a; 98680474 bytes."
           },
           {
             "kind": "evidence-note",
@@ -210,7 +216,7 @@
             "description": "Prior native Windows packaged-app download and open-folder acceptance evidence for unchanged platform IPC behavior."
           }
         ],
-        "summary": "0.2.4 Windows packaging passed on GitHub Actions: CI run 28464934988 completed the Windows package job 84363052155, including full-install verification, and Release Windows run 28464953780 published the installer after package-smoke verification. The uploaded v0.2.4 installer was downloaded and verified as SHA256 26ace9c524736036806a52059e5bed649faddecb0284b2c348c68d57ef51e5a5 with size 98680455 bytes. Native download/open-folder behavior remains covered by the prior Windows native evidence because 0.2.4 only changes saved configuration UI, Gemini imageConfig sizing, and Windows workflow packaging metadata."
+        "summary": "0.2.4 Windows packaging was rerun from the latest main commit 7ef40a2647114b3e512fff13cfd28ea8fee3e497 on native Windows. pnpm package:win completed successfully, including the project test suite, and pnpm verify:release:windows passed in full-install mode with silent install, app launch detection, mock endpoint configuration, and uninstall verification. The v0.2.4 GitHub Release Windows installer asset was replaced and downloaded back from the formal release URL as SHA256 cf0e5514a17155d298181ba401537d1296cbb0531021491019126fc222f6350a with size 98680474 bytes. Native download/open-folder behavior remains covered by the prior Windows native evidence because 0.2.4 only changes saved configuration UI, Gemini imageConfig sizing, and Windows workflow packaging metadata."
       }
     },
     {
@@ -260,15 +266,16 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T18:04:08.000Z",
-        "commit": "b08b7b4a0aeaf0f8e7126711bff88031c98b16a7",
-        "environment": "macOS 26.5.1 arm64 local shell plus GitHub Actions Windows runner; package version 0.2.4; darwin/arm64 DMG and win32/x64 installer published to the v0.2.4 GitHub release.",
+        "verifiedAt": "2026-07-01T01:50:25.000Z",
+        "commit": "7ef40a2647114b3e512fff13cfd28ea8fee3e497",
+        "environment": "macOS 26.5.1 arm64 prior signed package evidence plus Native Windows 11 Pro 10.0.26100 x64 shell; package version 0.2.4; darwin/arm64 DMG and win32/x64 installer published to the v0.2.4 GitHub release.",
         "commands": [
           "gh release view v0.2.4 --json assets,url,publishedAt,tagName,targetCommitish",
-          "gh release download v0.2.4 --pattern Image2Tools-Setup.exe --dir /tmp/image2tools-v024-check --clobber",
-          "shasum -a 256 /tmp/image2tools-v024-check/Image2Tools-Setup.exe",
-          "wc -c /tmp/image2tools-v024-check/Image2Tools-Setup.exe",
-          "pnpm verify:release-evidence"
+          "gh api repos/Bliveren/image2tools/releases/tags/v0.2.4",
+          "gh release download v0.2.4 --repo Bliveren/image2tools --pattern Image2Tools-Setup.exe --dir C:\\work\\image2tools-release-download-v024-windows --clobber",
+          "Get-FileHash -Algorithm SHA256 -LiteralPath C:\\work\\image2tools-release-download-v024-windows\\Image2Tools-Setup.exe",
+          "Get-Item -LiteralPath C:\\work\\image2tools-release-download-v024-windows\\Image2Tools-Setup.exe | Select-Object Length",
+          "pnpm verify:release-evidence -- --require-complete"
         ],
         "references": [
           {
@@ -288,7 +295,7 @@
             "description": "Update manifest with darwin/arm64 DMG and win32/x64 installer asset URLs, SHA256, and sizeBytes for v0.2.4."
           }
         ],
-        "summary": "Update manifest assets populated for v0.2.4 from the current release artifacts. Darwin DMG: SHA256 4931076a2cd8d6d69c0afcdd7c17d20286d0bd1906fcde501be7bdfe9b1dad34, 103470128 bytes. Windows installer: SHA256 26ace9c524736036806a52059e5bed649faddecb0284b2c348c68d57ef51e5a5, 98680455 bytes. Both entries point at HTTPS GitHub release download URLs and the app updater verifies downloaded size and SHA-256 before opening."
+        "summary": "Update manifest assets populated for v0.2.4 from the current release artifacts. Darwin DMG: SHA256 4931076a2cd8d6d69c0afcdd7c17d20286d0bd1906fcde501be7bdfe9b1dad34, 103470128 bytes. Windows installer: SHA256 cf0e5514a17155d298181ba401537d1296cbb0531021491019126fc222f6350a, 98680474 bytes. Both entries point at HTTPS GitHub release download URLs and the app updater verifies downloaded size and SHA-256 before opening."
       }
     }
   ]
