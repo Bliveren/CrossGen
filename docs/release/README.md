@@ -32,6 +32,10 @@ External gate trackers:
 | Native Linux desktop AppImage validation | https://github.com/Bliveren/image2tools/issues/4 |
 | Formal update manifest distribution assets | https://github.com/Bliveren/image2tools/issues/103 |
 
+Release-specific preparation:
+
+- `v0.3.0`: [v0.3.0-preflight.md](./v0.3.0-preflight.md)
+
 Rules for updating evidence:
 
 - Never include raw API keys, GitHub tokens, Apple credentials, private key
