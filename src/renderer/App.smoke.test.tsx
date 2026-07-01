@@ -492,6 +492,52 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("creates a color prompt chip with keyboard navigation", async () => {
+    const bridge = await renderApp(snapshot());
+    const promptInput = textAreaByLabel("Prompt");
+
+    await changeTextArea(promptInput, "Product hero #");
+    expect(document.querySelector('[role="listbox"][aria-label="# Color"]')).toBeTruthy();
+    await keyDown(promptInput, "ArrowDown");
+    await keyDown(promptInput, "Enter");
+
+    expect(document.body.textContent).toContain("#FF6600");
+
+    await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: "Product hero\n\n#FF6600"
+      })
+    );
+  });
+
+  it("filters @ Gallery prompt chips by the active Gallery folder, tag, and search", async () => {
+    const productFolder = galleryFolder("Product refs");
+    const matching = galleryAsset("folder-match.png", { folderId: productFolder.id, tags: ["hero"] });
+    const wrongFolder = galleryAsset("folder-miss.png", { tags: ["hero"] });
+    const wrongTag = galleryAsset("tag-miss.png", { folderId: productFolder.id, tags: ["draft"] });
+    const bridge = await renderApp(snapshot({
+      galleryFolders: [productFolder],
+      galleryAssets: [matching, wrongFolder, wrongTag]
+    }));
+    const promptInput = textAreaByLabel("Prompt");
+
+    await openGalleryRail();
+    await click(buttonByText("Product refs", ".gallery-folder-main"));
+    await changeSelect(document.querySelector<HTMLSelectElement>(".gallery-toolbar select")!, "hero");
+    await changeInput(inputByPlaceholder("Search Gallery"), "folder-match");
+
+    await changeTextArea(promptInput, "Product hero @");
+    expect(document.body.textContent).toContain("folder-match.png");
+    expect(document.querySelector('[role="listbox"]')?.textContent).not.toContain("folder-miss.png");
+    expect(document.querySelector('[role="listbox"]')?.textContent).not.toContain("tag-miss.png");
+    await keyDown(promptInput, "Enter");
+
+    expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(matching.id);
+    expect(document.body.textContent).toContain("@ folder-match.png");
+  });
+
   it("adds a history result to Gallery", async () => {
     const result = imageAsset("history-result.png");
     const job = geminiJob(0, { outputs: [result] });

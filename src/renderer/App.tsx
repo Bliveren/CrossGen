@@ -2887,7 +2887,7 @@ export function App() {
                 value={prompt}
                 tokens={promptTokens}
                 templates={snapshot.promptTemplates}
-                galleryAssets={snapshot.galleryAssets}
+                galleryAssets={filteredGalleryAssets}
                 removeTokenLabel={copy.removePromptChip}
                 onChange={setPrompt}
                 onTokensChange={setPromptTokens}
