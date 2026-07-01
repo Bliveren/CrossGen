@@ -34,13 +34,15 @@
 Image2Tools is an easy-to-use desktop tool for managing AI image generation and editing workflows. It currently focuses on GPT Image 2, Gemini-backed image models such as Nano Banana 3, and OpenAI-compatible custom image providers.
 <img width="1721" height="1154" alt="image" src="https://github.com/user-attachments/assets/e3810a38-4604-47b8-8cb8-46d073bdb252" />
 
-Version `0.2.3` turns the app into a cleaner production workspace:
+The current mainline is preparing the `v0.3.0` workspace release. It keeps the local-first generation surface from `v0.2.x` and adds a stronger prompt and asset workflow:
 
-- Multiple API access profiles are managed inside the model configuration module.
-- The active API access is shown as one compact configuration card with provider name, Base URL, saved-key status, and discovered-model count.
+- Multiple API access profiles are managed in the left rail with consistent API access wording.
+- The active API access is shown as one compact card with API type, Base URL, saved-key status, and discovered-model count.
 - Saved but inactive API access profiles stay collapsed and can be expanded or switched at any time.
-- Prompt templates are moved into a focused modal opened from the prompt area.
-- The reference Gallery now lives in the right rail next to Recent jobs, so history results and saved references can both be dragged into the reference area.
+- Prompt templates have a left-rail section plus a focused manager for create, edit, search, tag, import, export, and apply flows.
+- The reference Gallery lives in the right rail next to Recent jobs, so history results and saved references can both be dragged into the reference area.
+- Gallery folders let users organize reusable images into logical collections without exposing arbitrary local paths.
+- Prompt chips support `@` Gallery assets, `#` hex colors, and `~` templates, then serialize into model-ready prompt text and reference inputs.
 - Image-to-image mode has clearer reference and mask drop zones, including tooltips for ambiguous controls.
 - The interface uses a unified visual system with the `#F37021` accent reserved for important actions and active states.
 
@@ -48,7 +50,7 @@ Image2Tools is for creators, operators, product teams, and internal AI workflow 
 
 ## Product Tour
 
-The screenshots below show the current `0.2.3` workspace.
+The screenshots below show the published `0.2.x` workspace. Updated `v0.3.0` screenshots will be captured during release preparation.
 
 <table>
 <tr>
@@ -82,15 +84,15 @@ The screenshots below show the current `0.2.3` workspace.
 | Area | Capability |
 | --- | --- |
 | API access profiles | Save and switch OpenAI, Gemini, and OpenAI-compatible custom API access profiles. Each profile keeps its own name, Base URL, saved-key status, launch model, and model discovery result. |
-| Model configuration | The active API access is presented as a compact card. Expand it when you need to edit API Key, Base URL, provider type, or discovery settings. |
+| API access configuration | The active API access is presented as a compact card. Expand it when you need to edit API Key, Base URL, API type, or discovery settings. |
 | Model discovery | Detects available models from the configured API and shows discovered-model counts and actionable failure messages. |
 | Launch models | GPT Image 2, Nano Banana 3, and General launch entries are enabled or disabled based on provider support, saved key status, and discovery results. |
 | GPT Image 2 | Text-to-image, reference editing, multi-image editing, exact-mask inpainting, and validated OpenAI Image API parameters. OpenAI streaming is currently disabled globally for broad aggregator compatibility. |
 | Nano Banana 3 | Gemini `generateContent` image generation, reference-image editing, guided-region editing, aspect ratio, resolution, Thinking, and Search grounding controls. |
 | General mode | A minimal fallback for discovered image-capable models. Gemini supports prompt and reference-image flows; OpenAI and Custom use a prompt-only OpenAI-compatible generation contract. |
-| Prompt templates | A single button under the prompt opens a template manager for saving, searching, tagging, importing, exporting, and applying reusable prompts. |
-| Prompt chips | Gallery and template triggers can be inserted into the prompt flow, then serialized into model-ready prompt and reference inputs. |
-| Reference Gallery | A right-rail Gallery stores reusable reference images. Items can be clicked or dragged into the reference area. |
+| Prompt templates | A left-rail template section and focused manager support saving, searching, tagging, importing, exporting, and applying reusable prompts. |
+| Prompt chips | `@` Gallery assets, `#` hex colors, and `~` templates can be inserted into the prompt flow, then serialized into model-ready prompt and reference inputs. |
+| Reference Gallery | A right-rail Gallery stores reusable reference images with folders, tags, and search. Items can be clicked or dragged into the reference area. |
 | Recent jobs | History cards show provider/model context, prompt summaries, reusable outputs, download actions, and Gallery import actions. |
 | Mask workflow | Image-to-image mode provides a clearer mask area, brush-size control, upload-mask action, and hover tooltips for ambiguous controls. |
 | Local storage | Outputs, history, drafts, templates, and Gallery assets are stored locally under Electron user data. |
@@ -99,19 +101,19 @@ The screenshots below show the current `0.2.3` workspace.
 
 ## Download and Install
 
-Download the latest installer from the [GitHub Releases page](https://github.com/Bliveren/image2tools/releases/latest).
+Download the latest published installer from the [GitHub Releases page](https://github.com/Bliveren/image2tools/releases/latest). The `v0.3.0` features above are on `main` and will be packaged after release approval.
 
 | Platform | Artifact | Status |
 | --- | --- | --- |
-| macOS Apple Silicon | `Image2Tools-0.2.3-mac-arm64.dmg` | Developer ID signed when the local signing identity is available. Notarization depends on Apple notary credentials. |
+| macOS Apple Silicon | `Image2Tools-0.2.4-mac-arm64.dmg` | Developer ID signed when the local signing identity is available. Notarization depends on Apple notary credentials. |
 | Windows x64 | `Image2Tools-Setup.exe` | NSIS installer. Native Windows validation is tracked in release evidence. |
-| Linux x64 | `Image2Tools-0.2.3-linux-x86_64.AppImage` | Packaging support exists; publish status depends on the release cycle. |
+| Linux x64 | AppImage | Packaging support exists; not published in the current `0.2.4` update manifest. |
 
 Verify downloads against [`docs/updates/latest.json`](./docs/updates/latest.json):
 
 ```bash
 # macOS
-shasum -a 256 ~/Downloads/Image2Tools-0.2.3-mac-arm64.dmg
+shasum -a 256 ~/Downloads/Image2Tools-0.2.4-mac-arm64.dmg
 
 # Windows PowerShell
 Get-FileHash .\Image2Tools-Setup.exe -Algorithm SHA256
@@ -127,13 +129,13 @@ If Windows SmartScreen appears, choose **More info** and then **Run anyway**.
 
 ## Product Flow
 
-1. Add or expand an API access profile in Model config.
+1. Add or expand an API access profile.
 2. Save the API Key and Base URL, then run model discovery.
 3. Launch GPT Image 2, Nano Banana 3, or General based on discovered capability.
-4. Enter a prompt, optionally apply a prompt template, and generate.
-5. For image-to-image work, add references from disk, Gallery, or Recent jobs.
+4. Enter a prompt, optionally combine prompt templates, Gallery assets, and color chips, then generate.
+5. For image-to-image work, add references from disk, Gallery folders, or Recent jobs.
 6. When supported, upload or paint a mask for local edits.
-7. Reuse history, import useful outputs into Gallery, or download results.
+7. Reuse history, import useful outputs into Gallery folders, or download results.
 
 ## Development
 
@@ -170,7 +172,7 @@ pnpm verify:release:linux
 pnpm verify:release-evidence
 ```
 
-`pnpm build` runs TypeScript checks, Vitest, the renderer build, and the Electron main build. Mock verifiers cover OpenAI image calls, Gemini `generateContent`, model discovery, and provider-specific error handling without spending real API credits.
+`pnpm build` runs TypeScript checks, Vitest, the renderer build, and the Electron main build. Mock verifiers cover OpenAI image calls, Gemini `generateContent`, model discovery, and API-specific error handling without spending real API credits.
 
 For a Developer ID signed local macOS build without notarization, use the configured signing identity directly:
 
@@ -209,7 +211,7 @@ pnpm mock:gemini
 Configure Image2Tools:
 
 ```text
-Provider: Gemini
+API type: Gemini
 API Key: mock-gemini-key
 Base URL: http://127.0.0.1:8788/v1beta
 ```

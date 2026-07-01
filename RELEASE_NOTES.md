@@ -1,5 +1,27 @@
 # Image2Tools Release Notes
 
+## v0.3.0 (pending release)
+
+Development notes for the next release. Package version, signed assets, update manifest, release evidence, tag, and GitHub Release will be updated only after release approval.
+
+### Features
+
+- **API access wording and left-rail flow refined**: user-facing copy now consistently uses API access terminology, while the left rail keeps API access, launch model, prompt templates, parameters, draft, notices, and updates in a predictable order.
+- **Prompt template workflow expanded**: prompt templates now have a left-rail section plus a focused manager for create, edit, search, tag filtering, JSON import, JSON export, and apply flows.
+- **Gallery folders**: reusable reference images can be organized into logical folders. Deleting a folder keeps images in Gallery and moves them back to Uncategorized.
+- **Gallery filtering**: folder, tag, and search filters compose together, with counts visible in the Gallery folder list.
+- **Prompt chips**: prompt input supports `@` Gallery assets, `#` hex colors, and `~` templates. Chips serialize into model-ready prompt text plus reference inputs before `runJob`.
+- **Folder-aware Gallery chips**: `@` Gallery chip suggestions inherit the current Gallery folder, tag, and search filters.
+
+### Validation
+
+- `pnpm build`
+- `pnpm verify:mock-api`
+- `pnpm verify:mock-gemini-api`
+- `pnpm verify:mock-model-discovery`
+
+---
+
 ## v0.2.4
 
 Bugfix release for saved model configurations and Gemini image sizing.
