@@ -1434,6 +1434,23 @@
     font-size: 12px;
   }
 
+  .history-gallery-folder-select {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    height: 30px;
+    font-size: 12px;
+  }
+
+  .gallery-empty-state {
+    justify-self: center;
+  }
+
+  .gallery-empty-state .secondary {
+    min-width: 0;
+    padding: 0 11px;
+  }
+
   .dot {
     width: 8px;
     height: 8px;

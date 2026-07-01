@@ -692,6 +692,7 @@ export function App() {
   const [gallerySearch, setGallerySearch] = useState("");
   const [galleryTagFilter, setGalleryTagFilter] = useState("");
   const [activeGalleryFolderId, setActiveGalleryFolderId] = useState<GalleryFolderFilter>(GALLERY_ALL_FILTER);
+  const [historyGalleryFolderId, setHistoryGalleryFolderId] = useState("");
   const [newGalleryFolderName, setNewGalleryFolderName] = useState("");
   const [editingGalleryFolderId, setEditingGalleryFolderId] = useState<string | null>(null);
   const [editingGalleryFolderName, setEditingGalleryFolderName] = useState("");
@@ -825,6 +826,7 @@ export function App() {
     return { counts, uncategorized, total: snapshot.galleryAssets.length };
   }, [snapshot.galleryAssets]);
   const currentImportFolderId = activeGalleryFolderId === GALLERY_ALL_FILTER || activeGalleryFolderId === GALLERY_UNCATEGORIZED_FILTER ? null : activeGalleryFolderId;
+  const historyGalleryTargetFolderId = historyGalleryFolderId || null;
   const filteredGalleryAssets = useMemo(() => {
     const query = gallerySearch.trim().toLowerCase();
     return snapshot.galleryAssets.filter((asset) => {
@@ -880,6 +882,12 @@ export function App() {
       setActiveGalleryFolderId(GALLERY_ALL_FILTER);
     }
   }, [activeGalleryFolderId, snapshot.galleryFolders]);
+
+  useEffect(() => {
+    if (historyGalleryFolderId && !snapshot.galleryFolders.some((folder) => folder.id === historyGalleryFolderId)) {
+      setHistoryGalleryFolderId("");
+    }
+  }, [historyGalleryFolderId, snapshot.galleryFolders]);
 
   useEffect(() => {
     if (!resizingColumn) return;
@@ -1205,7 +1213,7 @@ export function App() {
   async function addHistoryAssetToGallery(asset?: ImageAsset) {
     if (!bridge || !asset) return;
     try {
-      const galleryAsset = await bridge.addHistoryAssetToGallery(asset.path, currentImportFolderId);
+      const galleryAsset = await bridge.addHistoryAssetToGallery(asset.path, historyGalleryTargetFolderId);
       setSnapshot((current) => ({ ...current, galleryAssets: [galleryAsset, ...current.galleryAssets] }));
       setNotice({ kind: "success", text: copy.galleryAdded });
     } catch (error) {
@@ -3275,6 +3283,18 @@ export function App() {
                           <Trash2 size={15} />
                           <span>{copy.delete}</span>
                         </button>
+                        <select
+                          className="history-gallery-folder-select"
+                          value={historyGalleryFolderId}
+                          onChange={(event) => setHistoryGalleryFolderId(event.target.value)}
+                          aria-label={copy.galleryAddTargetFolder}
+                          data-tooltip={copy.galleryAddTargetFolder}
+                        >
+                          <option value="">{copy.galleryUncategorized}</option>
+                          {snapshot.galleryFolders.map((folder) => (
+                            <option key={folder.id} value={folder.id}>{folder.name}</option>
+                          ))}
+                        </select>
                       </div>
                     </article>
                   );
@@ -3393,7 +3413,13 @@ export function App() {
             </div>
             <div className="gallery-grid">
               {filteredGalleryAssets.length === 0 && (
-                <p className="history-empty">{snapshot.galleryAssets.length === 0 ? copy.galleryEmpty : copy.galleryNoMatch}</p>
+                <div className="history-empty gallery-empty-state">
+                  <span>{snapshot.galleryAssets.length === 0 ? copy.galleryEmpty : copy.galleryNoMatch}</span>
+                  <button type="button" className="secondary" onClick={() => void importToGallery()}>
+                    <FileUp size={15} />
+                    {copy.galleryImport}
+                  </button>
+                </div>
               )}
               {filteredGalleryAssets.map((asset) => (
                 <article key={asset.id} className="gallery-item">

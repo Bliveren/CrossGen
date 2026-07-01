@@ -264,6 +264,32 @@ describe("renderer multi-model smoke", () => {
     expect(buttonByText("Nano Banana 3", ".launch-button").disabled).toBe(true);
   });
 
+  it("adds an API access without a key and leaves it untested", async () => {
+    const bridge = await renderApp(snapshot());
+    vi.mocked(bridge.testConnection).mockClear();
+
+    await openSavedApiAccess();
+    await click(buttonByText("Add API access"));
+    const addForm = apiAccessAddForm();
+    await changeSelect(selectByLabel("API type", addForm), "custom");
+    await changeInput(inputByLabel("API access name", addForm), "Custom gateway");
+    await changeInput(inputByLabel("Base URL", addForm), "https://gateway.example.com/v1");
+    await click(buttonByText("Add API access", ".api-access-add-form button"));
+
+    expect(bridge.addProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "custom",
+        name: "Custom gateway",
+        apiKey: undefined,
+        baseURL: "https://gateway.example.com/v1"
+      })
+    );
+    expect(bridge.testConnection).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Custom gateway");
+    expect(document.body.textContent).toContain("No key saved");
+    expect(buttonByText("GPT Image 2", ".launch-button").disabled).toBe(true);
+  });
+
   it("switches API access and derives launch availability from the selected access discovery", async () => {
     const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
     const geminiConfig = providerConfig({
@@ -288,6 +314,41 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.switchProvider).toHaveBeenCalledWith("gemini-access");
     expect(launchButton("GPT Image 2").disabled).toBe(true);
     expect(launchButton("Nano Banana 3").disabled).toBe(false);
+  });
+
+  it("keeps prompt and references when switching API access", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }]
+    });
+    const gallery = galleryAsset("switch-reference.png");
+    const bridge = await renderApp(snapshot({
+      providers: [openaiConfig, geminiConfig],
+      activeProviderId: openaiConfig.id,
+      galleryAssets: [gallery]
+    }));
+
+    await changeTextArea(textAreaByLabel("Prompt"), "Keep this prompt");
+    await openGalleryRail();
+    await click(document.querySelector<HTMLButtonElement>(".gallery-thumb")!);
+    expect(document.querySelector(".asset-tile")?.textContent).toContain("switch-reference.png");
+
+    await openSavedApiAccess();
+    await click(buttonByText("Gemini access", ".api-access-item-main"));
+
+    expect(bridge.saveDraft).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: "Keep this prompt",
+      inputAssets: [expect.objectContaining({ name: "switch-reference.png" })]
+    }));
+    expect(textAreaByLabel("Prompt").value).toBe("Keep this prompt");
+    expect(document.querySelector(".asset-tile")?.textContent).toContain("switch-reference.png");
   });
 
   it("deletes inactive API access without changing the active workspace", async () => {
@@ -483,6 +544,55 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("removes prompt chips and saves serialized draft content", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }]
+    });
+    const gallery = galleryAsset("draft-gallery.png");
+    const template = {
+      id: "template-draft",
+      title: "Draft template",
+      body: "serialized template body",
+      tags: ["draft"],
+      createdAt: now,
+      updatedAt: now
+    };
+    const bridge = await renderApp(snapshot({
+      providers: [openaiConfig, geminiConfig],
+      activeProviderId: openaiConfig.id,
+      galleryAssets: [gallery],
+      promptTemplates: [template]
+    }));
+    const promptInput = textAreaByLabel("Prompt");
+
+    await changeTextArea(promptInput, "Product hero @draft");
+    await keyDown(promptInput, "Enter");
+    await changeTextArea(promptInput, `${promptInput.value} ~draft`);
+    await keyDown(promptInput, "Enter");
+
+    expect(document.body.textContent).toContain("@ draft-gallery.png");
+    expect(document.body.textContent).toContain("~ Draft template");
+
+    await click(document.querySelector<HTMLButtonElement>(".prompt-chip")!);
+    expect(document.body.textContent).not.toContain("@ draft-gallery.png");
+
+    await openSavedApiAccess();
+    await click(buttonByText("Gemini access", ".api-access-item-main"));
+
+    expect(bridge.saveDraft).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: "Product hero\n\nserialized template body",
+      inputAssets: []
+    }));
+  });
+
   it("creates prompt chips from @ and ~ triggers in the prompt input", async () => {
     const gallery = galleryAsset("trigger-gallery.png");
     const template = {
@@ -565,14 +675,16 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("@ folder-match.png");
   });
 
-  it("adds a history result to Gallery", async () => {
+  it("adds a history result to a selected Gallery folder", async () => {
+    const folder = galleryFolder("History picks");
     const result = imageAsset("history-result.png");
     const job = geminiJob(0, { outputs: [result] });
-    const bridge = await renderApp(snapshot({ history: [job] }));
+    const bridge = await renderApp(snapshot({ history: [job], galleryFolders: [folder] }));
 
+    await changeSelect(document.querySelector<HTMLSelectElement>(".history-gallery-folder-select")!, folder.id);
     await click(buttonByText("Add to Gallery", ".history-action-button"));
 
-    expect(bridge.addHistoryAssetToGallery).toHaveBeenCalledWith(result.path, null);
+    expect(bridge.addHistoryAssetToGallery).toHaveBeenCalledWith(result.path, folder.id);
     expect(document.body.textContent).toContain("Added to Gallery.");
 
     await openGalleryRail();
@@ -604,8 +716,9 @@ describe("renderer multi-model smoke", () => {
 
     expect(bridge.createGalleryFolder).toHaveBeenCalledWith({ name: "Product refs" });
     expect(document.body.textContent).toContain("Product refs");
+    expect(document.body.textContent).toContain("No Gallery images yet.");
 
-    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Import to Gallery"]')!);
+    await click(document.querySelector<HTMLButtonElement>(".gallery-empty-state button")!);
     expect(bridge.importToGallery).toHaveBeenCalledWith(undefined, "folder-product-refs");
     expect(document.body.textContent).toContain("imported.png");
 

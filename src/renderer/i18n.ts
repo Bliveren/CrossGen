@@ -175,6 +175,7 @@ export interface UiCopy {
   galleryImport: string;
   galleryChoose: string;
   galleryAddHistory: string;
+  galleryAddTargetFolder: string;
   galleryEditTags: string;
   gallerySaveTags: string;
   galleryEmpty: string;
@@ -393,6 +394,7 @@ export const translations: Record<Language, UiCopy> = {
     galleryImport: "Import to Gallery",
     galleryChoose: "Choose from Gallery",
     galleryAddHistory: "Add to Gallery",
+    galleryAddTargetFolder: "Gallery target folder",
     galleryEditTags: "Edit tags",
     gallerySaveTags: "Save tags",
     galleryEmpty: "No Gallery images yet.",
@@ -674,6 +676,7 @@ export const translations: Record<Language, UiCopy> = {
     galleryImport: "导入图库",
     galleryChoose: "从图库选择",
     galleryAddHistory: "加入图库",
+    galleryAddTargetFolder: "加入图库目标文件夹",
     galleryEditTags: "编辑标签",
     gallerySaveTags: "保存标签",
     galleryEmpty: "暂无图库图片。",
