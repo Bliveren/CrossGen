@@ -155,6 +155,20 @@ export interface UiCopy {
   templateExported: (filePath: string) => string;
   gallery: string;
   galleryDescription: string;
+  galleryFolders: string;
+  galleryAllFolders: string;
+  galleryUncategorized: string;
+  galleryFolderNew: string;
+  galleryFolderName: string;
+  galleryFolderCreate: string;
+  galleryFolderRename: string;
+  galleryFolderDelete: string;
+  galleryFolderDeleteConfirm: (name: string) => string;
+  galleryFolderCreated: string;
+  galleryFolderRenamed: string;
+  galleryFolderDeleted: string;
+  galleryMoveToFolder: string;
+  galleryMoved: string;
   gallerySearch: string;
   galleryAllTags: string;
   galleryImport: string;
@@ -358,6 +372,20 @@ export const translations: Record<Language, UiCopy> = {
     templateExported: (filePath: string) => `Templates exported to ${filePath}`,
     gallery: "Gallery",
     galleryDescription: "Reference images ready for reuse.",
+    galleryFolders: "Gallery folders",
+    galleryAllFolders: "All",
+    galleryUncategorized: "Uncategorized",
+    galleryFolderNew: "New folder",
+    galleryFolderName: "Folder name",
+    galleryFolderCreate: "Create folder",
+    galleryFolderRename: "Rename folder",
+    galleryFolderDelete: "Delete folder",
+    galleryFolderDeleteConfirm: (name: string) => `Delete Gallery folder "${name}"? Images stay in Gallery and move to Uncategorized.`,
+    galleryFolderCreated: "Gallery folder created.",
+    galleryFolderRenamed: "Gallery folder renamed.",
+    galleryFolderDeleted: "Gallery folder deleted.",
+    galleryMoveToFolder: "Move to folder",
+    galleryMoved: "Gallery image moved.",
     gallerySearch: "Search Gallery",
     galleryAllTags: "All",
     galleryImport: "Import to Gallery",
@@ -624,6 +652,20 @@ export const translations: Record<Language, UiCopy> = {
     templateExported: (filePath: string) => `模板已导出到 ${filePath}`,
     gallery: "图库",
     galleryDescription: "方便随时调用的参考图库。",
+    galleryFolders: "图库文件夹",
+    galleryAllFolders: "全部",
+    galleryUncategorized: "未分类",
+    galleryFolderNew: "新建文件夹",
+    galleryFolderName: "文件夹名称",
+    galleryFolderCreate: "创建文件夹",
+    galleryFolderRename: "重命名文件夹",
+    galleryFolderDelete: "删除文件夹",
+    galleryFolderDeleteConfirm: (name: string) => `确认删除图库文件夹“${name}”？图片会保留在图库并移到未分类。`,
+    galleryFolderCreated: "图库文件夹已创建。",
+    galleryFolderRenamed: "图库文件夹已重命名。",
+    galleryFolderDeleted: "图库文件夹已删除。",
+    galleryMoveToFolder: "移动到文件夹",
+    galleryMoved: "图库图片已移动。",
     gallerySearch: "搜索图库",
     galleryAllTags: "全部",
     galleryImport: "导入图库",

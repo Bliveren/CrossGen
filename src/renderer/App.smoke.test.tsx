@@ -7,6 +7,7 @@ import type {
   AppSnapshot,
   GenerationJob,
   GalleryAsset,
+  GalleryFolder,
   ImageAsset,
   RunJobRequest,
   ProviderConfig,
@@ -498,7 +499,7 @@ describe("renderer multi-model smoke", () => {
 
     await click(buttonByText("Add to Gallery", ".history-action-button"));
 
-    expect(bridge.addHistoryAssetToGallery).toHaveBeenCalledWith(result.path);
+    expect(bridge.addHistoryAssetToGallery).toHaveBeenCalledWith(result.path, null);
     expect(document.body.textContent).toContain("Added to Gallery.");
 
     await openGalleryRail();
@@ -518,6 +519,48 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Gallery tags updated.");
     expect(document.body.textContent).toContain("product");
     expect(document.body.textContent).toContain("hero");
+  });
+
+  it("creates Gallery folders, imports and moves assets, then deletes folders back to Uncategorized", async () => {
+    const bridge = await renderApp(snapshot());
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    await openGalleryRail();
+    await changeInput(inputByPlaceholder("New folder"), "Product refs");
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Create folder"]')!);
+
+    expect(bridge.createGalleryFolder).toHaveBeenCalledWith({ name: "Product refs" });
+    expect(document.body.textContent).toContain("Product refs");
+
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Import to Gallery"]')!);
+    expect(bridge.importToGallery).toHaveBeenCalledWith(undefined, "folder-product-refs");
+    expect(document.body.textContent).toContain("imported.png");
+
+    await changeSelect(document.querySelector<HTMLSelectElement>(".gallery-folder-select")!, "");
+    expect(bridge.moveGalleryAsset).toHaveBeenLastCalledWith("gallery_imported.png", null);
+    expect(document.body.textContent).toContain("Gallery image moved.");
+
+    await changeInput(inputByPlaceholder("Search Gallery"), "imported");
+    await changeSelect(document.querySelector<HTMLSelectElement>(".gallery-toolbar select")!, "");
+    expect(document.body.textContent).toContain("No matching Gallery images.");
+
+    await click(buttonByText("Uncategorized", ".gallery-folder-button"));
+    expect(document.body.textContent).toContain("imported.png");
+
+    await changeSelect(document.querySelector<HTMLSelectElement>(".gallery-folder-select")!, "folder-product-refs");
+    expect(bridge.moveGalleryAsset).toHaveBeenLastCalledWith("gallery_imported.png", "folder-product-refs");
+    expect(document.body.textContent).toContain("No matching Gallery images.");
+
+    await changeInput(inputByPlaceholder("Search Gallery"), "");
+    await click(buttonByText("Product refs", ".gallery-folder-main"));
+    expect(document.body.textContent).toContain("imported.png");
+
+    const folderDelete = document.querySelector<HTMLButtonElement>('button[aria-label="Delete folder"]')!;
+    await click(folderDelete);
+
+    expect(bridge.deleteGalleryFolder).toHaveBeenCalledWith("folder-product-refs");
+    expect(document.body.textContent).toContain("Uncategorized");
+    expect(document.body.textContent).toContain("imported.png");
   });
 
   it("confirms before deleting a Gallery image", async () => {
@@ -903,19 +946,48 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     importTemplates: vi.fn(async () => ({ imported: 0, skipped: 0 })),
     exportTemplates: vi.fn(async () => "/tmp/templates.json"),
     listGallery: vi.fn(async () => currentSnapshot.galleryAssets),
-    importToGallery: vi.fn(async () => {
-      const asset = galleryAsset("imported.png");
+    listGalleryFolders: vi.fn(async () => currentSnapshot.galleryFolders),
+    createGalleryFolder: vi.fn(async (input) => {
+      const folder = galleryFolder(input.name);
+      currentSnapshot = { ...currentSnapshot, galleryFolders: [folder, ...currentSnapshot.galleryFolders] };
+      return folder;
+    }),
+    renameGalleryFolder: vi.fn(async (id, input) => {
+      const folder = currentSnapshot.galleryFolders.find((item) => item.id === id) ?? galleryFolder(input.name, { id });
+      const updated = { ...folder, name: input.name.trim(), updatedAt: now };
+      currentSnapshot = { ...currentSnapshot, galleryFolders: currentSnapshot.galleryFolders.map((item) => item.id === id ? updated : item) };
+      return updated;
+    }),
+    deleteGalleryFolder: vi.fn(async (id) => {
+      currentSnapshot = {
+        ...currentSnapshot,
+        galleryFolders: currentSnapshot.galleryFolders.filter((folder) => folder.id !== id),
+        galleryAssets: currentSnapshot.galleryAssets.map((asset) => asset.folderId === id ? { ...asset, folderId: null, updatedAt: now } : asset)
+      };
+      return {
+        folders: currentSnapshot.galleryFolders,
+        assets: currentSnapshot.galleryAssets
+      };
+    }),
+    importToGallery: vi.fn(async (_paths, folderId) => {
+      const asset = galleryAsset("imported.png", { folderId: folderId ?? null });
       currentSnapshot = { ...currentSnapshot, galleryAssets: [asset, ...currentSnapshot.galleryAssets] };
       return [asset];
     }),
-    addHistoryAssetToGallery: vi.fn(async () => {
-      const asset = galleryAsset("history.png", { source: "result" });
+    addHistoryAssetToGallery: vi.fn(async (_assetPath, folderId) => {
+      const asset = galleryAsset("history.png", { source: "result", folderId: folderId ?? null });
       currentSnapshot = { ...currentSnapshot, galleryAssets: [asset, ...currentSnapshot.galleryAssets] };
       return asset;
     }),
     updateGalleryAsset: vi.fn(async (id, patch) => {
       const asset = currentSnapshot.galleryAssets.find((item) => item.id === id) ?? galleryAsset("missing.png", { id });
-      const updated = { ...asset, tags: patch.tags ?? asset.tags, updatedAt: now };
+      const updated = { ...asset, tags: patch.tags ?? asset.tags, folderId: "folderId" in patch ? patch.folderId ?? null : asset.folderId ?? null, updatedAt: now };
+      currentSnapshot = { ...currentSnapshot, galleryAssets: currentSnapshot.galleryAssets.map((item) => item.id === id ? updated : item) };
+      return updated;
+    }),
+    moveGalleryAsset: vi.fn(async (id, folderId) => {
+      const asset = currentSnapshot.galleryAssets.find((item) => item.id === id) ?? galleryAsset("missing.png", { id });
+      const updated = { ...asset, folderId, updatedAt: now };
       currentSnapshot = { ...currentSnapshot, galleryAssets: currentSnapshot.galleryAssets.map((item) => item.id === id ? updated : item) };
       return updated;
     }),
@@ -1018,6 +1090,7 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     activeProviderId: defaultConfig.id,
     history: [],
     promptTemplates: [],
+    galleryFolders: [],
     galleryAssets: [],
     ...patch
   };
@@ -1092,6 +1165,17 @@ function galleryAsset(fileName: string, patch: Partial<GalleryAsset> = {}): Gall
     sizeBytes: 1024,
     tags: [],
     source: "import",
+    createdAt: now,
+    updatedAt: now,
+    ...patch
+  };
+}
+
+function galleryFolder(name: string, patch: Partial<GalleryFolder> = {}): GalleryFolder {
+  const id = `folder-${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "untitled"}`;
+  return {
+    id,
+    name: name.trim(),
     createdAt: now,
     updatedAt: now,
     ...patch

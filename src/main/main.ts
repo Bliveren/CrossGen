@@ -18,6 +18,10 @@ import type {
   ConnectionTestResult,
   DownloadRequest,
   GalleryAsset,
+  GalleryAssetPatch,
+  GalleryFolder,
+  GalleryFolderDeleteResult,
+  GalleryFolderInput,
   GenerationJob,
   InputAsset,
   JobProgressEvent,
@@ -243,6 +247,7 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
     activeProviderId: state.activeProviderId,
     history: state.history.slice(0, MAX_HISTORY),
     promptTemplates: state.promptTemplates,
+    galleryFolders: state.galleryFolders,
     galleryAssets: state.galleryAssets,
     draft: state.draft
   };
@@ -502,13 +507,18 @@ function sendJobEvent(event: JobProgressEvent): void {
 
 async function handleGetSnapshot(): Promise<AppSnapshot> {
   const state = await readState();
+  return snapshotFromState(state);
+}
+
+function snapshotFromState(state: AppStateFile): AppSnapshot {
   const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
   return {
     appVersion: getAppVersion(),
     providers: state.providers.map(toPublicConfig),
-    activeProviderId: state.activeProviderId,
+    activeProviderId: activeProvider.id,
     history: state.history,
     promptTemplates: state.promptTemplates,
+    galleryFolders: state.galleryFolders,
     galleryAssets: state.galleryAssets,
     draft: state.draft
   };
@@ -592,6 +602,7 @@ async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConf
     activeProviderId: newId,
     history: state.history,
     promptTemplates: state.promptTemplates,
+    galleryFolders: state.galleryFolders,
     galleryAssets: state.galleryAssets,
     draft: state.draft
   };
@@ -614,6 +625,7 @@ async function handleSwitchProvider(_event: IpcMainInvokeEvent, providerId: stri
     activeProviderId: providerId,
     history: state.history,
     promptTemplates: state.promptTemplates,
+    galleryFolders: state.galleryFolders,
     galleryAssets: state.galleryAssets,
     draft: state.draft
   };
@@ -638,6 +650,7 @@ async function handleDeleteProvider(_event: IpcMainInvokeEvent, providerId: stri
     activeProviderId: nextActiveProviderId,
     history: state.history,
     promptTemplates: state.promptTemplates,
+    galleryFolders: state.galleryFolders,
     galleryAssets: state.galleryAssets,
     draft: state.draft
   };
@@ -833,7 +846,7 @@ function galleryFileNameFor(sourcePath: string): string {
   return `${Date.now()}-${randomUUID()}${ext}`;
 }
 
-async function createGalleryAssetFromFile(sourcePath: string, source: GalleryAsset["source"], now: string): Promise<GalleryAsset> {
+async function createGalleryAssetFromFile(sourcePath: string, source: GalleryAsset["source"], now: string, folderId: string | null): Promise<GalleryAsset> {
   await ensureDir(getGalleryDir());
   const stat = await fs.stat(sourcePath);
   if (!stat.isFile()) throw new Error("Gallery 只能导入图片文件。");
@@ -846,6 +859,7 @@ async function createGalleryAssetFromFile(sourcePath: string, source: GalleryAss
     originalName: path.basename(sourcePath),
     mimeType: mimeTypeForFile(sourcePath),
     sizeBytes: stat.size,
+    folderId,
     tags: [],
     source,
     createdAt: now,
@@ -858,7 +872,98 @@ async function handleListGallery(): Promise<GalleryAsset[]> {
   return state.galleryAssets;
 }
 
-async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[]): Promise<GalleryAsset[]> {
+async function handleListGalleryFolders(): Promise<GalleryFolder[]> {
+  const state = await readState();
+  return state.galleryFolders;
+}
+
+function normalizeGalleryFolderName(value: unknown): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+}
+
+function normalizeGalleryFolderColor(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed.toUpperCase() : undefined;
+}
+
+function normalizeGalleryFolderInput(input: GalleryFolderInput | undefined): { name: string; color?: string; hasColor: boolean } {
+  const name = normalizeGalleryFolderName(input?.name);
+  if (!name) throw new Error("Gallery 文件夹名称不能为空。");
+  return {
+    name,
+    color: normalizeGalleryFolderColor(input?.color),
+    hasColor: Object.prototype.hasOwnProperty.call(input ?? {}, "color")
+  };
+}
+
+function normalizeGalleryFolderId(state: AppStateFile, folderId?: unknown): string | null {
+  if (folderId === undefined || folderId === null || folderId === "") return null;
+  if (typeof folderId !== "string") throw new Error("Gallery 文件夹不存在。");
+  const normalized = folderId.trim();
+  if (!normalized) return null;
+  if (!state.galleryFolders.some((folder) => folder.id === normalized)) {
+    throw new Error("Gallery 文件夹不存在。");
+  }
+  return normalized;
+}
+
+async function handleCreateGalleryFolder(_event: IpcMainInvokeEvent, input: GalleryFolderInput): Promise<GalleryFolder> {
+  const state = await readState();
+  const { name, color } = normalizeGalleryFolderInput(input);
+  if (state.galleryFolders.some((folder) => folder.name.toLowerCase() === name.toLowerCase())) {
+    throw new Error("Gallery 文件夹名称已存在。");
+  }
+  const now = new Date().toISOString();
+  const folder: GalleryFolder = {
+    id: `gallery_folder_${randomUUID()}`,
+    name,
+    color,
+    createdAt: now,
+    updatedAt: now
+  };
+  await writeState({ ...state, galleryFolders: [folder, ...state.galleryFolders] });
+  return folder;
+}
+
+async function handleRenameGalleryFolder(_event: IpcMainInvokeEvent, id: string, input: GalleryFolderInput): Promise<GalleryFolder> {
+  const state = await readState();
+  const folder = state.galleryFolders.find((item) => item.id === id);
+  if (!folder) throw new Error("Gallery 文件夹不存在。");
+  const { name, color, hasColor } = normalizeGalleryFolderInput(input);
+  if (state.galleryFolders.some((item) => item.id !== id && item.name.toLowerCase() === name.toLowerCase())) {
+    throw new Error("Gallery 文件夹名称已存在。");
+  }
+  const updated: GalleryFolder = {
+    ...folder,
+    name,
+    color: hasColor ? color : folder.color,
+    updatedAt: new Date().toISOString()
+  };
+  await writeState({ ...state, galleryFolders: state.galleryFolders.map((item) => item.id === id ? updated : item) });
+  return updated;
+}
+
+async function handleDeleteGalleryFolder(_event: IpcMainInvokeEvent, id: string): Promise<GalleryFolderDeleteResult> {
+  const state = await readState();
+  if (!state.galleryFolders.some((folder) => folder.id === id)) {
+    throw new Error("Gallery 文件夹不存在。");
+  }
+  const nextState: AppStateFile = {
+    ...state,
+    galleryFolders: state.galleryFolders.filter((folder) => folder.id !== id),
+    galleryAssets: state.galleryAssets.map((asset) => asset.folderId === id ? { ...asset, folderId: null, updatedAt: new Date().toISOString() } : asset)
+  };
+  await writeState(nextState);
+  return {
+    folders: nextState.galleryFolders,
+    assets: nextState.galleryAssets
+  };
+}
+
+async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[], folderId?: string | null): Promise<GalleryAsset[]> {
+  const state = await readState();
+  const targetFolderId = normalizeGalleryFolderId(state, folderId);
   let sourcePaths = Array.isArray(paths) ? paths : [];
   if (sourcePaths.length === 0) {
     const result = await dialog.showOpenDialog({
@@ -872,34 +977,43 @@ async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[
   const now = new Date().toISOString();
   const imported: GalleryAsset[] = [];
   for (const sourcePath of sourcePaths) {
+    if (typeof sourcePath !== "string") continue;
     if (!IMAGE_EXTENSIONS.has(path.extname(sourcePath).toLowerCase())) continue;
-    imported.push(await createGalleryAssetFromFile(sourcePath, "import", now));
+    imported.push(await createGalleryAssetFromFile(sourcePath, "import", now, targetFolderId));
   }
   if (imported.length === 0) return [];
-  const state = await readState();
   await writeState({ ...state, galleryAssets: [...imported, ...state.galleryAssets] });
   return imported;
 }
 
-async function handleAddHistoryAssetToGallery(_event: IpcMainInvokeEvent, assetPath: string): Promise<GalleryAsset> {
+async function handleAddHistoryAssetToGallery(_event: IpcMainInvokeEvent, assetPath: string, folderId?: string | null): Promise<GalleryAsset> {
   const state = await readState();
+  const targetFolderId = normalizeGalleryFolderId(state, folderId);
   const sourcePath = await assertKnownRegularOutputPath(getImagesDir(), state.history, assetPath);
-  const asset = await createGalleryAssetFromFile(sourcePath, "result", new Date().toISOString());
+  const asset = await createGalleryAssetFromFile(sourcePath, "result", new Date().toISOString(), targetFolderId);
   await writeState({ ...state, galleryAssets: [asset, ...state.galleryAssets] });
   return asset;
 }
 
-async function handleUpdateGalleryAsset(_event: IpcMainInvokeEvent, id: string, patch: { tags?: string[] }): Promise<GalleryAsset> {
+async function handleUpdateGalleryAsset(_event: IpcMainInvokeEvent, id: string, patch: GalleryAssetPatch = {}): Promise<GalleryAsset> {
+  const normalizedPatch = patch && typeof patch === "object" ? patch : {};
   const state = await readState();
   const asset = state.galleryAssets.find((item) => item.id === id);
   if (!asset) throw new Error("Gallery 资源不存在。");
+  const hasTagsPatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "tags");
+  const hasFolderPatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "folderId");
   const updated: GalleryAsset = {
     ...asset,
-    tags: normalizeTemplateTags(patch.tags),
+    tags: hasTagsPatch ? normalizeTemplateTags(normalizedPatch.tags) : asset.tags,
+    folderId: hasFolderPatch ? normalizeGalleryFolderId(state, normalizedPatch.folderId) : asset.folderId ?? null,
     updatedAt: new Date().toISOString()
   };
   await writeState({ ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) });
   return updated;
+}
+
+async function handleMoveGalleryAsset(_event: IpcMainInvokeEvent, id: string, folderId: string | null): Promise<GalleryAsset> {
+  return handleUpdateGalleryAsset(_event, id, { folderId });
 }
 
 async function handleRemoveGalleryAsset(_event: IpcMainInvokeEvent, id: string): Promise<GalleryAsset[]> {
@@ -1338,9 +1452,14 @@ function registerIpcHandlers(): void {
   ipcMain.handle("templates:import", handleImportTemplates);
   ipcMain.handle("templates:export", handleExportTemplates);
   ipcMain.handle("gallery:list", handleListGallery);
+  ipcMain.handle("galleryFolders:list", handleListGalleryFolders);
+  ipcMain.handle("galleryFolders:create", handleCreateGalleryFolder);
+  ipcMain.handle("galleryFolders:rename", handleRenameGalleryFolder);
+  ipcMain.handle("galleryFolders:delete", handleDeleteGalleryFolder);
   ipcMain.handle("gallery:import", handleImportToGallery);
   ipcMain.handle("gallery:addHistoryAsset", handleAddHistoryAssetToGallery);
   ipcMain.handle("gallery:update", handleUpdateGalleryAsset);
+  ipcMain.handle("gallery:move", handleMoveGalleryAsset);
   ipcMain.handle("gallery:remove", handleRemoveGalleryAsset);
   ipcMain.handle("gallery:pick", handlePickGalleryAsset);
   ipcMain.handle("dialog:selectImages", handleSelectImages);

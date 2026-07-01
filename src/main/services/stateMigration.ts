@@ -2,6 +2,7 @@ import type {
   DiscoveredModel,
   FocusedLaunchId,
   GalleryAsset,
+  GalleryFolder,
   GenerationJob,
   ImageParams,
   ImageQuality,
@@ -59,6 +60,7 @@ export interface AppStateFile {
   activeProviderId: string;
   history: GenerationJob[];
   promptTemplates: PromptTemplate[];
+  galleryFolders: GalleryFolder[];
   galleryAssets: GalleryAsset[];
   draft?: WorkspaceDraft;
 }
@@ -88,6 +90,7 @@ export function getDefaultState(): AppStateFile {
     activeProviderId: defaultProvider.id,
     history: [],
     promptTemplates: [],
+    galleryFolders: [],
     galleryAssets: []
   };
 }
@@ -98,13 +101,15 @@ export function normalizeState(parsed: unknown): AppStateFile {
   // Handle migration from v1/v2 (single config) to v3 (multiple providers)
   if ((parsed.version === 1 || parsed.version === 2) && isRecord(parsed.config)) {
     const migratedProvider = normalizeStoredConfig(parsed.config);
+    const galleryFolders = normalizeGalleryFolders(parsed.galleryFolders);
     return {
       version: STATE_VERSION,
       providers: [migratedProvider],
       activeProviderId: migratedProvider.id,
       history: Array.isArray(parsed.history) ? parsed.history.map((job) => normalizeGenerationJob(job, migratedProvider.id)) : [],
       promptTemplates: normalizePromptTemplates(parsed.promptTemplates),
-      galleryAssets: normalizeGalleryAssets(parsed.galleryAssets),
+      galleryFolders,
+      galleryAssets: normalizeGalleryAssets(parsed.galleryAssets, galleryFolders),
       draft: normalizeWorkspaceDraft(parsed.draft)
     };
   }
@@ -117,13 +122,15 @@ export function normalizeState(parsed: unknown): AppStateFile {
   const activeProviderId = nonEmptyString(parsed.activeProviderId, providers[0].id);
   const activeProvider = providers.find(p => p.id === activeProviderId) ?? providers[0];
 
+  const galleryFolders = normalizeGalleryFolders(parsed.galleryFolders);
   return {
     version: STATE_VERSION,
     providers,
     activeProviderId: activeProvider.id,
     history: Array.isArray(parsed.history) ? parsed.history.map((job) => normalizeGenerationJob(job, activeProvider.id)) : [],
     promptTemplates: normalizePromptTemplates(parsed.promptTemplates),
-    galleryAssets: normalizeGalleryAssets(parsed.galleryAssets),
+    galleryFolders,
+    galleryAssets: normalizeGalleryAssets(parsed.galleryAssets, galleryFolders),
     draft: normalizeWorkspaceDraft(parsed.draft)
   };
 }
@@ -200,9 +207,39 @@ function normalizePromptTemplates(value: unknown): PromptTemplate[] {
   });
 }
 
-function normalizeGalleryAssets(value: unknown): GalleryAsset[] {
+function normalizeGalleryFolders(value: unknown): GalleryFolder[] {
+  if (!Array.isArray(value)) return [];
+  const seenIds = new Set<string>();
+  const seenNames = new Set<string>();
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const id = nonEmptyString(item.id, "");
+    const name = normalizeGalleryFolderName(item.name);
+    const nameKey = name.toLowerCase();
+    if (!id || !name || seenIds.has(id) || seenNames.has(nameKey)) return [];
+    seenIds.add(id);
+    seenNames.add(nameKey);
+    const createdAt = nonEmptyString(item.createdAt, new Date(0).toISOString());
+    const updatedAt = nonEmptyString(item.updatedAt, createdAt);
+    const color = normalizeGalleryFolderColor(item.color);
+    return [{ id, name, color, createdAt, updatedAt }];
+  });
+}
+
+function normalizeGalleryFolderName(value: unknown): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+}
+
+function normalizeGalleryFolderColor(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed.toUpperCase() : undefined;
+}
+
+function normalizeGalleryAssets(value: unknown, folders: GalleryFolder[]): GalleryAsset[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
+  const folderIds = new Set(folders.map((folder) => folder.id));
   return value.flatMap((item) => {
     if (!isRecord(item)) return [];
     const id = nonEmptyString(item.id, "");
@@ -215,6 +252,7 @@ function normalizeGalleryAssets(value: unknown): GalleryAsset[] {
     seen.add(id);
     const createdAt = nonEmptyString(item.createdAt, new Date(0).toISOString());
     const updatedAt = nonEmptyString(item.updatedAt, createdAt);
+    const folderId = optionalString(item.folderId);
     return [
       {
         id,
@@ -224,6 +262,7 @@ function normalizeGalleryAssets(value: unknown): GalleryAsset[] {
         sizeBytes,
         width: boundedOptionalInteger(item.width),
         height: boundedOptionalInteger(item.height),
+        folderId: folderId && folderIds.has(folderId) ? folderId : null,
         tags: normalizeStringList(item.tags),
         source: item.source === "result" ? "result" : "import",
         createdAt,

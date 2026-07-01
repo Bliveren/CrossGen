@@ -11,13 +11,16 @@ import {
   FileDown,
   FileUp,
   Eraser,
+  Folder,
   FolderOpen,
+  FolderPlus,
   ImagePlus,
   KeyRound,
   Languages,
   Loader2,
   Maximize2,
   Paintbrush,
+  Pencil,
   RefreshCw,
   Save,
   Search,
@@ -52,6 +55,7 @@ import type {
   AppSnapshot,
   FocusedLaunchId,
   GalleryAsset,
+  GalleryFolder,
   GeneralImageParams,
   GenerationJob,
   GeminiAspectRatio,
@@ -128,6 +132,10 @@ const HISTORY_COLLAPSED_LIMIT = 6;
 const DEFAULT_HISTORY_MODEL_DISPLAY = "GPT Image 2";
 
 type TabMode = "text2img" | "img2img";
+type GalleryFolderFilter = "__all__" | "__uncategorized__" | string;
+
+const GALLERY_ALL_FILTER = "__all__";
+const GALLERY_UNCATEGORIZED_FILTER = "__uncategorized__";
 
 function tabModeForWorkMode(mode: WorkMode): TabMode {
   return mode === "generate" ? "text2img" : "img2img";
@@ -183,6 +191,7 @@ const fallbackSnapshot: AppSnapshot = {
   activeProviderId: fallbackConfig.id,
   history: [],
   promptTemplates: [],
+  galleryFolders: [],
   galleryAssets: []
 };
 
@@ -681,6 +690,10 @@ export function App() {
   const [rightRailView, setRightRailView] = useState<"history" | "gallery">("history");
   const [gallerySearch, setGallerySearch] = useState("");
   const [galleryTagFilter, setGalleryTagFilter] = useState("");
+  const [activeGalleryFolderId, setActiveGalleryFolderId] = useState<GalleryFolderFilter>(GALLERY_ALL_FILTER);
+  const [newGalleryFolderName, setNewGalleryFolderName] = useState("");
+  const [editingGalleryFolderId, setEditingGalleryFolderId] = useState<string | null>(null);
+  const [editingGalleryFolderName, setEditingGalleryFolderName] = useState("");
   const [editingGalleryId, setEditingGalleryId] = useState<string | null>(null);
   const [galleryTagsInput, setGalleryTagsInput] = useState("");
   const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
@@ -798,15 +811,30 @@ export function App() {
     snapshot.galleryAssets.forEach((asset) => asset.tags.forEach((tag) => tags.add(tag)));
     return [...tags].sort((a, b) => a.localeCompare(b));
   }, [snapshot.galleryAssets]);
+  const galleryAssetCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    let uncategorized = 0;
+    for (const asset of snapshot.galleryAssets) {
+      if (asset.folderId) {
+        counts.set(asset.folderId, (counts.get(asset.folderId) ?? 0) + 1);
+      } else {
+        uncategorized += 1;
+      }
+    }
+    return { counts, uncategorized, total: snapshot.galleryAssets.length };
+  }, [snapshot.galleryAssets]);
+  const currentImportFolderId = activeGalleryFolderId === GALLERY_ALL_FILTER || activeGalleryFolderId === GALLERY_UNCATEGORIZED_FILTER ? null : activeGalleryFolderId;
   const filteredGalleryAssets = useMemo(() => {
     const query = gallerySearch.trim().toLowerCase();
     return snapshot.galleryAssets.filter((asset) => {
+      if (activeGalleryFolderId === GALLERY_UNCATEGORIZED_FILTER && asset.folderId) return false;
+      if (activeGalleryFolderId !== GALLERY_ALL_FILTER && activeGalleryFolderId !== GALLERY_UNCATEGORIZED_FILTER && asset.folderId !== activeGalleryFolderId) return false;
       if (galleryTagFilter && !asset.tags.includes(galleryTagFilter)) return false;
       if (!query) return true;
       const haystack = `${asset.originalName} ${asset.fileName} ${asset.tags.join(" ")}`.toLowerCase();
       return haystack.includes(query);
     });
-  }, [gallerySearch, galleryTagFilter, snapshot.galleryAssets]);
+  }, [activeGalleryFolderId, gallerySearch, galleryTagFilter, snapshot.galleryAssets]);
   const hasHistoryOverflow = filteredHistory.length > HISTORY_COLLAPSED_LIMIT;
   const visibleHistory = isHistoryExpanded ? filteredHistory : filteredHistory.slice(0, HISTORY_COLLAPSED_LIMIT);
   const isSearchingHistory = historySearch.trim().length > 0;
@@ -841,6 +869,16 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("image2tools.historyWidth", String(historyWidth));
   }, [historyWidth]);
+
+  useEffect(() => {
+    if (
+      activeGalleryFolderId !== GALLERY_ALL_FILTER &&
+      activeGalleryFolderId !== GALLERY_UNCATEGORIZED_FILTER &&
+      !snapshot.galleryFolders.some((folder) => folder.id === activeGalleryFolderId)
+    ) {
+      setActiveGalleryFolderId(GALLERY_ALL_FILTER);
+    }
+  }, [activeGalleryFolderId, snapshot.galleryFolders]);
 
   useEffect(() => {
     if (!resizingColumn) return;
@@ -1153,7 +1191,7 @@ export function App() {
   async function importToGallery() {
     if (!bridge) return;
     try {
-      const assets = await bridge.importToGallery();
+      const assets = await bridge.importToGallery(undefined, currentImportFolderId);
       if (assets.length > 0) {
         setSnapshot((current) => ({ ...current, galleryAssets: [...assets, ...current.galleryAssets] }));
       }
@@ -1166,7 +1204,7 @@ export function App() {
   async function addHistoryAssetToGallery(asset?: ImageAsset) {
     if (!bridge || !asset) return;
     try {
-      const galleryAsset = await bridge.addHistoryAssetToGallery(asset.path);
+      const galleryAsset = await bridge.addHistoryAssetToGallery(asset.path, currentImportFolderId);
       setSnapshot((current) => ({ ...current, galleryAssets: [galleryAsset, ...current.galleryAssets] }));
       setNotice({ kind: "success", text: copy.galleryAdded });
     } catch (error) {
@@ -1194,6 +1232,61 @@ export function App() {
       markDraftChanged();
       if (tabMode === "text2img") setTabMode("img2img");
       setNotice({ kind: "success", text: copy.galleryPicked(asset.originalName) });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function createGalleryFolder() {
+    if (!bridge) return;
+    try {
+      const folder = await bridge.createGalleryFolder({ name: newGalleryFolderName });
+      setSnapshot((current) => ({ ...current, galleryFolders: [folder, ...current.galleryFolders] }));
+      setActiveGalleryFolderId(folder.id);
+      setNewGalleryFolderName("");
+      setNotice({ kind: "success", text: copy.galleryFolderCreated });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  function editGalleryFolder(folder: GalleryFolder) {
+    setEditingGalleryFolderId(folder.id);
+    setEditingGalleryFolderName(folder.name);
+  }
+
+  async function renameGalleryFolder(folder: GalleryFolder) {
+    if (!bridge) return;
+    try {
+      const updated = await bridge.renameGalleryFolder(folder.id, { name: editingGalleryFolderName });
+      setSnapshot((current) => ({ ...current, galleryFolders: current.galleryFolders.map((item) => item.id === folder.id ? updated : item) }));
+      setEditingGalleryFolderId(null);
+      setEditingGalleryFolderName("");
+      setNotice({ kind: "success", text: copy.galleryFolderRenamed });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function deleteGalleryFolder(folder: GalleryFolder) {
+    if (!bridge) return;
+    if (!window.confirm(copy.galleryFolderDeleteConfirm(folder.name))) return;
+    try {
+      const next = await bridge.deleteGalleryFolder(folder.id);
+      setSnapshot((current) => ({ ...current, galleryFolders: next.folders, galleryAssets: next.assets }));
+      setActiveGalleryFolderId(GALLERY_UNCATEGORIZED_FILTER);
+      setNotice({ kind: "success", text: copy.galleryFolderDeleted });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function moveGalleryAsset(asset: GalleryAsset, folderId: string | null) {
+    if (!bridge) return;
+    try {
+      const updated = await bridge.moveGalleryAsset(asset.id, folderId);
+      setSnapshot((current) => ({ ...current, galleryAssets: current.galleryAssets.map((item) => item.id === asset.id ? updated : item) }));
+      setNotice({ kind: "success", text: copy.galleryMoved });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -3156,6 +3249,95 @@ export function App() {
                 <FileUp size={15} />
               </button>
             </header>
+            <div className="gallery-folder-panel">
+              <div className="gallery-folder-list" role="list" aria-label={copy.galleryFolders}>
+                <button
+                  type="button"
+                  className={`gallery-folder-button ${activeGalleryFolderId === GALLERY_ALL_FILTER ? "active" : ""}`}
+                  onClick={() => setActiveGalleryFolderId(GALLERY_ALL_FILTER)}
+                >
+                  <FolderOpen size={14} />
+                  <span>{copy.galleryAllFolders}</span>
+                  <small>{galleryAssetCounts.total}</small>
+                </button>
+                <button
+                  type="button"
+                  className={`gallery-folder-button ${activeGalleryFolderId === GALLERY_UNCATEGORIZED_FILTER ? "active" : ""}`}
+                  onClick={() => setActiveGalleryFolderId(GALLERY_UNCATEGORIZED_FILTER)}
+                >
+                  <Folder size={14} />
+                  <span>{copy.galleryUncategorized}</span>
+                  <small>{galleryAssetCounts.uncategorized}</small>
+                </button>
+                {snapshot.galleryFolders.map((folder) => (
+                  <div key={folder.id} className={`gallery-folder-row ${activeGalleryFolderId === folder.id ? "active" : ""}`}>
+                    {editingGalleryFolderId === folder.id ? (
+                      <>
+                        <input
+                          value={editingGalleryFolderName}
+                          onChange={(event) => setEditingGalleryFolderName(event.target.value)}
+                          aria-label={copy.galleryFolderName}
+                        />
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={() => void renameGalleryFolder(folder)}
+                          disabled={!editingGalleryFolderName.trim()}
+                          aria-label={copy.save}
+                          data-tooltip={copy.save}
+                        >
+                          <Save size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button ghost"
+                          onClick={() => {
+                            setEditingGalleryFolderId(null);
+                            setEditingGalleryFolderName("");
+                          }}
+                          aria-label={copy.cancel}
+                          data-tooltip={copy.cancel}
+                        >
+                          <X size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button type="button" className="gallery-folder-main" onClick={() => setActiveGalleryFolderId(folder.id)}>
+                          <Folder size={14} />
+                          <span>{folder.name}</span>
+                          <small>{galleryAssetCounts.counts.get(folder.id) ?? 0}</small>
+                        </button>
+                        <button type="button" className="icon-button ghost" onClick={() => editGalleryFolder(folder)} aria-label={copy.galleryFolderRename} data-tooltip={copy.galleryFolderRename}>
+                          <Pencil size={14} />
+                        </button>
+                        <button type="button" className="icon-button ghost danger" onClick={() => void deleteGalleryFolder(folder)} aria-label={copy.galleryFolderDelete} data-tooltip={copy.galleryFolderDelete}>
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="gallery-folder-create">
+                <input
+                  value={newGalleryFolderName}
+                  onChange={(event) => setNewGalleryFolderName(event.target.value)}
+                  placeholder={copy.galleryFolderNew}
+                  aria-label={copy.galleryFolderName}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => void createGalleryFolder()}
+                  disabled={!newGalleryFolderName.trim()}
+                  aria-label={copy.galleryFolderCreate}
+                  data-tooltip={copy.galleryFolderCreate}
+                >
+                  <FolderPlus size={15} />
+                </button>
+              </div>
+            </div>
             <div className="gallery-toolbar">
               <input value={gallerySearch} onChange={(event) => setGallerySearch(event.target.value)} placeholder={copy.gallerySearch} />
               <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)}>
@@ -3198,6 +3380,17 @@ export function App() {
                         {asset.tags.map((tag) => <span key={tag}>{tag}</span>)}
                       </div>
                     )}
+                    <select
+                      className="gallery-folder-select"
+                      value={asset.folderId ?? ""}
+                      onChange={(event) => void moveGalleryAsset(asset, event.target.value || null)}
+                      aria-label={copy.galleryMoveToFolder}
+                    >
+                      <option value="">{copy.galleryUncategorized}</option>
+                      {snapshot.galleryFolders.map((folder) => (
+                        <option key={folder.id} value={folder.id}>{folder.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="gallery-actions">
                     <button type="button" className="icon-button" onClick={() => editGalleryTags(asset)} aria-label={copy.galleryEditTags} data-tooltip={copy.galleryEditTags}>

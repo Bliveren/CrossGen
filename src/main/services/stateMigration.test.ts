@@ -126,6 +126,7 @@ describe("state migration", () => {
     });
 
     expect(migrated.galleryAssets).toEqual([]);
+    expect(migrated.galleryFolders).toEqual([]);
   });
 
   it("normalizes prompt templates and filters malformed records", () => {
@@ -191,6 +192,18 @@ describe("state migration", () => {
       ],
       activeProviderId: "default",
       history: [],
+      galleryFolders: [
+        {
+          id: "folder-product",
+          name: " Product ",
+          color: "#aabbcc",
+          createdAt: "2026-01-02T03:04:01.000Z",
+          updatedAt: "2026-01-02T03:04:02.000Z"
+        },
+        { id: "folder-product-duplicate-name", name: "Product", color: "red" },
+        { id: "folder-product", name: "Duplicate" },
+        { id: "bad-folder", name: "" }
+      ],
       galleryAssets: [
         {
           id: "gallery-1",
@@ -200,10 +213,19 @@ describe("state migration", () => {
           sizeBytes: 2048,
           width: 512,
           height: 512,
+          folderId: "folder-product",
           tags: ["product", " product ", "", 42],
           source: "result",
           createdAt: "2026-01-02T03:04:05.000Z",
           updatedAt: "2026-01-02T03:04:06.000Z"
+        },
+        {
+          id: "gallery-orphan",
+          fileName: "orphan.png",
+          originalName: "Orphan.png",
+          mimeType: "image/png",
+          sizeBytes: 1024,
+          folderId: "missing-folder"
         },
         { id: "gallery-1", fileName: "duplicate.png", mimeType: "image/png", sizeBytes: 1 },
         { id: "escape", fileName: "../escape.png", mimeType: "image/png", sizeBytes: 1 },
@@ -212,6 +234,15 @@ describe("state migration", () => {
       ]
     });
 
+    expect(migrated.galleryFolders).toEqual([
+      {
+        id: "folder-product",
+        name: "Product",
+        color: "#AABBCC",
+        createdAt: "2026-01-02T03:04:01.000Z",
+        updatedAt: "2026-01-02T03:04:02.000Z"
+      }
+    ]);
     expect(migrated.galleryAssets).toEqual([
       {
         id: "gallery-1",
@@ -221,10 +252,23 @@ describe("state migration", () => {
         sizeBytes: 2048,
         width: 512,
         height: 512,
+        folderId: "folder-product",
         tags: ["product"],
         source: "result",
         createdAt: "2026-01-02T03:04:05.000Z",
         updatedAt: "2026-01-02T03:04:06.000Z"
+      },
+      {
+        id: "gallery-orphan",
+        fileName: "orphan.png",
+        originalName: "Orphan.png",
+        mimeType: "image/png",
+        sizeBytes: 1024,
+        folderId: null,
+        tags: [],
+        source: "import",
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString()
       }
     ]);
   });

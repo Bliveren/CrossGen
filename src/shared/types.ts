@@ -152,10 +152,34 @@ export interface GalleryAsset {
   sizeBytes: number;
   width?: number;
   height?: number;
+  folderId?: string | null;
   tags: string[];
   source: "import" | "result";
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GalleryFolder {
+  id: string;
+  name: string;
+  color?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GalleryFolderInput {
+  name: string;
+  color?: string;
+}
+
+export interface GalleryAssetPatch {
+  tags?: string[];
+  folderId?: string | null;
+}
+
+export interface GalleryFolderDeleteResult {
+  folders: GalleryFolder[];
+  assets: GalleryAsset[];
 }
 
 export interface UsageDetails {
@@ -220,6 +244,7 @@ export interface AppSnapshot {
   activeProviderId: string;
   history: GenerationJob[];
   promptTemplates: PromptTemplate[];
+  galleryFolders: GalleryFolder[];
   galleryAssets: GalleryAsset[];
   draft?: WorkspaceDraft;
 }
@@ -316,9 +341,14 @@ export interface AppBridge {
   importTemplates: () => Promise<{ imported: number; skipped: number }>;
   exportTemplates: (templateIds?: string[]) => Promise<string | null>;
   listGallery: () => Promise<GalleryAsset[]>;
-  importToGallery: (paths?: string[]) => Promise<GalleryAsset[]>;
-  addHistoryAssetToGallery: (assetPath: string) => Promise<GalleryAsset>;
-  updateGalleryAsset: (id: string, patch: { tags?: string[] }) => Promise<GalleryAsset>;
+  listGalleryFolders: () => Promise<GalleryFolder[]>;
+  createGalleryFolder: (input: GalleryFolderInput) => Promise<GalleryFolder>;
+  renameGalleryFolder: (id: string, input: GalleryFolderInput) => Promise<GalleryFolder>;
+  deleteGalleryFolder: (id: string) => Promise<GalleryFolderDeleteResult>;
+  importToGallery: (paths?: string[], folderId?: string | null) => Promise<GalleryAsset[]>;
+  addHistoryAssetToGallery: (assetPath: string, folderId?: string | null) => Promise<GalleryAsset>;
+  updateGalleryAsset: (id: string, patch: GalleryAssetPatch) => Promise<GalleryAsset>;
+  moveGalleryAsset: (id: string, folderId: string | null) => Promise<GalleryAsset>;
   removeGalleryAsset: (id: string) => Promise<GalleryAsset[]>;
   pickGalleryAsset: (id: string) => Promise<InputAsset>;
   selectImages: () => Promise<InputAsset[]>;

@@ -1153,9 +1153,91 @@
     gap: 9px;
   }
 
+  .gallery-folder-panel {
+    display: grid;
+    gap: 7px;
+  }
+
+  .gallery-folder-list {
+    display: grid;
+    gap: 5px;
+  }
+
+  .gallery-folder-button,
+  .gallery-folder-row,
+  .gallery-folder-main {
+    min-width: 0;
+  }
+
+  .gallery-folder-button,
+  .gallery-folder-main {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: var(--control-height-sm);
+    width: 100%;
+    gap: 6px;
+    justify-content: flex-start;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-panel);
+    color: var(--text-secondary);
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .gallery-folder-button.active,
+  .gallery-folder-row.active .gallery-folder-main {
+    border-color: var(--accent-border);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .gallery-folder-button span,
+  .gallery-folder-main span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .gallery-folder-button small,
+  .gallery-folder-main small {
+    min-width: 18px;
+    border-radius: 999px;
+    background: var(--surface-panel-muted);
+    color: var(--text-muted);
+    padding: 1px 5px;
+    font-size: 11px;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  .gallery-folder-button.active small,
+  .gallery-folder-row.active .gallery-folder-main small {
+    background: rgba(255, 255, 255, 0.65);
+    color: var(--accent);
+  }
+
+  .gallery-folder-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px 32px;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .gallery-folder-row > input {
+    min-width: 0;
+  }
+
+  .gallery-folder-create {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 36px;
+    gap: 6px;
+  }
+
   .gallery-toolbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(82px, 0.5fr) 36px;
+    grid-template-columns: minmax(0, 1fr) minmax(82px, 0.5fr);
     align-items: center;
     gap: 7px;
   }
@@ -1289,6 +1371,13 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) 36px;
     gap: 5px;
+  }
+
+  .gallery-folder-select {
+    width: 100%;
+    min-width: 0;
+    height: 30px;
+    font-size: 12px;
   }
 
   .dot {
