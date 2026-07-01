@@ -1063,6 +1063,60 @@
     min-height: 0;
   }
 
+  .template-sidebar-section {
+    display: grid;
+    gap: 9px;
+  }
+
+  .template-sidebar-panel {
+    display: grid;
+    gap: 8px;
+  }
+
+  .template-sidebar-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 36px 36px;
+    gap: 7px;
+    align-items: center;
+  }
+
+  .template-sidebar-list {
+    display: grid;
+    gap: 6px;
+  }
+
+  .template-sidebar-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .template-sidebar-main {
+    display: grid;
+    min-width: 0;
+    justify-items: start;
+    gap: 2px;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-panel);
+    color: var(--text-primary);
+    padding: 7px 8px;
+    text-align: left;
+  }
+
+  .template-sidebar-main strong,
+  .template-sidebar-main span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .template-sidebar-main span {
+    color: var(--text-secondary);
+    font-size: 11px;
+  }
+
   .template-toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(86px, 0.55fr) 36px 36px;

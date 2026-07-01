@@ -651,6 +651,7 @@ export function App() {
   const [isActiveApiConfigOpen, setIsActiveApiConfigOpen] = useState(false);
   const [isSavedApiAccessOpen, setIsSavedApiAccessOpen] = useState(false);
   const [isAddingApiAccess, setIsAddingApiAccess] = useState(false);
+  const [isTemplateSectionOpen, setIsTemplateSectionOpen] = useState(false);
   const [newApiAccessKind, setNewApiAccessKind] = useState<ProviderKind>("openai");
   const [newApiAccessName, setNewApiAccessName] = useState("");
   const [newApiAccessBaseURL, setNewApiAccessBaseURL] = useState(DEFAULT_BASE_URL);
@@ -2663,6 +2664,49 @@ export function App() {
               );
             })}
           </div>
+        </section>
+
+        <section className="tool-section template-sidebar-section">
+          <button type="button" className="section-toggle" onClick={() => setIsTemplateSectionOpen((current) => !current)}>
+            <span className="section-toggle-label">
+              <Clipboard size={16} />
+              <span>{copy.promptTemplates}</span>
+            </span>
+            <span className="section-toggle-state">
+              {snapshot.promptTemplates.length}
+              {isTemplateSectionOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            </span>
+          </button>
+          {isTemplateSectionOpen && (
+            <div className="template-sidebar-panel">
+              <div className="template-sidebar-actions">
+                <button type="button" className="secondary" onClick={() => setIsTemplatesOpen(true)}>
+                  <Clipboard size={16} />
+                  {copy.templateEdit}
+                </button>
+                <button type="button" className="icon-button" onClick={() => void importTemplates()} aria-label={copy.templateImport} data-tooltip={copy.templateImport}>
+                  <FileUp size={15} />
+                </button>
+                <button type="button" className="icon-button" onClick={() => void exportTemplates()} disabled={snapshot.promptTemplates.length === 0} aria-label={copy.templateExport} data-tooltip={copy.templateExport}>
+                  <FileDown size={15} />
+                </button>
+              </div>
+              <div className="template-sidebar-list">
+                {snapshot.promptTemplates.length === 0 && <p className="empty-inline">{copy.templateEmpty}</p>}
+                {snapshot.promptTemplates.slice(0, 3).map((template) => (
+                  <article key={template.id} className="template-sidebar-item">
+                    <button type="button" className="template-sidebar-main" onClick={() => void applyTemplate(template)}>
+                      <strong>{template.title}</strong>
+                      <span>{template.body}</span>
+                    </button>
+                    <button type="button" className="icon-button ghost" onClick={() => editTemplate(template)} aria-label={copy.templateEdit} data-tooltip={copy.templateEdit}>
+                      <SlidersHorizontal size={14} />
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="tool-section">

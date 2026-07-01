@@ -224,31 +224,31 @@ describe("renderer multi-model smoke", () => {
   it("keeps the single API access path working", async () => {
     const bridge = await renderApp(snapshot());
 
-    expect(document.body.textContent).toContain("Model config");
+    expect(document.body.textContent).toContain("API access");
     expect(document.body.textContent).toContain("OpenAI · api.openai.com/v1");
     expect(document.body.textContent).toContain("Key saved · 1 model discovered");
 
     await click(apiAccessCurrentButton());
-    await changeInput(inputByLabel("Configuration name"), "Primary gateway");
+    await changeInput(inputByLabel("API access name"), "Primary gateway");
     await click(buttonByText("Save"));
 
     expect(bridge.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ name: "Primary gateway" }));
     await openSavedApiAccess();
     expect(document.querySelectorAll(".api-access-item").length).toBe(1);
     expect(document.body.textContent).toContain("Primary gateway");
-    expect(document.body.textContent).toContain("Current configuration");
+    expect(document.body.textContent).toContain("Current API access");
   });
 
   it("adds a second API access and switches to it automatically", async () => {
     const bridge = await renderApp(snapshot());
 
     await openSavedApiAccess();
-    await click(buttonByText("Add configuration"));
+    await click(buttonByText("Add API access"));
     const addForm = apiAccessAddForm();
-    await changeSelect(selectByLabel("Configuration type", addForm), "gemini");
-    await changeInput(inputByLabel("Configuration name", addForm), "Gemini gateway");
+    await changeSelect(selectByLabel("API type", addForm), "gemini");
+    await changeInput(inputByLabel("API access name", addForm), "Gemini gateway");
     await changeInput(inputByLabel("API Key", addForm), "gemini-test-key");
-    await click(buttonByText("Add configuration", ".api-access-add-form button"));
+    await click(buttonByText("Add API access", ".api-access-add-form button"));
 
     expect(bridge.addProvider).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -260,7 +260,7 @@ describe("renderer multi-model smoke", () => {
     );
     expect(document.body.textContent).toContain("Gemini gateway");
     expect(document.querySelectorAll(".api-access-item").length).toBe(2);
-    expect(document.body.textContent).toContain("Current configuration");
+    expect(document.body.textContent).toContain("Current API access");
     expect(buttonByText("Nano Banana 3", ".launch-button").disabled).toBe(true);
   });
 
@@ -326,7 +326,7 @@ describe("renderer multi-model smoke", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     await click(apiAccessCurrentButton());
-    const activeDeleteButton = [...document.querySelectorAll<HTMLButtonElement>(".api-config-detail button")].find((button) => button.title === "Delete configuration")!;
+    const activeDeleteButton = [...document.querySelectorAll<HTMLButtonElement>(".api-config-detail button")].find((button) => button.title === "Delete API access")!;
     await click(activeDeleteButton);
 
     expect(bridge.saveDraft).toHaveBeenCalled();
@@ -367,6 +367,33 @@ describe("renderer multi-model smoke", () => {
     await click(document.querySelector<HTMLButtonElement>('.template-actions button[aria-label="Delete"]')!);
     expect(bridge.deleteTemplate).toHaveBeenCalledWith("template-1");
     expect(document.body.textContent).not.toContain("Product shot");
+  });
+
+  it("imports and exports prompt templates from the sidebar template section", async () => {
+    const bridge = await renderApp(snapshot({
+      promptTemplates: [
+        {
+          id: "template-export",
+          title: "Exportable",
+          body: "export body",
+          tags: [],
+          createdAt: now,
+          updatedAt: now
+        }
+      ]
+    }));
+
+    await openTemplateSidebar();
+    await click(document.querySelector<HTMLButtonElement>('.template-sidebar-actions button[aria-label="Import templates"]')!);
+
+    expect(bridge.importTemplates).toHaveBeenCalled();
+    expect(bridge.listTemplates).toHaveBeenCalled();
+    expect(document.body.textContent).toContain("0 templates imported");
+
+    await click(document.querySelector<HTMLButtonElement>('.template-sidebar-actions button[aria-label="Export templates"]')!);
+
+    expect(bridge.exportTemplates).toHaveBeenCalledWith();
+    expect(document.body.textContent).toContain("Templates exported to /tmp/templates.json");
   });
 
   it("picks a Gallery image as a reference asset", async () => {
@@ -767,20 +794,23 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
-  it("keeps model config, launch buttons, parameters, and updates in a clear left-rail order", async () => {
+  it("keeps API access, launch buttons, templates, parameters, and updates in a clear left-rail order", async () => {
     await renderApp(snapshot());
     const sidebar = document.querySelector<HTMLElement>(".sidebar")!;
     const configSection = sidebar.querySelector<HTMLElement>("form.tool-section")!;
     const launchSection = sidebar.querySelector<HTMLElement>(".launch-section")!;
+    const templateSection = sidebar.querySelector<HTMLElement>(".template-sidebar-section")!;
     const parameterSection = buttonByText("Parameters", ".section-toggle").closest<HTMLElement>(".tool-section")!;
     const updatePanel = sidebar.querySelector<HTMLElement>(".update-panel")!;
 
-    expect(configSection.textContent).toContain("Model config");
+    expect(configSection.textContent).toContain("API access");
     expect(launchSection.textContent).toContain("Launch");
+    expect(templateSection.textContent).toContain("Prompt templates");
     expect(parameterSection.textContent).toContain("Parameters");
     expect(updatePanel.textContent).toContain("Updates");
     expect(configSection.compareDocumentPosition(launchSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(launchSection.compareDocumentPosition(parameterSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(launchSection.compareDocumentPosition(templateSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(templateSection.compareDocumentPosition(parameterSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(parameterSection.compareDocumentPosition(updatePanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -1243,11 +1273,16 @@ function apiAccessCurrentButton(): HTMLButtonElement {
 }
 
 async function openSavedApiAccess() {
-  await click(buttonByText("Saved configurations", ".compact-toggle"));
+  await click(buttonByText("Saved API access", ".compact-toggle"));
+}
+
+async function openTemplateSidebar() {
+  await click(buttonByText("Prompt templates", ".sidebar .section-toggle"));
 }
 
 async function openTemplateDialog() {
-  await click(buttonByText("Prompt templates", ".prompt-template-button"));
+  await openTemplateSidebar();
+  await click(buttonByText("Edit template", ".template-sidebar-actions button"));
 }
 
 async function openGalleryRail() {
