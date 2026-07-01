@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.2.4",
-  "lastUpdated": "2026-06-30T18:04:08.000Z",
+  "lastUpdated": "2026-07-01T01:23:25.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -76,7 +76,7 @@
       }
     },
     {
-      "id": "macos-signed-notarized",
+      "id": "macos-signed",
       "title": "Developer ID signed macOS release package",
       "required": false,
       "status": "passed",
@@ -85,7 +85,7 @@
         "macOS artifacts are built from the v0.2.4 application-code release commit.",
         "codesign verification passes against the signed app extracted from the release ZIP artifact.",
         "macOS release verification passes against the signed artifact.",
-        "Notarization status is recorded accurately when Apple notary credentials are unavailable."
+        "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
         "verifiedAt": "2026-06-30T17:27:11.000Z",
@@ -102,7 +102,7 @@
         ],
         "references": [
           {
-            "label": "Signed and notarized macOS distribution tracker",
+            "label": "Developer ID signed macOS distribution tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/3"
           }
         ],
@@ -121,6 +121,47 @@
           }
         ],
         "summary": "v0.2.4 macOS DMG and ZIP were rebuilt from application-code release commit 8c05309 and uploaded to the v0.2.4 release. GitHub records the DMG as SHA256 4931076a2cd8d6d69c0afcdd7c17d20286d0bd1906fcde501be7bdfe9b1dad34 with size 103470128 bytes and the ZIP as SHA256 bc404095e9ca39dbd91b01009a3043fd336032d92333ff78e44c88352f03c008 with size 99182264 bytes. The downloaded ZIP was extracted and codesign verified the app as Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7). spctl reports rejected, source=Unnotarized Developer ID, so the asset is signed but not Apple-notarized."
+      }
+    },
+    {
+      "id": "macos-notarized",
+      "title": "Apple notarized macOS release package",
+      "required": false,
+      "status": "blocked",
+      "acceptanceCriteria": [
+        "Apple notarization credentials are available without exposing secret values.",
+        "macOS artifacts are submitted to Apple notary service successfully.",
+        "Notarization is stapled to the distributed DMG or app artifact.",
+        "spctl verification reports an accepted notarized Developer ID source."
+      ],
+      "evidence": {
+        "verifiedAt": "2026-06-30T17:27:11.000Z",
+        "commit": "8c05309273f73e5bae1dce893c47a4b049c7356e",
+        "environment": "macOS 26.5.1 arm64; package version 0.2.4; Apple notarization credentials unset.",
+        "commands": [
+          "spctl -a -vv /tmp/image2tools-v024-mac-check/unzip/Image2Tools.app"
+        ],
+        "references": [
+          {
+            "label": "Apple notarized macOS distribution tracker",
+            "url": "https://github.com/Bliveren/image2tools/issues/3"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "release-artifact",
+            "path": "release/Image2Tools-0.2.4-mac-arm64.dmg",
+            "public": false,
+            "description": "Developer ID signed DMG uploaded to the v0.2.4 release, but not Apple-notarized."
+          },
+          {
+            "kind": "release-artifact",
+            "path": "release/Image2Tools-0.2.4-mac-arm64.zip",
+            "public": false,
+            "description": "Developer ID signed ZIP uploaded to the v0.2.4 release, but not Apple-notarized."
+          }
+        ],
+        "summary": "Apple notarization has not been completed for v0.2.4 because APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID were not configured in the release environment. The downloaded app verifies as Developer ID signed, while spctl reports rejected, source=Unnotarized Developer ID. This gate is separate from macos-signed so signed artifacts are not misreported as notarized."
       }
     },
     {

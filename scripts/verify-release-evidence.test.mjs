@@ -42,7 +42,8 @@ function completeLedger() {
   const gateIds = [
     "real-openai-api",
     "real-gemini-api",
-    "macos-signed-notarized",
+    "macos-signed",
+    "macos-notarized",
     "windows-native-release",
     "linux-native-release",
     "update-manifest-assets"
@@ -114,7 +115,7 @@ describe("release evidence verifier", () => {
       const result = await run(["--file", filePath, "--require-complete"]);
 
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("Release evidence validated: 6/6 required gate(s) passed.");
+      expect(result.stdout).toContain("Release evidence validated: 7/7 required gate(s) passed.");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -149,11 +150,11 @@ describe("release evidence verifier", () => {
       const docsReleaseDir = path.join(tempRoot, "docs", "release");
       await mkdir(docsReleaseDir, { recursive: true });
 
-      // Use a synthetic evidence with macos-signed-notarized still pending
+      // Use a synthetic evidence with macos-notarized still pending.
       const ledger = completeLedger();
-      const signingGate = ledger.gates.find((gate) => gate.id === "macos-signed-notarized");
-      signingGate.status = "pending";
-      signingGate.evidence = {
+      const notarizationGate = ledger.gates.find((gate) => gate.id === "macos-notarized");
+      notarizationGate.status = "pending";
+      notarizationGate.evidence = {
         verifiedAt: null,
         commit: null,
         environment: null,
@@ -178,7 +179,7 @@ describe("release evidence verifier", () => {
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("完成签名、公证并补充正式分发资产 URL / hash / size 证据");
-      expect(result.stderr).toContain("macos-signed-notarized");
+      expect(result.stderr).toContain("macos-notarized");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

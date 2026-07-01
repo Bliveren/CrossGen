@@ -6,13 +6,13 @@ const defaultEvidenceFile = "docs/release/evidence.json";
 const allowedStatuses = new Set(["pending", "passed", "failed", "blocked"]);
 // Gates that must exist in the ledger. Whether each blocks release readiness is
 // driven by its own `required` flag in the evidence file, not by this list.
-// macos-signed-notarized is intentionally a non-blocking enhancement gate:
-// the app ships as an unsigned/ad-hoc preview, so signing/notarization absence
-// must not block a release.
+// macOS signing and notarization are tracked separately so a Developer ID signed
+// artifact is not misreported as Apple-notarized.
 const knownGateIds = [
   "real-openai-api",
   "real-gemini-api",
-  "macos-signed-notarized",
+  "macos-signed",
+  "macos-notarized",
   "windows-native-release",
   "linux-native-release",
   "update-manifest-assets"
@@ -31,7 +31,7 @@ const checklistGuards = [
   {
     file: "TODO.md",
     text: "完成签名、公证并补充正式分发资产 URL / hash / size 证据",
-    gateIds: ["macos-signed-notarized", "update-manifest-assets"]
+    gateIds: ["macos-signed", "macos-notarized", "update-manifest-assets"]
   },
   {
     file: "TODO.md",

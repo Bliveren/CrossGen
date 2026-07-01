@@ -1,9 +1,9 @@
 # Release Evidence
 
 `evidence.json` records the external gates that cannot be completed from a
-normal local development shell: real provider API acceptance, signed/notarized
-macOS release artifacts, native Windows and Linux validation, and formal update
-manifest assets.
+normal local development shell: real provider API acceptance, macOS Developer ID
+signing, Apple notarization status, native Windows and Linux validation, and
+formal update manifest assets.
 
 Validate the ledger after every evidence update:
 
@@ -26,7 +26,8 @@ External gate trackers:
 | --- | --- |
 | Real OpenAI GPT Image 2 API acceptance | https://github.com/Bliveren/image2tools/issues/1 |
 | Real Gemini / Nano Banana 3 API acceptance | https://github.com/Bliveren/image2tools/issues/102 |
-| Signed and notarized macOS release package | https://github.com/Bliveren/image2tools/issues/3 |
+| Developer ID signed macOS release package | https://github.com/Bliveren/image2tools/issues/3 |
+| Apple notarized macOS release package | https://github.com/Bliveren/image2tools/issues/3 |
 | Native Windows release package validation | https://github.com/Bliveren/image2tools/issues/4 |
 | Native Linux desktop AppImage validation | https://github.com/Bliveren/image2tools/issues/4 |
 | Formal update manifest distribution assets | https://github.com/Bliveren/image2tools/issues/103 |

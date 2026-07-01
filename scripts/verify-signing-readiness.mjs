@@ -49,7 +49,7 @@ async function main() {
   if ((macConfig.identity === null || macConfig.identity === "-") && !hasSignedPackageOverride) {
     checks.push({
       ok: false,
-      message: "package.json does not provide a Developer ID signed/notarized packaging override."
+      message: "package.json does not provide a Developer ID signing override with notarization enabled."
     });
   } else if (macConfig.identity === "-") {
     checks.push({
