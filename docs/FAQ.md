@@ -126,6 +126,25 @@ Go to **Settings → Parameters** and turn off **Streaming Output**. Non-streami
 
 ---
 
+### A model that worked before suddenly fails to generate — what should I do?
+### 之前能用的模型突然无法生成了怎么办？
+
+Image generation depends on the availability of the upstream provider, which can fluctuate. If a model that worked earlier (for example GPT Image) suddenly returns errors or produces nothing:
+
+1. The upstream provider may be temporarily unstable — this is usually not an app or configuration problem. Wait a while and retry later.
+2. **Switch to an alternate model as a temporary workaround.** image2tools auto-detects the models your API supports, so you can click a different model in the left sidebar (for example Nano Banana / Gemini) **without changing your API configuration**.
+3. Try turning off **Streaming Partial Preview** (流式局部预览) on the left panel — several users have confirmed this improves generation success rate with some providers, especially in edit mode.
+4. Open the log panel and check the specific error to confirm whether it is an upstream outage rather than a local issue.
+
+图片生成依赖上游服务商的可用性，而上游状态会波动。如果之前能用的模型（例如 GPT Image）突然报错或无返回：
+
+1. 上游服务商可能临时不稳定——这通常不是软件或配置问题，稍后重试即可。
+2. **临时切换到其他模型。** image2tools 会自动识别当前 API 支持的模型，无需更换 API 配置，直接在左侧点击切换到其他模型（例如 Nano Banana / Gemini）即可。
+3. 尝试关闭左侧的 **流式局部预览**——多位用户实测这样能提升生图成功率，尤其是在编辑模式下。
+4. 打开日志面板查看具体报错，确认是上游中断还是本地问题。
+
+---
+
 ## Other / 其他
 
 ### Where are history records and generated images stored?
