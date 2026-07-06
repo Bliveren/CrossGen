@@ -5,13 +5,13 @@ describe("Windows update launcher", () => {
   it("waits for the current app process before running the NSIS installer", () => {
     const command = buildWindowsUpdatePowerShellCommand({
       currentPid: 1234,
-      executablePath: "C:\\Program Files\\Image2Tools\\Image2Tools.exe",
-      installerPath: "C:\\Users\\Ada\\AppData\\Roaming\\image2tools\\updates\\Image2Tools-Setup.exe",
+      executablePath: "C:\\Program Files\\CrossGen\\CrossGen.exe",
+      installerPath: "C:\\Users\\Ada\\AppData\\Roaming\\CrossGen\\updates\\CrossGen-Setup.exe",
       waitSeconds: 45
     });
 
     expect(command).toContain("Wait-Process -Id 1234 -Timeout 45");
-    expect(command).toContain("$installer = 'C:\\Users\\Ada\\AppData\\Roaming\\image2tools\\updates\\Image2Tools-Setup.exe'");
+    expect(command).toContain("$installer = 'C:\\Users\\Ada\\AppData\\Roaming\\CrossGen\\updates\\CrossGen-Setup.exe'");
     expect(command).toContain("Get-CimInstance Win32_Process");
     expect(command).toContain("$_.ExecutablePath -and $_.ExecutablePath -ieq $app");
     expect(command).toContain("Start-Process -FilePath $installer -ArgumentList @('/S', '--updated')");
@@ -21,11 +21,11 @@ describe("Windows update launcher", () => {
   it("quotes single quotes in paths for PowerShell", () => {
     const command = buildWindowsUpdatePowerShellCommand({
       currentPid: 1234,
-      executablePath: "C:\\Apps\\Image2Tools\\Image2Tools.exe",
-      installerPath: "C:\\Users\\O'Brien\\updates\\Image2Tools-Setup.exe"
+      executablePath: "C:\\Apps\\CrossGen\\CrossGen.exe",
+      installerPath: "C:\\Users\\O'Brien\\updates\\CrossGen-Setup.exe"
     });
 
-    expect(command).toContain("$installer = 'C:\\Users\\O''Brien\\updates\\Image2Tools-Setup.exe'");
+    expect(command).toContain("$installer = 'C:\\Users\\O''Brien\\updates\\CrossGen-Setup.exe'");
   });
 
   it("spawns a detached hidden PowerShell helper and then quits the app", () => {
@@ -37,10 +37,10 @@ describe("Windows update launcher", () => {
       return 1;
     });
 
-    launchWindowsInstallerAndRestart("C:\\updates\\Image2Tools-Setup.exe", {
+    launchWindowsInstallerAndRestart("C:\\updates\\CrossGen-Setup.exe", {
       appQuit,
       currentPid: 5678,
-      executablePath: "C:\\Apps\\Image2Tools\\Image2Tools.exe",
+      executablePath: "C:\\Apps\\CrossGen\\CrossGen.exe",
       helperCwd: "C:\\Temp",
       spawnImpl,
       setTimeoutImpl

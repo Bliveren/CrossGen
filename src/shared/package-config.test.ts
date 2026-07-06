@@ -4,12 +4,16 @@ import updateManifest from "../../docs/updates/latest.json";
 
 describe("package release configuration", () => {
   it("stages the v0.2.4 bugfix release metadata", () => {
+    expect(packageJson.name).toBe("crossgen");
     expect(packageJson.version).toBe("0.2.4");
     expect(packageJson.description).toContain("multi-model desktop image workspace");
     expect(packageJson.description).toContain("GPT Image 2");
     expect(packageJson.description).toContain("Nano Banana 3");
+    expect(packageJson.build.appId).toBe("com.bliveren.crossgen");
+    expect(packageJson.build.productName).toBe("CrossGen");
     expect(packageJson.build.copyright).toContain("Nowo");
     expect(packageJson.build.copyright).toContain("Corgnitor");
+    expect(packageJson.build.copyright).toContain("CrossGen");
   });
 
   it("keeps a published update manifest with verifiable size and sha256", () => {
@@ -29,9 +33,9 @@ describe("package release configuration", () => {
     }
   });
 
-  it("keeps the Windows installer asset name stable for latest-release download links", () => {
+  it("uses the CrossGen Windows installer asset name for release download links", () => {
     expect(packageJson.build.win.target).toContain("nsis");
-    expect(packageJson.build.nsis.artifactName).toBe("Image2Tools-Setup.${ext}");
+    expect(packageJson.build.nsis.artifactName).toBe("CrossGen-Setup.${ext}");
   });
 
   it("uses an assisted Windows installer so users can choose the install path", () => {

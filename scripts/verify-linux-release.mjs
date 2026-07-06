@@ -7,8 +7,9 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const releaseDir = path.resolve("release");
-const productName = "Image2Tools";
-const appImagePattern = /^Image2Tools-.*-linux-.*\.AppImage$/;
+const productName = "CrossGen";
+const linuxExecutableName = "crossgen";
+const appImagePattern = /^CrossGen-.*-linux-.*\.AppImage$/;
 const requireDirectAppImage = process.env.IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE === "1";
 const smokeTimeoutMs = Number(process.env.IMAGE2TOOLS_LINUX_SMOKE_TIMEOUT_MS ?? 12000);
 
@@ -47,7 +48,7 @@ async function findAppImage() {
 }
 
 async function findUnpackedExecutable() {
-  const { stdout } = await run("find", [releaseDir, "-maxdepth", "2", "-type", "f", "-path", "*/linux*-unpacked/image2tools", "-print"]);
+  const { stdout } = await run("find", [releaseDir, "-maxdepth", "2", "-type", "f", "-path", `*/linux*-unpacked/${linuxExecutableName}`, "-print"]);
   const candidates = stdout
     .split("\n")
     .map((line) => line.trim())
@@ -200,13 +201,13 @@ async function verifyDirectAppImageLaunch(appImagePath) {
 }
 
 async function verifyAppImageExtraction(appImagePath) {
-  const tempRoot = await mkdtemp(path.join(tmpdir(), "Image2Tools-linux-appimage-"));
+  const tempRoot = await mkdtemp(path.join(tmpdir(), "CrossGen-linux-appimage-"));
   try {
     await run("cp", [appImagePath, tempRoot]);
     const copiedAppImage = path.join(tempRoot, path.basename(appImagePath));
     await run("chmod", ["+x", copiedAppImage]);
     await run(copiedAppImage, ["--appimage-extract"], { cwd: tempRoot });
-    const extractedExecutable = path.join(tempRoot, "squashfs-root", "image2tools");
+    const extractedExecutable = path.join(tempRoot, "squashfs-root", linuxExecutableName);
     await assertElfExecutable(extractedExecutable);
     await launchWithXvfb(extractedExecutable, "Extracted AppImage app");
   } finally {

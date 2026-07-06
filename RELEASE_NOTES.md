@@ -1,4 +1,4 @@
-# Image2Tools Release Notes
+# CrossGen Release Notes
 
 ## v0.3.0 (pending release)
 
@@ -57,7 +57,7 @@ Compatibility, release, and configuration UI patch release. Fixes aggregator str
 ### Release Assets
 
 - macOS arm64 DMG/ZIP assets are Developer ID signed with `Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)` and verified with the macOS release verifier. They are not Apple-notarized in this rebuild because notarization credentials were not configured in the release shell.
-- Windows x64 installer is attached as `Image2Tools-Setup.exe`.
+- Windows x64 installer is attached as `CrossGen-Setup.exe`.
 - `docs/updates/latest.json` contains the final v0.2.3 macOS and Windows asset URLs, SHA256 hashes, and byte sizes.
 
 ### Internal

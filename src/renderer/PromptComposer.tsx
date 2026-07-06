@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { ImagePlus, Palette, ScrollText, X } from "lucide-react";
 import type { GalleryAsset, PromptTemplate } from "../shared/types";
 import { normalizeHexColor, type PromptToken } from "./promptTokens";
@@ -28,6 +28,7 @@ export function PromptComposer({
   onGalleryAssetToken,
   onDirty
 }: PromptComposerProps) {
+  const promptId = useId();
   const promptTrigger = useMemo(
     () => getTrailingPromptTrigger(value, galleryAssets, templates),
     [galleryAssets, templates, value]
@@ -131,9 +132,12 @@ export function PromptComposer({
 
   return (
     <div className="prompt-composer">
-      <label>
-        <span>{label}</span>
+      <label className="prompt-composer-field" htmlFor={promptId}>
+        <div className="prompt-composer-heading">
+          <h3>{label}</h3>
+        </div>
         <textarea
+          id={promptId}
           value={value}
           onChange={(event) => {
             onDirty();

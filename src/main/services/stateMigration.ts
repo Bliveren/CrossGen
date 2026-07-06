@@ -9,8 +9,10 @@ import type {
   OpenAIImageParams,
   PromptTemplate,
   ProviderKind,
+  StorageSettings,
   WorkspaceDraft
 } from "../../shared/types.js";
+import path from "node:path";
 import {
   DEFAULT_BASE_URL,
   DEFAULT_GEMINI_BASE_URL,
@@ -62,6 +64,7 @@ export interface AppStateFile {
   promptTemplates: PromptTemplate[];
   galleryFolders: GalleryFolder[];
   galleryAssets: GalleryAsset[];
+  storage?: StorageSettings;
   draft?: WorkspaceDraft;
 }
 
@@ -110,6 +113,7 @@ export function normalizeState(parsed: unknown): AppStateFile {
       promptTemplates: normalizePromptTemplates(parsed.promptTemplates),
       galleryFolders,
       galleryAssets: normalizeGalleryAssets(parsed.galleryAssets, galleryFolders),
+      storage: normalizeStorageSettings(parsed.storage),
       draft: normalizeWorkspaceDraft(parsed.draft)
     };
   }
@@ -131,6 +135,7 @@ export function normalizeState(parsed: unknown): AppStateFile {
     promptTemplates: normalizePromptTemplates(parsed.promptTemplates),
     galleryFolders,
     galleryAssets: normalizeGalleryAssets(parsed.galleryAssets, galleryFolders),
+    storage: normalizeStorageSettings(parsed.storage),
     draft: normalizeWorkspaceDraft(parsed.draft)
   };
 }
@@ -209,21 +214,53 @@ function normalizePromptTemplates(value: unknown): PromptTemplate[] {
 
 function normalizeGalleryFolders(value: unknown): GalleryFolder[] {
   if (!Array.isArray(value)) return [];
+  const candidates: GalleryFolder[] = [];
   const seenIds = new Set<string>();
-  const seenNames = new Set<string>();
-  return value.flatMap((item) => {
-    if (!isRecord(item)) return [];
+  for (const item of value) {
+    if (!isRecord(item)) continue;
     const id = nonEmptyString(item.id, "");
     const name = normalizeGalleryFolderName(item.name);
-    const nameKey = name.toLowerCase();
-    if (!id || !name || seenIds.has(id) || seenNames.has(nameKey)) return [];
+    if (!id || !name || seenIds.has(id)) continue;
     seenIds.add(id);
-    seenNames.add(nameKey);
     const createdAt = nonEmptyString(item.createdAt, new Date(0).toISOString());
     const updatedAt = nonEmptyString(item.updatedAt, createdAt);
     const color = normalizeGalleryFolderColor(item.color);
-    return [{ id, name, color, createdAt, updatedAt }];
-  });
+    candidates.push({
+      id,
+      name,
+      parentId: optionalString(item.parentId) ?? null,
+      color,
+      createdAt,
+      updatedAt
+    });
+  }
+
+  const idSet = new Set(candidates.map((folder) => folder.id));
+  const normalizedParents = candidates.map((folder) => ({
+    ...folder,
+    parentId: folder.parentId && idSet.has(folder.parentId) && folder.parentId !== folder.id ? folder.parentId : null
+  }));
+  const parentById = new Map(normalizedParents.map((folder) => [folder.id, folder.parentId ?? null]));
+  const breaksCycle = (folder: GalleryFolder): boolean => {
+    const visited = new Set<string>([folder.id]);
+    let current = folder.parentId ?? null;
+    while (current) {
+      if (visited.has(current)) return false;
+      visited.add(current);
+      current = parentById.get(current) ?? null;
+    }
+    return true;
+  };
+  const acyclic = normalizedParents.map((folder) => breaksCycle(folder) ? folder : { ...folder, parentId: null });
+  const seenSiblingNames = new Set<string>();
+  const result: GalleryFolder[] = [];
+  for (const folder of acyclic) {
+    const key = `${folder.parentId ?? ""}\u0000${folder.name.toLowerCase()}`;
+    if (seenSiblingNames.has(key)) continue;
+    seenSiblingNames.add(key);
+    result.push(folder);
+  }
+  return result;
 }
 
 function normalizeGalleryFolderName(value: unknown): string {
@@ -234,6 +271,17 @@ function normalizeGalleryFolderColor(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed.toUpperCase() : undefined;
+}
+
+function normalizeStorageSettings(value: unknown): StorageSettings | undefined {
+  if (!isRecord(value)) return undefined;
+  const historyDir = optionalString(value.historyDir);
+  const galleryDir = optionalString(value.galleryDir);
+  if (!historyDir && !galleryDir) return undefined;
+  return {
+    historyDir: historyDir ?? "",
+    galleryDir: galleryDir ?? ""
+  };
 }
 
 function normalizeGalleryAssets(value: unknown, folders: GalleryFolder[]): GalleryAsset[] {
@@ -266,14 +314,19 @@ function normalizeGalleryAssets(value: unknown, folders: GalleryFolder[]): Galle
         tags: normalizeStringList(item.tags),
         source: item.source === "result" ? "result" : "import",
         createdAt,
-        updatedAt
+        updatedAt,
+        ...(optionalString(item.modifiedAt) ? { modifiedAt: optionalString(item.modifiedAt) } : {})
       }
     ];
   });
 }
 
 function pathSafeFileName(value: string): string {
-  return value.replace(/[\\/]/g, "").trim();
+  const normalized = value.trim().replace(/\\/g, "/");
+  if (!normalized || path.isAbsolute(normalized) || path.win32.isAbsolute(normalized)) return "";
+  const segments = normalized.split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) return "";
+  return segments.join("/");
 }
 
 function boundedOptionalInteger(value: unknown): number | undefined {

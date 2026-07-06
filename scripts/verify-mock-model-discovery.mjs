@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 
 const host = process.env.HOST ?? "127.0.0.1";
-const openAIApiKey = "sk-mock-image2tools";
+const openAIApiKey = "sk-mock-crossgen";
 const geminiApiKey = "mock-gemini-key";
 
 function assert(condition, message) {

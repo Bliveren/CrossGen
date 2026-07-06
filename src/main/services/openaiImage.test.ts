@@ -87,7 +87,7 @@ async function createRuntime(fetchImpl: typeof fetch) {
 describe("OpenAI image service", () => {
   it("builds gpt-image-2 request bodies without unsupported transparent background", () => {
     expect(buildEndpoint("https://example.test/v1///", "/images/generations")).toBe("https://example.test/v1/images/generations");
-    expect(baseRequestBody(params({ outputFormat: "png", background: "auto", stream: true }), "prompt")).toEqual({
+    expect(baseRequestBody(params({ outputFormat: "png", background: "auto", stream: true, partialImages: 2 }), "prompt")).toEqual({
       model: "gpt-image-2",
       prompt: "prompt",
       size: "auto",

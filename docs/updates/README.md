@@ -1,4 +1,4 @@
-# Image2Tools Update Feed
+# CrossGen Update Feed
 
 This directory contains the update manifest consumed by the desktop app.
 
@@ -30,8 +30,8 @@ Example asset:
 {
   "platform": "win32",
   "arch": "x64",
-  "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.0/Image2Tools-0.2.0-win-x64.exe",
-  "fileName": "Image2Tools-0.2.0-win-x64.exe",
+  "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.0/CrossGen-0.2.0-win-x64.exe",
+  "fileName": "CrossGen-0.2.0-win-x64.exe",
   "sha256": "64-char-lowercase-sha256",
   "sizeBytes": 12345678
 }

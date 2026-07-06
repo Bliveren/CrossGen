@@ -118,7 +118,7 @@ export function safeUpdateFileName(asset: UpdateManifestAsset): string {
   const fromManifest = asset.fileName?.trim();
   if (fromManifest) return basename(fromManifest);
   const fromUrl = basename(new URL(asset.url).pathname);
-  return fromUrl || `Image2Tools-update-${Date.now()}`;
+  return fromUrl || `CrossGen-update-${Date.now()}`;
 }
 
 function isLoopbackHostname(hostname: string): boolean {

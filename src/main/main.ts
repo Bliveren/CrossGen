@@ -17,6 +17,7 @@ import type {
   AppSnapshot,
   ConnectionTestResult,
   DownloadRequest,
+  EditedGalleryImageInput,
   GalleryAsset,
   GalleryAssetPatch,
   GalleryFolder,
@@ -30,6 +31,9 @@ import type {
   ProviderConfig,
   ProviderConfigInput,
   RunJobRequest,
+  StorageKind,
+  StorageFolderOptions,
+  StorageSettings,
   TemplateExportFormat,
   UpdateCheckResult,
   UpdateInstallResult,
@@ -61,7 +65,15 @@ import { fetchWithTimeout } from "./services/openaiImage.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
-import { assertKnownOutputPath, assertKnownRegularOutputPath, assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
+import { assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
+import {
+  isIgnoredGalleryEntryName,
+  reconcileGalleryDiskChanges,
+  reconcileGalleryDiskState,
+  scanGalleryDisk,
+  startGalleryDiskWatchers,
+  type GalleryWatchHandle
+} from "./services/galleryDiskSync.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
 import { verifyUpdateAssetBytes } from "./services/updateInstallerVerification.js";
@@ -71,9 +83,37 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAX_HISTORY = 100;
 const FALLBACK_KEY_PREFIX = "plain:";
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+const MAX_GALLERY_FOLDER_NAME_BYTES = 120;
+const MAX_GALLERY_FILE_NAME_BYTES = 180;
+const WINDOWS_RESERVED_FILE_NAMES = new Set([
+  "CON",
+  "PRN",
+  "AUX",
+  "NUL",
+  "COM1",
+  "COM2",
+  "COM3",
+  "COM4",
+  "COM5",
+  "COM6",
+  "COM7",
+  "COM8",
+  "COM9",
+  "LPT1",
+  "LPT2",
+  "LPT3",
+  "LPT4",
+  "LPT5",
+  "LPT6",
+  "LPT7",
+  "LPT8",
+  "LPT9"
+]);
 const ASSET_PROTOCOL = "image2tools-asset";
 const UPDATE_CHECK_TIMEOUT_MS = 30000;
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 600000; // 10 minutes for large installer downloads
+const BRAND_NAME = "CrossGen";
+const LEGACY_USER_DATA_NAME = "Image2Tools";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -87,6 +127,9 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 interface PackageMetadata {
+  crossgen?: {
+    updateManifestUrl?: unknown;
+  };
   image2tools?: {
     updateManifestUrl?: unknown;
   };
@@ -95,9 +138,30 @@ interface PackageMetadata {
 let stateCache: AppStateFile | null = null;
 let recoveredInterruptedJobs = false;
 let latestUpdateCheck: UpdateCheckResult | null = null;
+let galleryWatchRoot: string | null = null;
+let galleryWatchers: GalleryWatchHandle[] = [];
+let galleryWatchDebounce: NodeJS.Timeout | null = null;
+let galleryOperationQueue: Promise<void> = Promise.resolve();
+let galleryWatchNeedsFullSync = false;
+let galleryWatchChangedRelPaths = new Set<string>();
 
 interface WriteStateOptions {
   updateBackup?: boolean;
+}
+
+async function runGalleryOperation<T>(operation: () => Promise<T>): Promise<T> {
+  const current = galleryOperationQueue.then(operation, operation);
+  galleryOperationQueue = current.then(
+    () => undefined,
+    () => undefined
+  );
+  return current;
+}
+
+function galleryIpc<TArgs extends unknown[], TResult>(
+  handler: (event: IpcMainInvokeEvent, ...args: TArgs) => Promise<TResult>
+): (event: IpcMainInvokeEvent, ...args: TArgs) => Promise<TResult> {
+  return (event, ...args) => runGalleryOperation(() => handler(event, ...args));
 }
 
 function createWindow(): void {
@@ -106,7 +170,7 @@ function createWindow(): void {
     height: 940,
     minWidth: 1120,
     minHeight: 760,
-    title: "Image2Tools",
+    title: BRAND_NAME,
     backgroundColor: "#f6f4ef",
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js"),
@@ -125,6 +189,10 @@ function createWindow(): void {
   }
 }
 
+function preserveLegacyUserDataPath(): void {
+  app.setPath("userData", path.join(app.getPath("appData"), LEGACY_USER_DATA_NAME));
+}
+
 function registerAssetProtocol(): void {
   protocol.handle(ASSET_PROTOCOL, async (request) => {
     const url = new URL(request.url);
@@ -133,9 +201,11 @@ function registerAssetProtocol(): void {
     let normalized: string | null = null;
 
     try {
+      const state = await readState();
+      const galleryDir = getGalleryDir(state);
       normalized = galleryFileName
-        ? resolveManagedFileName(getGalleryDir(), galleryFileName)
-        : normalizeManagedAssetPath(getImagesDir(), assetPath);
+        ? resolveManagedFileName(galleryDir, galleryFileName)
+        : assertKnownHistoryAssetPath(state, assetPath);
     } catch {
       return new Response("Forbidden", { status: 403 });
     }
@@ -145,9 +215,11 @@ function registerAssetProtocol(): void {
     }
 
     try {
+      const state = await readState();
+      const galleryDir = getGalleryDir(state);
       const safePath = galleryFileName
-        ? await assertManagedRegularFile(getGalleryDir(), normalized)
-        : await assertManagedRegularFileInRoots([getImagesDir()], normalized);
+        ? await assertManagedRegularFile(galleryDir, normalized)
+        : await assertKnownHistoryRegularAsset(state, normalized);
       const content = await fs.readFile(safePath);
       const mimeType = mimeTypeForFile(safePath);
       return new Response(new Blob([content], { type: mimeType }), {
@@ -157,7 +229,7 @@ function registerAssetProtocol(): void {
         }
       });
     } catch (error) {
-      console.warn("[image2tools] Failed to serve image asset.", sanitizeError(error));
+      console.warn("[CrossGen] Failed to serve image asset.", sanitizeError(error));
       return new Response("Not found", { status: 404 });
     }
   });
@@ -171,12 +243,61 @@ function getBackupStatePath(): string {
   return `${getStatePath()}.bak`;
 }
 
-function getImagesDir(): string {
+function getDefaultImagesDir(): string {
   return path.join(app.getPath("userData"), "images");
 }
 
-function getGalleryDir(): string {
+function getDefaultGalleryDir(): string {
   return path.join(app.getPath("userData"), "gallery");
+}
+
+function getStorageSettings(state?: AppStateFile | null): StorageSettings {
+  return {
+    historyDir: state?.storage?.historyDir || getDefaultImagesDir(),
+    galleryDir: state?.storage?.galleryDir || getDefaultGalleryDir()
+  };
+}
+
+function getImagesDir(state?: AppStateFile | null): string {
+  return getStorageSettings(state ?? stateCache).historyDir;
+}
+
+function getGalleryDir(state?: AppStateFile | null): string {
+  return getStorageSettings(state ?? stateCache).galleryDir;
+}
+
+function getHistoryImageRoots(state?: AppStateFile | null): string[] {
+  const roots = [
+    getImagesDir(state),
+    path.join(app.getPath("appData"), "image2tools", "images"),
+    path.join(app.getPath("appData"), LEGACY_USER_DATA_NAME, "images")
+  ];
+  return [...new Set(roots.map((root) => path.resolve(root)))];
+}
+
+function assertKnownHistoryAssetPath(state: AppStateFile, assetPath: string): string {
+  const resolved = path.resolve(assetPath);
+  const knownPaths = new Set<string>();
+  for (const job of state.history) {
+    for (const asset of job.outputs) {
+      knownPaths.add(path.resolve(asset.path));
+    }
+    if (job.maskAsset) {
+      knownPaths.add(path.resolve(job.maskAsset.path));
+    }
+  }
+  if (!knownPaths.has(resolved)) {
+    throw new Error("无法操作：资源不属于当前历史。");
+  }
+  if (!isImagePath(resolved)) {
+    throw new Error("无法操作：资源不是图片。");
+  }
+  return resolved;
+}
+
+async function assertKnownHistoryRegularAsset(state: AppStateFile, assetPath: string): Promise<string> {
+  const knownPath = assertKnownHistoryAssetPath(state, assetPath);
+  return assertManagedRegularFileInRoots(getHistoryImageRoots(state), knownPath);
 }
 
 function toPublicConfig(config: StoredProviderConfig): ProviderConfig {
@@ -216,7 +337,7 @@ async function readState(): Promise<AppStateFile> {
     stateCache = applyStartupRecovery(normalizeState(await readStateFile(getStatePath())));
   } catch (error) {
     if (!isNodeError(error) || error.code !== "ENOENT") {
-      console.warn("[image2tools] Failed to read state file; trying backup.", sanitizeError(error));
+      console.warn("[CrossGen] Failed to read state file; trying backup.", sanitizeError(error));
     }
 
     try {
@@ -225,7 +346,7 @@ async function readState(): Promise<AppStateFile> {
       return stateCache;
     } catch (backupError) {
       if (!isNodeError(backupError) || backupError.code !== "ENOENT") {
-        console.warn("[image2tools] Failed to read backup state file; using defaults.", sanitizeError(backupError));
+        console.warn("[CrossGen] Failed to read backup state file; using defaults.", sanitizeError(backupError));
       }
       stateCache = getDefaultState();
       await writeState(stateCache);
@@ -249,6 +370,7 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
     promptTemplates: state.promptTemplates,
     galleryFolders: state.galleryFolders,
     galleryAssets: state.galleryAssets,
+    storage: state.storage,
     draft: state.draft
   };
   const statePath = getStatePath();
@@ -259,7 +381,7 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
       await fs.copyFile(statePath, backupPath);
     } catch (error) {
       if (!isNodeError(error) || error.code !== "ENOENT") {
-        console.warn("[image2tools] Failed to update state backup.", sanitizeError(error));
+        console.warn("[CrossGen] Failed to update state backup.", sanitizeError(error));
       }
     }
   }
@@ -330,7 +452,11 @@ function getSavedApiKeyPreview(config: StoredProviderConfig): string | undefined
 
 function maskApiKeyPreview(apiKey: string): string {
   const trimmed = apiKey.trim();
-  if (trimmed.length <= 8) return "********";
+  if (trimmed.length === 0) return "";
+  if (trimmed.length === 1) return `${trimmed}**`;
+  if (trimmed.length <= 8) {
+    return `${trimmed.slice(0, 1)}${"*".repeat(Math.max(2, trimmed.length - 2))}${trimmed.slice(-1)}`;
+  }
   return `${trimmed.slice(0, 4)}${"*".repeat(12)}${trimmed.slice(-4)}`;
 }
 
@@ -382,7 +508,7 @@ function getUpdateManifestUrl(): string {
   try {
     const packagePath = path.join(app.getAppPath(), "package.json");
     const packageJson = JSON.parse(readFileSync(packagePath, "utf8")) as PackageMetadata;
-    const packageUrl = packageJson.image2tools?.updateManifestUrl;
+    const packageUrl = packageJson.crossgen?.updateManifestUrl ?? packageJson.image2tools?.updateManifestUrl;
     return typeof packageUrl === "string" ? packageUrl.trim() : "";
   } catch {
     return "";
@@ -402,6 +528,178 @@ function mimeTypeForFile(filePath: string): string {
 
 function isImagePath(filePath: string): boolean {
   return IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.stat(filePath);
+    return true;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function sameResolvedPath(a: string, b: string): boolean {
+  return path.resolve(a) === path.resolve(b);
+}
+
+async function copyOrMoveFile(sourcePath: string, targetPath: string, removeSource = false): Promise<void> {
+  if (sameResolvedPath(sourcePath, targetPath)) return;
+  await ensureDir(path.dirname(targetPath));
+  if (removeSource) {
+    try {
+      await fs.rename(sourcePath, targetPath);
+      return;
+    } catch (error) {
+      if (!isNodeError(error) || (error.code !== "EXDEV" && error.code !== "EEXIST")) {
+        throw error;
+      }
+    }
+  }
+  await fs.copyFile(sourcePath, targetPath);
+  if (removeSource) {
+    await fs.unlink(sourcePath).catch(() => undefined);
+  }
+}
+
+function normalizeGalleryRelativePath(value: string): string {
+  const normalized = value.trim().replace(/\\/g, "/");
+  const segments = normalized.split("/");
+  if (
+    !normalized ||
+    path.isAbsolute(normalized) ||
+    path.win32.isAbsolute(normalized) ||
+    segments.some((segment) => !segment || segment === "." || segment === "..")
+  ) {
+    throw new Error("Gallery 资源路径无效。");
+  }
+  return segments.join("/");
+}
+
+function galleryFolderForId(state: AppStateFile, folderId: string | null | undefined): GalleryFolder | undefined {
+  if (!folderId) return undefined;
+  return state.galleryFolders.find((folder) => folder.id === folderId);
+}
+
+function galleryFolderDiskName(folder: GalleryFolder): string {
+  return normalizeGalleryFolderName(folder.name);
+}
+
+function galleryFolderSegments(state: AppStateFile, folder: GalleryFolder): string[] {
+  const byId = new Map(state.galleryFolders.map((item) => [item.id, item]));
+  const segments: string[] = [];
+  const visited = new Set<string>();
+  let current: GalleryFolder | undefined = folder;
+  while (current) {
+    if (visited.has(current.id)) throw new Error("Gallery 文件夹层级存在循环。");
+    visited.add(current.id);
+    segments.unshift(galleryFolderDiskName(current));
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+  return segments;
+}
+
+function galleryFolderRelativePath(state: AppStateFile, folder: GalleryFolder): string {
+  return galleryFolderSegments(state, folder).join("/");
+}
+
+function galleryFolderRelativePathForId(state: AppStateFile, folderId: string | null | undefined): string {
+  const folder = galleryFolderForId(state, folderId);
+  return folder ? galleryFolderRelativePath(state, folder) : "";
+}
+
+function galleryFolderAbsolutePath(state: AppStateFile, folder: GalleryFolder): string {
+  return resolveManagedFileName(getGalleryDir(state), galleryFolderRelativePath(state, folder));
+}
+
+function galleryRelativePathFor(state: AppStateFile, sourcePath: string, folder?: GalleryFolder): string {
+  const ext = path.extname(sourcePath).toLowerCase() || ".png";
+  const fileName = `${Date.now()}-${randomUUID()}${ext}`;
+  const folderName = folder ? galleryFolderRelativePath(state, folder) : "";
+  return folderName ? `${folderName}/${fileName}` : fileName;
+}
+
+function galleryAssetBaseName(asset: GalleryAsset): string {
+  return path.posix.basename(normalizeGalleryRelativePath(asset.fileName));
+}
+
+function normalizeGalleryAssetNameInput(value: unknown, currentName: string): string {
+  const rawName = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  if (!rawName) throw new Error("Gallery 图片名称不能为空。");
+  if (rawName.includes("/") || rawName.includes("\\")) throw new Error("Gallery 图片名称不能包含路径分隔符。");
+  if (/[<>:"|?*\x00-\x1F]/.test(rawName)) throw new Error("Gallery 图片名称包含非法字符。");
+  if (rawName.endsWith(".") || rawName.endsWith(" ")) throw new Error("Gallery 图片名称不能以空格或句点结尾。");
+
+  const currentExt = path.posix.extname(currentName).toLowerCase();
+  const inputExt = path.posix.extname(rawName).toLowerCase();
+  const nextName = inputExt ? rawName : `${rawName}${currentExt || ".png"}`;
+  const nextExt = path.posix.extname(nextName).toLowerCase();
+  if (!IMAGE_EXTENSIONS.has(nextExt)) throw new Error("Gallery 图片名称必须使用 png、jpg、jpeg 或 webp 扩展名。");
+  if (isIgnoredGalleryEntryName(nextName) || isReservedWindowsFileName(nextName)) throw new Error("Gallery 图片名称不可用于托管目录。");
+  if (Buffer.byteLength(nextName, "utf8") > MAX_GALLERY_FILE_NAME_BYTES) throw new Error("Gallery 图片名称过长。");
+  normalizeGalleryRelativePath(nextName);
+  return nextName;
+}
+
+async function renameGalleryAssetFile(state: AppStateFile, asset: GalleryAsset, originalName: unknown): Promise<GalleryAsset> {
+  const galleryDir = getGalleryDir(state);
+  const currentRelPath = normalizeGalleryRelativePath(asset.fileName);
+  const currentBaseName = galleryAssetBaseName(asset);
+  const nextBaseName = normalizeGalleryAssetNameInput(originalName, currentBaseName);
+  if (nextBaseName.toLowerCase() === currentBaseName.toLowerCase() && nextBaseName === asset.originalName) {
+    return asset;
+  }
+
+  const folderRelPath = path.posix.dirname(currentRelPath) === "." ? "" : path.posix.dirname(currentRelPath);
+  const desiredRelPath = folderRelPath ? `${folderRelPath}/${nextBaseName}` : nextBaseName;
+  const currentPath = resolveManagedFileName(galleryDir, currentRelPath);
+  const nextRelPath = await uniqueGalleryRelativePath(galleryDir, desiredRelPath, currentPath);
+  const nextPath = resolveManagedFileName(galleryDir, nextRelPath);
+  if (await pathExists(currentPath)) {
+    await copyOrMoveFile(currentPath, nextPath, true);
+  }
+  const stat = await fs.stat(nextPath).catch(() => null);
+  return {
+    ...asset,
+    fileName: nextRelPath,
+    originalName: path.posix.basename(nextRelPath),
+    mimeType: mimeTypeForFile(nextPath),
+    sizeBytes: stat?.size ?? asset.sizeBytes,
+    modifiedAt: stat?.mtime.toISOString() ?? asset.modifiedAt
+  };
+}
+
+async function ensureGalleryFolderDirs(state: AppStateFile): Promise<void> {
+  const galleryDir = getGalleryDir(state);
+  await ensureDir(galleryDir);
+  for (const folder of state.galleryFolders) {
+    await ensureDir(galleryFolderAbsolutePath(state, folder));
+  }
+}
+
+async function moveGalleryAssetFileToFolder(state: AppStateFile, asset: GalleryAsset, folderId: string | null): Promise<GalleryAsset> {
+  const galleryDir = getGalleryDir(state);
+  const currentRelPath = normalizeGalleryRelativePath(asset.fileName);
+  const folder = galleryFolderForId(state, folderId);
+  const folderRelPath = folder ? galleryFolderRelativePath(state, folder) : "";
+  const desiredNextRelPath = folderRelPath ? `${folderRelPath}/${galleryAssetBaseName(asset)}` : galleryAssetBaseName(asset);
+  if (currentRelPath === desiredNextRelPath) {
+    return { ...asset, folderId, updatedAt: new Date().toISOString() };
+  }
+
+  const currentPath = resolveManagedFileName(galleryDir, currentRelPath);
+  const nextRelPath = await uniqueGalleryRelativePath(galleryDir, desiredNextRelPath, currentPath);
+  const nextPath = resolveManagedFileName(galleryDir, nextRelPath);
+  if (await pathExists(currentPath)) {
+    await copyOrMoveFile(currentPath, nextPath, true);
+  }
+  return {
+    ...asset,
+    fileName: nextRelPath,
+    folderId,
+    updatedAt: new Date().toISOString()
+  };
 }
 
 function createAssetId(filePath: string): string {
@@ -433,26 +731,26 @@ async function selectedFilesToAssets(paths: string[]): Promise<InputAsset[]> {
   return Promise.all(imagePaths.map((filePath) => toInputAsset(filePath, true)));
 }
 
-async function resolveRequestInputs(request: RunJobRequest): Promise<{ inputs: InputAsset[]; mask?: InputAsset }> {
+async function resolveRequestInputs(request: RunJobRequest, imagesDir: string): Promise<{ inputs: InputAsset[]; mask?: InputAsset }> {
   const inputs = await Promise.all(request.inputPaths.filter(isImagePath).map((filePath) => toInputAsset(filePath, false)));
 
   let mask: InputAsset | undefined;
   if (request.maskPath) {
     mask = await toInputAsset(request.maskPath, false);
   } else if (request.maskDataUrl) {
-    mask = await persistMaskDataUrl(request.maskDataUrl);
+    mask = await persistMaskDataUrl(request.maskDataUrl, imagesDir);
   }
 
   return { inputs, mask };
 }
 
-async function persistMaskDataUrl(dataUrl: string): Promise<InputAsset> {
+async function persistMaskDataUrl(dataUrl: string, imagesDir: string): Promise<InputAsset> {
   const mimeMatch = /^data:([^;]+);base64,/.exec(dataUrl);
   const mimeType = mimeMatch?.[1] ?? "image/png";
   const ext = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png";
-  await ensureDir(getImagesDir());
+  await ensureDir(imagesDir);
   const fileName = `mask-${Date.now()}-${randomUUID()}.${ext}`;
-  const filePath = path.join(getImagesDir(), fileName);
+  const filePath = path.join(imagesDir, fileName);
   await fs.writeFile(filePath, Buffer.from(dataUrlToBase64(dataUrl), "base64"));
   const stat = await fs.stat(filePath);
 
@@ -505,8 +803,19 @@ function sendJobEvent(event: JobProgressEvent): void {
   }
 }
 
+function sendGalleryEvent(state: AppStateFile, reason: "disk" | "mutation"): void {
+  const payload = {
+    folders: state.galleryFolders,
+    assets: state.galleryAssets,
+    reason
+  };
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("gallery:event", payload);
+  }
+}
+
 async function handleGetSnapshot(): Promise<AppSnapshot> {
-  const state = await readState();
+  const state = await syncGalleryWithDisk(await readState());
   return snapshotFromState(state);
 }
 
@@ -520,13 +829,18 @@ function snapshotFromState(state: AppStateFile): AppSnapshot {
     promptTemplates: state.promptTemplates,
     galleryFolders: state.galleryFolders,
     galleryAssets: state.galleryAssets,
+    storage: getStorageSettings(state),
     draft: state.draft
   };
 }
 
 async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfigInput): Promise<ProviderConfig> {
   const state = await readState();
-  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
+  const targetProviderId = typeof input.providerId === "string" && input.providerId.trim() ? input.providerId.trim() : state.activeProviderId;
+  const activeProvider = state.providers.find(p => p.id === targetProviderId) ?? state.providers[0];
+  if (!activeProvider) {
+    throw new Error("API 配置不存在。");
+  }
   const configValidation = validateProviderConfigInput(input);
   if (!configValidation.ok) {
     throw new Error(configValidation.message ?? "配置参数无效。");
@@ -549,7 +863,7 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
     nextConfig = await refreshModelDiscovery(nextConfig);
   }
 
-  const nextProviders = state.providers.map(p => p.id === state.activeProviderId ? nextConfig : p);
+  const nextProviders = state.providers.map(p => p.id === activeProvider.id ? nextConfig : p);
   await writeState({ ...state, providers: nextProviders });
   return toPublicConfig(nextConfig);
 }
@@ -596,16 +910,7 @@ async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConf
   const nextState = { ...state, providers: nextProviders, activeProviderId: newId };
   await writeState(nextState);
 
-  return {
-    appVersion: getAppVersion(),
-    providers: nextProviders.map(toPublicConfig),
-    activeProviderId: newId,
-    history: state.history,
-    promptTemplates: state.promptTemplates,
-    galleryFolders: state.galleryFolders,
-    galleryAssets: state.galleryAssets,
-    draft: state.draft
-  };
+  return snapshotFromState(nextState);
 }
 
 async function handleSwitchProvider(_event: IpcMainInvokeEvent, providerId: string): Promise<AppSnapshot> {
@@ -619,16 +924,7 @@ async function handleSwitchProvider(_event: IpcMainInvokeEvent, providerId: stri
   const nextState = { ...state, activeProviderId: providerId };
   await writeState(nextState);
 
-  return {
-    appVersion: getAppVersion(),
-    providers: state.providers.map(toPublicConfig),
-    activeProviderId: providerId,
-    history: state.history,
-    promptTemplates: state.promptTemplates,
-    galleryFolders: state.galleryFolders,
-    galleryAssets: state.galleryAssets,
-    draft: state.draft
-  };
+  return snapshotFromState(nextState);
 }
 
 async function handleDeleteProvider(_event: IpcMainInvokeEvent, providerId: string): Promise<AppSnapshot> {
@@ -644,21 +940,16 @@ async function handleDeleteProvider(_event: IpcMainInvokeEvent, providerId: stri
   const nextState = { ...state, providers: nextProviders, activeProviderId: nextActiveProviderId };
   await writeState(nextState);
 
-  return {
-    appVersion: getAppVersion(),
-    providers: nextProviders.map(toPublicConfig),
-    activeProviderId: nextActiveProviderId,
-    history: state.history,
-    promptTemplates: state.promptTemplates,
-    galleryFolders: state.galleryFolders,
-    galleryAssets: state.galleryAssets,
-    draft: state.draft
-  };
+  return snapshotFromState(nextState);
 }
 
-async function handleClearApiKey(): Promise<ProviderConfig> {
+async function handleClearApiKey(_event: IpcMainInvokeEvent, providerId?: string): Promise<ProviderConfig> {
   const state = await readState();
-  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
+  const targetProviderId = typeof providerId === "string" && providerId.trim() ? providerId.trim() : state.activeProviderId;
+  const activeProvider = state.providers.find(p => p.id === targetProviderId) ?? state.providers[0];
+  if (!activeProvider) {
+    throw new Error("API 配置不存在。");
+  }
   const nextConfig: StoredProviderConfig = {
     ...activeProvider,
     encryptedApiKey: undefined,
@@ -668,7 +959,7 @@ async function handleClearApiKey(): Promise<ProviderConfig> {
     lastModelDiscoveryError: undefined,
     updatedAt: new Date().toISOString()
   };
-  const nextProviders = state.providers.map(p => p.id === state.activeProviderId ? nextConfig : p);
+  const nextProviders = state.providers.map(p => p.id === activeProvider.id ? nextConfig : p);
   await writeState({ ...state, providers: nextProviders });
   return toPublicConfig(nextConfig);
 }
@@ -827,7 +1118,7 @@ async function handleExportTemplates(_event: IpcMainInvokeEvent, templateIds?: s
     : state.promptTemplates;
   const result = await dialog.showSaveDialog({
     title: "导出提示词模板",
-    defaultPath: `image2tools-prompt-templates-${new Date().toISOString().slice(0, 10)}.json`,
+    defaultPath: `CrossGen-prompt-templates-${new Date().toISOString().slice(0, 10)}.json`,
     filters: [{ name: "JSON", extensions: ["json"] }]
   });
   if (result.canceled || !result.filePath) return null;
@@ -841,17 +1132,31 @@ async function handleExportTemplates(_event: IpcMainInvokeEvent, templateIds?: s
   return result.filePath;
 }
 
-function galleryFileNameFor(sourcePath: string): string {
-  const ext = path.extname(sourcePath).toLowerCase() || ".png";
-  return `${Date.now()}-${randomUUID()}${ext}`;
+async function uniqueGalleryRelativePath(galleryDir: string, desiredRelPath: string, sourcePath?: string): Promise<string> {
+  const normalized = normalizeGalleryRelativePath(desiredRelPath);
+  const folderName = path.posix.dirname(normalized) === "." ? "" : path.posix.dirname(normalized);
+  const baseName = path.posix.basename(normalized, path.posix.extname(normalized));
+  const ext = path.posix.extname(normalized);
+
+  for (let index = 0; index < 1000; index += 1) {
+    const fileName = index === 0 ? `${baseName}${ext}` : `${baseName}-${index}${ext}`;
+    const candidate = folderName ? `${folderName}/${fileName}` : fileName;
+    const targetPath = resolveManagedFileName(galleryDir, candidate);
+    if (sourcePath && sameResolvedPath(sourcePath, targetPath)) return candidate;
+    if (!(await pathExists(targetPath))) return candidate;
+  }
+
+  throw new Error("无法创建唯一的 Gallery 文件名。");
 }
 
-async function createGalleryAssetFromFile(sourcePath: string, source: GalleryAsset["source"], now: string, folderId: string | null): Promise<GalleryAsset> {
-  await ensureDir(getGalleryDir());
+async function createGalleryAssetFromFile(state: AppStateFile, sourcePath: string, source: GalleryAsset["source"], now: string, folderId: string | null): Promise<GalleryAsset> {
+  const galleryDir = getGalleryDir(state);
+  await ensureGalleryFolderDirs(state);
   const stat = await fs.stat(sourcePath);
   if (!stat.isFile()) throw new Error("Gallery 只能导入图片文件。");
-  const fileName = galleryFileNameFor(sourcePath);
-  const targetPath = resolveManagedFileName(getGalleryDir(), fileName);
+  const folder = galleryFolderForId(state, folderId);
+  const fileName = await uniqueGalleryRelativePath(galleryDir, galleryRelativePathFor(state, sourcePath, folder));
+  const targetPath = resolveManagedFileName(galleryDir, fileName);
   await fs.copyFile(sourcePath, targetPath);
   return {
     id: `gallery_${randomUUID()}`,
@@ -863,22 +1168,93 @@ async function createGalleryAssetFromFile(sourcePath: string, source: GalleryAss
     tags: [],
     source,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    modifiedAt: stat.mtime.toISOString()
   };
 }
 
+async function createGalleryAssetFromDataUrl(state: AppStateFile, input: EditedGalleryImageInput, source: GalleryAsset["source"], now: string, folderId: string | null): Promise<GalleryAsset> {
+  if (!input || typeof input !== "object" || typeof input.dataUrl !== "string") {
+    throw new Error("Gallery 图片内容无效。");
+  }
+  const mimeMatch = /^data:(image\/(?:png|jpeg|webp));base64,/.exec(input.dataUrl);
+  if (!mimeMatch) throw new Error("Gallery 只能导入 png、jpg、jpeg 或 webp 图片。");
+  const mimeType = mimeMatch[1];
+  const ext = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png";
+  const requestedName = input.originalName || `edited-${Date.now()}.${ext}`;
+  const originalName = normalizeGalleryAssetNameInput(requestedName, `edited.${ext}`);
+  const buffer = Buffer.from(dataUrlToBase64(input.dataUrl), "base64");
+  if (buffer.length === 0) throw new Error("Gallery 图片内容为空。");
+
+  const galleryDir = getGalleryDir(state);
+  await ensureGalleryFolderDirs(state);
+  const folder = galleryFolderForId(state, folderId);
+  const folderName = folder ? galleryFolderRelativePath(state, folder) : "";
+  const desiredRelPath = folderName ? `${folderName}/${originalName}` : originalName;
+  const fileName = await uniqueGalleryRelativePath(galleryDir, desiredRelPath);
+  const targetPath = resolveManagedFileName(galleryDir, fileName);
+  await ensureDir(path.dirname(targetPath));
+  await fs.writeFile(targetPath, buffer);
+  const stat = await fs.stat(targetPath);
+
+  return {
+    id: `gallery_${randomUUID()}`,
+    fileName,
+    originalName: path.posix.basename(fileName),
+    mimeType,
+    sizeBytes: stat.size,
+    folderId,
+    tags: [],
+    source,
+    createdAt: now,
+    updatedAt: now,
+    modifiedAt: stat.mtime.toISOString()
+  };
+}
+
+async function syncGalleryWithDisk(inputState: AppStateFile, changedRelPaths?: string[]): Promise<AppStateFile> {
+  const galleryDir = getGalleryDir(inputState);
+  await ensureDir(galleryDir);
+
+  const now = new Date().toISOString();
+  const baseState = stateCache ?? inputState;
+  const hasIncrementalChanges = Boolean(changedRelPaths?.length);
+  const disk = await scanGalleryDisk(galleryDir, hasIncrementalChanges ? { rootRelPaths: changedRelPaths } : undefined);
+  const reconcileOptions = {
+    now,
+    createFolderId: () => `gallery_folder_${randomUUID()}`,
+    createAssetId: () => `gallery_${randomUUID()}`
+  };
+  const state = hasIncrementalChanges
+    ? reconcileGalleryDiskChanges(baseState, disk, changedRelPaths ?? [], reconcileOptions)
+    : reconcileGalleryDiskState(baseState, disk, reconcileOptions);
+  if (
+    JSON.stringify(baseState.galleryFolders) !== JSON.stringify(state.galleryFolders) ||
+    JSON.stringify(baseState.galleryAssets) !== JSON.stringify(state.galleryAssets)
+  ) {
+    await writeState(state, { updateBackup: false });
+  }
+
+  return state;
+}
+
 async function handleListGallery(): Promise<GalleryAsset[]> {
-  const state = await readState();
+  const state = await syncGalleryWithDisk(await readState());
   return state.galleryAssets;
 }
 
 async function handleListGalleryFolders(): Promise<GalleryFolder[]> {
-  const state = await readState();
+  const state = await syncGalleryWithDisk(await readState());
   return state.galleryFolders;
 }
 
 function normalizeGalleryFolderName(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+}
+
+function isReservedWindowsFileName(name: string): boolean {
+  const baseName = name.split(".")[0]?.toUpperCase();
+  return Boolean(baseName && WINDOWS_RESERVED_FILE_NAMES.has(baseName));
 }
 
 function normalizeGalleryFolderColor(value: unknown): string | undefined {
@@ -890,6 +1266,11 @@ function normalizeGalleryFolderColor(value: unknown): string | undefined {
 function normalizeGalleryFolderInput(input: GalleryFolderInput | undefined): { name: string; color?: string; hasColor: boolean } {
   const name = normalizeGalleryFolderName(input?.name);
   if (!name) throw new Error("Gallery 文件夹名称不能为空。");
+  if (name.includes("/") || name.includes("\\")) throw new Error("Gallery 文件夹名称不能包含路径分隔符。");
+  if (/[<>:"|?*\x00-\x1F]/.test(name)) throw new Error("Gallery 文件夹名称包含非法字符。");
+  if (name.endsWith(".") || name.endsWith(" ")) throw new Error("Gallery 文件夹名称不能以空格或句点结尾。");
+  if (isIgnoredGalleryEntryName(name) || isReservedWindowsFileName(name)) throw new Error("Gallery 文件夹名称不可用于托管目录。");
+  if (Buffer.byteLength(name, "utf8") > MAX_GALLERY_FOLDER_NAME_BYTES) throw new Error("Gallery 文件夹名称过长。");
   return {
     name,
     color: normalizeGalleryFolderColor(input?.color),
@@ -908,53 +1289,143 @@ function normalizeGalleryFolderId(state: AppStateFile, folderId?: unknown): stri
   return normalized;
 }
 
+function isGalleryFolderDescendant(state: AppStateFile, folderId: string, maybeAncestorId: string): boolean {
+  const byId = new Map(state.galleryFolders.map((folder) => [folder.id, folder]));
+  const visited = new Set<string>();
+  let current = byId.get(folderId)?.parentId ?? null;
+  while (current) {
+    if (current === maybeAncestorId) return true;
+    if (visited.has(current)) return false;
+    visited.add(current);
+    current = byId.get(current)?.parentId ?? null;
+  }
+  return false;
+}
+
+function galleryFolderSubtreeIds(state: AppStateFile, folderId: string): Set<string> {
+  const result = new Set<string>([folderId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const folder of state.galleryFolders) {
+      if (folder.parentId && result.has(folder.parentId) && !result.has(folder.id)) {
+        result.add(folder.id);
+        changed = true;
+      }
+    }
+  }
+  return result;
+}
+
+function normalizeGalleryFolderParentId(state: AppStateFile, parentId?: unknown, movingFolderId?: string): string | null {
+  const normalized = normalizeGalleryFolderId(state, parentId);
+  if (movingFolderId && normalized) {
+    if (normalized === movingFolderId || isGalleryFolderDescendant(state, normalized, movingFolderId)) {
+      throw new Error("不能将文件夹移动到自身或其子文件夹。");
+    }
+  }
+  return normalized;
+}
+
 async function handleCreateGalleryFolder(_event: IpcMainInvokeEvent, input: GalleryFolderInput): Promise<GalleryFolder> {
-  const state = await readState();
+  const state = await syncGalleryWithDisk(await readState());
   const { name, color } = normalizeGalleryFolderInput(input);
-  if (state.galleryFolders.some((folder) => folder.name.toLowerCase() === name.toLowerCase())) {
+  const parentId = normalizeGalleryFolderParentId(state, input?.parentId);
+  if (state.galleryFolders.some((folder) => (folder.parentId ?? null) === parentId && folder.name.toLowerCase() === name.toLowerCase())) {
     throw new Error("Gallery 文件夹名称已存在。");
   }
   const now = new Date().toISOString();
   const folder: GalleryFolder = {
     id: `gallery_folder_${randomUUID()}`,
     name,
+    parentId,
     color,
     createdAt: now,
     updatedAt: now
   };
-  await writeState({ ...state, galleryFolders: [folder, ...state.galleryFolders] });
+  const nextState = { ...state, galleryFolders: [folder, ...state.galleryFolders] };
+  await ensureDir(galleryFolderAbsolutePath(nextState, folder));
+  await writeState(nextState);
+  sendGalleryEvent(nextState, "mutation");
   return folder;
 }
 
 async function handleRenameGalleryFolder(_event: IpcMainInvokeEvent, id: string, input: GalleryFolderInput): Promise<GalleryFolder> {
-  const state = await readState();
+  const state = await syncGalleryWithDisk(await readState());
   const folder = state.galleryFolders.find((item) => item.id === id);
   if (!folder) throw new Error("Gallery 文件夹不存在。");
   const { name, color, hasColor } = normalizeGalleryFolderInput(input);
-  if (state.galleryFolders.some((item) => item.id !== id && item.name.toLowerCase() === name.toLowerCase())) {
+  const parentId = Object.prototype.hasOwnProperty.call(input ?? {}, "parentId")
+    ? normalizeGalleryFolderParentId(state, input?.parentId, id)
+    : folder.parentId ?? null;
+  if (state.galleryFolders.some((item) => item.id !== id && (item.parentId ?? null) === parentId && item.name.toLowerCase() === name.toLowerCase())) {
     throw new Error("Gallery 文件夹名称已存在。");
   }
   const updated: GalleryFolder = {
     ...folder,
     name,
+    parentId,
     color: hasColor ? color : folder.color,
     updatedAt: new Date().toISOString()
   };
-  await writeState({ ...state, galleryFolders: state.galleryFolders.map((item) => item.id === id ? updated : item) });
+  const galleryDir = getGalleryDir(state);
+  const oldDir = galleryFolderAbsolutePath(state, folder);
+  const nextState = { ...state, galleryFolders: state.galleryFolders.map((item) => item.id === id ? updated : item) };
+  const newDir = galleryFolderAbsolutePath(nextState, updated);
+  if (!sameResolvedPath(oldDir, newDir)) {
+    await ensureDir(path.dirname(newDir));
+    if (await pathExists(oldDir)) {
+      await fs.rename(oldDir, newDir);
+    } else {
+      await ensureDir(newDir);
+    }
+  }
+  const subtreeIds = galleryFolderSubtreeIds(state, id);
+  const galleryAssets = state.galleryAssets.map((asset) => {
+    if (!asset.folderId || !subtreeIds.has(asset.folderId)) return asset;
+    return {
+      ...asset,
+      fileName: normalizeGalleryRelativePath(path.posix.join(galleryFolderRelativePathForId(nextState, asset.folderId), galleryAssetBaseName(asset))),
+      updatedAt: updated.updatedAt
+    };
+  });
+  const writtenState = {
+    ...state,
+    galleryFolders: nextState.galleryFolders,
+    galleryAssets
+  };
+  await writeState(writtenState);
+  sendGalleryEvent(writtenState, "mutation");
   return updated;
 }
 
+async function handleMoveGalleryFolder(_event: IpcMainInvokeEvent, id: string, parentId: string | null): Promise<GalleryFolder> {
+  const state = await syncGalleryWithDisk(await readState());
+  const folder = state.galleryFolders.find((item) => item.id === id);
+  if (!folder) throw new Error("Gallery 文件夹不存在。");
+  return handleRenameGalleryFolder(_event, id, { name: folder.name, color: folder.color, parentId });
+}
+
 async function handleDeleteGalleryFolder(_event: IpcMainInvokeEvent, id: string): Promise<GalleryFolderDeleteResult> {
-  const state = await readState();
-  if (!state.galleryFolders.some((folder) => folder.id === id)) {
+  const state = await syncGalleryWithDisk(await readState());
+  const folder = state.galleryFolders.find((item) => item.id === id);
+  if (!folder) {
     throw new Error("Gallery 文件夹不存在。");
+  }
+  const now = new Date().toISOString();
+  const subtreeIds = galleryFolderSubtreeIds(state, id);
+  const movedAssets: GalleryAsset[] = [];
+  for (const asset of state.galleryAssets) {
+    movedAssets.push(asset.folderId && subtreeIds.has(asset.folderId) ? await moveGalleryAssetFileToFolder(state, asset, null) : asset);
   }
   const nextState: AppStateFile = {
     ...state,
-    galleryFolders: state.galleryFolders.filter((folder) => folder.id !== id),
-    galleryAssets: state.galleryAssets.map((asset) => asset.folderId === id ? { ...asset, folderId: null, updatedAt: new Date().toISOString() } : asset)
+    galleryFolders: state.galleryFolders.filter((folder) => !subtreeIds.has(folder.id)),
+    galleryAssets: movedAssets.map((asset) => asset.folderId && subtreeIds.has(asset.folderId) ? { ...asset, folderId: null, updatedAt: now } : asset)
   };
   await writeState(nextState);
+  sendGalleryEvent(nextState, "mutation");
+  await fs.rm(galleryFolderAbsolutePath(state, folder), { recursive: true, force: true }).catch(() => undefined);
   return {
     folders: nextState.galleryFolders,
     assets: nextState.galleryAssets
@@ -962,7 +1433,7 @@ async function handleDeleteGalleryFolder(_event: IpcMainInvokeEvent, id: string)
 }
 
 async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[], folderId?: string | null): Promise<GalleryAsset[]> {
-  const state = await readState();
+  const state = await syncGalleryWithDisk(await readState());
   const targetFolderId = normalizeGalleryFolderId(state, folderId);
   let sourcePaths = Array.isArray(paths) ? paths : [];
   if (sourcePaths.length === 0) {
@@ -979,36 +1450,58 @@ async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[
   for (const sourcePath of sourcePaths) {
     if (typeof sourcePath !== "string") continue;
     if (!IMAGE_EXTENSIONS.has(path.extname(sourcePath).toLowerCase())) continue;
-    imported.push(await createGalleryAssetFromFile(sourcePath, "import", now, targetFolderId));
+    imported.push(await createGalleryAssetFromFile(state, sourcePath, "import", now, targetFolderId));
   }
   if (imported.length === 0) return [];
-  await writeState({ ...state, galleryAssets: [...imported, ...state.galleryAssets] });
+  const nextState = { ...state, galleryAssets: [...imported, ...state.galleryAssets] };
+  await writeState(nextState);
+  sendGalleryEvent(nextState, "mutation");
   return imported;
 }
 
 async function handleAddHistoryAssetToGallery(_event: IpcMainInvokeEvent, assetPath: string, folderId?: string | null): Promise<GalleryAsset> {
-  const state = await readState();
+  const state = await syncGalleryWithDisk(await readState());
   const targetFolderId = normalizeGalleryFolderId(state, folderId);
-  const sourcePath = await assertKnownRegularOutputPath(getImagesDir(), state.history, assetPath);
-  const asset = await createGalleryAssetFromFile(sourcePath, "result", new Date().toISOString(), targetFolderId);
-  await writeState({ ...state, galleryAssets: [asset, ...state.galleryAssets] });
+  const sourcePath = await assertKnownHistoryRegularAsset(state, assetPath);
+  const asset = await createGalleryAssetFromFile(state, sourcePath, "result", new Date().toISOString(), targetFolderId);
+  const nextState = { ...state, galleryAssets: [asset, ...state.galleryAssets] };
+  await writeState(nextState);
+  sendGalleryEvent(nextState, "mutation");
+  return asset;
+}
+
+async function handleAddEditedImageToGallery(_event: IpcMainInvokeEvent, input: EditedGalleryImageInput): Promise<GalleryAsset> {
+  const state = await syncGalleryWithDisk(await readState());
+  const targetFolderId = normalizeGalleryFolderId(state, input?.folderId);
+  const asset = await createGalleryAssetFromDataUrl(state, input, "result", new Date().toISOString(), targetFolderId);
+  const nextState = { ...state, galleryAssets: [asset, ...state.galleryAssets] };
+  await writeState(nextState);
+  sendGalleryEvent(nextState, "mutation");
   return asset;
 }
 
 async function handleUpdateGalleryAsset(_event: IpcMainInvokeEvent, id: string, patch: GalleryAssetPatch = {}): Promise<GalleryAsset> {
   const normalizedPatch = patch && typeof patch === "object" ? patch : {};
-  const state = await readState();
+  const state = await syncGalleryWithDisk(await readState());
   const asset = state.galleryAssets.find((item) => item.id === id);
   if (!asset) throw new Error("Gallery 资源不存在。");
   const hasTagsPatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "tags");
   const hasFolderPatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "folderId");
+  const hasNamePatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "originalName");
+  const movedAsset = hasFolderPatch
+    ? await moveGalleryAssetFileToFolder(state, asset, normalizeGalleryFolderId(state, normalizedPatch.folderId))
+    : asset;
+  const renamedAsset = hasNamePatch
+    ? await renameGalleryAssetFile(state, movedAsset, normalizedPatch.originalName)
+    : movedAsset;
   const updated: GalleryAsset = {
-    ...asset,
-    tags: hasTagsPatch ? normalizeTemplateTags(normalizedPatch.tags) : asset.tags,
-    folderId: hasFolderPatch ? normalizeGalleryFolderId(state, normalizedPatch.folderId) : asset.folderId ?? null,
+    ...renamedAsset,
+    tags: hasTagsPatch ? normalizeTemplateTags(normalizedPatch.tags) : renamedAsset.tags,
     updatedAt: new Date().toISOString()
   };
-  await writeState({ ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) });
+  const nextState = { ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) };
+  await writeState(nextState);
+  sendGalleryEvent(nextState, "mutation");
   return updated;
 }
 
@@ -1017,22 +1510,25 @@ async function handleMoveGalleryAsset(_event: IpcMainInvokeEvent, id: string, fo
 }
 
 async function handleRemoveGalleryAsset(_event: IpcMainInvokeEvent, id: string): Promise<GalleryAsset[]> {
-  const state = await readState();
+  const state = await syncGalleryWithDisk(await readState());
   const asset = state.galleryAssets.find((item) => item.id === id);
   const galleryAssets = state.galleryAssets.filter((item) => item.id !== id);
-  await writeState({ ...state, galleryAssets });
+  const nextState = { ...state, galleryAssets };
+  await writeState(nextState);
+  sendGalleryEvent(nextState, "mutation");
   if (asset) {
-    const filePath = resolveManagedFileName(getGalleryDir(), asset.fileName);
+    const filePath = resolveManagedFileName(getGalleryDir(state), asset.fileName);
     await fs.unlink(filePath).catch(() => undefined);
   }
   return galleryAssets;
 }
 
 async function handlePickGalleryAsset(_event: IpcMainInvokeEvent, id: string): Promise<InputAsset> {
-  const state = await readState();
+  const state = await syncGalleryWithDisk(await readState());
   const asset = state.galleryAssets.find((item) => item.id === id);
   if (!asset) throw new Error("Gallery 资源不存在。");
-  const filePath = await assertManagedRegularFile(getGalleryDir(), resolveManagedFileName(getGalleryDir(), asset.fileName));
+  const galleryDir = getGalleryDir(state);
+  const filePath = await assertManagedRegularFile(galleryDir, resolveManagedFileName(galleryDir, asset.fileName));
   return {
     id: asset.id,
     name: asset.originalName,
@@ -1125,11 +1621,15 @@ function selectActiveLaunchForDiscovery(
   };
 }
 
-async function handleDiscoverModels(): Promise<ProviderConfig> {
+async function handleDiscoverModels(_event: IpcMainInvokeEvent, providerId?: string): Promise<ProviderConfig> {
   const state = await readState();
-  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
+  const targetProviderId = typeof providerId === "string" && providerId.trim() ? providerId.trim() : state.activeProviderId;
+  const activeProvider = state.providers.find(p => p.id === targetProviderId) ?? state.providers[0];
+  if (!activeProvider) {
+    throw new Error("API 配置不存在。");
+  }
   const nextConfig = await refreshModelDiscovery(activeProvider);
-  const nextProviders = state.providers.map(p => p.id === state.activeProviderId ? nextConfig : p);
+  const nextProviders = state.providers.map(p => p.id === activeProvider.id ? nextConfig : p);
   await writeState({ ...state, providers: nextProviders });
   return toPublicConfig(nextConfig);
 }
@@ -1217,7 +1717,8 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
   }
   const apiKey = await getApiKeyOrThrow();
-  const { inputs, mask } = await resolveRequestInputs(normalizedRequest);
+  const imagesDir = getImagesDir(state);
+  const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir);
   const startedAt = Date.now();
   let job = createJob(normalizedRequest, activeProvider, inputs, mask);
   await upsertJob(job);
@@ -1233,7 +1734,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   try {
     job = await adapter.runJob(job, apiKey, activeProvider, {
       fetch,
-      imagesDir: getImagesDir(),
+      imagesDir,
       ensureDir,
       sendJobEvent
     });
@@ -1272,8 +1773,7 @@ function canRunRequestWithConfig(request: RunJobRequest, config: StoredProviderC
 
 async function handleDownloadAsset(_event: IpcMainInvokeEvent, request: DownloadRequest): Promise<string | null> {
   const state = await readState();
-  const sourcePath = assertKnownOutputPath(getImagesDir(), state.history, request.assetPath);
-  await assertManagedRegularFile(getImagesDir(), sourcePath);
+  const sourcePath = await assertKnownHistoryRegularAsset(state, request.assetPath);
 
   const result = await dialog.showSaveDialog({
     title: "Save image",
@@ -1287,13 +1787,142 @@ async function handleDownloadAsset(_event: IpcMainInvokeEvent, request: Download
 
 async function handleOpenAssetFolder(_event: IpcMainInvokeEvent, assetPath: string): Promise<void> {
   const state = await readState();
-  const sourcePath = assertKnownOutputPath(getImagesDir(), state.history, assetPath);
+  const imagesDir = getImagesDir(state);
   try {
-    await assertManagedRegularFile(getImagesDir(), sourcePath);
+    const sourcePath = await assertKnownHistoryRegularAsset(state, assetPath);
     shell.showItemInFolder(sourcePath);
   } catch {
-    await shell.openPath(getImagesDir());
+    await shell.openPath(imagesDir);
   }
+}
+
+function normalizeStorageKind(kind: unknown): StorageKind {
+  if (kind === "history" || kind === "gallery") return kind;
+  throw new Error("存储目录类型无效。");
+}
+
+function normalizeStorageFolderOptions(value: unknown): StorageFolderOptions {
+  if (!value || typeof value !== "object") return {};
+  return {
+    syncBoth: (value as StorageFolderOptions).syncBoth === true
+  };
+}
+
+async function migrateHistoryStorage(state: AppStateFile, nextDir: string): Promise<AppStateFile> {
+  const storage = getStorageSettings(state);
+  const oldDir = storage.historyDir;
+  const resolvedNextDir = path.resolve(nextDir);
+  await ensureDir(resolvedNextDir);
+  if (sameResolvedPath(oldDir, resolvedNextDir)) {
+    return { ...state, storage: { ...storage, historyDir: resolvedNextDir } };
+  }
+
+  async function migrateManagedPath(assetPath: string): Promise<string> {
+    const normalized = normalizeManagedAssetPath(oldDir, assetPath);
+    if (!normalized || !(await pathExists(normalized))) return assetPath;
+    const relativePath = path.relative(path.resolve(oldDir), normalized);
+    const targetPath = path.resolve(resolvedNextDir, relativePath);
+    await copyOrMoveFile(normalized, targetPath, true);
+    return targetPath;
+  }
+
+  const history = await Promise.all(
+    state.history.map(async (job) => ({
+      ...job,
+      outputs: await Promise.all(
+        job.outputs.map(async (asset) => ({
+          ...asset,
+          path: await migrateManagedPath(asset.path)
+        }))
+      ),
+      maskAsset: job.maskAsset
+        ? {
+            ...job.maskAsset,
+            path: await migrateManagedPath(job.maskAsset.path)
+          }
+        : undefined
+    }))
+  );
+
+  return {
+    ...state,
+    history,
+    storage: { ...storage, historyDir: resolvedNextDir }
+  };
+}
+
+async function migrateGalleryStorage(state: AppStateFile, nextDir: string): Promise<AppStateFile> {
+  const syncedState = await syncGalleryWithDisk(state);
+  const storage = getStorageSettings(syncedState);
+  const oldDir = storage.galleryDir;
+  const resolvedNextDir = path.resolve(nextDir);
+  await ensureDir(resolvedNextDir);
+
+  if (sameResolvedPath(oldDir, resolvedNextDir)) {
+    return { ...syncedState, storage: { ...storage, galleryDir: resolvedNextDir } };
+  }
+
+  for (const folder of syncedState.galleryFolders) {
+    await ensureDir(resolveManagedFileName(resolvedNextDir, galleryFolderRelativePath(syncedState, folder)));
+  }
+
+  for (const asset of syncedState.galleryAssets) {
+    const relPath = normalizeGalleryRelativePath(asset.fileName);
+    const sourcePath = resolveManagedFileName(oldDir, relPath);
+    if (!(await pathExists(sourcePath))) continue;
+    await copyOrMoveFile(sourcePath, resolveManagedFileName(resolvedNextDir, relPath), true);
+  }
+
+  return {
+    ...syncedState,
+    storage: { ...storage, galleryDir: resolvedNextDir }
+  };
+}
+
+async function handleOpenStorageFolder(_event: IpcMainInvokeEvent, kindInput: unknown, folderId?: string | null): Promise<void> {
+  const kind = normalizeStorageKind(kindInput);
+  const state = kind === "gallery" ? await syncGalleryWithDisk(await readState()) : await readState();
+  const storage = getStorageSettings(state);
+  let targetPath = kind === "history" ? storage.historyDir : storage.galleryDir;
+
+  if (kind === "gallery" && folderId) {
+    const folder = state.galleryFolders.find((item) => item.id === folderId);
+    if (!folder) throw new Error("Gallery 文件夹不存在。");
+    targetPath = galleryFolderAbsolutePath(state, folder);
+  }
+
+  await ensureDir(targetPath);
+  const openError = await shell.openPath(targetPath);
+  if (openError) throw new Error(openError);
+}
+
+async function handleChooseStorageFolder(_event: IpcMainInvokeEvent, kindInput: unknown, optionsInput?: unknown): Promise<AppSnapshot> {
+  const kind = normalizeStorageKind(kindInput);
+  const options = normalizeStorageFolderOptions(optionsInput);
+  const currentState = kind === "gallery" ? await syncGalleryWithDisk(await readState()) : await readState();
+  const storage = getStorageSettings(currentState);
+  const currentDir = kind === "history" ? storage.historyDir : storage.galleryDir;
+  const result = await dialog.showOpenDialog({
+    title: options.syncBoth ? "选择历史与图库默认存储目录" : kind === "history" ? "选择历史图片默认存储目录" : "选择图库默认存储目录",
+    defaultPath: currentDir,
+    properties: ["openDirectory", "createDirectory"]
+  });
+
+  if (result.canceled || !result.filePaths[0]) return snapshotFromState(currentState);
+
+  const nextDir = result.filePaths[0];
+  const migratedState = options.syncBoth
+    ? await migrateGalleryStorage(await migrateHistoryStorage(currentState, nextDir), nextDir)
+    : kind === "history"
+      ? await migrateHistoryStorage(currentState, nextDir)
+      : await migrateGalleryStorage(currentState, nextDir);
+  await writeState(migratedState);
+  const nextState = kind === "gallery" || options.syncBoth ? await syncGalleryWithDisk(migratedState) : migratedState;
+  if (kind === "gallery" || options.syncBoth) {
+    await startGalleryWatcherForState(nextState);
+    sendGalleryEvent(nextState, "mutation");
+  }
+  return snapshotFromState(nextState);
 }
 
 async function handleCheckForUpdates(): Promise<UpdateCheckResult> {
@@ -1418,25 +2047,82 @@ async function handleDeleteJob(_event: IpcMainInvokeEvent, jobId: string): Promi
   const history = state.history.filter((item) => item.id !== jobId);
   await writeState({ ...state, history });
   if (job) {
-    await Promise.all(pathsOwnedByJob(job).map((assetPath) => fs.unlink(assetPath).catch(() => undefined)));
+    await Promise.all(pathsOwnedByJob(state, job).map((assetPath) => fs.unlink(assetPath).catch(() => undefined)));
   }
   return history;
 }
 
 async function handleClearHistory(): Promise<GenerationJob[]> {
   const state = await readState();
-  const paths = state.history.flatMap(pathsOwnedByJob);
+  const paths = state.history.flatMap((job) => pathsOwnedByJob(state, job));
   await writeState({ ...state, history: [] });
   await Promise.all(paths.map((assetPath) => fs.unlink(assetPath).catch(() => undefined)));
   return [];
 }
 
-function pathsOwnedByJob(job: GenerationJob): string[] {
-  return collectOwnedJobFilePaths(getImagesDir(), job);
+function pathsOwnedByJob(state: AppStateFile, job: GenerationJob): string[] {
+  const paths = getHistoryImageRoots(state).flatMap((root) => collectOwnedJobFilePaths(root, job));
+  return [...new Set(paths)];
+}
+
+function stopGalleryWatcher(): void {
+  for (const watcher of galleryWatchers) {
+    watcher.close();
+  }
+  galleryWatchers = [];
+  galleryWatchRoot = null;
+  if (galleryWatchDebounce) {
+    clearTimeout(galleryWatchDebounce);
+    galleryWatchDebounce = null;
+  }
+  galleryWatchNeedsFullSync = false;
+  galleryWatchChangedRelPaths = new Set();
+}
+
+async function startGalleryWatcherForState(state: AppStateFile): Promise<void> {
+  const galleryDir = getGalleryDir(state);
+  await ensureDir(galleryDir);
+  const disk = await scanGalleryDisk(galleryDir);
+  stopGalleryWatcher();
+  galleryWatchRoot = galleryDir;
+  galleryWatchers = startGalleryDiskWatchers(galleryDir, disk.folders, scheduleGalleryDiskSync, {
+    onWatchError: (error) => console.warn("[CrossGen] Failed to watch Gallery directory.", sanitizeError(error))
+  });
+}
+
+async function startGalleryWatcher(): Promise<void> {
+  const state = await syncGalleryWithDisk(await readState());
+  await startGalleryWatcherForState(state);
+}
+
+function scheduleGalleryDiskSync(changedRelPath: string | null = null): void {
+  if (changedRelPath) {
+    galleryWatchChangedRelPaths.add(changedRelPath);
+  } else {
+    galleryWatchNeedsFullSync = true;
+  }
+  if (galleryWatchDebounce) clearTimeout(galleryWatchDebounce);
+  galleryWatchDebounce = setTimeout(() => {
+    galleryWatchDebounce = null;
+    const changedRelPaths = galleryWatchNeedsFullSync ? undefined : [...galleryWatchChangedRelPaths];
+    galleryWatchNeedsFullSync = false;
+    galleryWatchChangedRelPaths = new Set();
+    void (async () => {
+      try {
+        await runGalleryOperation(async () => {
+          const synced = await syncGalleryWithDisk(await readState(), changedRelPaths);
+          await startGalleryWatcherForState(synced);
+          sendGalleryEvent(synced, "disk");
+        });
+      } catch (error) {
+        console.warn("[CrossGen] Failed to sync Gallery after disk change.", sanitizeError(error));
+      }
+    })();
+  }, 250);
 }
 
 function registerIpcHandlers(): void {
-  ipcMain.handle("app:getSnapshot", handleGetSnapshot);
+  ipcMain.handle("app:getSnapshot", () => runGalleryOperation(handleGetSnapshot));
   ipcMain.handle("config:save", handleSaveConfig);
   ipcMain.handle("provider:add", handleAddProvider);
   ipcMain.handle("provider:switch", handleSwitchProvider);
@@ -1451,23 +2137,27 @@ function registerIpcHandlers(): void {
   ipcMain.handle("templates:delete", handleDeleteTemplate);
   ipcMain.handle("templates:import", handleImportTemplates);
   ipcMain.handle("templates:export", handleExportTemplates);
-  ipcMain.handle("gallery:list", handleListGallery);
-  ipcMain.handle("galleryFolders:list", handleListGalleryFolders);
-  ipcMain.handle("galleryFolders:create", handleCreateGalleryFolder);
-  ipcMain.handle("galleryFolders:rename", handleRenameGalleryFolder);
-  ipcMain.handle("galleryFolders:delete", handleDeleteGalleryFolder);
-  ipcMain.handle("gallery:import", handleImportToGallery);
-  ipcMain.handle("gallery:addHistoryAsset", handleAddHistoryAssetToGallery);
-  ipcMain.handle("gallery:update", handleUpdateGalleryAsset);
-  ipcMain.handle("gallery:move", handleMoveGalleryAsset);
-  ipcMain.handle("gallery:remove", handleRemoveGalleryAsset);
-  ipcMain.handle("gallery:pick", handlePickGalleryAsset);
+  ipcMain.handle("gallery:list", () => runGalleryOperation(handleListGallery));
+  ipcMain.handle("galleryFolders:list", () => runGalleryOperation(handleListGalleryFolders));
+  ipcMain.handle("galleryFolders:create", galleryIpc(handleCreateGalleryFolder));
+  ipcMain.handle("galleryFolders:rename", galleryIpc(handleRenameGalleryFolder));
+  ipcMain.handle("galleryFolders:move", galleryIpc(handleMoveGalleryFolder));
+  ipcMain.handle("galleryFolders:delete", galleryIpc(handleDeleteGalleryFolder));
+  ipcMain.handle("gallery:import", galleryIpc(handleImportToGallery));
+  ipcMain.handle("gallery:addHistoryAsset", galleryIpc(handleAddHistoryAssetToGallery));
+  ipcMain.handle("gallery:addEditedImage", galleryIpc(handleAddEditedImageToGallery));
+  ipcMain.handle("gallery:update", galleryIpc(handleUpdateGalleryAsset));
+  ipcMain.handle("gallery:move", galleryIpc(handleMoveGalleryAsset));
+  ipcMain.handle("gallery:remove", galleryIpc(handleRemoveGalleryAsset));
+  ipcMain.handle("gallery:pick", galleryIpc(handlePickGalleryAsset));
   ipcMain.handle("dialog:selectImages", handleSelectImages);
   ipcMain.handle("dialog:importImages", handleImportImages);
   ipcMain.handle("dialog:selectMask", handleSelectMask);
   ipcMain.handle("job:run", handleRunJob);
   ipcMain.handle("asset:download", handleDownloadAsset);
   ipcMain.handle("asset:openFolder", handleOpenAssetFolder);
+  ipcMain.handle("storage:openFolder", handleOpenStorageFolder);
+  ipcMain.handle("storage:chooseFolder", handleChooseStorageFolder);
   ipcMain.handle("updates:check", handleCheckForUpdates);
   ipcMain.handle("updates:downloadAndInstall", handleDownloadAndInstallUpdate);
   ipcMain.handle("history:deleteJob", handleDeleteJob);
@@ -1475,9 +2165,12 @@ function registerIpcHandlers(): void {
 }
 
 app.whenReady().then(() => {
+  app.setName(BRAND_NAME);
+  preserveLegacyUserDataPath();
   registerIpcHandlers();
   registerAssetProtocol();
   createWindow();
+  void startGalleryWatcher();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -1490,4 +2183,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", () => {
+  stopGalleryWatcher();
 });

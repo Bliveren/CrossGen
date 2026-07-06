@@ -13,8 +13,8 @@ describe("update manifest", () => {
         {
           platform: "win32",
           arch: "x64",
-          url: "https://github.com/Bliveren/image2tools/releases/download/v0.2.1/Image2Tools-Setup.exe",
-          fileName: "Image2Tools-Setup.exe",
+          url: "https://github.com/Bliveren/image2tools/releases/download/v0.2.1/CrossGen-Setup.exe",
+          fileName: "CrossGen-Setup.exe",
           sha256: sha256.toUpperCase(),
           sizeBytes: 123456
         }
@@ -25,8 +25,8 @@ describe("update manifest", () => {
     expect(manifest.assets[0]).toEqual({
       platform: "win32",
       arch: "x64",
-      url: "https://github.com/Bliveren/image2tools/releases/download/v0.2.1/Image2Tools-Setup.exe",
-      fileName: "Image2Tools-Setup.exe",
+      url: "https://github.com/Bliveren/image2tools/releases/download/v0.2.1/CrossGen-Setup.exe",
+      fileName: "CrossGen-Setup.exe",
       sha256,
       sizeBytes: 123456
     });
@@ -39,7 +39,7 @@ describe("update manifest", () => {
         assets: [
           {
             platform: "darwin",
-            url: "https://github.com/Bliveren/image2tools/releases/download/v0.2.1/Image2Tools-0.2.1-mac-arm64.dmg",
+            url: "https://github.com/Bliveren/image2tools/releases/download/v0.2.1/CrossGen-0.2.1-mac-arm64.dmg",
             sha256,
             sizeBytes: 0
           }
@@ -72,10 +72,10 @@ describe("update manifest", () => {
       safeUpdateFileName({
         platform: "win32",
         url: "https://example.com/download.exe",
-        fileName: "../Image2Tools-Setup.exe",
+        fileName: "../CrossGen-Setup.exe",
         sha256,
         sizeBytes: 10
       })
-    ).toBe("Image2Tools-Setup.exe");
+    ).toBe("CrossGen-Setup.exe");
   });
 });

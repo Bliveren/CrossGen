@@ -1,4 +1,4 @@
-# Image2Tools 多生图模型支持计划
+# CrossGen 多生图模型支持计划
 
 Last updated: 2026-06-10
 
@@ -53,7 +53,7 @@ node scripts/verify-release-evidence.mjs --require-complete
 
 ## 1. 目标
 
-将 Image2Tools 从当前的 `gpt-image-2` 单模型工作台升级为多生图模型工作台，作为 `v0.2.0` 的核心版本目标。
+将 CrossGen 从当前的 `gpt-image-2` 单模型工作台升级为多生图模型工作台，作为 `v0.2.0` 的核心版本目标。
 
 最终用户体验：
 

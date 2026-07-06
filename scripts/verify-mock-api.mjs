@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
 const baseURL = `http://${host}:${port}/v1`;
-const apiKey = "sk-mock-image2tools";
+const apiKey = "sk-mock-crossgen";
 const tinyPngPrefix = "iVBORw0KGgoAAAANSUhEUg";
 
 function assert(condition, message) {

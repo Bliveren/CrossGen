@@ -149,7 +149,9 @@ describe("asset ownership checks", () => {
   it("resolves managed file names inside a root directory", () => {
     const root = path.join(os.tmpdir(), "image2tools", "gallery");
     expect(resolveManagedFileName(root, "sample.png")).toBe(path.resolve(root, "sample.png"));
+    expect(resolveManagedFileName(root, "Product refs/sample.png")).toBe(path.resolve(root, "Product refs", "sample.png"));
     expect(() => resolveManagedFileName(root, "../escape.png")).toThrow("管理目录");
+    expect(() => resolveManagedFileName(root, "folder/../escape.png")).toThrow("管理目录");
   });
 
   it.skipIf(process.platform === "win32")("checks managed files across multiple roots", async () => {

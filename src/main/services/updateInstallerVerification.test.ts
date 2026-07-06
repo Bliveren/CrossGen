@@ -8,7 +8,7 @@ describe("update installer verification", () => {
     const digest = createHash("sha256").update(bytes).digest("hex");
     const asset = {
       platform: "all" as const,
-      url: "https://example.com/Image2Tools.dmg",
+      url: "https://example.com/CrossGen.dmg",
       sha256: digest,
       sizeBytes: bytes.byteLength
     };

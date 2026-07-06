@@ -9,6 +9,7 @@ import type {
   GalleryAsset,
   GalleryFolder,
   ImageAsset,
+  InputAsset,
   RunJobRequest,
   ProviderConfig,
   UpdateCheckResult,
@@ -46,6 +47,7 @@ afterEach(() => {
   root = null;
   container?.remove();
   container = null;
+  delete window.crossgen;
   delete window.image2tools;
 });
 
@@ -56,6 +58,14 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Browser preview: Electron IPC is unavailable.");
     await click(apiAccessCurrentButton());
     expect(buttonByText("Discover models").disabled).toBe(true);
+  });
+
+  it("adds hover tooltips to compactable prompt action buttons", async () => {
+    await renderApp(snapshot());
+
+    expect(document.querySelector<HTMLButtonElement>(".primary-run")?.dataset.tooltip).toBe("Generate");
+    expect(document.querySelector<HTMLButtonElement>(".prompt-template-button")?.dataset.tooltip).toBe("Prompt templates");
+    expect(document.querySelector<HTMLButtonElement>(".prompt-copy-button")?.dataset.tooltip).toBe("Copy prompt");
   });
 
   it("disables all launch buttons before an API key is saved", async () => {
@@ -111,6 +121,9 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot());
 
     await click(buttonByText("Parameters", ".section-toggle"));
+    expect(inputByLabel("Stream partial preview").checked).toBe(false);
+    expect(inputByLabel("Partial images").value).toBe("0");
+
     await changeInput(inputByLabel("Count"), "4");
 
     const streamPreview = inputByLabel("Stream partial preview");
@@ -221,34 +234,37 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("guidance");
   });
 
-  it("keeps the single API access path working", async () => {
+  it("keeps the single API config path working", async () => {
     const bridge = await renderApp(snapshot());
 
-    expect(document.body.textContent).toContain("API access");
+    expect(document.body.textContent).toContain("API config");
     expect(document.body.textContent).toContain("OpenAI · api.openai.com/v1");
     expect(document.body.textContent).toContain("Key saved · 1 model discovered");
 
     await click(apiAccessCurrentButton());
-    await changeInput(inputByLabel("API access name"), "Primary gateway");
+    await changeInput(inputByLabel("API config name"), "Primary gateway");
     await click(buttonByText("Save"));
+    await flushAsync();
 
     expect(bridge.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ name: "Primary gateway" }));
+    expect(buttonByText("Saved", ".api-config-detail button")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Saved key:");
     await openSavedApiAccess();
-    expect(document.querySelectorAll(".api-access-item").length).toBe(1);
+    expect(document.querySelectorAll(".api-config-card").length).toBe(1);
     expect(document.body.textContent).toContain("Primary gateway");
-    expect(document.body.textContent).toContain("Current API access");
+    expect(document.body.textContent).toContain("Current API config");
   });
 
-  it("adds a second API access and switches to it automatically", async () => {
+  it("adds a second API config and switches to it automatically", async () => {
     const bridge = await renderApp(snapshot());
 
     await openSavedApiAccess();
-    await click(buttonByText("Add API access"));
+    await click(buttonByText("Add API config"));
     const addForm = apiAccessAddForm();
     await changeSelect(selectByLabel("API type", addForm), "gemini");
-    await changeInput(inputByLabel("API access name", addForm), "Gemini gateway");
+    await changeInput(inputByLabel("API config name", addForm), "Gemini gateway");
     await changeInput(inputByLabel("API Key", addForm), "gemini-test-key");
-    await click(buttonByText("Add API access", ".api-access-add-form button"));
+    await click(buttonByText("Add API config", ".api-access-add-form button"));
 
     expect(bridge.addProvider).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -259,22 +275,22 @@ describe("renderer multi-model smoke", () => {
       })
     );
     expect(document.body.textContent).toContain("Gemini gateway");
-    expect(document.querySelectorAll(".api-access-item").length).toBe(2);
-    expect(document.body.textContent).toContain("Current API access");
+    expect(document.querySelectorAll(".api-config-card").length).toBe(2);
+    expect(document.body.textContent).toContain("Current API config");
     expect(buttonByText("Nano Banana 3", ".launch-button").disabled).toBe(true);
   });
 
-  it("adds an API access without a key and leaves it untested", async () => {
+  it("adds an API config without a key and leaves it untested", async () => {
     const bridge = await renderApp(snapshot());
     vi.mocked(bridge.testConnection).mockClear();
 
     await openSavedApiAccess();
-    await click(buttonByText("Add API access"));
+    await click(buttonByText("Add API config"));
     const addForm = apiAccessAddForm();
     await changeSelect(selectByLabel("API type", addForm), "custom");
-    await changeInput(inputByLabel("API access name", addForm), "Custom gateway");
+    await changeInput(inputByLabel("API config name", addForm), "Custom gateway");
     await changeInput(inputByLabel("Base URL", addForm), "https://gateway.example.com/v1");
-    await click(buttonByText("Add API access", ".api-access-add-form button"));
+    await click(buttonByText("Add API config", ".api-access-add-form button"));
 
     expect(bridge.addProvider).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -290,7 +306,7 @@ describe("renderer multi-model smoke", () => {
     expect(buttonByText("GPT Image 2", ".launch-button").disabled).toBe(true);
   });
 
-  it("switches API access and derives launch availability from the selected access discovery", async () => {
+  it("switches API config and derives launch availability from the selected config discovery", async () => {
     const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
     const geminiConfig = providerConfig({
       id: "gemini-access",
@@ -308,7 +324,12 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("Nano Banana 3").disabled).toBe(true);
 
     await openSavedApiAccess();
-    await click(buttonByText("Gemini access", ".api-access-item-main"));
+    await click(apiConfigCardMainByText("Gemini access"));
+
+    expect(inputByLabel("API config name").value).toBe("Gemini access");
+    expect(bridge.switchProvider).not.toHaveBeenCalled();
+
+    await click(apiConfigUseButtonByText("Gemini access"));
 
     expect(bridge.saveDraft).toHaveBeenCalled();
     expect(bridge.switchProvider).toHaveBeenCalledWith("gemini-access");
@@ -316,7 +337,37 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("Nano Banana 3").disabled).toBe(false);
   });
 
-  it("keeps prompt and references when switching API access", async () => {
+  it("discovers models from a saved API config card and shows the model list in details", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      discoveredModels: []
+    });
+    const bridge = await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
+    vi.mocked(bridge.discoverModels).mockResolvedValueOnce({
+      ...geminiConfig,
+      discoveredModels: [
+        { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
+        { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini", displayName: "Gemini 3 Pro Image" }
+      ],
+      lastModelDiscoveryAt: now
+    });
+
+    await openSavedApiAccess();
+    await click(apiConfigDiscoverButtonByText("Gemini access"));
+    await flushAsync();
+    await click(apiConfigCardMainByText("Gemini access"));
+
+    expect(bridge.discoverModels).toHaveBeenCalledWith("gemini-access");
+    expect(apiConfigCardByText("Gemini access").textContent).toContain("2 models discovered");
+    expect(apiConfigCardByText("Gemini access").getAttribute("title")).toContain(NANO_BANANA_3_MODEL_ID);
+    expect(document.body.textContent).toContain("Gemini 3 Pro Image");
+  });
+
+  it("keeps prompt and references when switching API config", async () => {
     const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
     const geminiConfig = providerConfig({
       id: "gemini-access",
@@ -341,7 +392,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector(".asset-tile")?.textContent).toContain("switch-reference.png");
 
     await openSavedApiAccess();
-    await click(buttonByText("Gemini access", ".api-access-item-main"));
+    await click(apiConfigUseButtonByText("Gemini access"));
 
     expect(bridge.saveDraft).toHaveBeenCalledWith(expect.objectContaining({
       prompt: "Keep this prompt",
@@ -351,7 +402,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector(".asset-tile")?.textContent).toContain("switch-reference.png");
   });
 
-  it("deletes inactive API access without changing the active workspace", async () => {
+  it("deletes inactive API config without changing the active workspace", async () => {
     const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
     const geminiConfig = providerConfig({
       id: "gemini-access",
@@ -363,15 +414,14 @@ describe("renderer multi-model smoke", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     await openSavedApiAccess();
-    const geminiItem = [...document.querySelectorAll<HTMLElement>(".api-access-item")].find((item) => item.textContent?.includes("Gemini access"))!;
-    await click(geminiItem.querySelector<HTMLButtonElement>(".icon-button")!);
+    await click(apiConfigDeleteButtonByText("Gemini access"));
 
     expect(bridge.deleteProvider).toHaveBeenCalledWith("gemini-access");
     expect(launchButton("GPT Image 2").disabled).toBe(false);
     expect(document.body.textContent).not.toContain("Gemini access");
   });
 
-  it("deletes active API access and switches to the remaining access", async () => {
+  it("deletes active API config and switches to the remaining config", async () => {
     const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
     const geminiConfig = providerConfig({
       id: "gemini-access",
@@ -387,7 +437,7 @@ describe("renderer multi-model smoke", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     await click(apiAccessCurrentButton());
-    const activeDeleteButton = [...document.querySelectorAll<HTMLButtonElement>(".api-config-detail button")].find((button) => button.title === "Delete API access")!;
+    const activeDeleteButton = [...document.querySelectorAll<HTMLButtonElement>(".api-config-detail button")].find((button) => button.title === "Delete API config")!;
     await click(activeDeleteButton);
 
     expect(bridge.saveDraft).toHaveBeenCalled();
@@ -430,7 +480,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).not.toContain("Product shot");
   });
 
-  it("imports and exports prompt templates from the sidebar template section", async () => {
+  it("imports and exports prompt templates from the prompt template dialog", async () => {
     const bridge = await renderApp(snapshot({
       promptTemplates: [
         {
@@ -444,14 +494,14 @@ describe("renderer multi-model smoke", () => {
       ]
     }));
 
-    await openTemplateSidebar();
-    await click(document.querySelector<HTMLButtonElement>('.template-sidebar-actions button[aria-label="Import templates"]')!);
+    await openTemplateDialog();
+    await click(document.querySelector<HTMLButtonElement>('.template-toolbar button[aria-label="Import templates"]')!);
 
     expect(bridge.importTemplates).toHaveBeenCalled();
     expect(bridge.listTemplates).toHaveBeenCalled();
     expect(document.body.textContent).toContain("0 templates imported");
 
-    await click(document.querySelector<HTMLButtonElement>('.template-sidebar-actions button[aria-label="Export templates"]')!);
+    await click(document.querySelector<HTMLButtonElement>('.template-toolbar button[aria-label="Export templates"]')!);
 
     expect(bridge.exportTemplates).toHaveBeenCalledWith();
     expect(document.body.textContent).toContain("Templates exported to /tmp/templates.json");
@@ -585,7 +635,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).not.toContain("@ draft-gallery.png");
 
     await openSavedApiAccess();
-    await click(buttonByText("Gemini access", ".api-access-item-main"));
+    await click(apiConfigUseButtonByText("Gemini access"));
 
     expect(bridge.saveDraft).toHaveBeenCalledWith(expect.objectContaining({
       prompt: "Product hero\n\nserialized template body",
@@ -649,26 +699,25 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
-  it("filters @ Gallery prompt chips by the active Gallery folder, tag, and search", async () => {
+  it("filters @ Gallery prompt chips by the active Gallery folder and search", async () => {
     const productFolder = galleryFolder("Product refs");
     const matching = galleryAsset("folder-match.png", { folderId: productFolder.id, tags: ["hero"] });
     const wrongFolder = galleryAsset("folder-miss.png", { tags: ["hero"] });
-    const wrongTag = galleryAsset("tag-miss.png", { folderId: productFolder.id, tags: ["draft"] });
+    const wrongName = galleryAsset("name-miss.png", { folderId: productFolder.id, tags: ["hero"] });
     const bridge = await renderApp(snapshot({
       galleryFolders: [productFolder],
-      galleryAssets: [matching, wrongFolder, wrongTag]
+      galleryAssets: [matching, wrongFolder, wrongName]
     }));
     const promptInput = textAreaByLabel("Prompt");
 
     await openGalleryRail();
-    await click(buttonByText("Product refs", ".gallery-folder-main"));
-    await changeSelect(document.querySelector<HTMLSelectElement>(".gallery-toolbar select")!, "hero");
+    await selectGalleryFolder("Product refs");
     await changeInput(inputByPlaceholder("Search Gallery"), "folder-match");
 
     await changeTextArea(promptInput, "Product hero @");
     expect(document.body.textContent).toContain("folder-match.png");
     expect(document.querySelector('[role="listbox"]')?.textContent).not.toContain("folder-miss.png");
-    expect(document.querySelector('[role="listbox"]')?.textContent).not.toContain("tag-miss.png");
+    expect(document.querySelector('[role="listbox"]')?.textContent).not.toContain("name-miss.png");
     await keyDown(promptInput, "Enter");
 
     expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(matching.id);
@@ -693,7 +742,8 @@ describe("renderer multi-model smoke", () => {
 
   it("edits Gallery tags and updates the visible filter state", async () => {
     const asset = galleryAsset("gallery-tags.png", { tags: ["old"] });
-    const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
+    const other = galleryAsset("gallery-other.png", { tags: ["draft"] });
+    const bridge = await renderApp(snapshot({ galleryAssets: [asset, other] }));
 
     await openGalleryRail();
     await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[aria-label="Edit tags"]')!);
@@ -704,21 +754,25 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Gallery tags updated.");
     expect(document.body.textContent).toContain("product");
     expect(document.body.textContent).toContain("hero");
+
+    await changeSelect(document.querySelector<HTMLSelectElement>('select[aria-label="Gallery tag filter"]')!, "hero");
+    expect(document.body.textContent).toContain("gallery-tags.png");
+    expect(document.body.textContent).not.toContain("gallery-other.png");
   });
 
   it("creates Gallery folders, imports and moves assets, then deletes folders back to Uncategorized", async () => {
     const bridge = await renderApp(snapshot());
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     await openGalleryRail();
-    await changeInput(inputByPlaceholder("New folder"), "Product refs");
     await click(document.querySelector<HTMLButtonElement>('button[aria-label="Create folder"]')!);
+    await changeInput(inputByLabel("Folder name", document.querySelector<HTMLElement>(".gallery-folder-dialog")!), "Product refs");
+    await click(buttonByText("Create folder", ".gallery-folder-dialog button"));
 
-    expect(bridge.createGalleryFolder).toHaveBeenCalledWith({ name: "Product refs" });
+    expect(bridge.createGalleryFolder).toHaveBeenCalledWith({ name: "Product refs", parentId: null });
     expect(document.body.textContent).toContain("Product refs");
     expect(document.body.textContent).toContain("No Gallery images yet.");
 
-    await click(document.querySelector<HTMLButtonElement>(".gallery-empty-state button")!);
+    await click(document.querySelector<HTMLButtonElement>(".rail-import-button")!);
     expect(bridge.importToGallery).toHaveBeenCalledWith(undefined, "folder-product-refs");
     expect(document.body.textContent).toContain("imported.png");
 
@@ -727,10 +781,9 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Gallery image moved.");
 
     await changeInput(inputByPlaceholder("Search Gallery"), "imported");
-    await changeSelect(document.querySelector<HTMLSelectElement>(".gallery-toolbar select")!, "");
     expect(document.body.textContent).toContain("No matching Gallery images.");
 
-    await click(buttonByText("Uncategorized", ".gallery-folder-button"));
+    await selectGalleryFolder("Uncategorized");
     expect(document.body.textContent).toContain("imported.png");
 
     await changeSelect(document.querySelector<HTMLSelectElement>(".gallery-folder-select")!, "folder-product-refs");
@@ -738,35 +791,268 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("No matching Gallery images.");
 
     await changeInput(inputByPlaceholder("Search Gallery"), "");
-    await click(buttonByText("Product refs", ".gallery-folder-main"));
+    await selectGalleryFolder("Product refs");
     expect(document.body.textContent).toContain("imported.png");
 
-    const folderDelete = document.querySelector<HTMLButtonElement>('button[aria-label="Delete folder"]')!;
-    await click(folderDelete);
+    const folderButton = await openGalleryFolderMenuItem("Product refs");
+    await contextMenu(folderButton);
+    await click(elementByText("Delete folder", ".context-menu-item"));
+
+    expect(bridge.deleteGalleryFolder).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('Delete Gallery folder "Product refs"?');
+    await click(buttonByText("Delete folder", ".confirm-dialog .danger-button"));
 
     expect(bridge.deleteGalleryFolder).toHaveBeenCalledWith("folder-product-refs");
     expect(document.body.textContent).toContain("Uncategorized");
     expect(document.body.textContent).toContain("imported.png");
   });
 
+  it("shows a clean duplicate Gallery folder error from Electron IPC", async () => {
+    const bridge = await renderApp(snapshot());
+    vi.mocked(bridge.createGalleryFolder).mockRejectedValueOnce(
+      new Error("Error invoking remote method 'galleryFolders:create': Error: Gallery 文件夹名称已存在。")
+    );
+
+    await openGalleryRail();
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Create folder"]')!);
+    await changeInput(inputByLabel("Folder name", document.querySelector<HTMLElement>(".gallery-folder-dialog")!), "Product refs");
+    await click(buttonByText("Create folder", ".gallery-folder-dialog button"));
+
+    expect(document.body.textContent).toContain("A Gallery folder with this name already exists.");
+    expect(document.body.textContent).not.toContain("Error invoking remote method");
+    expect(document.querySelector(".gallery-folder-dialog")).toBeTruthy();
+  });
+
+  it("blocks duplicate Gallery folder names before calling IPC", async () => {
+    const existing = galleryFolder("Product refs");
+    const bridge = await renderApp(snapshot({ galleryFolders: [existing] }));
+
+    await openGalleryRail();
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Create folder"]')!);
+    await changeInput(inputByLabel("Folder name", document.querySelector<HTMLElement>(".gallery-folder-dialog")!), " product refs ");
+    await click(buttonByText("Create folder", ".gallery-folder-dialog button"));
+
+    expect(bridge.createGalleryFolder).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("A Gallery folder with this name already exists.");
+    expect(document.body.textContent).not.toContain("Error invoking remote method");
+    expect(document.querySelector(".gallery-folder-dialog")).toBeTruthy();
+  });
+
+  it("shows the localized duplicate Gallery folder error in Chinese", async () => {
+    window.localStorage.setItem("image2tools.language", "zh");
+    const bridge = await renderApp(snapshot());
+    vi.mocked(bridge.createGalleryFolder).mockRejectedValueOnce(
+      new Error("Error: Error invoking remote method 'galleryFolders:create': Error: Gallery 文件夹名称已存在。")
+    );
+
+    await openGalleryRail();
+    await click(document.querySelector<HTMLButtonElement>(".rail-new-folder-button")!);
+    await changeInput(inputByLabel("文件夹名称", document.querySelector<HTMLElement>(".gallery-folder-dialog")!), "Product refs");
+    await click(buttonByText("创建文件夹", ".gallery-folder-dialog button"));
+
+    expect(document.body.textContent).toContain("图库文件夹名称已存在。");
+    expect(document.body.textContent).not.toContain("Error invoking remote method");
+    expect(document.querySelector(".gallery-folder-dialog")).toBeTruthy();
+  });
+
+  it("renders nested Gallery folders with a tree, breadcrumb, and child creation target", async () => {
+    const parent = galleryFolder("Products");
+    const child = galleryFolder("Hero shots", { parentId: parent.id });
+    const asset = galleryAsset("hero.png", { folderId: child.id });
+    const bridge = await renderApp(snapshot({ galleryFolders: [parent, child], galleryAssets: [asset] }));
+
+    await openGalleryRail();
+    await click(buttonByText("Products", ".gallery-tree-folder-button"));
+    await flushAsync();
+
+    expect(document.querySelector(".gallery-breadcrumb")?.textContent).toContain("AllProducts");
+    expect(document.body.textContent).toContain("Hero shots");
+
+    await click(buttonByText("Hero shots", ".gallery-tree-folder-button"));
+    expect(document.querySelector(".gallery-breadcrumb")?.textContent).toContain("ProductsHero shots");
+    expect(document.body.textContent).toContain("hero.png");
+
+    await click(buttonByText("Products", ".gallery-tree-folder-button"));
+    await click(document.querySelector<HTMLButtonElement>(".rail-new-folder-button")!);
+    await changeInput(inputByLabel("Folder name", document.querySelector<HTMLElement>(".gallery-folder-dialog")!), "Campaign");
+    await click(buttonByText("Create folder", ".gallery-folder-dialog button"));
+
+    expect(bridge.createGalleryFolder).toHaveBeenLastCalledWith({ name: "Campaign", parentId: parent.id });
+  });
+
+  it("moves nested Gallery folders by dragging them into another folder", async () => {
+    const parent = galleryFolder("Products");
+    const target = galleryFolder("Archive");
+    const child = galleryFolder("Hero shots", { parentId: parent.id });
+    const bridge = await renderApp(snapshot({ galleryFolders: [parent, target, child] }));
+
+    await openGalleryRail();
+    await click(buttonByText("Products", ".gallery-tree-folder-button"));
+    await flushAsync();
+    const dragTransfer = dataTransferStub();
+    await dispatchDragEvent(document.querySelector<HTMLElement>(".gallery-folder-entry")!, "dragstart", dragTransfer);
+    await dispatchDragEvent(buttonByText("Archive", ".gallery-tree-folder-button").closest<HTMLElement>(".gallery-tree-row")!, "drop", dragTransfer);
+
+    expect(bridge.moveGalleryFolder).toHaveBeenCalledWith(child.id, target.id);
+  });
+
+  it("deletes selected Gallery images in a batch", async () => {
+    const asset = galleryAsset("batch-delete.png");
+    const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
+
+    await openGalleryRail();
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="Select batch-delete.png"]')).toBeNull();
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Batch select"]')!);
+    await click(document.querySelector<HTMLInputElement>('input[aria-label="Select batch-delete.png"]')!);
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Delete selected"]')!);
+
+    expect(bridge.removeGalleryAsset).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Delete 1 selected Gallery item?");
+    await click(buttonByText("Delete selected", ".confirm-dialog .danger-button"));
+
+    expect(bridge.removeGalleryAsset).toHaveBeenCalledWith(asset.id);
+    expect(document.body.textContent).toContain("Selected Gallery items deleted.");
+  });
+
+  it("uses four unified Library actions and single-button display toggles", async () => {
+    const asset = galleryAsset("view-toggle.png");
+    await renderApp(snapshot({ history: [geminiJob(0)], galleryAssets: [asset] }));
+
+    let actionButtons = document.querySelectorAll<HTMLButtonElement>(".right-rail-action-group button");
+    expect(actionButtons).toHaveLength(4);
+    expect([...actionButtons].map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Grid view",
+      "Library path settings",
+      "Batch select",
+      "Clear all history records"
+    ]);
+    expect(Boolean(document.querySelector(".right-rail-summary")!.compareDocumentPosition(document.querySelector(".right-rail-action-group")!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+    await click(actionButtons[0]);
+    expect(document.querySelector(".history-list.grid")).toBeTruthy();
+    expect(document.querySelector<HTMLButtonElement>('button[aria-label="List view"]')).toBeTruthy();
+
+    await openGalleryRail();
+    actionButtons = document.querySelectorAll<HTMLButtonElement>(".right-rail-action-group button");
+    expect(actionButtons).toHaveLength(4);
+    expect([...actionButtons].map((button) => button.getAttribute("aria-label"))).toEqual([
+      "List view",
+      "Library path settings",
+      "Batch select",
+      "Clear all Gallery items"
+    ]);
+    expect(document.querySelector(".gallery-entry-select")).toBeNull();
+
+    await click(actionButtons[0]);
+    expect(document.querySelector(".gallery-content-grid.list")).toBeTruthy();
+    expect(document.querySelector<HTMLButtonElement>('button[aria-label="Grid view"]')).toBeTruthy();
+  });
+
+  it("opens the Gallery file context menu for file-specific actions", async () => {
+    const asset = galleryAsset("context-file.png");
+    const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
+
+    await openGalleryRail();
+    await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
+    await click(elementByText("Open folder", ".context-menu-item"));
+
+    expect(bridge.openStorageFolder).toHaveBeenCalledWith("gallery", null);
+  });
+
+  it("renames a Gallery image from the file context menu", async () => {
+    const asset = galleryAsset("rename-file.png");
+    const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
+
+    await openGalleryRail();
+    await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
+    await click(elementByText("Rename image", ".context-menu-item"));
+    await changeInput(inputByLabel("Image name", document.querySelector<HTMLElement>(".gallery-asset-dialog")!), "renamed-file.png");
+    await click(buttonByText("Rename image", ".gallery-asset-dialog button"));
+
+    expect(bridge.updateGalleryAsset).toHaveBeenCalledWith(asset.id, { originalName: "renamed-file.png" });
+    expect(document.body.textContent).toContain("Gallery image renamed.");
+    expect(document.body.textContent).toContain("renamed-file.png");
+    expect(document.body.textContent).not.toContain("rename-file.png");
+  });
+
+  it("opens the current folder context menu from blank Gallery space", async () => {
+    const folder = galleryFolder("Products");
+    const bridge = await renderApp(snapshot({ galleryFolders: [folder] }));
+
+    await openGalleryRail();
+    await click(buttonByText("Products", ".gallery-tree-folder-button"));
+    await contextMenu(document.querySelector<HTMLElement>(".gallery-empty-state")!);
+    await click(elementByText("Create folder", ".context-menu-item"));
+    await changeInput(inputByLabel("Folder name", document.querySelector<HTMLElement>(".gallery-folder-dialog")!), "Nested");
+    await click(buttonByText("Create folder", ".gallery-folder-dialog button"));
+
+    expect(bridge.createGalleryFolder).toHaveBeenLastCalledWith({ name: "Nested", parentId: folder.id });
+  });
+
+  it("virtualizes large Gallery folders instead of rendering every item at once", async () => {
+    const assets = Array.from({ length: 80 }, (_, index) => galleryAsset(`virtual-${String(index).padStart(2, "0")}.png`));
+    await renderApp(snapshot({ galleryAssets: assets }));
+
+    await openGalleryRail();
+    const grid = document.querySelector<HTMLElement>(".gallery-content-grid")!;
+
+    expect(grid.dataset.totalCount).toBe("80");
+    expect(Number(grid.dataset.renderedCount)).toBeLessThan(80);
+    expect(document.querySelectorAll(".gallery-content-grid .gallery-item").length).toBe(Number(grid.dataset.renderedCount));
+  });
+
+  it("moves Gallery images by dragging them into a folder", async () => {
+    const folder = galleryFolder("Product refs");
+    const asset = galleryAsset("folder-drag.png");
+    const bridge = await renderApp(snapshot({ galleryFolders: [folder], galleryAssets: [asset] }));
+
+    await openGalleryRail();
+    const dragTransfer = dataTransferStub();
+    await dispatchDragEvent(document.querySelector<HTMLButtonElement>(".gallery-thumb")!, "dragstart", dragTransfer);
+    const folderButton = await openGalleryFolderMenuItem("Product refs");
+    await dispatchDragEvent(folderButton, "dragover", dragTransfer);
+    await dispatchDragEvent(folderButton, "drop", dragTransfer);
+
+    expect(bridge.moveGalleryAsset).toHaveBeenCalledWith(asset.id, folder.id);
+    expect(document.body.textContent).toContain("Gallery image moved.");
+  });
+
+  it("moves multiple selected Gallery images by dragging the selection into a folder", async () => {
+    const folder = galleryFolder("Batch target");
+    const first = galleryAsset("batch-move-a.png");
+    const second = galleryAsset("batch-move-b.png");
+    const bridge = await renderApp(snapshot({ galleryFolders: [folder], galleryAssets: [first, second] }));
+
+    await openGalleryRail();
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Batch select"]')!);
+    const dragTransfer = dataTransferStub({
+      "application/x-image2tools-gallery-selection": JSON.stringify({ assetIds: [first.id, second.id], folderIds: [] })
+    });
+    const folderButton = await openGalleryFolderMenuItem("Batch target");
+    await dispatchDragEvent(folderButton, "drop", dragTransfer);
+
+    expect(bridge.moveGalleryAsset).toHaveBeenCalledWith(first.id, folder.id);
+    expect(bridge.moveGalleryAsset).toHaveBeenCalledWith(second.id, folder.id);
+  });
+
   it("confirms before deleting a Gallery image", async () => {
     const asset = galleryAsset("gallery-delete.png");
     const bridge = await renderApp(snapshot({ galleryAssets: [asset], history: [geminiJob(0)] }));
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
 
     await openGalleryRail();
-    expect(buttonByText("Recent jobs", ".right-rail-tabs button").textContent).toContain("1");
+    expect(buttonByText("History", ".right-rail-tabs button")).toBeTruthy();
     await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[aria-label="Delete"]')!);
 
-    expect(confirmSpy).toHaveBeenCalledWith('Delete Gallery image "gallery-delete.png"?');
+    expect(document.body.textContent).toContain('Delete Gallery image "gallery-delete.png"?');
     expect(bridge.removeGalleryAsset).not.toHaveBeenCalled();
 
-    confirmSpy.mockReturnValue(true);
+    await click(buttonByText("Cancel", ".confirm-dialog button"));
     await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[aria-label="Delete"]')!);
+    await click(buttonByText("Delete", ".confirm-dialog .danger-button"));
 
     expect(bridge.removeGalleryAsset).toHaveBeenCalledWith(asset.id);
     expect(document.body.textContent).not.toContain("gallery-delete.png");
-    await click(buttonByText("Recent jobs", ".right-rail-tabs button"));
+    await click(buttonByText("History", ".right-rail-tabs button"));
     expect(document.querySelectorAll(".history-item")).toHaveLength(1);
   });
 
@@ -820,8 +1106,50 @@ describe("renderer multi-model smoke", () => {
 
     // Reference tools (and the upload-rights reminder) live under the image-to-image tab now.
     await click(buttonByText("Image to image", ".mode-tab"));
-    expect(document.body.textContent).toContain("Only upload images you have permission to use");
-    expect(buttonByText("Upload mask")).toBeTruthy();
+    const addReferenceButton = document.querySelector<HTMLButtonElement>(".reference-add-button")!;
+    expect(addReferenceButton.dataset.tooltip).toBe("Add local reference image");
+    const referenceGrid = document.querySelector<HTMLElement>(".reference-grid");
+    const reminder = document.querySelector<HTMLElement>(".reference-rights-reminder");
+    expect(reminder?.textContent).toContain("Only upload images you have permission to use");
+    expect(referenceGrid && reminder ? Boolean(referenceGrid.compareDocumentPosition(reminder) & Node.DOCUMENT_POSITION_FOLLOWING) : false).toBe(true);
+    expect(buttonByText("Add as mask").disabled).toBe(true);
+    expect(document.body.textContent).toContain("Drag local images, History results, or Gallery images here.");
+    expect(document.querySelector<HTMLButtonElement>('.input-panel button[aria-label="Clear"]')).toBeNull();
+  });
+
+  it("caps local reference images to the active model capability", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
+    vi.mocked(bridge.selectImages).mockResolvedValueOnce([
+      inputAsset("local-a.png"),
+      inputAsset("local-b.png"),
+      inputAsset("local-c.png")
+    ]);
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    await click(document.querySelector<HTMLButtonElement>(".reference-add-button")!);
+    await flushAsync();
+
+    expect(document.querySelectorAll(".asset-tile")).toHaveLength(2);
+    expect(document.body.textContent).toContain("The current model supports up to 2 reference images.");
+    expect(document.querySelector(".reference-limit-toast")?.textContent).toContain("The current model supports up to 2 reference images.");
+
+    vi.mocked(bridge.selectImages).mockClear();
+    await click(document.querySelector<HTMLButtonElement>(".reference-add-button")!);
+
+    expect(bridge.selectImages).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("The current model supports up to 2 reference images.");
+    expect(document.querySelector(".reference-limit-toast")?.textContent).toContain("The current model supports up to 2 reference images.");
   });
 
   it("enables Nano Banana 3 and Gemini General candidate without showing more than six collapsed history items", async () => {
@@ -907,24 +1235,46 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
-  it("keeps API access, launch buttons, templates, parameters, and updates in a clear left-rail order", async () => {
+  it("keeps API config, launch buttons, parameters, and updates in a clear left-rail order", async () => {
     await renderApp(snapshot());
     const sidebar = document.querySelector<HTMLElement>(".sidebar")!;
-    const configSection = sidebar.querySelector<HTMLElement>("form.tool-section")!;
+    const configSection = sidebar.querySelector<HTMLElement>(".api-access-section")!;
     const launchSection = sidebar.querySelector<HTMLElement>(".launch-section")!;
-    const templateSection = sidebar.querySelector<HTMLElement>(".template-sidebar-section")!;
     const parameterSection = buttonByText("Parameters", ".section-toggle").closest<HTMLElement>(".tool-section")!;
-    const updatePanel = sidebar.querySelector<HTMLElement>(".update-panel")!;
+    const updatePanel = sidebar.querySelector<HTMLElement>(".sidebar-utility-bar")!;
 
-    expect(configSection.textContent).toContain("API access");
+    expect(configSection.textContent).toContain("API config");
     expect(launchSection.textContent).toContain("Launch");
-    expect(templateSection.textContent).toContain("Prompt templates");
     expect(parameterSection.textContent).toContain("Parameters");
-    expect(updatePanel.textContent).toContain("Updates");
+    expect(updatePanel.textContent).toContain("0.1.0");
+    expect(sidebar.querySelector(".template-sidebar-section")).toBeNull();
+    expect(sidebar.querySelector(".draft-section")).toBeNull();
     expect(configSection.compareDocumentPosition(launchSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(launchSection.compareDocumentPosition(templateSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(templateSection.compareDocumentPosition(parameterSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(launchSection.compareDocumentPosition(parameterSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(parameterSection.compareDocumentPosition(updatePanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("uses a clear Chinese update failure label instead of an exception shorthand", async () => {
+    window.localStorage.setItem("image2tools.language", "zh");
+    const bridge = await renderApp(snapshot());
+    vi.mocked(bridge.checkForUpdates).mockResolvedValueOnce({
+      status: "error",
+      currentVersion: "0.1.0",
+      updateAvailable: false,
+      checkedAt: now,
+      message: "网络错误"
+    });
+
+    const checkButton = document.querySelector<HTMLButtonElement>(".sidebar-utility-bar .utility-check-button")!;
+    expect(checkButton.getAttribute("aria-label")).toBe("检查最新版本");
+    expect(checkButton.dataset.tooltip).toBe("检查最新版本");
+    expect(checkButton.textContent).toBe("");
+
+    await click(checkButton);
+    await flushAsync();
+
+    expect(document.querySelector<HTMLElement>(".version-status-badge")?.textContent).toBe("检查失败");
+    expect(document.querySelector<HTMLElement>(".version-status-badge")?.textContent).not.toBe("异常");
   });
 
   it("supports keyboard resizing without losing fixed history layout", async () => {
@@ -933,15 +1283,35 @@ describe("renderer multi-model smoke", () => {
     const historyResizer = separatorByLabel("Resize history");
 
     expect(sidebarResizer.getAttribute("aria-valuenow")).toBe("310");
-    expect(historyResizer.getAttribute("aria-valuenow")).toBe("330");
+    expect(historyResizer.getAttribute("aria-valuenow")).toBe("310");
 
     await keyDown(sidebarResizer, "ArrowRight");
     await keyDown(historyResizer, "ArrowLeft", { shiftKey: true });
 
     expect(sidebarResizer.getAttribute("aria-valuenow")).toBe("326");
-    expect(historyResizer.getAttribute("aria-valuenow")).toBe("370");
+    expect(historyResizer.getAttribute("aria-valuenow")).toBe("350");
     expect(window.localStorage.getItem("image2tools.sidebarWidth")).toBe("326");
-    expect(window.localStorage.getItem("image2tools.historyWidth")).toBe("370");
+    expect(window.localStorage.getItem("image2tools.historyWidth")).toBe("350");
+  });
+
+  it("keeps the workspace in the main grid when the sidebar is collapsed", async () => {
+    await renderApp(snapshot());
+
+    const shell = document.querySelector<HTMLElement>(".app-shell")!;
+    expect(document.querySelector(".sidebar-resizer")).toBeTruthy();
+    expect(document.querySelector(".history-resizer")).toBeTruthy();
+    expect(document.querySelector(".workspace")).toBeTruthy();
+
+    await click(document.querySelector<HTMLButtonElement>(".sidebar-collapse-button")!);
+
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(true);
+    expect(document.querySelector(".workspace")).toBeTruthy();
+    expect(document.querySelector(".history")).toBeTruthy();
+    const compactStack = document.querySelector<HTMLElement>(".sidebar-mini-stack")!;
+    expect(compactStack).toBeTruthy();
+    expect(compactStack.querySelector('button[aria-label="API config"]')).toBeTruthy();
+    expect(compactStack.querySelector('button[aria-label="Launch"]')).toBeTruthy();
+    expect(compactStack.querySelector('button[aria-label="Parameters"]')).toBeTruthy();
   });
 
   it("keeps compact controls and history from overflowing their layout contracts", async () => {
@@ -996,6 +1366,26 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).not.toContain("Clear all history?");
   });
 
+  it("can set History and Gallery storage to the same local path", async () => {
+    const bridge = await renderApp(snapshot());
+    const storageConfigButton = document.querySelector<HTMLButtonElement>('button[aria-label="Library path settings"]')!;
+
+    await click(storageConfigButton);
+    expect(document.body.textContent).toContain("Use the same path for History and Gallery");
+    expect(document.body.textContent).toContain("History");
+    expect(document.body.textContent).toContain("Gallery");
+    const pathValues = document.querySelectorAll<HTMLElement>(".storage-path-value");
+    expect(pathValues[0]?.dataset.tooltip).toBe("/tmp/crossgen/history");
+    expect(pathValues[1]?.dataset.tooltip).toBe("/tmp/crossgen/gallery");
+
+    await click(inputByLabel("Use the same path for History and Gallery"));
+    expect(document.querySelectorAll<HTMLElement>(".storage-path-value")).toHaveLength(1);
+    await click(buttonByText("Choose folder", ".storage-dialog button"));
+
+    expect(bridge.chooseStorageFolder).toHaveBeenCalledWith("history", { syncBoth: true });
+    expect(document.body.textContent).toContain("History and Gallery storage folders updated.");
+  });
+
   it("renders Gemini results on the canvas and routes downloads through the bridge", async () => {
     const job = geminiJob(0, { outputs: [imageAsset("result_gemini.png")] });
     const bridge = await renderApp(snapshot({ history: [job] }));
@@ -1013,6 +1403,70 @@ describe("renderer multi-model smoke", () => {
       assetPath: "/tmp/image2tools/result_gemini.png",
       suggestedName: "result_gemini.png"
     });
+  });
+
+  it("switches preview edit and crop controls into returnable toolbars", async () => {
+    const job = geminiJob(0, { outputs: [imageAsset("result_gemini.png")] });
+    await renderApp(snapshot({ history: [job] }));
+
+    await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
+
+    const previewControls = document.querySelector<HTMLElement>(".preview-control-strip")!;
+    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Edit"]')?.dataset.tooltip).toBe("Edit");
+    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Crop"]')?.dataset.tooltip).toBe("Crop");
+
+    await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Edit"]')!);
+
+    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Back"]')).toBeTruthy();
+    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Text box"]')).toBeTruthy();
+    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Clear annotations"]')?.dataset.tooltip).toBe("Clear annotations");
+    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Save to Gallery"]')).toBeTruthy();
+    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Download"]')).toBeNull();
+
+    await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!);
+    await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Crop"]')!);
+
+    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Rectangle crop"]')).toBeTruthy();
+    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Apply crop"]')).toBeTruthy();
+  });
+
+  it("saves the edited preview to Gallery through the bridge", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(mockCanvasContext() as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,ZmFrZQ==");
+    const OriginalImage = window.Image;
+    class MockImage {
+      crossOrigin = "";
+      naturalWidth = 100;
+      naturalHeight = 100;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      #src = "";
+      get src() {
+        return this.#src;
+      }
+      set src(value: string) {
+        this.#src = value;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    window.Image = MockImage as unknown as typeof Image;
+    try {
+      const job = geminiJob(0, { outputs: [imageAsset("result_gemini.png")] });
+      const bridge = await renderApp(snapshot({ history: [job] }));
+
+      await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
+      await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Edit"]')!);
+      await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Save to Gallery"]')!);
+      await flushAsync();
+
+      expect(bridge.addEditedImageToGallery).toHaveBeenCalledWith({
+        dataUrl: "data:image/png;base64,ZmFrZQ==",
+        originalName: "result_gemini-edited.png",
+        folderId: null
+      });
+    } finally {
+      window.Image = OriginalImage;
+    }
   });
 
   it("renders selectable thumbnails for multi-output jobs", async () => {
@@ -1041,7 +1495,7 @@ async function renderApp(initialSnapshot: AppSnapshot): Promise<AppBridge> {
   container = document.createElement("div");
   document.body.append(container);
   const bridge = createBridge(initialSnapshot);
-  window.image2tools = bridge;
+  window.crossgen = bridge;
   await act(async () => {
     root = createRoot(container!);
     root.render(<App />);
@@ -1055,6 +1509,7 @@ async function renderApp(initialSnapshot: AppSnapshot): Promise<AppBridge> {
 async function renderAppWithoutBridge() {
   container = document.createElement("div");
   document.body.append(container);
+  delete window.crossgen;
   delete window.image2tools;
   await act(async () => {
     root = createRoot(container!);
@@ -1076,11 +1531,12 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
   };
 
   const activeConfig = () => currentSnapshot.providers.find(p => p.id === currentSnapshot.activeProviderId) ?? currentSnapshot.providers[0];
+  const configById = (providerId?: string) => currentSnapshot.providers.find(p => p.id === providerId) ?? activeConfig();
 
   return {
     getSnapshot: vi.fn(async () => currentSnapshot),
     saveConfig: vi.fn(async (input) => {
-      const config = activeConfig();
+      const config = configById(input.providerId);
       const nextConfig: ProviderConfig = {
         ...config,
         kind: input.kind ?? config.kind,
@@ -1097,14 +1553,19 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
       };
       currentSnapshot = {
         ...currentSnapshot,
-        providers: currentSnapshot.providers.map(p => p.id === currentSnapshot.activeProviderId ? nextConfig : p)
+        providers: currentSnapshot.providers.map(p => p.id === config.id ? nextConfig : p)
       };
       return nextConfig;
     }),
-    discoverModels: vi.fn(async () => activeConfig()),
-    clearApiKey: vi.fn(async () => {
-      const config = activeConfig();
-      return { ...config, apiKeySaved: false, discoveredModels: [] };
+    discoverModels: vi.fn(async (providerId?: string) => configById(providerId)),
+    clearApiKey: vi.fn(async (providerId?: string) => {
+      const config = configById(providerId);
+      const nextConfig = { ...config, apiKeySaved: false, discoveredModels: [] };
+      currentSnapshot = {
+        ...currentSnapshot,
+        providers: currentSnapshot.providers.map(p => p.id === config.id ? nextConfig : p)
+      };
+      return nextConfig;
     }),
     testConnection: vi.fn(async () => ({ ok: true, message: "ok" })),
     saveDraft: vi.fn(async (input) => ({ ...input, activeLaunchId: input.activeLaunchId ?? input.params.launchId, activeModelId: input.activeModelId ?? input.params.model, updatedAt: now }) as WorkspaceDraft),
@@ -1137,13 +1598,19 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     listGallery: vi.fn(async () => currentSnapshot.galleryAssets),
     listGalleryFolders: vi.fn(async () => currentSnapshot.galleryFolders),
     createGalleryFolder: vi.fn(async (input) => {
-      const folder = galleryFolder(input.name);
+      const folder = galleryFolder(input.name, { parentId: input.parentId ?? null });
       currentSnapshot = { ...currentSnapshot, galleryFolders: [folder, ...currentSnapshot.galleryFolders] };
       return folder;
     }),
     renameGalleryFolder: vi.fn(async (id, input) => {
       const folder = currentSnapshot.galleryFolders.find((item) => item.id === id) ?? galleryFolder(input.name, { id });
-      const updated = { ...folder, name: input.name.trim(), updatedAt: now };
+      const updated = { ...folder, name: input.name.trim(), parentId: input.parentId ?? folder.parentId ?? null, updatedAt: now };
+      currentSnapshot = { ...currentSnapshot, galleryFolders: currentSnapshot.galleryFolders.map((item) => item.id === id ? updated : item) };
+      return updated;
+    }),
+    moveGalleryFolder: vi.fn(async (id, parentId) => {
+      const folder = currentSnapshot.galleryFolders.find((item) => item.id === id)!;
+      const updated = { ...folder, parentId, updatedAt: now };
       currentSnapshot = { ...currentSnapshot, galleryFolders: currentSnapshot.galleryFolders.map((item) => item.id === id ? updated : item) };
       return updated;
     }),
@@ -1168,9 +1635,22 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
       currentSnapshot = { ...currentSnapshot, galleryAssets: [asset, ...currentSnapshot.galleryAssets] };
       return asset;
     }),
+    addEditedImageToGallery: vi.fn(async (input) => {
+      const asset = galleryAsset(input.originalName ?? "edited.png", { source: "result", folderId: input.folderId ?? null });
+      currentSnapshot = { ...currentSnapshot, galleryAssets: [asset, ...currentSnapshot.galleryAssets] };
+      return asset;
+    }),
     updateGalleryAsset: vi.fn(async (id, patch) => {
       const asset = currentSnapshot.galleryAssets.find((item) => item.id === id) ?? galleryAsset("missing.png", { id });
-      const updated = { ...asset, tags: patch.tags ?? asset.tags, folderId: "folderId" in patch ? patch.folderId ?? null : asset.folderId ?? null, updatedAt: now };
+      const originalName = patch.originalName?.trim() || asset.originalName;
+      const updated = {
+        ...asset,
+        fileName: patch.originalName ? originalName : asset.fileName,
+        originalName,
+        tags: patch.tags ?? asset.tags,
+        folderId: "folderId" in patch ? patch.folderId ?? null : asset.folderId ?? null,
+        updatedAt: now
+      };
       currentSnapshot = { ...currentSnapshot, galleryAssets: currentSnapshot.galleryAssets.map((item) => item.id === id ? updated : item) };
       return updated;
     }),
@@ -1206,11 +1686,14 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     }),
     downloadAsset: vi.fn(async () => "/tmp/downloaded.png"),
     openAssetFolder: vi.fn(async () => undefined),
+    openStorageFolder: vi.fn(async () => undefined),
+    chooseStorageFolder: vi.fn(async () => currentSnapshot),
     checkForUpdates: vi.fn(async () => updateCheckResult),
     downloadAndInstallUpdate: vi.fn(async () => ({ version: "0.0.0", filePath: "/tmp/update", message: "opened" })),
     deleteJob: vi.fn(async () => initialSnapshot.history),
     clearHistory: vi.fn(async () => []),
     onJobEvent: vi.fn(() => () => undefined),
+    onGalleryEvent: vi.fn(() => () => undefined),
     addProvider: vi.fn(async (input) => {
       const kind = input.kind ?? "openai";
       const newProvider = providerConfig({
@@ -1281,6 +1764,10 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     promptTemplates: [],
     galleryFolders: [],
     galleryAssets: [],
+    storage: {
+      historyDir: "/tmp/crossgen/history",
+      galleryDir: "/tmp/crossgen/gallery"
+    },
     ...patch
   };
 }
@@ -1345,6 +1832,17 @@ function imageAsset(fileName: string, jobId = "job_gemini_0"): ImageAsset {
   };
 }
 
+function inputAsset(fileName: string): InputAsset {
+  return {
+    id: `input_${fileName}`,
+    name: fileName,
+    path: `/tmp/input/${fileName}`,
+    mimeType: "image/png",
+    sizeBytes: 1024,
+    previewUrl: `image2tools-asset://image?path=${encodeURIComponent(`/tmp/input/${fileName}`)}`
+  };
+}
+
 function galleryAsset(fileName: string, patch: Partial<GalleryAsset> = {}): GalleryAsset {
   return {
     id: `gallery_${fileName}`,
@@ -1357,6 +1855,24 @@ function galleryAsset(fileName: string, patch: Partial<GalleryAsset> = {}): Gall
     createdAt: now,
     updatedAt: now,
     ...patch
+  };
+}
+
+function mockCanvasContext(): Partial<CanvasRenderingContext2D> {
+  return {
+    beginPath: vi.fn(),
+    clearRect: vi.fn(),
+    clip: vi.fn(),
+    drawImage: vi.fn(),
+    ellipse: vi.fn(),
+    fillRect: vi.fn(),
+    fillText: vi.fn(),
+    lineTo: vi.fn(),
+    measureText: vi.fn(() => ({ width: 12 }) as TextMetrics),
+    moveTo: vi.fn(),
+    restore: vi.fn(),
+    save: vi.fn(),
+    stroke: vi.fn()
   };
 }
 
@@ -1381,27 +1897,61 @@ function launchModelOption(name: string): HTMLButtonElement {
 
 function apiAccessCurrentButton(): HTMLButtonElement {
   const button = document.querySelector<HTMLButtonElement>(".api-access-current");
-  if (!button) throw new Error("Current API access button was not found.");
+  if (!button) throw new Error("Current API config button was not found.");
+  return button;
+}
+
+function apiConfigCardByText(text: string): HTMLElement {
+  const card = [...document.querySelectorAll<HTMLElement>(".api-config-card")].find((item) => item.textContent?.includes(text));
+  if (!card) throw new Error(`API config card containing "${text}" was not found.`);
+  return card;
+}
+
+function apiConfigCardMainByText(text: string): HTMLButtonElement {
+  const button = apiConfigCardByText(text).querySelector<HTMLButtonElement>(".api-config-card-main");
+  if (!button) throw new Error(`API config card main button containing "${text}" was not found.`);
+  return button;
+}
+
+function apiConfigUseButtonByText(text: string): HTMLButtonElement {
+  const button = apiConfigCardByText(text).querySelector<HTMLButtonElement>(".api-config-use-button");
+  if (!button) throw new Error(`API config use button containing "${text}" was not found.`);
+  return button;
+}
+
+function apiConfigDeleteButtonByText(text: string): HTMLButtonElement {
+  const button = [...apiConfigCardByText(text).querySelectorAll<HTMLButtonElement>(".api-config-card-actions button")].find((item) => item.getAttribute("aria-label") === "Delete API config");
+  if (!button) throw new Error(`API config delete button containing "${text}" was not found.`);
+  return button;
+}
+
+function apiConfigDiscoverButtonByText(text: string): HTMLButtonElement {
+  const button = [...apiConfigCardByText(text).querySelectorAll<HTMLButtonElement>(".api-config-card-actions button")].find((item) => item.getAttribute("aria-label") === "Discover models");
+  if (!button) throw new Error(`API config discover button containing "${text}" was not found.`);
   return button;
 }
 
 async function openSavedApiAccess() {
-  await click(buttonByText("Saved API access", ".compact-toggle"));
-}
-
-async function openTemplateSidebar() {
-  await click(buttonByText("Prompt templates", ".sidebar .section-toggle"));
+  await click(apiAccessCurrentButton());
 }
 
 async function openTemplateDialog() {
-  await openTemplateSidebar();
-  await click(buttonByText("Edit template", ".template-sidebar-actions button"));
+  await click(buttonByText("Prompt templates", ".prompt-actions button"));
 }
 
 async function openGalleryRail() {
   const tab = document.querySelectorAll<HTMLButtonElement>(".right-rail-tabs button")[1];
   if (!tab) throw new Error("Gallery rail tab was not found.");
   await click(tab);
+}
+
+async function openGalleryFolderMenuItem(text: string): Promise<HTMLElement> {
+  const button = buttonByText(text, ".gallery-tree-folder-button, .gallery-tree-root");
+  return button.closest<HTMLElement>(".gallery-tree-row") ?? button;
+}
+
+async function selectGalleryFolder(text: string) {
+  await click(buttonByText(text, ".gallery-tree-folder-button, .gallery-tree-root"));
 }
 
 function buttonByText(text: string, selector = "button"): HTMLButtonElement {
@@ -1417,10 +1967,16 @@ async function flushAsync() {
   });
 }
 
-async function click(button: HTMLButtonElement) {
+async function click(element: HTMLElement) {
   await act(async () => {
-    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
+}
+
+function elementByText(text: string, selector: string): HTMLElement {
+  const element = [...document.querySelectorAll<HTMLElement>(selector)].find((item) => item.textContent?.includes(text));
+  if (!element) throw new Error(`Element containing "${text}" was not found.`);
+  return element;
 }
 
 async function changeInput(input: HTMLInputElement, value: string) {
@@ -1479,7 +2035,7 @@ function selectByLabel(labelText: string, root: ParentNode = document): HTMLSele
 
 function apiAccessAddForm(): HTMLElement {
   const form = document.querySelector<HTMLElement>(".api-access-add-form");
-  if (!form) throw new Error("API access add form was not found.");
+  if (!form) throw new Error("API config add form was not found.");
   return form;
 }
 
@@ -1494,6 +2050,13 @@ async function dispatchDragEvent(element: HTMLElement, type: string, dataTransfe
     const event = new Event(type, { bubbles: true, cancelable: true });
     Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
     element.dispatchEvent(event);
+    await Promise.resolve();
+  });
+}
+
+async function contextMenu(element: HTMLElement) {
+  await act(async () => {
+    element.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 24, clientY: 24 }));
     await Promise.resolve();
   });
 }

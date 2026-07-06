@@ -13,9 +13,9 @@ import { createFindPidsByPathScript } from "../dist/shared/windowsVerifierScript
 
 const execFileAsync = promisify(execFile);
 const releaseDir = path.resolve("release");
-const productName = "Image2Tools";
+const productName = "CrossGen";
 const appExecutableName = `${productName}.exe`;
-const installerPattern = /^Image2Tools(?:-Setup|-.*-win-.*)\.exe$/;
+const installerPattern = /^CrossGen(?:-Setup|-.*-win-.*)\.exe$/;
 const installerTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_INSTALL_TIMEOUT_MS ?? 120000);
 const smokeTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_SMOKE_TIMEOUT_MS ?? 12000);
 const windowTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_WINDOW_TIMEOUT_MS ?? 15000);
@@ -198,11 +198,11 @@ function fallbackInstallExecutableCandidates() {
   const programFilesX86 = process.env["ProgramFiles(x86)"];
   return [
     path.join(localAppData, "Programs", productName, appExecutableName),
-    path.join(localAppData, "Programs", "image2tools", appExecutableName),
+    path.join(localAppData, "Programs", "crossgen", appExecutableName),
     programFiles ? path.join(programFiles, productName, appExecutableName) : "",
-    programFiles ? path.join(programFiles, "image2tools", appExecutableName) : "",
+    programFiles ? path.join(programFiles, "crossgen", appExecutableName) : "",
     programFilesX86 ? path.join(programFilesX86, productName, appExecutableName) : "",
-    programFilesX86 ? path.join(programFilesX86, "image2tools", appExecutableName) : ""
+    programFilesX86 ? path.join(programFilesX86, "crossgen", appExecutableName) : ""
   ].filter(Boolean);
 }
 

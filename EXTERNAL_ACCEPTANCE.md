@@ -1,4 +1,4 @@
-# Image2Tools External Acceptance Runbook
+# CrossGen External Acceptance Runbook
 
 This runbook covers the work that cannot be completed from the current local
 macOS development environment. Do not paste API keys, Apple credentials, or

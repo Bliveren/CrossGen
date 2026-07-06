@@ -5,7 +5,7 @@ Last reviewed: 2026-06-09
 ## Scope
 
 This audit covers tracked source files, scripts, build metadata, documentation,
-and public packaging configuration for publishing Image2Tools under the MIT
+and public packaging configuration for publishing CrossGen under the MIT
 license with Nowo, Corgnitor, and project contributors listed as copyright
 holders.
 

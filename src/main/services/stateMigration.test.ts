@@ -227,6 +227,14 @@ describe("state migration", () => {
           sizeBytes: 1024,
           folderId: "missing-folder"
         },
+        {
+          id: "gallery-foldered",
+          fileName: "Product/foldered.png",
+          originalName: "Foldered.png",
+          mimeType: "image/png",
+          sizeBytes: 512,
+          folderId: "folder-product"
+        },
         { id: "gallery-1", fileName: "duplicate.png", mimeType: "image/png", sizeBytes: 1 },
         { id: "escape", fileName: "../escape.png", mimeType: "image/png", sizeBytes: 1 },
         { id: "bad-mime", fileName: "bad.png", mimeType: "", sizeBytes: 1 },
@@ -238,6 +246,7 @@ describe("state migration", () => {
       {
         id: "folder-product",
         name: "Product",
+        parentId: null,
         color: "#AABBCC",
         createdAt: "2026-01-02T03:04:01.000Z",
         updatedAt: "2026-01-02T03:04:02.000Z"
@@ -269,7 +278,57 @@ describe("state migration", () => {
         source: "import",
         createdAt: new Date(0).toISOString(),
         updatedAt: new Date(0).toISOString()
+      },
+      {
+        id: "gallery-foldered",
+        fileName: "Product/foldered.png",
+        originalName: "Foldered.png",
+        mimeType: "image/png",
+        sizeBytes: 512,
+        folderId: "folder-product",
+        tags: [],
+        source: "import",
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString()
       }
+    ]);
+  });
+
+  it("normalizes nested gallery folders and breaks invalid parent cycles", () => {
+    const migrated = normalizeState({
+      version: 3,
+      providers: [
+        {
+          id: "default",
+          baseURL: "https://api.openai.com/v1",
+          defaultModel: "gpt-image-2",
+          defaultSize: "auto",
+          defaultQuality: "auto",
+          timeoutMs: 120000,
+          updatedAt: "2026-01-02T03:04:05.000Z",
+          encryption: "none"
+        }
+      ],
+      activeProviderId: "default",
+      history: [],
+      galleryFolders: [
+        { id: "root-a", name: "Projects", createdAt: "2026-01-02T03:04:01.000Z", updatedAt: "2026-01-02T03:04:02.000Z" },
+        { id: "child-a", name: "Shots", parentId: "root-a", createdAt: "2026-01-02T03:04:03.000Z", updatedAt: "2026-01-02T03:04:04.000Z" },
+        { id: "root-b", name: "Shots", createdAt: "2026-01-02T03:04:05.000Z", updatedAt: "2026-01-02T03:04:06.000Z" },
+        { id: "duplicate-child", name: "Shots", parentId: "root-a" },
+        { id: "cycle-a", name: "Cycle A", parentId: "cycle-b" },
+        { id: "cycle-b", name: "Cycle B", parentId: "cycle-a" },
+        { id: "missing-parent", name: "Missing", parentId: "does-not-exist" }
+      ]
+    });
+
+    expect(migrated.galleryFolders).toEqual([
+      expect.objectContaining({ id: "root-a", name: "Projects", parentId: null }),
+      expect.objectContaining({ id: "child-a", name: "Shots", parentId: "root-a" }),
+      expect.objectContaining({ id: "root-b", name: "Shots", parentId: null }),
+      expect.objectContaining({ id: "cycle-a", name: "Cycle A", parentId: null }),
+      expect.objectContaining({ id: "cycle-b", name: "Cycle B", parentId: null }),
+      expect.objectContaining({ id: "missing-parent", name: "Missing", parentId: null })
     ]);
   });
 

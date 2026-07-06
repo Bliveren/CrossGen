@@ -1,6 +1,6 @@
 # Security and Open Source Readiness
 
-Image2Tools is designed to be published as an MIT-licensed desktop tool. This
+CrossGen is designed to be published as an MIT-licensed desktop tool. This
 document records the security and privacy checks expected before each public
 release.
 
@@ -17,7 +17,7 @@ release.
   discovering models, or running jobs.
 - The repository intentionally ignores `.env`, `.env.*`, logs, release output,
   build output, coverage, and real API artifacts.
-- Mock keys such as `sk-mock-image2tools`, `sk-test-key`, and
+- Mock keys such as `sk-mock-crossgen`, `sk-test-key`, and
   `mock-gemini-key` are test fixtures, not real credentials.
 
 ## Local Data

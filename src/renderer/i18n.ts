@@ -80,6 +80,14 @@ export interface UiCopy {
   apiAccessShort: string;
   apiAccessName: string;
   apiAccessList: string;
+  apiAccessCurrentSlot: string;
+  apiAccessDialogSummary: (count: number) => string;
+  apiAccessEditHint: string;
+  apiAccessUseNow: string;
+  apiAccessSelectedDetail: string;
+  apiAccessModels: string;
+  apiAccessNoModels: string;
+  apiAccessSaved: string;
   addApiAccess: string;
   addingApiAccess: string;
   switchApiAccess: string;
@@ -154,26 +162,60 @@ export interface UiCopy {
   templateApplied: (title: string) => string;
   templateImported: (imported: number, skipped: number) => string;
   templateExported: (filePath: string) => string;
+  library: string;
+  libraryConfig: string;
+  batchSelect: string;
+  exitBatchSelect: string;
   gallery: string;
   galleryDescription: string;
   galleryFolders: string;
   galleryAllFolders: string;
   galleryUncategorized: string;
+  galleryFolderFilter: string;
+  galleryTagFilter: string;
   galleryFolderNew: string;
   galleryFolderName: string;
   galleryFolderCreate: string;
   galleryFolderRename: string;
   galleryFolderDelete: string;
+  galleryFolderContents: string;
+  galleryBreadcrumb: string;
+  galleryViewMode: string;
+  galleryGridView: string;
+  galleryListView: string;
+  gallerySelectItem: (name: string) => string;
+  galleryOpenItem: (name: string) => string;
+  galleryFolderItemMeta: (count: number, modifiedAt: string) => string;
+  galleryFolderDialogDescription: string;
   galleryFolderDeleteConfirm: (name: string) => string;
   galleryFolderCreated: string;
   galleryFolderRenamed: string;
+  galleryFolderMoved: string;
+  galleryFolderMoveInvalid: string;
   galleryFolderDeleted: string;
+  galleryFolderNameExists: string;
+  gallerySelectionCount: (count: number) => string;
+  galleryClearSelection: string;
+  galleryDeleteSelected: string;
+  galleryDeleteSelectedTooltip: (count: number) => string;
+  gallerySelectedDeleteConfirm: (count: number) => string;
+  gallerySelectedDeleted: string;
+  clearGalleryTooltip: string;
+  confirmClearGalleryTitle: string;
+  confirmClearGalleryBody: (assetCount: number, folderCount: number) => string;
+  confirmClearGallery: string;
+  galleryCleared: string;
   galleryMoveToFolder: string;
   galleryMoved: string;
   gallerySearch: string;
   galleryAllTags: string;
   galleryImport: string;
+  importShort: string;
   galleryChoose: string;
+  galleryAssetRename: string;
+  galleryAssetName: string;
+  galleryAssetDialogDescription: string;
+  galleryAssetRenamed: string;
   galleryAddHistory: string;
   galleryAddTargetFolder: string;
   galleryEditTags: string;
@@ -215,7 +257,6 @@ export interface UiCopy {
   resultViewer: string;
   outputCanvas: string;
   download: string;
-  openFolder: string;
   saveImage: string;
   generatedResult: string;
   jobFailed: string;
@@ -224,9 +265,13 @@ export interface UiCopy {
   running: string;
   copy: string;
   addReferences: string;
+  addLocalReferences: string;
+  referenceLimitReached: (max: number) => string;
   uploadRightsReminder: string;
   uploadMask: string;
   uploadMaskTooltip: string;
+  addPaintedMask: string;
+  addPaintedMaskTooltip: string;
   clear: string;
   noReferences: string;
   dropReferencesHint: string;
@@ -251,11 +296,28 @@ export interface UiCopy {
   confirmClearHistory: string;
   cancel: string;
   searchPrompt: string;
+  historyFilter: string;
+  filterAll: string;
+  historySucceeded: string;
+  historyFailed: string;
   sortNewest: string;
   sortOldest: string;
+  sortName: string;
+  sortSize: string;
+  sortModified: string;
   historyMatchCount: (count: number) => string;
   showAllHistory: (count: number) => string;
   collapseHistory: string;
+  historyGridView: string;
+  historyListView: string;
+  historySelectItem: (name: string) => string;
+  historySelectionCount: (count: number) => string;
+  historyDeleteSelected: string;
+  historyDeleteSelectedTooltip: (count: number) => string;
+  historySelectedDeleteConfirm: (count: number) => string;
+  historySelectedDeleted: (count: number) => string;
+  historyPageSizeMenu: string;
+  historyPageSizeOption: (count: number) => string;
   noJobsYet: string;
   openJob: string;
   historyResult: string;
@@ -263,9 +325,24 @@ export interface UiCopy {
   copyPrompt: string;
   removePromptChip: string;
   delete: string;
+  openFolder: string;
+  openHistoryFolder: string;
+  chooseHistoryFolder: string;
+  openGalleryFolder: string;
+  chooseGalleryFolder: string;
+  chooseStorageFolder: string;
+  historyStats: (count: number) => string;
+  galleryStats: (assetCount: number, folderCount: number) => string;
+  historyStorageUpdated: string;
+  galleryStorageUpdated: string;
+  storageFoldersUpdated: string;
+  storageFolderDialogDescription: string;
+  storageFolderSyncBoth: string;
+  storageSharedPath: string;
   updates: string;
   currentVersion: string;
   checkUpdates: string;
+  checkLatestVersion: string;
   checkingUpdates: string;
   installUpdate: string;
   downloadingUpdate: string;
@@ -279,6 +356,28 @@ export interface UiCopy {
   resetZoom: string;
   zoomLevel: string;
   clicked: string;
+  back: string;
+  editImage: string;
+  cropImage: string;
+  drawTool: string;
+  textTool: string;
+  textBox: string;
+  quickColors: string;
+  chooseColor: (color: string) => string;
+  annotationColor: string;
+  strokeWidth: string;
+  textSize: string;
+  boldText: string;
+  undo: string;
+  clearAnnotations: string;
+  saveToGallery: string;
+  downloadEditedImage: string;
+  editedDownloadStarted: string;
+  annotationRestoreFailed: string;
+  cropRectangle: string;
+  cropEllipse: string;
+  applyCrop: string;
+  cropApplied: string;
   modes: Record<WorkMode, ModeCopy>;
   guidedRegionMode: ModeCopy;
   tabs: { text2img: { title: string; hint: string }; img2img: { title: string; hint: string } };
@@ -293,23 +392,31 @@ export const translations: Record<Language, UiCopy> = {
     english: "English",
     chinese: "中文",
     tagline: "An easy-to-use, all-in-one AI image generation management tool.",
-    provider: "API access",
+    provider: "API config",
     providerLabel: "API type",
-    apiAccess: "API access",
-    apiAccessShort: "Access",
-    apiAccessName: "API access name",
-    apiAccessList: "Saved API access",
-    addApiAccess: "Add API access",
+    apiAccess: "API config",
+    apiAccessShort: "Config",
+    apiAccessName: "API config name",
+    apiAccessList: "Saved API configs",
+    apiAccessCurrentSlot: "Current in use",
+    apiAccessDialogSummary: (count: number) => `${count} saved config${count === 1 ? "" : "s"} · Click a card to edit it.`,
+    apiAccessEditHint: "Click a card to edit it on the right.",
+    apiAccessUseNow: "Use this config now",
+    apiAccessSelectedDetail: "Config details",
+    apiAccessModels: "Supported models",
+    apiAccessNoModels: "No models discovered yet.",
+    apiAccessSaved: "Saved",
+    addApiAccess: "Add API config",
     addingApiAccess: "Adding",
-    switchApiAccess: "Use this API access",
-    currentApiAccess: "Current API access",
-    deleteApiAccess: "Delete API access",
-    deleteLastApiAccessDisabled: "At least one API access must remain.",
-    confirmDeleteApiAccess: (name: string) => `Delete API access "${name}"? Saved key and model discovery for this access will be removed.`,
-    apiAccessAdded: "API access added.",
-    apiAccessDeleted: "API access deleted.",
+    switchApiAccess: "Use this API config",
+    currentApiAccess: "Current API config",
+    deleteApiAccess: "Delete API config",
+    deleteLastApiAccessDisabled: "At least one API config must remain.",
+    confirmDeleteApiAccess: (name: string) => `Delete API config "${name}"? Saved key and model discovery for this config will be removed.`,
+    apiAccessAdded: "API config added.",
+    apiAccessDeleted: "API config deleted.",
     apiAccessSwitched: (name: string) => `Switched to ${name}.`,
-    apiAccessUntitled: "Untitled API access",
+    apiAccessUntitled: "Untitled API config",
     apiAccessKind: "API type",
     apiAccessBaseURLSummary: "Base URL",
     providerAutoDetected: "Auto-detected from API",
@@ -335,7 +442,7 @@ export const translations: Record<Language, UiCopy> = {
     launchUnavailableModel: (model: string) => `${model} was not discovered.`,
     launchRuntimeUnavailable: (model: string) => `${model} runtime is not connected yet.`,
     selectLaunchToRun: (model: string) => `Select ${model} before running.`,
-    generalRuntimeUnsupported: "General is not available for this API access.",
+    generalRuntimeUnsupported: "General is not available for this API config.",
     generalLimitedRuntime: "General uses API-specific minimal fallback capability.",
     generalReferenceRuntime: "General uses a minimal Gemini fallback: prompt and reference images only.",
     generalPromptOnlyRuntime: "General uses a minimal OpenAI-compatible fallback: prompt-only generation.",
@@ -373,26 +480,60 @@ export const translations: Record<Language, UiCopy> = {
     templateApplied: (title: string) => `Template "${title}" filled into the prompt.`,
     templateImported: (imported: number, skipped: number) => `${imported} template${imported === 1 ? "" : "s"} imported${skipped ? `, ${skipped} skipped` : ""}.`,
     templateExported: (filePath: string) => `Templates exported to ${filePath}`,
+    library: "Library",
+    libraryConfig: "Library path settings",
+    batchSelect: "Batch select",
+    exitBatchSelect: "Exit batch select",
     gallery: "Gallery",
     galleryDescription: "Reference images ready for reuse.",
     galleryFolders: "Gallery folders",
     galleryAllFolders: "All",
     galleryUncategorized: "Uncategorized",
+    galleryFolderFilter: "Gallery folder filter",
+    galleryTagFilter: "Gallery tag filter",
     galleryFolderNew: "New folder",
     galleryFolderName: "Folder name",
     galleryFolderCreate: "Create folder",
     galleryFolderRename: "Rename folder",
     galleryFolderDelete: "Delete folder",
+    galleryFolderContents: "Gallery folder contents",
+    galleryBreadcrumb: "Gallery path",
+    galleryViewMode: "Gallery view mode",
+    galleryGridView: "Grid view",
+    galleryListView: "List view",
+    gallerySelectItem: (name: string) => `Select ${name}`,
+    galleryOpenItem: (name: string) => `Open ${name}`,
+    galleryFolderItemMeta: (count: number, modifiedAt: string) => `${count} image${count === 1 ? "" : "s"} · ${modifiedAt}`,
+    galleryFolderDialogDescription: "Folders map to local folders in your Gallery storage path.",
     galleryFolderDeleteConfirm: (name: string) => `Delete Gallery folder "${name}"? Images stay in Gallery and move to Uncategorized.`,
     galleryFolderCreated: "Gallery folder created.",
     galleryFolderRenamed: "Gallery folder renamed.",
+    galleryFolderMoved: "Gallery folder moved.",
+    galleryFolderMoveInvalid: "A folder cannot be moved into itself or one of its child folders.",
     galleryFolderDeleted: "Gallery folder deleted.",
+    galleryFolderNameExists: "A Gallery folder with this name already exists.",
+    gallerySelectionCount: (count: number) => `${count} selected`,
+    galleryClearSelection: "Clear selection",
+    galleryDeleteSelected: "Delete selected",
+    galleryDeleteSelectedTooltip: (count: number) => count > 0 ? `Delete ${count} selected Gallery item${count === 1 ? "" : "s"}` : "Select Gallery items to delete",
+    gallerySelectedDeleteConfirm: (count: number) => `Delete ${count} selected Gallery item${count === 1 ? "" : "s"}?`,
+    gallerySelectedDeleted: "Selected Gallery items deleted.",
+    clearGalleryTooltip: "Clear all Gallery items",
+    confirmClearGalleryTitle: "Clear Gallery?",
+    confirmClearGalleryBody: (assetCount: number, folderCount: number) => `This will delete ${assetCount} Gallery image${assetCount === 1 ? "" : "s"} and ${folderCount} folder${folderCount === 1 ? "" : "s"}.`,
+    confirmClearGallery: "Clear Gallery",
+    galleryCleared: "Gallery images cleared.",
     galleryMoveToFolder: "Move to folder",
     galleryMoved: "Gallery image moved.",
     gallerySearch: "Search Gallery",
     galleryAllTags: "All",
     galleryImport: "Import to Gallery",
+    importShort: "Import",
     galleryChoose: "Choose from Gallery",
+    galleryAssetRename: "Rename image",
+    galleryAssetName: "Image name",
+    galleryAssetDialogDescription: "Renames the image file in the current Gallery folder.",
+    galleryAssetRenamed: "Gallery image renamed.",
     galleryAddHistory: "Add to Gallery",
     galleryAddTargetFolder: "Gallery target folder",
     galleryEditTags: "Edit tags",
@@ -405,6 +546,7 @@ export const translations: Record<Language, UiCopy> = {
     galleryPicked: (name: string) => `${name} added as a reference.`,
     galleryUpdated: "Gallery tags updated.",
     galleryDeleted: "Gallery image deleted.",
+    galleryStorageUpdated: "Gallery storage folder updated.",
     size: "Size",
     aspectRatio: "Aspect ratio",
     resolution: "Resolution",
@@ -434,7 +576,6 @@ export const translations: Record<Language, UiCopy> = {
     resultViewer: "Image preview",
     outputCanvas: "Output canvas",
     download: "Download",
-    openFolder: "Open folder",
     saveImage: "Save image",
     generatedResult: "Generated result",
     jobFailed: "Job failed",
@@ -443,17 +584,21 @@ export const translations: Record<Language, UiCopy> = {
     running: "Running",
     copy: "Copy",
     addReferences: "Add references",
+    addLocalReferences: "Add local reference image",
+    referenceLimitReached: (max: number) => `The current model supports up to ${max} reference image${max === 1 ? "" : "s"}.`,
     uploadRightsReminder: "Only upload images you have permission to use; selected references are sent to the active image provider.",
     uploadMask: "Upload mask",
     uploadMaskTooltip: "Upload an existing mask image.",
+    addPaintedMask: "Add as mask",
+    addPaintedMaskTooltip: "Add the painted region as the active mask.",
     clear: "Clear",
     noReferences: "No reference images selected.",
-    dropReferencesHint: "No reference images. Drag images here, drag a history result, or use Add references.",
+    dropReferencesHint: "Drag local images, History results, or Gallery images here.",
     source: "Source",
     reference: "Reference",
     mask: "Mask",
     maskDescription: "Paint the area to replace. With multiple references, the mask applies to the first image.",
-    guidedRegionDescription: "Use the painted or uploaded region as guidance for the first image.",
+    guidedRegionDescription: "Use the painted region as guidance for the first image.",
     maskBrushSize: "Adjust mask brush size",
     clearPaintedMask: "Clear painted mask",
     sourceForMask: "Source for mask",
@@ -470,11 +615,28 @@ export const translations: Record<Language, UiCopy> = {
     confirmClearHistory: "Clear all",
     cancel: "Cancel",
     searchPrompt: "Search prompt",
+    historyFilter: "History filter",
+    filterAll: "All",
+    historySucceeded: "Succeeded",
+    historyFailed: "Failed",
     sortNewest: "Newest",
     sortOldest: "Oldest",
+    sortName: "Name",
+    sortSize: "Size",
+    sortModified: "Modified",
     historyMatchCount: (count: number) => `${count} match${count === 1 ? "" : "es"}`,
     showAllHistory: (count: number) => `Show all ${count}`,
     collapseHistory: "Show fewer",
+    historyGridView: "Grid view",
+    historyListView: "List view",
+    historySelectItem: (name: string) => `Select history item ${name}`,
+    historySelectionCount: (count: number) => `${count} selected`,
+    historyDeleteSelected: "Delete selected history",
+    historyDeleteSelectedTooltip: (count: number) => count > 0 ? `Delete ${count} selected history item${count === 1 ? "" : "s"}` : "Select history items to delete",
+    historySelectedDeleteConfirm: (count: number) => `Delete ${count} selected history item${count === 1 ? "" : "s"}?`,
+    historySelectedDeleted: (count: number) => `${count} history item${count === 1 ? "" : "s"} deleted.`,
+    historyPageSizeMenu: "History page size",
+    historyPageSizeOption: (count: number) => `Show ${count} per page`,
     noJobsYet: "No jobs yet.",
     openJob: "Open job",
     historyResult: "History result",
@@ -482,9 +644,23 @@ export const translations: Record<Language, UiCopy> = {
     copyPrompt: "Copy prompt",
     removePromptChip: "Remove",
     delete: "Delete",
+    openFolder: "Open folder",
+    openHistoryFolder: "Open History folder",
+    chooseHistoryFolder: "Set History folder",
+    openGalleryFolder: "Open Gallery folder",
+    chooseGalleryFolder: "Set Gallery folder",
+    chooseStorageFolder: "Choose folder",
+    historyStats: (count: number) => `${count} history item${count === 1 ? "" : "s"}`,
+    galleryStats: (assetCount: number, folderCount: number) => `${assetCount} image${assetCount === 1 ? "" : "s"} · ${folderCount} folder${folderCount === 1 ? "" : "s"}`,
+    historyStorageUpdated: "History storage folder updated.",
+    storageFoldersUpdated: "History and Gallery storage folders updated.",
+    storageFolderDialogDescription: "Choose where CrossGen stores managed images. Enable one shared path to update both libraries at once.",
+    storageFolderSyncBoth: "Use the same path for History and Gallery",
+    storageSharedPath: "Shared",
     updates: "Updates",
     currentVersion: "Current",
     checkUpdates: "Check",
+    checkLatestVersion: "Check latest version",
     checkingUpdates: "Checking",
     installUpdate: "Update",
     downloadingUpdate: "Downloading",
@@ -498,6 +674,28 @@ export const translations: Record<Language, UiCopy> = {
     resetZoom: "Reset zoom",
     zoomLevel: "Zoom level",
     clicked: "Done",
+    back: "Back",
+    editImage: "Edit",
+    cropImage: "Crop",
+    drawTool: "Draw",
+    textTool: "Text box",
+    textBox: "Text box",
+    quickColors: "Quick colors",
+    chooseColor: (color: string) => `Use ${color}`,
+    annotationColor: "Edit color",
+    strokeWidth: "Stroke width",
+    textSize: "Text size",
+    boldText: "Bold",
+    undo: "Undo",
+    clearAnnotations: "Clear annotations",
+    saveToGallery: "Save to Gallery",
+    downloadEditedImage: "Download edited image",
+    editedDownloadStarted: "Edited image download started.",
+    annotationRestoreFailed: "Cannot restore edit layer.",
+    cropRectangle: "Rectangle crop",
+    cropEllipse: "Ellipse crop",
+    applyCrop: "Apply crop",
+    cropApplied: "Crop applied.",
     modes: {
       generate: { title: "Generate", action: "Generate", hint: "Prompt only" },
       edit: { title: "Edit", action: "Edit", hint: "Use references" },
@@ -552,9 +750,9 @@ export const translations: Record<Language, UiCopy> = {
       sizePixels: "GPT Image 2 total pixels must be between 655,360 and 8,294,400.",
       addReference: "Add at least one reference image.",
       addSource: "Add a source image before inpainting.",
-      maxInputs: (max: number) => `GPT Image 2 supports up to ${max} input images.`,
-      paintOrUploadMask: "Paint or upload a mask before inpainting.",
-      generalProviderUnsupported: "The current API access does not have a General runtime.",
+      maxInputs: (max: number) => `The current model supports up to ${max} reference images.`,
+      paintOrUploadMask: "Paint a mask before inpainting.",
+      generalProviderUnsupported: "The current API config does not have a General runtime.",
       generalSelectImageModel: "Select an available image model.",
       generalNoInpaint: "General does not support inpainting in this version.",
       generalNoMask: "General does not support mask parameters in this version.",
@@ -575,23 +773,31 @@ export const translations: Record<Language, UiCopy> = {
     english: "English",
     chinese: "中文",
     tagline: "方便易用的一站式AI生图管理工具。",
-    provider: "API 接入",
+    provider: "API 配置",
     providerLabel: "API 类型",
-    apiAccess: "API 接入",
-    apiAccessShort: "接入",
-    apiAccessName: "API 接入名称",
-    apiAccessList: "已保存的 API 接入",
-    addApiAccess: "添加 API 接入",
+    apiAccess: "API 配置",
+    apiAccessShort: "配置",
+    apiAccessName: "API 配置名称",
+    apiAccessList: "已保存的 API 配置",
+    apiAccessCurrentSlot: "当前使用",
+    apiAccessDialogSummary: (count: number) => `${count} 个已保存配置 · 点击卡片编辑。`,
+    apiAccessEditHint: "点击卡片后可在右侧编辑配置。",
+    apiAccessUseNow: "立即使用该配置",
+    apiAccessSelectedDetail: "配置信息",
+    apiAccessModels: "支持的模型",
+    apiAccessNoModels: "暂未探测到模型。",
+    apiAccessSaved: "已保存",
+    addApiAccess: "添加 API 配置",
     addingApiAccess: "添加中",
-    switchApiAccess: "使用此 API 接入",
-    currentApiAccess: "当前 API 接入",
-    deleteApiAccess: "删除 API 接入",
-    deleteLastApiAccessDisabled: "至少需要保留一个 API 接入。",
-    confirmDeleteApiAccess: (name: string) => `确认删除 API 接入“${name}”？该接入保存的 Key 和模型探测结果会一并移除。`,
-    apiAccessAdded: "API 接入已添加。",
-    apiAccessDeleted: "API 接入已删除。",
+    switchApiAccess: "使用此 API 配置",
+    currentApiAccess: "当前 API 配置",
+    deleteApiAccess: "删除 API 配置",
+    deleteLastApiAccessDisabled: "至少需要保留一个 API 配置。",
+    confirmDeleteApiAccess: (name: string) => `确认删除 API 配置“${name}”？该配置保存的 Key 和模型探测结果会一并移除。`,
+    apiAccessAdded: "API 配置已添加。",
+    apiAccessDeleted: "API 配置已删除。",
     apiAccessSwitched: (name: string) => `已切换到 ${name}。`,
-    apiAccessUntitled: "未命名 API 接入",
+    apiAccessUntitled: "未命名 API 配置",
     apiAccessKind: "API 类型",
     apiAccessBaseURLSummary: "Base URL",
     providerAutoDetected: "已根据 API 自动识别",
@@ -617,8 +823,8 @@ export const translations: Record<Language, UiCopy> = {
     launchUnavailableModel: (model: string) => `未探测到 ${model}。`,
     launchRuntimeUnavailable: (model: string) => `${model} 运行时尚未接入。`,
     selectLaunchToRun: (model: string) => `运行前请选择 ${model}。`,
-    generalRuntimeUnsupported: "当前 API 接入暂未接入 General 运行时。",
-    generalLimitedRuntime: "General 使用 API 接入专属最小兜底能力。",
+    generalRuntimeUnsupported: "当前 API 配置暂未接入 General 运行时。",
+    generalLimitedRuntime: "General 使用 API 配置专属最小兜底能力。",
     generalReferenceRuntime: "General 使用最小 Gemini 兜底能力：仅提示词和参考图。",
     generalPromptOnlyRuntime: "General 使用最小 OpenAI 兼容兜底能力：仅纯提示词生成。",
     generalFallback: "探测到的兜底模型",
@@ -655,26 +861,60 @@ export const translations: Record<Language, UiCopy> = {
     templateApplied: (title: string) => `已将模板“${title}”填入提示词。`,
     templateImported: (imported: number, skipped: number) => `已导入 ${imported} 个模板${skipped ? `，跳过 ${skipped} 个` : ""}。`,
     templateExported: (filePath: string) => `模板已导出到 ${filePath}`,
+    library: "库",
+    libraryConfig: "库路径配置",
+    batchSelect: "批量选择",
+    exitBatchSelect: "退出批量选择",
     gallery: "图库",
     galleryDescription: "方便随时调用的参考图库。",
     galleryFolders: "图库文件夹",
     galleryAllFolders: "全部",
     galleryUncategorized: "未分类",
+    galleryFolderFilter: "图库文件夹筛选",
+    galleryTagFilter: "图库标签筛选",
     galleryFolderNew: "新建文件夹",
     galleryFolderName: "文件夹名称",
     galleryFolderCreate: "创建文件夹",
     galleryFolderRename: "重命名文件夹",
     galleryFolderDelete: "删除文件夹",
+    galleryFolderContents: "图库文件夹内容",
+    galleryBreadcrumb: "图库路径",
+    galleryViewMode: "图库视图模式",
+    galleryGridView: "网格视图",
+    galleryListView: "列表视图",
+    gallerySelectItem: (name: string) => `选择 ${name}`,
+    galleryOpenItem: (name: string) => `打开 ${name}`,
+    galleryFolderItemMeta: (count: number, modifiedAt: string) => `${count} 张图片 · ${modifiedAt}`,
+    galleryFolderDialogDescription: "图库文件夹会对应本地图库存储目录下的文件夹。",
     galleryFolderDeleteConfirm: (name: string) => `确认删除图库文件夹“${name}”？图片会保留在图库并移到未分类。`,
     galleryFolderCreated: "图库文件夹已创建。",
     galleryFolderRenamed: "图库文件夹已重命名。",
+    galleryFolderMoved: "图库文件夹已移动。",
+    galleryFolderMoveInvalid: "不能将文件夹移动到自身或其子文件夹。",
     galleryFolderDeleted: "图库文件夹已删除。",
+    galleryFolderNameExists: "图库文件夹名称已存在。",
+    gallerySelectionCount: (count: number) => `已选择 ${count} 项`,
+    galleryClearSelection: "清除选择",
+    galleryDeleteSelected: "删除所选",
+    galleryDeleteSelectedTooltip: (count: number) => count > 0 ? `删除 ${count} 个所选图库项目` : "选择要删除的图库项目",
+    gallerySelectedDeleteConfirm: (count: number) => `确认删除 ${count} 个所选图库项目？`,
+    gallerySelectedDeleted: "所选图库项目已删除。",
+    clearGalleryTooltip: "清空全部图库项目",
+    confirmClearGalleryTitle: "确认清空图库？",
+    confirmClearGalleryBody: (assetCount: number, folderCount: number) => `将删除 ${assetCount} 张图库图片和 ${folderCount} 个文件夹。`,
+    confirmClearGallery: "确认清空图库",
+    galleryCleared: "图库图片已清空。",
     galleryMoveToFolder: "移动到文件夹",
     galleryMoved: "图库图片已移动。",
     gallerySearch: "搜索图库",
     galleryAllTags: "全部",
     galleryImport: "导入图库",
+    importShort: "导入",
     galleryChoose: "从图库选择",
+    galleryAssetRename: "重命名图片",
+    galleryAssetName: "图片名称",
+    galleryAssetDialogDescription: "会同步重命名当前图库文件夹中的真实图片文件。",
+    galleryAssetRenamed: "图库图片已重命名。",
     galleryAddHistory: "加入图库",
     galleryAddTargetFolder: "加入图库目标文件夹",
     galleryEditTags: "编辑标签",
@@ -687,6 +927,7 @@ export const translations: Record<Language, UiCopy> = {
     galleryPicked: (name: string) => `已将 ${name} 加入参考图。`,
     galleryUpdated: "图库标签已更新。",
     galleryDeleted: "图库图片已删除。",
+    galleryStorageUpdated: "图库默认存储路径已更新。",
     size: "尺寸",
     aspectRatio: "画面比例",
     resolution: "分辨率",
@@ -716,7 +957,6 @@ export const translations: Record<Language, UiCopy> = {
     resultViewer: "图片预览",
     outputCanvas: "输出画布",
     download: "下载",
-    openFolder: "打开文件夹",
     saveImage: "保存图片",
     generatedResult: "生成结果",
     jobFailed: "任务失败",
@@ -725,17 +965,21 @@ export const translations: Record<Language, UiCopy> = {
     running: "运行中",
     copy: "复制",
     addReferences: "添加参考图",
+    addLocalReferences: "添加本地参考图",
+    referenceLimitReached: (max: number) => `当前模型最多支持 ${max} 张参考图。`,
     uploadRightsReminder: "仅上传你有权使用的图片；已选择的参考图会发送给当前图片服务商。",
     uploadMask: "上传蒙版",
     uploadMaskTooltip: "上传已有蒙版图片。",
+    addPaintedMask: "添加为蒙版",
+    addPaintedMaskTooltip: "将已绘制区域添加为当前蒙版。",
     clear: "清除",
     noReferences: "未选择参考图。",
-    dropReferencesHint: "暂无参考图。可拖拽图片到此处、拖入历史结果，或点击「添加参考图」。",
+    dropReferencesHint: "可拖拽本地图片、历史或图库中的图片到此处。",
     source: "源图",
     reference: "参考图",
     mask: "蒙版",
     maskDescription: "涂抹需要替换的区域。多张参考图时，蒙版应用到第一张图片。",
-    guidedRegionDescription: "将涂抹或上传的区域作为第一张图片的修改引导。",
+    guidedRegionDescription: "将涂抹区域作为第一张图片的修改引导。",
     maskBrushSize: "调整蒙版画笔大小",
     clearPaintedMask: "清除已绘制蒙版",
     sourceForMask: "蒙版源图",
@@ -752,11 +996,28 @@ export const translations: Record<Language, UiCopy> = {
     confirmClearHistory: "确认清空",
     cancel: "取消",
     searchPrompt: "搜索提示词",
+    historyFilter: "历史筛选",
+    filterAll: "全部",
+    historySucceeded: "成功",
+    historyFailed: "失败",
     sortNewest: "最新优先",
     sortOldest: "最早优先",
+    sortName: "按名称",
+    sortSize: "按大小",
+    sortModified: "修改时间",
     historyMatchCount: (count: number) => `${count} 条匹配`,
     showAllHistory: (count: number) => `显示全部 ${count} 条`,
     collapseHistory: "收起",
+    historyGridView: "网格视图",
+    historyListView: "列表视图",
+    historySelectItem: (name: string) => `选择历史项目 ${name}`,
+    historySelectionCount: (count: number) => `已选择 ${count} 项`,
+    historyDeleteSelected: "删除所选历史",
+    historyDeleteSelectedTooltip: (count: number) => count > 0 ? `删除 ${count} 个所选历史项目` : "选择要删除的历史项目",
+    historySelectedDeleteConfirm: (count: number) => `确认删除 ${count} 个所选历史项目？`,
+    historySelectedDeleted: (count: number) => `已删除 ${count} 个历史项目。`,
+    historyPageSizeMenu: "历史每页数量",
+    historyPageSizeOption: (count: number) => `每页显示 ${count} 条`,
     noJobsYet: "暂无任务。",
     openJob: "打开任务",
     historyResult: "历史结果",
@@ -764,9 +1025,23 @@ export const translations: Record<Language, UiCopy> = {
     copyPrompt: "复制提示词",
     removePromptChip: "移除",
     delete: "删除",
+    openFolder: "打开文件夹",
+    openHistoryFolder: "打开历史目录",
+    chooseHistoryFolder: "设置历史默认目录",
+    openGalleryFolder: "打开图库目录",
+    chooseGalleryFolder: "设置图库默认目录",
+    chooseStorageFolder: "选择目录",
+    historyStats: (count: number) => `${count} 条历史`,
+    galleryStats: (assetCount: number, folderCount: number) => `${assetCount} 张图片 · ${folderCount} 个文件夹`,
+    historyStorageUpdated: "历史默认存储路径已更新。",
+    storageFoldersUpdated: "历史与图库默认存储路径已更新。",
+    storageFolderDialogDescription: "选择 CrossGen 托管图片的本地存储目录。勾选同路径后，历史与图库会一次设置完成。",
+    storageFolderSyncBoth: "历史与图库使用同一路径",
+    storageSharedPath: "共同路径",
     updates: "升级",
     currentVersion: "当前版本",
     checkUpdates: "检查",
+    checkLatestVersion: "检查最新版本",
     checkingUpdates: "检查中",
     installUpdate: "更新",
     downloadingUpdate: "下载中",
@@ -780,6 +1055,28 @@ export const translations: Record<Language, UiCopy> = {
     resetZoom: "重置缩放",
     zoomLevel: "缩放比例",
     clicked: "完成",
+    back: "返回",
+    editImage: "编辑",
+    cropImage: "裁剪",
+    drawTool: "手绘",
+    textTool: "添加文本框",
+    textBox: "文本框",
+    quickColors: "常用色块",
+    chooseColor: (color: string) => `选择 ${color}`,
+    annotationColor: "编辑颜色",
+    strokeWidth: "笔触粗细",
+    textSize: "字号大小",
+    boldText: "加粗",
+    undo: "回退",
+    clearAnnotations: "清除批注",
+    saveToGallery: "保存到图库",
+    downloadEditedImage: "下载编辑图",
+    editedDownloadStarted: "编辑图下载已开始。",
+    annotationRestoreFailed: "无法恢复编辑图层。",
+    cropRectangle: "矩形裁剪",
+    cropEllipse: "椭圆裁剪",
+    applyCrop: "应用裁剪",
+    cropApplied: "裁剪已应用。",
     modes: {
       generate: { title: "生成", action: "生成", hint: "仅提示词" },
       edit: { title: "编辑", action: "编辑", hint: "使用参考图" },
@@ -834,9 +1131,9 @@ export const translations: Record<Language, UiCopy> = {
       sizePixels: "GPT Image 2 总像素需在 655,360 到 8,294,400 之间。",
       addReference: "请至少添加一张参考图。",
       addSource: "局部重绘前请先添加源图。",
-      maxInputs: (max: number) => `GPT Image 2 最多支持 ${max} 张输入图片。`,
-      paintOrUploadMask: "局部重绘前请绘制或上传蒙版。",
-      generalProviderUnsupported: "当前 API 接入暂未接入 General 运行时。",
+      maxInputs: (max: number) => `当前模型最多支持 ${max} 张参考图。`,
+      paintOrUploadMask: "局部重绘前请先绘制蒙版。",
+      generalProviderUnsupported: "当前 API 配置暂未接入 General 运行时。",
       generalSelectImageModel: "请选择可用的图片模型。",
       generalNoInpaint: "General 首期不支持局部重绘。",
       generalNoMask: "General 首期不支持 mask 参数。",
@@ -865,7 +1162,7 @@ const validationMessageMap: Record<string, keyof UiCopy["validation"]> = {
   "GPT Image 2 长短边比例不能超过 3:1。": "sizeRatio",
   "GPT Image 2 总像素需在 655,360 到 8,294,400 之间。": "sizePixels",
   "当前 provider 暂未接入 General 运行时。": "generalProviderUnsupported",
-  "当前 API 接入暂未接入 General 运行时。": "generalProviderUnsupported",
+  "当前 API 配置暂未接入 General 运行时。": "generalProviderUnsupported",
   "请选择可用的图片模型。": "generalSelectImageModel",
   "General 首期不支持局部重绘。": "generalNoInpaint",
   "General 首期不支持 mask 参数。": "generalNoMask",

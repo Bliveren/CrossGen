@@ -19,6 +19,7 @@ export interface ImageModelCapabilities {
   edit: boolean;
   inpaint: "exact-mask" | "guided-region" | false;
   referenceImages: boolean;
+  maxReferenceImages: number;
   multiTurn: boolean;
   streamingPartials: boolean;
   outputText: boolean;
@@ -66,6 +67,7 @@ export interface ProviderConfig {
 }
 
 export interface ProviderConfigInput {
+  providerId?: string;
   kind?: ProviderKind;
   name?: string;
   apiKey?: string;
@@ -157,11 +159,13 @@ export interface GalleryAsset {
   source: "import" | "result";
   createdAt: string;
   updatedAt: string;
+  modifiedAt?: string;
 }
 
 export interface GalleryFolder {
   id: string;
   name: string;
+  parentId?: string | null;
   color?: string;
   createdAt: string;
   updatedAt: string;
@@ -169,17 +173,42 @@ export interface GalleryFolder {
 
 export interface GalleryFolderInput {
   name: string;
+  parentId?: string | null;
   color?: string;
 }
 
 export interface GalleryAssetPatch {
+  originalName?: string;
   tags?: string[];
+  folderId?: string | null;
+}
+
+export interface EditedGalleryImageInput {
+  dataUrl: string;
+  originalName?: string;
   folderId?: string | null;
 }
 
 export interface GalleryFolderDeleteResult {
   folders: GalleryFolder[];
   assets: GalleryAsset[];
+}
+
+export interface GallerySyncEvent {
+  folders: GalleryFolder[];
+  assets: GalleryAsset[];
+  reason: "disk" | "mutation";
+}
+
+export type StorageKind = "history" | "gallery";
+
+export interface StorageSettings {
+  historyDir: string;
+  galleryDir: string;
+}
+
+export interface StorageFolderOptions {
+  syncBoth?: boolean;
 }
 
 export interface UsageDetails {
@@ -246,6 +275,7 @@ export interface AppSnapshot {
   promptTemplates: PromptTemplate[];
   galleryFolders: GalleryFolder[];
   galleryAssets: GalleryAsset[];
+  storage: StorageSettings;
   draft?: WorkspaceDraft;
 }
 
@@ -330,8 +360,8 @@ export interface AppBridge {
   addProvider: (input: ProviderConfigInput) => Promise<AppSnapshot>;
   switchProvider: (providerId: string) => Promise<AppSnapshot>;
   deleteProvider: (providerId: string) => Promise<AppSnapshot>;
-  discoverModels: () => Promise<ProviderConfig>;
-  clearApiKey: () => Promise<ProviderConfig>;
+  discoverModels: (providerId?: string) => Promise<ProviderConfig>;
+  clearApiKey: (providerId?: string) => Promise<ProviderConfig>;
   testConnection: () => Promise<ConnectionTestResult>;
   saveDraft: (input: WorkspaceDraftInput) => Promise<WorkspaceDraft>;
   clearDraft: () => Promise<void>;
@@ -344,9 +374,11 @@ export interface AppBridge {
   listGalleryFolders: () => Promise<GalleryFolder[]>;
   createGalleryFolder: (input: GalleryFolderInput) => Promise<GalleryFolder>;
   renameGalleryFolder: (id: string, input: GalleryFolderInput) => Promise<GalleryFolder>;
+  moveGalleryFolder: (id: string, parentId: string | null) => Promise<GalleryFolder>;
   deleteGalleryFolder: (id: string) => Promise<GalleryFolderDeleteResult>;
   importToGallery: (paths?: string[], folderId?: string | null) => Promise<GalleryAsset[]>;
   addHistoryAssetToGallery: (assetPath: string, folderId?: string | null) => Promise<GalleryAsset>;
+  addEditedImageToGallery: (input: EditedGalleryImageInput) => Promise<GalleryAsset>;
   updateGalleryAsset: (id: string, patch: GalleryAssetPatch) => Promise<GalleryAsset>;
   moveGalleryAsset: (id: string, folderId: string | null) => Promise<GalleryAsset>;
   removeGalleryAsset: (id: string) => Promise<GalleryAsset[]>;
@@ -358,9 +390,12 @@ export interface AppBridge {
   runJob: (request: RunJobRequest) => Promise<GenerationJob>;
   downloadAsset: (request: DownloadRequest) => Promise<string | null>;
   openAssetFolder: (assetPath: string) => Promise<void>;
+  openStorageFolder: (kind: StorageKind, folderId?: string | null) => Promise<void>;
+  chooseStorageFolder: (kind: StorageKind, options?: StorageFolderOptions) => Promise<AppSnapshot>;
   checkForUpdates: () => Promise<UpdateCheckResult>;
   downloadAndInstallUpdate: () => Promise<UpdateInstallResult>;
   deleteJob: (jobId: string) => Promise<GenerationJob[]>;
   clearHistory: () => Promise<GenerationJob[]>;
   onJobEvent: (callback: (event: JobProgressEvent) => void) => () => void;
+  onGalleryEvent: (callback: (event: GallerySyncEvent) => void) => () => void;
 }

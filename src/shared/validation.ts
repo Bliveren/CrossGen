@@ -39,8 +39,8 @@ export const DEFAULT_IMAGE_PARAMS: OpenAIImageParams = {
   outputCompression: 100,
   background: "auto",
   n: 1,
-  stream: true,
-  partialImages: 2,
+  stream: false,
+  partialImages: 0,
   moderation: "auto",
   timeoutMs: 240000
 };

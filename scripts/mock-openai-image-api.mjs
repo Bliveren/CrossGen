@@ -153,7 +153,7 @@ const server = http.createServer(async (request, response) => {
 
 server.listen(port, host, () => {
   console.log(`Mock OpenAI Image API listening at http://${host}:${port}/v1`);
-  console.log("Use any API key with at least 12 characters, for example sk-mock-image2tools.");
+  console.log("Use any API key with at least 12 characters, for example sk-mock-crossgen.");
 });
 
 process.on("SIGINT", () => {

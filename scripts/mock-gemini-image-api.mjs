@@ -80,7 +80,7 @@ function modelResource(modelId) {
     displayName: modelId === focusedModelId ? "Gemini 3.1 Flash Image" : "Gemini 2.0 Flash Preview Image Generation",
     description:
       modelId === focusedModelId
-        ? "Mock Nano Banana 3 image model for Image2Tools verification."
+        ? "Mock Nano Banana 3 image model for CrossGen verification."
         : "Mock non-focused image generation model for General probing.",
     inputTokenLimit: 32768,
     outputTokenLimit: 8192,

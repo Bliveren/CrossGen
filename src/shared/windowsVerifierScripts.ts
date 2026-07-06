@@ -3,8 +3,9 @@ export function createFindPidsByPathScript(): string {
 $ErrorActionPreference = "Continue"
 try {
   $target = [System.IO.Path]::GetFullPath($env:IMAGE2TOOLS_EXE_PATH)
+  $targetName = [System.IO.Path]::GetFileName($target)
   $requireWindow = $env:IMAGE2TOOLS_REQUIRE_WINDOW -eq "1"
-  $processes = @(Get-CimInstance Win32_Process -Filter "Name = 'Image2Tools.exe'" -ErrorAction SilentlyContinue)
+  $processes = @(Get-CimInstance Win32_Process -Filter "Name = '$targetName'" -ErrorAction SilentlyContinue)
   foreach ($candidateProcess in $processes) {
     try {
       if (-not $candidateProcess.ExecutablePath) { continue }

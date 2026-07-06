@@ -8,9 +8,9 @@ import { selectDmgFile } from "./release-artifact-selection.mjs";
 
 const execFileAsync = promisify(execFile);
 const releaseDir = path.resolve("release");
-const appName = "Image2Tools.app";
-const processName = "Image2Tools";
-const appExecutable = "Contents/MacOS/Image2Tools";
+const appName = "CrossGen.app";
+const processName = "CrossGen";
+const appExecutable = "Contents/MacOS/CrossGen";
 
 function assertDarwin() {
   if (process.platform !== "darwin") {
@@ -212,7 +212,7 @@ async function runInstallCycle(mountPoint, tempRoot, cycle) {
 
 async function main() {
   assertDarwin();
-  const tempRoot = await mkdtemp(path.join("/tmp", "Image2Tools-release-test-"));
+  const tempRoot = await mkdtemp(path.join("/tmp", "CrossGen-release-test-"));
   let mountPoint;
   try {
     const dmgPath = await findDmg();

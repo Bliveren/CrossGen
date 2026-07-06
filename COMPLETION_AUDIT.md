@@ -1,4 +1,4 @@
-# Image2Tools Completion Audit
+# CrossGen Completion Audit
 
 Date: 2026-06-10
 Branch: `main`
@@ -6,7 +6,7 @@ Target release: `v0.2.0`
 
 ## Objective Restated
 
-Deliver Image2Tools as a local-first Electron desktop workspace for image
+Deliver CrossGen as a local-first Electron desktop workspace for image
 generation and editing across:
 
 - GPT Image 2 through the OpenAI Image API.

@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { GenerationJob } from "../../shared/types.js";
 
-const NOT_MANAGED_MESSAGE = "无法操作：资源不属于 Image2Tools 管理目录。";
+const NOT_MANAGED_MESSAGE = "无法操作：资源不属于 CrossGen 管理目录。";
 const NOT_IN_HISTORY_MESSAGE = "无法操作：资源不属于当前历史。";
 
 export function normalizeManagedAssetPath(imagesDir: string, assetPath: string): string | null {
@@ -86,10 +86,17 @@ export async function assertManagedRegularFileInRoots(managedRoots: string[], as
 }
 
 export function resolveManagedFileName(rootDir: string, fileName: string): string {
-  if (!fileName.trim() || fileName.includes("/") || fileName.includes("\\") || path.isAbsolute(fileName)) {
+  const normalizedFileName = fileName.trim().replace(/\\/g, "/");
+  const segments = normalizedFileName.split("/");
+  if (
+    !normalizedFileName ||
+    path.isAbsolute(normalizedFileName) ||
+    path.win32.isAbsolute(normalizedFileName) ||
+    segments.some((segment) => !segment || segment === "." || segment === "..")
+  ) {
     throw new Error(NOT_MANAGED_MESSAGE);
   }
-  const resolved = path.resolve(rootDir, fileName);
+  const resolved = path.resolve(rootDir, ...segments);
   if (!normalizeManagedAssetPath(rootDir, resolved)) {
     throw new Error(NOT_MANAGED_MESSAGE);
   }
