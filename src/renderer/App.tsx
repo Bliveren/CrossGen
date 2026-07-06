@@ -43,6 +43,7 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  RectangleHorizontal,
   SquarePen,
   Tags,
   Trash2,
@@ -3370,26 +3371,42 @@ export function App() {
 
   async function loadPreviewImage(source: string): Promise<HTMLImageElement> {
     const image = new Image();
-    image.crossOrigin = "anonymous";
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve();
       image.onerror = () => reject(imageLoadError());
       image.src = source;
     });
+    if (!(image.naturalWidth || image.width) || !(image.naturalHeight || image.height)) throw imageLoadError();
     return image;
+  }
+
+  async function getRenderablePreviewImage(): Promise<HTMLImageElement> {
+    const renderedImage = annotationImageRef.current;
+    if (
+      renderedImage?.complete &&
+      ((renderedImage.naturalWidth || renderedImage.width) > 0) &&
+      ((renderedImage.naturalHeight || renderedImage.height) > 0)
+    ) {
+      return renderedImage;
+    }
+    if (!activePreviewSource) throw imageLoadError();
+    return loadPreviewImage(activePreviewSource);
   }
 
   async function renderEditedPreviewCanvas(): Promise<HTMLCanvasElement> {
     const annotationCanvas = annotationCanvasRef.current;
     if (!activePreviewSource || !annotationCanvas) throw imageLoadError();
     resizeAnnotationCanvas();
-    const image = await loadPreviewImage(activePreviewSource);
+    const image = await getRenderablePreviewImage();
     const output = document.createElement("canvas");
     output.width = annotationCanvas.width;
     output.height = annotationCanvas.height;
     const context = output.getContext("2d");
     if (!context) throw imageLoadError();
-    const imageRatio = image.naturalWidth / image.naturalHeight;
+    const imageWidth = image.naturalWidth || image.width;
+    const imageHeight = image.naturalHeight || image.height;
+    if (!imageWidth || !imageHeight) throw imageLoadError();
+    const imageRatio = imageWidth / imageHeight;
     const canvasRatio = output.width / output.height;
     const drawWidth = canvasRatio > imageRatio ? output.height * imageRatio : output.width;
     const drawHeight = canvasRatio > imageRatio ? output.height : output.width / imageRatio;
@@ -4430,7 +4447,7 @@ export function App() {
                     {isCroppingPreview && (
                       <div className="annotation-tools crop-tools">
                         <button type="button" className={cropShape === "rect" ? "icon-button active" : "icon-button"} onClick={() => setCropShape("rect")} aria-label={copy.cropRectangle} data-tooltip={copy.cropRectangle}>
-                          <SquarePen size={15} />
+                          <RectangleHorizontal size={15} />
                         </button>
                         <button type="button" className={cropShape === "ellipse" ? "icon-button active" : "icon-button"} onClick={() => setCropShape("ellipse")} aria-label={copy.cropEllipse} data-tooltip={copy.cropEllipse}>
                           <Circle size={15} />

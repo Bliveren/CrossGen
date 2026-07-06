@@ -1435,7 +1435,6 @@ describe("renderer multi-model smoke", () => {
     vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,ZmFrZQ==");
     const OriginalImage = window.Image;
     class MockImage {
-      crossOrigin = "";
       naturalWidth = 100;
       naturalHeight = 100;
       onload: (() => void) | null = null;
@@ -1446,7 +1445,7 @@ describe("renderer multi-model smoke", () => {
       }
       set src(value: string) {
         this.#src = value;
-        queueMicrotask(() => this.onload?.());
+        queueMicrotask(() => this.onerror?.());
       }
     }
     window.Image = MockImage as unknown as typeof Image;
@@ -1455,6 +1454,10 @@ describe("renderer multi-model smoke", () => {
       const bridge = await renderApp(snapshot({ history: [job] }));
 
       await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
+      const previewImage = document.querySelector<HTMLImageElement>(".zoom-surface img")!;
+      Object.defineProperty(previewImage, "complete", { configurable: true, value: true });
+      Object.defineProperty(previewImage, "naturalWidth", { configurable: true, value: 100 });
+      Object.defineProperty(previewImage, "naturalHeight", { configurable: true, value: 100 });
       await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Edit"]')!);
       await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Save to Gallery"]')!);
       await flushAsync();
