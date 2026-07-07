@@ -287,6 +287,7 @@
 
   .history {
     grid-column: 5;
+    --right-rail-padding-bottom: 22px;
   }
 
   .history {
@@ -2489,9 +2490,10 @@
   }
 
   .right-rail.collapsed {
+    --right-rail-collapsed-thumb-size: 128px;
     gap: 8px;
-    padding-right: 20px;
-    padding-left: 20px;
+    padding-right: 18px;
+    padding-left: 18px;
     overflow: visible;
   }
 
@@ -2512,6 +2514,7 @@
     justify-content: space-between;
     gap: 10px;
     margin-top: auto;
+    min-height: max(51px, calc(100vh - var(--rail-collapse-button-y, calc(100vh - 86px)) - var(--right-rail-padding-bottom, 22px)));
     border-top: 1px solid var(--border-subtle);
     background: transparent;
     padding-top: 14px;
@@ -2574,15 +2577,15 @@
     grid-template-columns: 1fr;
     align-content: start;
     justify-items: center;
-    gap: 4px;
+    gap: 8px;
     padding-right: 0;
   }
 
   .right-rail.collapsed .history-item {
     grid-template-columns: 1fr;
-    width: 88px;
-    height: 88px;
-    min-height: 88px;
+    width: var(--right-rail-collapsed-thumb-size);
+    height: var(--right-rail-collapsed-thumb-size);
+    min-height: var(--right-rail-collapsed-thumb-size);
     gap: 0;
     border: 0;
     background: transparent;
@@ -2599,8 +2602,8 @@
   .right-rail.collapsed .history-preview,
   .right-rail.collapsed .gallery-thumb,
   .right-rail.collapsed .gallery-folder-thumb {
-    width: 88px;
-    height: 88px;
+    width: var(--right-rail-collapsed-thumb-size);
+    height: var(--right-rail-collapsed-thumb-size);
     min-height: 0;
     border-radius: var(--radius-lg);
   }
@@ -2618,15 +2621,15 @@
     grid-template-columns: 1fr;
     align-content: start;
     justify-items: center;
-    gap: 4px;
+    gap: 8px;
     min-height: 0;
     padding-right: 0;
   }
 
   .right-rail.collapsed .gallery-item {
     grid-template-columns: 1fr;
-    width: 88px;
-    min-height: 88px;
+    width: var(--right-rail-collapsed-thumb-size);
+    min-height: var(--right-rail-collapsed-thumb-size);
     gap: 0;
     border: 0;
     background: transparent;
@@ -2665,11 +2668,10 @@
     z-index: 5100;
     display: flex;
     gap: 6px;
-    padding: 4px 6px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--surface-floating-radius);
-    background: var(--surface-floating);
-    box-shadow: var(--shadow-popover);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
     opacity: 0;
     pointer-events: none;
     transform: translate(calc(20px + var(--toolbar-drift-x, 0px)), var(--toolbar-drift-y, 0px)) scaleX(0.82);
@@ -4902,6 +4904,10 @@
     .history {
       padding-top: 14px;
       padding-bottom: 14px;
+    }
+
+    .history {
+      --right-rail-padding-bottom: 14px;
     }
 
     .workspace {
