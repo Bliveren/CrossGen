@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  ArrowDownUp,
   BookOpen,
   Brush,
   ChevronDown,
@@ -108,7 +107,7 @@ import {
 } from "../shared/modelCatalog";
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
-import { HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
+import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -5593,41 +5592,17 @@ export function App() {
 
         {rightRailView === "history" ? (
           <div className="right-rail-panel history-panel" role="tabpanel">
-            <div className="rail-filter-row">
-              <label className="search-box">
-                <Search size={15} />
-                <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder={copy.searchPrompt} />
-              </label>
-              <select value={historyStatusFilter} onChange={(event) => setHistoryStatusFilter(event.target.value as typeof historyStatusFilter)} aria-label={copy.historyFilter}>
-                <option value="all">{copy.filterAll}</option>
-                <option value="succeeded">{copy.historySucceeded}</option>
-                <option value="failed">{copy.historyFailed}</option>
-              </select>
-            </div>
-
-            <div className="history-sort rail-sort-row">
-              <ArrowDownUp size={14} />
-              <button
-                type="button"
-                className={historySort === "newest" ? "history-sort-option active" : "history-sort-option"}
-                onClick={() => setHistorySort("newest")}
-              >
-                {copy.sortNewest}
-              </button>
-              <button
-                type="button"
-                className={historySort === "oldest" ? "history-sort-option active" : "history-sort-option"}
-                onClick={() => setHistorySort("oldest")}
-              >
-                {copy.sortOldest}
-              </button>
-            </div>
-
-            {isSearchingHistory && (
-              <div className="history-list-status">
-                <span>{copy.historyMatchCount(filteredHistory.length)}</span>
-              </div>
-            )}
+            <HistoryFilterToolbar
+              copy={copy}
+              search={historySearch}
+              statusFilter={historyStatusFilter}
+              sort={historySort}
+              searching={isSearchingHistory}
+              matchCount={filteredHistory.length}
+              onSearchChange={setHistorySearch}
+              onStatusFilterChange={setHistoryStatusFilter}
+              onSortChange={setHistorySort}
+            />
 
             <HistoryListShell
               copy={copy}

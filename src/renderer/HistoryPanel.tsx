@@ -1,9 +1,11 @@
 import type React from "react";
-import { CheckCircle2, ChevronUp, Copy, Download, FolderInput, RotateCcw, Save, Trash2 } from "lucide-react";
+import { ArrowDownUp, CheckCircle2, ChevronUp, Copy, Download, FolderInput, RotateCcw, Save, Search, Trash2 } from "lucide-react";
 import type { GenerationJob, ImageAsset } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
 type HistoryViewMode = "grid" | "list";
+type HistoryStatusFilter = "all" | "succeeded" | "failed";
+type HistorySortMode = "newest" | "oldest";
 
 interface HistoryScrollState {
   top: number;
@@ -41,6 +43,18 @@ interface HistoryFloatingPagerProps {
   onNextPage: () => void;
   onMoveToolbarTowardPointer: (event: React.MouseEvent<HTMLElement>) => void;
   onResetToolbarDrift: (event: React.MouseEvent<HTMLElement>) => void;
+}
+
+interface HistoryFilterToolbarProps {
+  copy: UiCopy;
+  search: string;
+  statusFilter: HistoryStatusFilter;
+  sort: HistorySortMode;
+  searching: boolean;
+  matchCount: number;
+  onSearchChange: (value: string) => void;
+  onStatusFilterChange: (filter: HistoryStatusFilter) => void;
+  onSortChange: (sort: HistorySortMode) => void;
 }
 
 interface HistoryItemCardProps {
@@ -89,6 +103,58 @@ interface HistoryItemCardProps {
   onDownload: () => void;
   onToggleGalleryMenu: () => void;
   onDelete: () => void;
+}
+
+export function HistoryFilterToolbar({
+  copy,
+  search,
+  statusFilter,
+  sort,
+  searching,
+  matchCount,
+  onSearchChange,
+  onStatusFilterChange,
+  onSortChange
+}: HistoryFilterToolbarProps) {
+  return (
+    <>
+      <div className="rail-filter-row">
+        <label className="search-box">
+          <Search size={15} />
+          <input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder={copy.searchPrompt} />
+        </label>
+        <select value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value as HistoryStatusFilter)} aria-label={copy.historyFilter}>
+          <option value="all">{copy.filterAll}</option>
+          <option value="succeeded">{copy.historySucceeded}</option>
+          <option value="failed">{copy.historyFailed}</option>
+        </select>
+      </div>
+
+      <div className="history-sort rail-sort-row">
+        <ArrowDownUp size={14} />
+        <button
+          type="button"
+          className={sort === "newest" ? "history-sort-option active" : "history-sort-option"}
+          onClick={() => onSortChange("newest")}
+        >
+          {copy.sortNewest}
+        </button>
+        <button
+          type="button"
+          className={sort === "oldest" ? "history-sort-option active" : "history-sort-option"}
+          onClick={() => onSortChange("oldest")}
+        >
+          {copy.sortOldest}
+        </button>
+      </div>
+
+      {searching && (
+        <div className="history-list-status">
+          <span>{copy.historyMatchCount(matchCount)}</span>
+        </div>
+      )}
+    </>
+  );
 }
 
 export function HistoryListShell({
