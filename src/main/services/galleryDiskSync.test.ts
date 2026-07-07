@@ -5,9 +5,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { GalleryAsset, GalleryFolder } from "../../shared/types";
 import { getDefaultState, type AppStateFile } from "./stateMigration";
 import {
+  diskGalleryFoldersFromState,
+  galleryCollectionsChanged,
   isIgnoredGalleryEntryName,
   reconcileGalleryDiskChanges,
+  reconcileGalleryDiskChangesWithResult,
   reconcileGalleryDiskState,
+  reconcileGalleryDiskStateWithResult,
   scanGalleryDisk,
   startGalleryDiskWatchers,
   type DiskGalleryAsset,
@@ -75,6 +79,16 @@ function reconcile(input: AppStateFile, folders: DiskGalleryFolder[], assets: Di
     createFolderId: () => `new-folder-${folderId += 1}`,
     createAssetId: () => `new-asset-${assetId += 1}`
   });
+}
+
+function reconcileOptions() {
+  let folderId = 0;
+  let assetId = 0;
+  return {
+    now: later,
+    createFolderId: () => `new-folder-${folderId += 1}`,
+    createAssetId: () => `new-asset-${assetId += 1}`
+  };
 }
 
 async function waitFor(condition: () => boolean, timeoutMs = 2500): Promise<void> {
@@ -191,6 +205,17 @@ describe("gallery disk sync reconciliation", () => {
     expect(changed).toEqual(["root.png", "Products/Hero/shot.png", null]);
   });
 
+  it("builds watcher folder entries from nested state folders", () => {
+    const products = folder("Products", { id: "folder-products" });
+    const hero = folder("Hero", { id: "folder-hero", parentId: products.id });
+    const missingParent = folder("Orphan", { id: "folder-orphan", parentId: "missing-parent" });
+
+    expect(diskGalleryFoldersFromState(state({ galleryFolders: [hero, missingParent, products] }))).toEqual([
+      { relPath: "Products", parentRelPath: null, name: "Products" },
+      { relPath: "Products/Hero", parentRelPath: "Products", name: "Hero" }
+    ]);
+  });
+
   it("receives real fs.watch events for non-ignored Gallery changes", async () => {
     const galleryDir = await makeTempDir();
     let syncCount = 0;
@@ -252,6 +277,36 @@ describe("gallery disk sync reconciliation", () => {
         modifiedAt: later
       })
     ]);
+  });
+
+  it("does not mark full reconciliation dirty when Gallery collections are unchanged", () => {
+    const products = folder("Products", { id: "folder-products" });
+    const existing = asset("Products/hero.png", {
+      id: "asset-hero",
+      folderId: products.id,
+      sizeBytes: 2048,
+      modifiedAt: later
+    });
+    const input = state({ galleryFolders: [products], galleryAssets: [existing] });
+
+    const result = reconcileGalleryDiskStateWithResult(
+      input,
+      {
+        folders: [{ relPath: "Products", parentRelPath: null, name: "Products" }],
+        assets: [{
+          relPath: "Products/hero.png",
+          folderRelPath: "Products",
+          originalName: "hero.png",
+          mimeType: "image/png",
+          sizeBytes: 2048,
+          modifiedAt: later
+        }]
+      },
+      reconcileOptions()
+    );
+
+    expect(galleryCollectionsChanged(input, result.state)).toBe(false);
+    expect(result.changed).toBe(false);
   });
 
   it("adds new disk files and drops state entries that no longer exist on disk", () => {
@@ -317,6 +372,66 @@ describe("gallery disk sync reconciliation", () => {
       existing,
       expect.objectContaining({ id: "asset-new", fileName: "Products/new.png", folderId: products.id })
     ]);
+  });
+
+  it("does not mark incremental reconciliation dirty when the changed file metadata is unchanged", () => {
+    const products = folder("Products", { id: "folder-products" });
+    const existing = asset("Products/hero.png", {
+      id: "asset-hero",
+      folderId: products.id,
+      sizeBytes: 2048,
+      modifiedAt: later
+    });
+    const input = state({ galleryFolders: [products], galleryAssets: [existing] });
+
+    const result = reconcileGalleryDiskChangesWithResult(
+      input,
+      {
+        folders: [],
+        assets: [{
+          relPath: "Products/hero.png",
+          folderRelPath: "Products",
+          originalName: "hero.png",
+          mimeType: "image/png",
+          sizeBytes: 2048,
+          modifiedAt: later
+        }]
+      },
+      ["Products/hero.png"],
+      reconcileOptions()
+    );
+
+    expect(result.changed).toBe(false);
+  });
+
+  it("marks incremental reconciliation dirty when changed file metadata differs", () => {
+    const products = folder("Products", { id: "folder-products" });
+    const existing = asset("Products/hero.png", {
+      id: "asset-hero",
+      folderId: products.id,
+      sizeBytes: 2048,
+      modifiedAt: later
+    });
+    const input = state({ galleryFolders: [products], galleryAssets: [existing] });
+
+    const result = reconcileGalleryDiskChangesWithResult(
+      input,
+      {
+        folders: [],
+        assets: [{
+          relPath: "Products/hero.png",
+          folderRelPath: "Products",
+          originalName: "hero.png",
+          mimeType: "image/png",
+          sizeBytes: 4096,
+          modifiedAt: "2026-07-06T02:00:00.000Z"
+        }]
+      },
+      ["Products/hero.png"],
+      reconcileOptions()
+    );
+
+    expect(result.changed).toBe(true);
   });
 
   it("reflects an incremental disk file rename as old removal and new file addition", () => {
