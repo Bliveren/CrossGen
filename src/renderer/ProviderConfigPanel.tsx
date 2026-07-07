@@ -1,9 +1,24 @@
 import type React from "react";
-import { CheckCircle2, ChevronUp, KeyRound, LibraryBig, Loader2, Plus, Radar, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronUp, KeyRound, LibraryBig, Loader2, Plus, Radar, Save, Trash2, Wrench, X } from "lucide-react";
 import type { ProviderConfig, ProviderKind } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
 type DiscoveredProviderModel = ProviderConfig["discoveredModels"][number];
+type ConnectionStatus = "idle" | "checking" | "ok" | "error";
+
+interface ProviderSummarySectionProps {
+  copy: UiCopy;
+  activeConfig: ProviderConfig;
+  displayName: string;
+  providerLabel: string;
+  baseUrlSummary: string;
+  discoveryText: string;
+  connectionStatus: ConnectionStatus;
+  connectionLabel: string;
+  connectionTitle: string;
+  testingConnection: boolean;
+  onOpen: () => void;
+}
 
 interface ApiConfigCardProps {
   copy: UiCopy;
@@ -29,6 +44,54 @@ interface ApiConfigCardProps {
   onSelect: () => void;
   onDelete: () => void;
   onDiscover: () => void;
+}
+
+export function ProviderSummarySection({
+  copy,
+  activeConfig,
+  displayName,
+  providerLabel,
+  baseUrlSummary,
+  discoveryText,
+  connectionStatus,
+  connectionLabel,
+  connectionTitle,
+  testingConnection,
+  onOpen
+}: ProviderSummarySectionProps) {
+  return (
+    <section className="tool-section model-config-section api-access-section">
+      <div className="section-title config-title">
+        <div className="section-title-label">
+          <KeyRound size={16} />
+          <h2>{copy.provider}</h2>
+        </div>
+        <span className="connection-badge" data-status={connectionStatus} title={connectionTitle}>
+          {testingConnection || connectionStatus === "checking" ? (
+            <Loader2 className="spin" size={13} />
+          ) : connectionStatus === "ok" ? (
+            <CheckCircle2 size={13} />
+          ) : connectionStatus === "error" ? (
+            <AlertTriangle size={13} />
+          ) : (
+            <span className="connection-dot" />
+          )}
+          {connectionLabel}
+        </span>
+      </div>
+
+      <button type="button" className="api-access-current" onClick={onOpen}>
+        <span>
+          <strong>{displayName}</strong>
+          <small>{providerLabel} · {baseUrlSummary}</small>
+          <small>
+            {activeConfig.apiKeySaved ? copy.keySaved : copy.noKeySaved} · {discoveryText}
+          </small>
+        </span>
+        <Wrench size={16} />
+      </button>
+    </section>
+  );
 }
 
 interface ApiConfigDetailProps {
