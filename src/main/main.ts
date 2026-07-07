@@ -124,6 +124,10 @@ const UPDATE_CHECK_TIMEOUT_MS = 30000;
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 600000; // 10 minutes for large installer downloads
 const BRAND_NAME = "CrossGen";
 const LEGACY_USER_DATA_NAME = "Image2Tools";
+const USER_DATA_DIR_ENV = "CROSSGEN_USER_DATA_DIR";
+const LEGACY_USER_DATA_DIR_ENV = "IMAGE2TOOLS_USER_DATA_DIR";
+const PERF_RESULT_PATH_ENV = "CROSSGEN_PERF_RESULT_PATH";
+const RENDERER_PERF_RESULT_PATH_ENV = "CROSSGEN_RENDERER_PERF_RESULT_PATH";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -155,6 +159,7 @@ let galleryWatchDebounce: NodeJS.Timeout | null = null;
 let galleryOperationQueue: Promise<void> = Promise.resolve();
 let galleryWatchNeedsFullSync = false;
 let galleryWatchChangedRelPaths = new Set<string>();
+let stateWriteCount = 0;
 
 interface WriteStateOptions {
   updateBackup?: boolean;
@@ -183,7 +188,7 @@ function galleryIpc<TArgs extends unknown[], TResult>(
   return (event, ...args) => runGalleryOperation(() => handler(event, ...args));
 }
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1440,
     height: 940,
@@ -201,15 +206,21 @@ function createWindow(): void {
 
   const devServerURL = process.env.VITE_DEV_SERVER_URL;
   if (devServerURL) {
-    void window.loadURL(devServerURL);
-    window.webContents.openDevTools({ mode: "detach" });
+    const url = process.env[RENDERER_PERF_RESULT_PATH_ENV] ? new URL(devServerURL) : null;
+    if (url) url.searchParams.set("crossgenPerf", "1");
+    void window.loadURL(url ? url.toString() : devServerURL);
+    if (!process.env[RENDERER_PERF_RESULT_PATH_ENV]) {
+      window.webContents.openDevTools({ mode: "detach" });
+    }
   } else {
-    void window.loadFile(path.join(__dirname, "../../dist-renderer/index.html"));
+    void window.loadFile(path.join(__dirname, "../../dist-renderer/index.html"), process.env[RENDERER_PERF_RESULT_PATH_ENV] ? { query: { crossgenPerf: "1" } } : undefined);
   }
+  return window;
 }
 
 function preserveLegacyUserDataPath(): void {
-  app.setPath("userData", path.join(app.getPath("appData"), LEGACY_USER_DATA_NAME));
+  const userDataOverride = process.env[USER_DATA_DIR_ENV] || process.env[LEGACY_USER_DATA_DIR_ENV];
+  app.setPath("userData", userDataOverride ? path.resolve(userDataOverride) : path.join(app.getPath("appData"), LEGACY_USER_DATA_NAME));
 }
 
 function registerAssetProtocol(): void {
@@ -407,6 +418,7 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
   }
   await fs.writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   await fs.rename(tmpPath, statePath);
+  stateWriteCount += 1;
   stateCache = payload;
 }
 
@@ -2408,6 +2420,248 @@ function scheduleGalleryDiskSync(changedRelPath: string | null = null): void {
   }, 250);
 }
 
+function summarizePerformanceResult(value: unknown): Record<string, unknown> {
+  if (Array.isArray(value)) {
+    return { kind: "array", count: value.length };
+  }
+  if (value && typeof value === "object") {
+    const maybeSnapshot = value as Partial<AppSnapshot>;
+    if (Array.isArray(maybeSnapshot.galleryAssets) && Array.isArray(maybeSnapshot.galleryFolders)) {
+      return {
+        kind: "snapshot",
+        galleryAssetCount: maybeSnapshot.galleryAssets.length,
+        galleryFolderCount: maybeSnapshot.galleryFolders.length,
+        historyCount: Array.isArray(maybeSnapshot.history) ? maybeSnapshot.history.length : undefined,
+        providerCount: Array.isArray(maybeSnapshot.providers) ? maybeSnapshot.providers.length : undefined
+      };
+    }
+    return { kind: "object", keys: Object.keys(value).length };
+  }
+  return { kind: typeof value };
+}
+
+async function runMainPerformanceCapture(resultPath: string): Promise<void> {
+  const measurements: Array<Record<string, unknown>> = [];
+  const measure = async (channel: string, operation: () => Promise<unknown>) => {
+    const writeCountBefore = stateWriteCount;
+    const startedAt = performance.now();
+    const value = await runGalleryOperation(operation);
+    const durationMs = performance.now() - startedAt;
+    measurements.push({
+      channel,
+      durationMs,
+      stateWriteCountDelta: stateWriteCount - writeCountBefore,
+      result: summarizePerformanceResult(value)
+    });
+  };
+
+  await measure("app:getSnapshot", handleGetSnapshot);
+  await measure("gallery:list", handleListGallery);
+  await measure("galleryFolders:list", handleListGalleryFolders);
+
+  const state = await readState();
+  await ensureDir(path.dirname(resultPath));
+  await fs.writeFile(
+    resultPath,
+    `${JSON.stringify({
+      capturedAt: new Date().toISOString(),
+      appVersion: getAppVersion(),
+      userDataDir: app.getPath("userData"),
+      statePath: getStatePath(),
+      galleryDir: getGalleryDir(state),
+      totalStateWriteCount: stateWriteCount,
+      measurements
+    }, null, 2)}\n`,
+    "utf8"
+  );
+}
+
+async function waitForWindowLoad(window: BrowserWindow): Promise<void> {
+  if (!window.webContents.isLoading()) return;
+  await new Promise<void>((resolve) => {
+    window.webContents.once("did-finish-load", () => resolve());
+  });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: string): Promise<void> {
+  await waitForWindowLoad(window);
+  const state = await readState();
+  const expectedGalleryAssetCount = state.galleryAssets.length;
+  const sampleGalleryAsset = state.galleryAssets[0];
+  const samplePartialPath = sampleGalleryAsset ? resolveManagedFileName(getGalleryDir(state), sampleGalleryAsset.fileName) : "";
+  const rendererResult = await window.webContents.executeJavaScript(`
+    (async () => {
+      const expectedGalleryAssetCount = ${JSON.stringify(expectedGalleryAssetCount)};
+      const waitForSelector = (selector, timeoutMs = 10000) => new Promise((resolve, reject) => {
+        const startedAt = performance.now();
+        const check = () => {
+          const node = document.querySelector(selector);
+          if (node) {
+            resolve(node);
+            return;
+          }
+          if (performance.now() - startedAt > timeoutMs) {
+            reject(new Error("Timed out waiting for " + selector));
+            return;
+          }
+          requestAnimationFrame(check);
+        };
+        check();
+      });
+      const waitForGalleryGridReady = (timeoutMs = 10000) => new Promise((resolve, reject) => {
+        const startedAt = performance.now();
+        const check = () => {
+          const grid = document.querySelector(".gallery-content-grid");
+          if (grid) {
+            const renderedCount = Number(grid.dataset.renderedCount || "0");
+            const totalCount = Number(grid.dataset.totalCount || "0");
+            const itemCount = grid.querySelectorAll(".gallery-item").length;
+            const hasEmptyState = Boolean(grid.querySelector(".gallery-empty-state"));
+            if (
+              renderedCount > 0 ||
+              itemCount > 0 ||
+              (expectedGalleryAssetCount === 0 && hasEmptyState) ||
+              totalCount >= expectedGalleryAssetCount
+            ) {
+              resolve(grid);
+              return;
+            }
+          }
+          if (performance.now() - startedAt > timeoutMs) {
+            reject(new Error("Timed out waiting for Gallery grid render"));
+            return;
+          }
+          requestAnimationFrame(check);
+        };
+        check();
+      });
+      const accessibleName = (node) => (
+        node.getAttribute("aria-label") ||
+        node.getAttribute("title") ||
+        node.textContent ||
+        ""
+      ).trim();
+      const pageStartedAt = performance.now();
+      const galleryTab = await waitForSelector(".right-rail-tabs button:nth-child(2)");
+      const tabReadyAt = performance.now();
+      galleryTab.click();
+      const galleryClickAt = performance.now();
+      const grid = await waitForGalleryGridReady();
+      await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+      const gridReadyAt = performance.now();
+      const buttonsWithoutNames = [...document.querySelectorAll("button")].filter((button) => !accessibleName(button)).map((button) => button.className || button.outerHTML.slice(0, 120));
+      const imagesMissingAlt = [...document.querySelectorAll("img:not([alt])")].map((image) => image.className || image.getAttribute("src") || image.outerHTML.slice(0, 120));
+      const dialogsWithoutModal = [...document.querySelectorAll('[role="dialog"]')].filter((dialog) => dialog.getAttribute("aria-modal") !== "true").length;
+      const notice = document.querySelector(".notice-area");
+      const noticeMissingLiveRegion = Boolean(notice && (notice.getAttribute("aria-live") === null || notice.getAttribute("aria-atomic") !== "true"));
+      return {
+        url: location.href,
+        title: document.title,
+        timings: {
+          pageToGalleryTabReadyMs: tabReadyAt - pageStartedAt,
+          timeToFirstGalleryGridRenderMs: gridReadyAt - galleryClickAt
+        },
+        galleryGrid: {
+          totalCount: Number(grid.dataset.totalCount || "0"),
+          renderedCount: Number(grid.dataset.renderedCount || "0"),
+          itemCount: grid.querySelectorAll(".gallery-item").length
+        },
+        accessibilitySmoke: {
+          status: buttonsWithoutNames.length === 0 && imagesMissingAlt.length === 0 && dialogsWithoutModal === 0 && !noticeMissingLiveRegion ? "ok" : "violations",
+          buttonsWithoutNames,
+          imagesMissingAlt,
+          dialogsWithoutModal,
+          noticeMissingLiveRegion,
+          noticeAriaLive: notice?.getAttribute("aria-live") ?? null,
+          noticeAriaAtomic: notice?.getAttribute("aria-atomic") ?? null
+        }
+      };
+    })();
+  `);
+
+  const profilerStartIndex = await window.webContents.executeJavaScript("window.__crossgenProfilerEvents?.length ?? 0");
+  if (sampleGalleryAsset && samplePartialPath) {
+    for (let index = 0; index < 3; index += 1) {
+      window.webContents.send("job:event", {
+        jobId: "perf_partial_job",
+        type: "partial",
+        partialIndex: index + 1,
+        image: {
+          id: `perf_partial_${index + 1}`,
+          jobId: "perf_partial_job",
+          path: samplePartialPath,
+          fileName: `perf-partial-${index + 1}.${path.extname(sampleGalleryAsset.fileName).replace(".", "") || "png"}`,
+          mimeType: sampleGalleryAsset.mimeType,
+          width: sampleGalleryAsset.width,
+          height: sampleGalleryAsset.height,
+          sourceType: "partial",
+          createdAt: new Date().toISOString()
+        }
+      } satisfies JobProgressEvent);
+      await sleep(30);
+    }
+    await sleep(120);
+  }
+  const profilerEvents = await window.webContents.executeJavaScript(`(window.__crossgenProfilerEvents ?? []).slice(${Number(profilerStartIndex) || 0})`);
+  (rendererResult as Record<string, unknown>).reactProfilerPartialImageTrace = {
+    status: Array.isArray(profilerEvents) ? "ok" : "unavailable",
+    simulatedPartialEventCount: sampleGalleryAsset ? 3 : 0,
+    profilerEventCount: Array.isArray(profilerEvents) ? profilerEvents.length : 0,
+    events: Array.isArray(profilerEvents) ? profilerEvents : []
+  };
+  try {
+    const axeSource = readFileSync(path.join(app.getAppPath(), "node_modules", "axe-core", "axe.min.js"), "utf8");
+    await window.webContents.executeJavaScript(axeSource);
+    const axeResult = await window.webContents.executeJavaScript(`
+      window.axe.run(document, {
+        resultTypes: ["violations", "incomplete"],
+        runOnly: {
+          type: "tag",
+          values: ["wcag2a", "wcag2aa", "best-practice"]
+        }
+      }).then((result) => ({
+        status: result.violations.length === 0 ? "ok" : "violations",
+        violationCount: result.violations.length,
+        incompleteCount: result.incomplete.length,
+        violations: result.violations.map((violation) => ({
+          id: violation.id,
+          impact: violation.impact,
+          description: violation.description,
+          help: violation.help,
+          helpUrl: violation.helpUrl,
+          nodes: violation.nodes.slice(0, 3).map((node) => ({
+            target: node.target,
+            failureSummary: node.failureSummary
+          }))
+        }))
+      }))
+    `);
+    (rendererResult as Record<string, unknown>).axeAccessibilitySmoke = axeResult;
+  } catch (error) {
+    (rendererResult as Record<string, unknown>).axeAccessibilitySmoke = {
+      status: "unavailable",
+      error: sanitizeError(error)
+    };
+  }
+
+  await ensureDir(path.dirname(resultPath));
+  await fs.writeFile(
+    resultPath,
+    `${JSON.stringify({
+      capturedAt: new Date().toISOString(),
+      appVersion: getAppVersion(),
+      userDataDir: app.getPath("userData"),
+      statePath: getStatePath(),
+      result: rendererResult
+    }, null, 2)}\n`,
+    "utf8"
+  );
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle("app:getSnapshot", () => runGalleryOperation(handleGetSnapshot));
   ipcMain.handle("config:save", handleSaveConfig);
@@ -2454,12 +2708,23 @@ function registerIpcHandlers(): void {
   ipcMain.handle("history:clear", handleClearHistory);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.setName(BRAND_NAME);
   preserveLegacyUserDataPath();
   registerIpcHandlers();
   registerAssetProtocol();
-  createWindow();
+  const performanceResultPath = process.env[PERF_RESULT_PATH_ENV];
+  if (performanceResultPath) {
+    await runMainPerformanceCapture(performanceResultPath);
+    app.quit();
+    return;
+  }
+  const window = createWindow();
+  const rendererPerformanceResultPath = process.env[RENDERER_PERF_RESULT_PATH_ENV];
+  if (rendererPerformanceResultPath) {
+    void runRendererPerformanceCapture(window, rendererPerformanceResultPath).finally(() => app.quit());
+    return;
+  }
   void startGalleryWatcher();
 
   app.on("activate", () => {

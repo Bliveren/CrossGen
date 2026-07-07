@@ -150,14 +150,16 @@ describe("gallery disk sync reconciliation", () => {
       return { close: () => closed.push(directory) };
     };
     let syncCount = 0;
+    const galleryRoot = path.resolve("/gallery");
+    const nestedGalleryPath = path.join(galleryRoot, "Products", "Hero");
     const watchers = startGalleryDiskWatchers(
-      "/gallery",
+      galleryRoot,
       [{ relPath: "Products/Hero", parentRelPath: "Products", name: "Hero" }],
       () => { syncCount += 1; },
       { watchFn: fakeWatch }
     );
 
-    expect(listeners.map((item) => item.directory)).toEqual(["/gallery", "/gallery/Products/Hero"]);
+    expect(listeners.map((item) => item.directory)).toEqual([galleryRoot, nestedGalleryPath]);
 
     listeners[0].listener("rename", ".DS_Store");
     listeners[0].listener("rename", "upload.tmp");
@@ -165,7 +167,7 @@ describe("gallery disk sync reconciliation", () => {
 
     expect(syncCount).toBe(1);
     watchers.forEach((watcher) => watcher.close());
-    expect(closed).toEqual(["/gallery", "/gallery/Products/Hero"]);
+    expect(closed).toEqual([galleryRoot, nestedGalleryPath]);
   });
 
   it("passes changed relative paths from watcher events", () => {
