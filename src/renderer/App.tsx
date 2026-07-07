@@ -121,6 +121,7 @@ import {
 } from "./GalleryPanel";
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 import { useImageEditor } from "./useImageEditor";
+import { useHistoryListModel } from "./useHistoryListModel";
 import {
   GALLERY_ALL_FILTER,
   GALLERY_CONTENT_DEFAULT_HEIGHT,
@@ -1069,37 +1070,30 @@ export function App() {
   const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
   const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
 
-  const filteredHistory = useMemo(() => {
-    const query = historySearch.trim().toLowerCase();
-    const statusMatched = historyStatusFilter === "all"
-      ? snapshot.history
-      : snapshot.history.filter((job) => job.status === historyStatusFilter);
-    const matched = !query
-      ? statusMatched
-      : statusMatched.filter((job) => {
-          const modelDetails = getHistoryModelDetails(job);
-          const systemTag = historySystemTagLabel(job.mode, language);
-          const haystack = `${historyDisplayName(job)} ${job.tags.join(" ")} ${systemTag} ${job.prompt} ${job.mode} ${job.status} ${job.error ?? ""} ${job.createdAt} ${modelDetails.searchText}`.toLowerCase();
-          return haystack.includes(query);
-        });
-    const sorted = [...matched];
-    if (historySort === "oldest") {
-      sorted.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
-    } else {
-      sorted.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-    }
-    return sorted;
-  }, [historySearch, historySort, historyStatusFilter, language, snapshot.history]);
-  const historyTagsAvailable = useMemo(() => {
-    const tags = new Set<string>();
-    snapshot.history.forEach((job) => job.tags.forEach((tag) => tags.add(tag)));
-    return [...tags].sort((a, b) => a.localeCompare(b));
-  }, [snapshot.history]);
-  const historySystemTagsAvailable = useMemo(() => {
-    const tags = new Set<string>();
-    snapshot.history.forEach((job) => tags.add(historySystemTagLabel(job.mode, language)));
-    return [...tags].sort((a, b) => a.localeCompare(b));
-  }, [language, snapshot.history]);
+  const {
+    filteredHistory,
+    tagsAvailable: historyTagsAvailable,
+    systemTagsAvailable: historySystemTagsAvailable,
+    hasOverflow: hasHistoryOverflow,
+    pageCount: historyPageCount,
+    normalizedPageIndex: normalizedHistoryPageIndex,
+    visibleHistory,
+    isSearching: isSearchingHistory,
+    pagerVisible: historyPagerVisible
+  } = useHistoryListModel({
+    history: snapshot.history,
+    search: historySearch,
+    statusFilter: historyStatusFilter,
+    sort: historySort,
+    language,
+    pageSize: historyPageSize,
+    pageIndex: historyPageIndex,
+    expanded: isHistoryExpanded,
+    scrollState: historyListScrollState,
+    displayNameForJob: historyDisplayName,
+    systemTagLabelForMode: historySystemTagLabel,
+    modelDetailsForJob: getHistoryModelDetails
+  });
   const templateTagsAvailable = useMemo(() => {
     const tags = new Set<string>();
     snapshot.promptTemplates.forEach((template) => template.tags.forEach((tag) => tags.add(tag)));
@@ -1371,17 +1365,6 @@ export function App() {
     if (entry.kind === "asset") event.dataTransfer.setData("application/x-image2tools-gallery-id", entry.id);
     if (entry.kind === "folder") event.dataTransfer.setData("application/x-image2tools-gallery-folder-id", entry.id);
   }
-
-  const hasHistoryOverflow = filteredHistory.length > historyPageSize;
-  const historyPageCount = Math.max(1, Math.ceil(filteredHistory.length / historyPageSize));
-  const normalizedHistoryPageIndex = Math.min(historyPageIndex, historyPageCount - 1);
-  const historyPageStartIndex = normalizedHistoryPageIndex * historyPageSize;
-  const visibleHistory = isHistoryExpanded ? filteredHistory : filteredHistory.slice(historyPageStartIndex, historyPageStartIndex + historyPageSize);
-  const isSearchingHistory = historySearch.trim().length > 0;
-  const historyPagerVisible = hasHistoryOverflow && (
-    historyListScrollState.scrollHeight > historyListScrollState.clientHeight &&
-    historyListScrollState.top + historyListScrollState.clientHeight >= historyListScrollState.scrollHeight - 80
-  );
 
   const modeError = useMemo(() => {
     if (generalParams && !generalFallbackSupportsReferenceImages(generalParams.providerKind) && effectiveInputAssets.length > 0) {
