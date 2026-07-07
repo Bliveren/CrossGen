@@ -1,5 +1,5 @@
 import type React from "react";
-import { ArrowDownUp, ChevronDown, FileUp, Folder, FolderOpen, FolderPlus, Pencil, Save, Tags, Trash2 } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ChevronRight, FileUp, Folder, FolderOpen, FolderPlus, Pencil, Save, Tags, Trash2 } from "lucide-react";
 import type { GalleryAsset, GalleryFolder } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
@@ -99,6 +99,26 @@ interface GalleryDirectoryTreeProps {
   children: React.ReactNode;
   onNavigate: (folderId: GalleryFolderFilter) => void;
   onContextMenu: (event: React.MouseEvent<HTMLElement>, folderId: GalleryFolderFilter) => void;
+}
+
+interface GalleryTreeRowsProps {
+  copy: UiCopy;
+  parentId: string | null;
+  depth?: number;
+  foldersByParent: ReadonlyMap<string | null, GalleryFolder[]>;
+  activeFolderId: GalleryFolderFilter;
+  batchMode: boolean;
+  expandedFolderIds: ReadonlySet<string>;
+  selectedFolderIds: ReadonlySet<string>;
+  dragTargetId: GalleryFolderFilter | null;
+  subtreeAssetCounts: ReadonlyMap<string, number>;
+  dropHandlersForFolder: (folderId: GalleryFolderFilter) => GalleryEntryDropHandlers;
+  folderDisplayPath: (folder: GalleryFolder) => string;
+  onPrepareEntryDrag: (event: React.DragEvent<HTMLElement>, entry: GalleryExplorerEntry) => void;
+  onFolderContextMenu: (event: React.MouseEvent<HTMLElement>, folderId: GalleryFolderFilter) => void;
+  onToggleExpanded: (folderId: string) => void;
+  onToggleSelectedFolder: (folderId: string, checked: boolean) => void;
+  onNavigateFolder: (folderId: GalleryFolderFilter) => void;
 }
 
 interface GalleryContentGridProps {
@@ -268,6 +288,105 @@ export function GalleryDirectoryTree({
       </div>
     </aside>
   );
+}
+
+export function GalleryTreeRows({
+  copy,
+  parentId,
+  depth = 0,
+  foldersByParent,
+  activeFolderId,
+  batchMode,
+  expandedFolderIds,
+  selectedFolderIds,
+  dragTargetId,
+  subtreeAssetCounts,
+  dropHandlersForFolder,
+  folderDisplayPath,
+  onPrepareEntryDrag,
+  onFolderContextMenu,
+  onToggleExpanded,
+  onToggleSelectedFolder,
+  onNavigateFolder
+}: GalleryTreeRowsProps): React.ReactNode[] {
+  const folders = foldersByParent.get(parentId) ?? [];
+  return folders.flatMap((folder) => {
+    const hasChildren = (foldersByParent.get(folder.id) ?? []).length > 0;
+    const isExpanded = expandedFolderIds.has(folder.id);
+    const entry: GalleryExplorerEntry = { kind: "folder", id: folder.id, folder };
+    const row = (
+      <div
+        key={folder.id}
+        className={`gallery-tree-row ${activeFolderId === folder.id ? "active" : ""} ${dragTargetId === folder.id ? "drop-target" : ""}`}
+        style={{ "--depth": depth } as React.CSSProperties}
+        draggable
+        onDragStart={(event) => onPrepareEntryDrag(event, entry)}
+        onContextMenu={(event) => onFolderContextMenu(event, folder.id)}
+        {...dropHandlersForFolder(folder.id)}
+      >
+        <button
+          type="button"
+          className="gallery-tree-expander"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (hasChildren) onToggleExpanded(folder.id);
+          }}
+          disabled={!hasChildren}
+          aria-label={isExpanded ? copy.hide : copy.show}
+          data-tooltip={isExpanded ? copy.hide : copy.show}
+        >
+          {hasChildren ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span />}
+        </button>
+        {batchMode && (
+          <input
+            type="checkbox"
+            checked={selectedFolderIds.has(folder.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSelectedFolder(folder.id, event.currentTarget.checked);
+            }}
+            onChange={() => undefined}
+            aria-label={copy.gallerySelectItem(folder.name)}
+          />
+        )}
+        <button
+          type="button"
+          className="gallery-tree-folder-button"
+          onClick={() => onNavigateFolder(folder.id)}
+          onDoubleClick={() => onNavigateFolder(folder.id)}
+          title={folderDisplayPath(folder)}
+        >
+          <Folder size={14} />
+          <span>{folder.name}</span>
+          <small>{subtreeAssetCounts.get(folder.id) ?? 0}</small>
+        </button>
+      </div>
+    );
+    return isExpanded
+      ? [
+          row,
+          ...GalleryTreeRows({
+            copy,
+            parentId: folder.id,
+            depth: depth + 1,
+            foldersByParent,
+            activeFolderId,
+            batchMode,
+            expandedFolderIds,
+            selectedFolderIds,
+            dragTargetId,
+            subtreeAssetCounts,
+            dropHandlersForFolder,
+            folderDisplayPath,
+            onPrepareEntryDrag,
+            onFolderContextMenu,
+            onToggleExpanded,
+            onToggleSelectedFolder,
+            onNavigateFolder
+          })
+        ]
+      : [row];
+  });
 }
 
 export function GalleryFolderCard({

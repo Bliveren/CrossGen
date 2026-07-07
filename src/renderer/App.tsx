@@ -114,6 +114,7 @@ import {
   GalleryContentGrid,
   GalleryDirectoryTree,
   GallerySortToolbar,
+  GalleryTreeRows,
   type GalleryExplorerEntry,
   type GalleryFolderFilter,
   type GallerySortMode,
@@ -4961,70 +4962,6 @@ export function App() {
     );
   }
 
-  const renderGalleryTreeRows = (parentId: string | null, depth = 0): React.ReactNode[] => {
-    const folders = galleryFoldersByParent.get(parentId) ?? [];
-    return folders.flatMap((folder) => {
-      const hasChildren = (galleryFoldersByParent.get(folder.id) ?? []).length > 0;
-      const isExpanded = expandedGalleryFolderIds.has(folder.id);
-      const entry: GalleryExplorerEntry = { kind: "folder", id: folder.id, folder };
-      const row = (
-        <div
-          key={folder.id}
-          className={`gallery-tree-row ${activeGalleryFolderId === folder.id ? "active" : ""} ${galleryFolderDragTarget === folder.id ? "drop-target" : ""}`}
-          style={{ "--depth": depth } as React.CSSProperties}
-          draggable
-          onDragStart={(event) => prepareGalleryEntryDrag(event, entry)}
-          onContextMenu={(event) => openGalleryFolderContextMenu(event, folder.id)}
-          {...galleryFolderDropHandlers(folder.id)}
-        >
-          <button
-            type="button"
-            className="gallery-tree-expander"
-            onClick={(event) => {
-              event.stopPropagation();
-              if (hasChildren) toggleGalleryFolderExpanded(folder.id);
-            }}
-            disabled={!hasChildren}
-            aria-label={isExpanded ? copy.hide : copy.show}
-            data-tooltip={isExpanded ? copy.hide : copy.show}
-          >
-            {hasChildren ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span />}
-          </button>
-          {isGalleryBatchMode && (
-            <input
-              type="checkbox"
-              checked={selectedGalleryFolderIds.has(folder.id)}
-              onClick={(event) => {
-                event.stopPropagation();
-                const checked = event.currentTarget.checked;
-                setSelectedGalleryFolderIds((current) => {
-                  const next = new Set(current);
-                  if (checked) next.add(folder.id);
-                  else next.delete(folder.id);
-                  return next;
-                });
-              }}
-              onChange={() => undefined}
-              aria-label={copy.gallerySelectItem(folder.name)}
-            />
-          )}
-          <button
-            type="button"
-            className="gallery-tree-folder-button"
-            onClick={() => navigateGalleryFolder(folder.id)}
-            onDoubleClick={() => navigateGalleryFolder(folder.id)}
-            title={galleryFolderDisplayPath(folder)}
-          >
-            <Folder size={14} />
-            <span>{folder.name}</span>
-            <small>{galleryFolderSubtreeAssetCounts.get(folder.id) ?? 0}</small>
-          </button>
-        </div>
-      );
-      return isExpanded ? [row, ...renderGalleryTreeRows(folder.id, depth + 1)] : [row];
-    });
-  };
-
   return (
     <main
       className={[
@@ -6008,7 +5945,31 @@ export function App() {
                 onNavigate={navigateGalleryFolder}
                 onContextMenu={openGalleryFolderContextMenu}
               >
-                {renderGalleryTreeRows(null)}
+                <GalleryTreeRows
+                  copy={copy}
+                  parentId={null}
+                  foldersByParent={galleryFoldersByParent}
+                  activeFolderId={activeGalleryFolderId}
+                  batchMode={isGalleryBatchMode}
+                  expandedFolderIds={expandedGalleryFolderIds}
+                  selectedFolderIds={selectedGalleryFolderIds}
+                  dragTargetId={galleryFolderDragTarget}
+                  subtreeAssetCounts={galleryFolderSubtreeAssetCounts}
+                  dropHandlersForFolder={galleryFolderDropHandlers}
+                  folderDisplayPath={galleryFolderDisplayPath}
+                  onPrepareEntryDrag={prepareGalleryEntryDrag}
+                  onFolderContextMenu={openGalleryFolderContextMenu}
+                  onToggleExpanded={toggleGalleryFolderExpanded}
+                  onToggleSelectedFolder={(folderId, checked) => {
+                    setSelectedGalleryFolderIds((current) => {
+                      const next = new Set(current);
+                      if (checked) next.add(folderId);
+                      else next.delete(folderId);
+                      return next;
+                    });
+                  }}
+                  onNavigateFolder={navigateGalleryFolder}
+                />
               </GalleryDirectoryTree>
               <GalleryContentGrid
                 copy={copy}
