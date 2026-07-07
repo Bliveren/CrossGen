@@ -107,7 +107,7 @@ import {
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
-import { ApiConfigDialog, ProviderSummarySection } from "./ProviderConfigPanel";
+import { ApiConfigDialog, LaunchSection, ProviderSummarySection } from "./ProviderConfigPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -5040,69 +5040,20 @@ export function App() {
           onOpen={() => openApiConfigDialog(activeConfig)}
         />
 
-        <section className="tool-section launch-section">
-          <div className="section-title launch-title">
-            <div className="section-title-label">
-              <Rocket size={16} />
-              <h2>{copy.launchModels}</h2>
-            </div>
-            <strong>{activeLaunchDisplay}</strong>
-          </div>
-          <div className="launch-strip" aria-label={copy.launchModels}>
-            {launchButtons.map((button) => {
-              const modelOptions = getLaunchModelOptions(activeConfig, button.launchId);
-              const hasModelMenu = button.available && modelOptions.length > 1;
-              const activeModelOption =
-                modelOptions.find((model) => model.id === activeConfig.activeModelId && model.providerKind === button.providerKind) ??
-                modelOptions.find((model) => model.id === button.modelId && model.providerKind === button.providerKind);
-              const isActive = activeConfig.activeLaunchId === button.launchId;
-              return (
-                <div key={button.launchId} className="launch-item">
-                  <button
-                    type="button"
-                    className={isActive ? "launch-button active" : "launch-button"}
-                    onClick={() => {
-                      if (!button.available) return;
-                      setOpenLaunchMenuId((current) => (hasModelMenu ? (current === button.launchId ? null : button.launchId) : null));
-                      void launchModel(button);
-                    }}
-                    disabled={!button.available || isSavingConfig}
-                    title={button.reason}
-                    aria-expanded={hasModelMenu ? openLaunchMenuId === button.launchId : undefined}
-                  >
-                    <span className="launch-button-main">
-                      <span>{button.displayName}</span>
-                      {hasModelMenu && (openLaunchMenuId === button.launchId ? <ChevronUp size={15} /> : <ChevronDown size={15} />)}
-                    </span>
-                    <small>{button.available ? activeModelOption?.displayName ?? (button.modelId || copy.generalFallback) : button.reason}</small>
-                  </button>
-                  {hasModelMenu && openLaunchMenuId === button.launchId && (
-                    <div className="launch-model-menu" role="listbox" aria-label={`${button.displayName} ${copy.model}`}>
-                      {modelOptions.map((model) => {
-                        const isSelected = activeConfig.activeLaunchId === button.launchId && activeConfig.activeModelId === model.id && params.providerKind === model.providerKind;
-                        return (
-                          <button
-                            key={`${model.providerKind}:${model.id}`}
-                            type="button"
-                            className={isSelected ? "launch-model-option active" : "launch-model-option"}
-                            onClick={() => void selectLaunchModel(button.launchId, model)}
-                            disabled={isSavingConfig}
-                            role="option"
-                            aria-selected={isSelected}
-                            title={model.id}
-                          >
-                            <span>{model.displayName}</span>
-                            <small>{providerLabelFromKind(model.providerKind)}</small>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
+        <LaunchSection
+          copy={copy}
+          activeConfig={activeConfig}
+          activeProviderKind={params.providerKind}
+          activeLaunchDisplay={activeLaunchDisplay}
+          launchButtons={launchButtons}
+          openLaunchMenuId={openLaunchMenuId}
+          saving={isSavingConfig}
+          providerLabelForKind={providerLabelFromKind}
+          modelOptionsForLaunch={getLaunchModelOptions}
+          onToggleLaunchMenu={(launchId, open) => setOpenLaunchMenuId(open ? launchId : null)}
+          onLaunch={(button) => void launchModel(button)}
+          onSelectModel={(launchId, model) => void selectLaunchModel(launchId, model)}
+        />
 
         <section className="tool-section">
           <button type="button" className="section-toggle" onClick={() => setShowAdvanced((current) => !current)}>
