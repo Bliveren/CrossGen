@@ -108,7 +108,7 @@ import {
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
-import { ApiConfigCard, ApiConfigDetail } from "./ProviderConfigPanel";
+import { AddApiConfigForm, ApiConfigCard, ApiConfigDetail } from "./ProviderConfigPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -5989,44 +5989,23 @@ export function App() {
                     );
                   })}
                 </div>
-                <button type="button" className="secondary" onClick={() => setIsAddingApiAccess((current) => !current)}>
-                  <Plus size={16} />
-                  {copy.addApiAccess}
-                </button>
-                {isAddingApiAccess && (
-                  <div className="api-access-add-form">
-                    <label>
-                      {copy.apiAccessKind}
-                      <select value={newApiAccessKind} onChange={(event) => changeNewApiAccessKind(event.target.value as ProviderKind)}>
-                        <option value="openai">OpenAI</option>
-                        <option value="gemini">Gemini</option>
-                        <option value="custom">Custom</option>
-                      </select>
-                    </label>
-                    <label>
-                      {copy.apiAccessName}
-                      <input value={newApiAccessName} onChange={(event) => setNewApiAccessName(event.target.value)} placeholder={providerLabelFromKind(newApiAccessKind)} />
-                    </label>
-                    <label>
-                      {copy.baseURL}
-                      <input value={newApiAccessBaseURL} onChange={(event) => setNewApiAccessBaseURL(event.target.value)} />
-                    </label>
-                    <label>
-                      {copy.apiKey}
-                      <input type="text" autoComplete="off" value={newApiAccessKey} onChange={(event) => setNewApiAccessKey(event.target.value)} placeholder={copy.pasteApiKey} />
-                    </label>
-                    <div className="button-row">
-                      <button type="button" onClick={addApiAccess} disabled={isSavingConfig}>
-                        {isSavingConfig ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
-                        {isSavingConfig ? copy.addingApiAccess : copy.addApiAccess}
-                      </button>
-                      <button type="button" className="ghost" onClick={() => setIsAddingApiAccess(false)}>
-                        <X size={16} />
-                        {copy.cancel}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <AddApiConfigForm
+                  copy={copy}
+                  open={isAddingApiAccess}
+                  saving={isSavingConfig}
+                  kind={newApiAccessKind}
+                  name={newApiAccessName}
+                  baseURL={newApiAccessBaseURL}
+                  apiKey={newApiAccessKey}
+                  namePlaceholder={providerLabelFromKind(newApiAccessKind)}
+                  onToggle={() => setIsAddingApiAccess((current) => !current)}
+                  onKindChange={changeNewApiAccessKind}
+                  onNameChange={setNewApiAccessName}
+                  onBaseURLChange={setNewApiAccessBaseURL}
+                  onApiKeyChange={setNewApiAccessKey}
+                  onAdd={() => void addApiAccess()}
+                  onCancel={() => setIsAddingApiAccess(false)}
+                />
               </aside>
 
               <ApiConfigDetail

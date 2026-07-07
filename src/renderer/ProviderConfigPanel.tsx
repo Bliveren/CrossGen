@@ -1,6 +1,6 @@
 import type React from "react";
-import { CheckCircle2, ChevronUp, KeyRound, LibraryBig, Loader2, Radar, Save, Trash2 } from "lucide-react";
-import type { ProviderConfig } from "../shared/types";
+import { CheckCircle2, ChevronUp, KeyRound, LibraryBig, Loader2, Plus, Radar, Save, Trash2, X } from "lucide-react";
+import type { ProviderConfig, ProviderKind } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
 type DiscoveredProviderModel = ProviderConfig["discoveredModels"][number];
@@ -58,6 +58,85 @@ interface ApiConfigDetailProps {
   onSubmit: () => void;
   onDiscover: () => void;
   onDelete: () => void;
+}
+
+interface AddApiConfigFormProps {
+  copy: UiCopy;
+  open: boolean;
+  saving: boolean;
+  kind: ProviderKind;
+  name: string;
+  baseURL: string;
+  apiKey: string;
+  namePlaceholder: string;
+  onToggle: () => void;
+  onKindChange: (kind: ProviderKind) => void;
+  onNameChange: (value: string) => void;
+  onBaseURLChange: (value: string) => void;
+  onApiKeyChange: (value: string) => void;
+  onAdd: () => void;
+  onCancel: () => void;
+}
+
+export function AddApiConfigForm({
+  copy,
+  open,
+  saving,
+  kind,
+  name,
+  baseURL,
+  apiKey,
+  namePlaceholder,
+  onToggle,
+  onKindChange,
+  onNameChange,
+  onBaseURLChange,
+  onApiKeyChange,
+  onAdd,
+  onCancel
+}: AddApiConfigFormProps) {
+  return (
+    <>
+      <button type="button" className="secondary" onClick={onToggle}>
+        <Plus size={16} />
+        {copy.addApiAccess}
+      </button>
+      {open && (
+        <div className="api-access-add-form">
+          <label>
+            {copy.apiAccessKind}
+            <select value={kind} onChange={(event) => onKindChange(event.target.value as ProviderKind)}>
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Gemini</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label>
+            {copy.apiAccessName}
+            <input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder={namePlaceholder} />
+          </label>
+          <label>
+            {copy.baseURL}
+            <input value={baseURL} onChange={(event) => onBaseURLChange(event.target.value)} />
+          </label>
+          <label>
+            {copy.apiKey}
+            <input type="text" autoComplete="off" value={apiKey} onChange={(event) => onApiKeyChange(event.target.value)} placeholder={copy.pasteApiKey} />
+          </label>
+          <div className="button-row">
+            <button type="button" onClick={onAdd} disabled={saving}>
+              {saving ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
+              {saving ? copy.addingApiAccess : copy.addApiAccess}
+            </button>
+            <button type="button" className="ghost" onClick={onCancel}>
+              <X size={16} />
+              {copy.cancel}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 export function ApiConfigDetail({
