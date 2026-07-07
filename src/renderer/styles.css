@@ -2490,8 +2490,8 @@
 
   .right-rail.collapsed {
     gap: 8px;
-    padding-right: 18px;
-    padding-left: 18px;
+    padding-right: 20px;
+    padding-left: 20px;
     overflow: visible;
   }
 
@@ -2583,9 +2583,9 @@
 
   .right-rail.collapsed .history-item {
     grid-template-columns: 1fr;
-    width: 60px;
-    height: 60px;
-    min-height: 60px;
+    width: 56px;
+    height: 56px;
+    min-height: 56px;
     gap: 0;
     border: 0;
     background: transparent;
@@ -2602,8 +2602,8 @@
   .right-rail.collapsed .history-preview,
   .right-rail.collapsed .gallery-thumb,
   .right-rail.collapsed .gallery-folder-thumb {
-    width: 60px;
-    height: 60px;
+    width: 56px;
+    height: 56px;
     min-height: 0;
     border-radius: var(--radius-lg);
   }
@@ -2628,8 +2628,8 @@
 
   .right-rail.collapsed .gallery-item {
     grid-template-columns: 1fr;
-    width: 60px;
-    min-height: 60px;
+    width: 56px;
+    min-height: 56px;
     gap: 0;
     border: 0;
     background: transparent;

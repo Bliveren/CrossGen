@@ -51,5 +51,5 @@ This document defines the global UI standards for CrossGen. Renderer changes sho
 
 - Resizers remain visible as region dividers, but collapsed regions must not be draggable.
 - Collapsed region dividers must not be pointer targets or keyboard-focusable resize handles.
-- Collapsed right rail thumbnails use compact spacing and keep 18px side padding so thumbnails and bottom actions do not hug the app edge.
+- Collapsed right rail thumbnails use compact spacing and keep 20px side padding so thumbnails and bottom actions match the compact left rail button inset.
 - Low-height viewports must compress secondary copy, metadata, prompts, reference grids, and mask canvases before creating app-level vertical scrolling.
