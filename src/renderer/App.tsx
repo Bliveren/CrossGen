@@ -2139,6 +2139,12 @@ export function App() {
     return `image2tools-asset://image?gallery=${encodeURIComponent(asset.fileName)}&v=${version}`;
   }
 
+  function galleryAssetThumbnailPath(asset: GalleryAsset): string {
+    if (asset.previewUrl) return asset.previewUrl;
+    const version = encodeURIComponent(asset.modifiedAt ?? asset.updatedAt ?? asset.createdAt);
+    return `image2tools-asset://image?gallery=${encodeURIComponent(asset.fileName)}&thumb=1&v=${version}`;
+  }
+
   async function importToGallery() {
     if (!bridge) return;
     try {
@@ -6392,7 +6398,7 @@ export function App() {
                     onContextMenu={(event) => openGalleryAssetContextMenu(event, entry.asset)}
                     title={copy.galleryOpenItem(entry.asset.originalName)}
                   >
-                    <img src={galleryAssetPath(entry.asset)} alt={entry.asset.originalName} draggable={false} loading="lazy" decoding="async" />
+                    <img src={galleryAssetThumbnailPath(entry.asset)} alt={entry.asset.originalName} draggable={false} loading="lazy" decoding="async" />
                   </button>
                   <div className="gallery-meta">
                     <strong title={entry.asset.originalName}>{entry.asset.originalName}</strong>
