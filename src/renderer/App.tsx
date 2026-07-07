@@ -109,7 +109,7 @@ import {
 } from "../shared/modelCatalog";
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
-import { GalleryCompactControls, GallerySortToolbar, type GalleryFolderFilter, type GallerySortMode, type GalleryViewMode } from "./GalleryPanel";
+import { GalleryAssetCard, GalleryCompactControls, GalleryFolderCard, GallerySortToolbar, type GalleryFolderFilter, type GallerySortMode, type GalleryViewMode } from "./GalleryPanel";
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 import { useImageEditor } from "./useImageEditor";
 import {
@@ -6041,131 +6041,50 @@ export function App() {
                   {galleryVirtualEntries.map((entry, virtualIndex) => {
                     const index = galleryVirtualStartIndex + virtualIndex;
                     return entry.kind === "folder" ? (
-                    <article
-                      key={entry.id}
-                      className={`gallery-item gallery-folder-entry ${isGalleryEntrySelected(entry) ? "selected" : ""} ${galleryFolderDragTarget === entry.id ? "drop-target" : ""}`}
-                      draggable
-                      onDragStart={(event) => prepareGalleryEntryDrag(event, entry)}
-                      onDoubleClick={() => navigateGalleryFolder(entry.id)}
-                      onContextMenu={(event) => openGalleryFolderContextMenu(event, entry.id)}
-                      {...galleryFolderDropHandlers(entry.id)}
-                    >
-                      {isGalleryBatchMode && (
-                        <input
-                          className="gallery-entry-select"
-                          type="checkbox"
-                          checked={isGalleryEntrySelected(entry)}
-                          onClick={(event) => toggleGalleryEntrySelection(entry, index, event)}
-                          onChange={() => undefined}
-                          aria-label={copy.gallerySelectItem(entry.folder.name)}
-                        />
-                      )}
-                      <button type="button" className="gallery-folder-thumb folder-thumb" onClick={() => navigateGalleryFolder(entry.id)} aria-label={copy.galleryOpenItem(entry.folder.name)} data-tooltip={copy.galleryOpenItem(entry.folder.name)}>
-                        <FolderOpen size={24} />
-                      </button>
-                      <div className="gallery-meta">
-                        <strong title={galleryFolderDisplayPath(entry.folder)}>{entry.folder.name}</strong>
-                        <small>{copy.galleryFolderItemMeta(galleryFolderSubtreeAssetCounts.get(entry.id) ?? 0, formatDate(entry.folder.updatedAt))}</small>
-                      </div>
-                      <div className="gallery-actions">
-                        <button type="button" className="icon-button" onClick={() => navigateGalleryFolder(entry.id)} aria-label={copy.openFolder} data-tooltip={copy.openFolder}>
-                          <FolderOpen size={15} />
-                        </button>
-                        <button type="button" className="icon-button" onClick={() => openRenameGalleryFolderDialog(entry.folder)} aria-label={copy.galleryFolderRename} data-tooltip={copy.galleryFolderRename}>
-                          <Pencil size={15} />
-                        </button>
-                      </div>
-                    </article>
-                  ) : (
-                    <article
-                      key={entry.id}
-                      className={`gallery-item ${isGalleryEntrySelected(entry) ? "selected" : ""}`}
-                      onContextMenu={(event) => openGalleryAssetContextMenu(event, entry.asset)}
-                    >
-                      {isGalleryBatchMode && (
-                        <input
-                          className="gallery-entry-select"
-                          type="checkbox"
-                          checked={isGalleryEntrySelected(entry)}
-                          onClick={(event) => toggleGalleryEntrySelection(entry, index, event)}
-                          onChange={() => undefined}
-                          aria-label={copy.gallerySelectItem(entry.asset.originalName)}
-                        />
-                      )}
-                  <button
-                    type="button"
-                    className="gallery-thumb"
-                    draggable
-                    onDragStart={(event) => {
-                      prepareGalleryEntryDrag(event, entry);
-                    }}
-                    onClick={() => previewGalleryAsset(entry.asset)}
-                    onContextMenu={(event) => openGalleryAssetContextMenu(event, entry.asset)}
-                    title={copy.galleryOpenItem(entry.asset.originalName)}
-                  >
-                    <img src={galleryAssetThumbnailPath(entry.asset)} alt={entry.asset.originalName} draggable={false} loading="lazy" decoding="async" />
-                  </button>
-                  <div className="gallery-meta">
-                    <strong title={entry.asset.originalName}>{entry.asset.originalName}</strong>
-                    <div className="template-tags gallery-tag-row">
-                      {entry.asset.tags.map((tag) => <span key={tag}>{tag}</span>)}
-                      <span className="history-add-tag-anchor gallery-add-tag-anchor">
-                        <button
-                          type="button"
-                          className="history-chip history-add-tag-button gallery-add-tag-button"
-                          onClick={() => editGalleryTags(entry.asset)}
-                          aria-label={copy.addTag}
-                          data-tooltip={copy.addTag}
-                        >
-                          {copy.addTag}
-                        </button>
-                        {editingGalleryId === entry.asset.id && (
-                          <div
-                            className="history-tag-popover gallery-tag-popover"
-                            data-drift="subtle"
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onMouseMove={movePreviewToolbarTowardPointer}
-                            onMouseLeave={resetPreviewToolbarDrift}
-                          >
-                            <input
-                              value={galleryTagsInput}
-                              onChange={(event) => setGalleryTagsInput(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  void saveGalleryTags(entry.asset);
-                                }
-                                if (event.key === "Escape") {
-                                  event.preventDefault();
-                                  setEditingGalleryId(null);
-                                  setGalleryTagsInput("");
-                                }
-                              }}
-                              placeholder={copy.templateTags}
-                              aria-label={copy.addTag}
-                              autoFocus
-                            />
-                            <button type="button" className="icon-button" disabled={!galleryTagsInput.trim()} onClick={() => void saveGalleryTags(entry.asset)} aria-label={copy.gallerySaveTags} data-tooltip={copy.gallerySaveTags}>
-                              <Save size={14} />
-                            </button>
-                          </div>
-                        )}
-                      </span>
-                    </div>
-                    <small>{formatBytes(entry.asset.sizeBytes)} · {formatDate(entry.asset.modifiedAt ?? entry.asset.updatedAt ?? entry.asset.createdAt)}</small>
-                  </div>
-                  <div className="gallery-actions">
-                    <button type="button" className="icon-button" onClick={() => openRenameGalleryAssetDialog(entry.asset)} aria-label={copy.galleryAssetRename} data-tooltip={copy.galleryAssetRename}>
-                      <Pencil size={15} />
-                    </button>
-                    <button type="button" className="icon-button" onClick={() => editGalleryTags(entry.asset)} aria-label={copy.galleryEditTags} data-tooltip={copy.galleryEditTags}>
-                      <Tags size={15} />
-                    </button>
-                    <button type="button" className="icon-button ghost danger" onClick={() => void removeGalleryAsset(entry.asset)} aria-label={copy.delete} data-tooltip={copy.delete}>
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </article>
+                      <GalleryFolderCard
+                        key={entry.id}
+                        copy={copy}
+                        folder={entry.folder}
+                        selected={isGalleryEntrySelected(entry)}
+                        dropTarget={galleryFolderDragTarget === entry.id}
+                        batchMode={isGalleryBatchMode}
+                        displayPath={galleryFolderDisplayPath(entry.folder)}
+                        meta={copy.galleryFolderItemMeta(galleryFolderSubtreeAssetCounts.get(entry.id) ?? 0, formatDate(entry.folder.updatedAt))}
+                        dropHandlers={galleryFolderDropHandlers(entry.id)}
+                        onDragStart={(event) => prepareGalleryEntryDrag(event, entry)}
+                        onOpen={() => navigateGalleryFolder(entry.id)}
+                        onContextMenu={(event) => openGalleryFolderContextMenu(event, entry.id)}
+                        onToggleSelection={(event) => toggleGalleryEntrySelection(entry, index, event)}
+                        onRename={() => openRenameGalleryFolderDialog(entry.folder)}
+                      />
+                    ) : (
+                      <GalleryAssetCard
+                        key={entry.id}
+                        copy={copy}
+                        asset={entry.asset}
+                        selected={isGalleryEntrySelected(entry)}
+                        batchMode={isGalleryBatchMode}
+                        thumbnailSrc={galleryAssetThumbnailPath(entry.asset)}
+                        meta={`${formatBytes(entry.asset.sizeBytes)} · ${formatDate(entry.asset.modifiedAt ?? entry.asset.updatedAt ?? entry.asset.createdAt)}`}
+                        editingTags={editingGalleryId === entry.asset.id}
+                        tagsInput={galleryTagsInput}
+                        onDragStart={(event) => prepareGalleryEntryDrag(event, entry)}
+                        onOpen={() => previewGalleryAsset(entry.asset)}
+                        onContextMenu={(event) => openGalleryAssetContextMenu(event, entry.asset)}
+                        onToggleSelection={(event) => toggleGalleryEntrySelection(entry, index, event)}
+                        onEditTags={() => editGalleryTags(entry.asset)}
+                        onTagsInputChange={setGalleryTagsInput}
+                        onSaveTags={() => void saveGalleryTags(entry.asset)}
+                        onCancelTags={() => {
+                          setEditingGalleryId(null);
+                          setGalleryTagsInput("");
+                        }}
+                        onMoveTagPopoverPointerDown={(event) => event.stopPropagation()}
+                        onMoveToolbarTowardPointer={movePreviewToolbarTowardPointer}
+                        onResetToolbarDrift={resetPreviewToolbarDrift}
+                        onRename={() => openRenameGalleryAssetDialog(entry.asset)}
+                        onDelete={() => void removeGalleryAsset(entry.asset)}
+                      />
                     );
                   })}
                   {galleryVirtualBottomSpacer > 0 && <div className="gallery-virtual-spacer" style={{ height: galleryVirtualBottomSpacer }} />}
