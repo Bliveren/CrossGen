@@ -109,6 +109,7 @@ import {
 } from "../shared/modelCatalog";
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
+import { GalleryCompactControls, GallerySortToolbar, type GalleryFolderFilter, type GallerySortMode, type GalleryViewMode } from "./GalleryPanel";
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 import { useImageEditor } from "./useImageEditor";
 import {
@@ -155,8 +156,6 @@ type GalleryFolderDialogState =
   | { mode: "create"; parentId?: string | null }
   | { mode: "rename"; folder: GalleryFolder };
 type GalleryAssetDialogState = { asset: GalleryAsset };
-type GallerySortMode = "newest" | "oldest" | "name" | "size" | "modified";
-type GalleryViewMode = "grid" | "list";
 type GalleryExplorerEntry =
   | { kind: "folder"; id: string; folder: GalleryFolder }
   | { kind: "asset"; id: string; asset: GalleryAsset };
@@ -203,7 +202,6 @@ const GALLERY_CONTENT_DEFAULT_HEIGHT = 380;
 const GALLERY_CONTENT_DEFAULT_WIDTH = 320;
 
 type TabMode = "text2img" | "img2img";
-type GalleryFolderFilter = "__all__" | "__uncategorized__" | string;
 
 const GALLERY_ALL_FILTER = "__all__";
 const GALLERY_UNCATEGORIZED_FILTER = "__uncategorized__";
@@ -5952,19 +5950,15 @@ export function App() {
           </div>
         ) : (
           <div className="right-rail-panel gallery-panel gallery-explorer-panel" role="tabpanel">
-            <div className="gallery-compact-controls">
-              <select value={activeGalleryFolderId} onChange={(event) => navigateGalleryFolder(event.target.value as GalleryFolderFilter)} aria-label={copy.galleryFolders}>
-                {galleryFolderSelectOptions.map((folder) => (
-                  <option key={folder.id} value={folder.id}>{folder.id === GALLERY_ALL_FILTER ? copy.galleryFolderCompactLabel : folder.name}</option>
-                ))}
-              </select>
-              <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)} aria-label={copy.galleryTagFilter}>
-                <option value="">{copy.galleryTagCompactLabel}</option>
-                {globalTagOptions.map((tag) => (
-                  <option key={tag} value={tag}>{tag}</option>
-                ))}
-              </select>
-            </div>
+            <GalleryCompactControls
+              copy={copy}
+              activeFolderId={activeGalleryFolderId}
+              folderOptions={galleryFolderSelectOptions}
+              tagFilter={galleryTagFilter}
+              tagOptions={globalTagOptions}
+              onFolderChange={navigateGalleryFolder}
+              onTagFilterChange={setGalleryTagFilter}
+            />
             <div className="rail-filter-row gallery-toolbar">
               <label className="search-box">
                 <Search size={15} />
@@ -5978,48 +5972,20 @@ export function App() {
               </select>
             </div>
 
-            <div className="rail-sort-row gallery-explorer-toolbar">
-              <div className={`gallery-sort-control ${isGallerySortMenuOpen ? "open" : ""}`}>
-                <button
-                  type="button"
-                  className="gallery-sort-trigger"
-                  onClick={() => setIsGallerySortMenuOpen((current) => !current)}
-                  aria-label={gallerySortLabel}
-                  aria-expanded={isGallerySortMenuOpen}
-                  data-tooltip={gallerySortLabel}
-                >
-                  <ArrowDownUp size={14} />
-                  <span>{gallerySortLabel}</span>
-                  <ChevronDown size={13} />
-                </button>
-                {isGallerySortMenuOpen && (
-                  <div className="gallery-sort-menu" role="menu">
-                    {gallerySortOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={gallerySort === option.value ? "active" : undefined}
-                        onClick={() => {
-                          setGallerySort(option.value);
-                          setIsGallerySortMenuOpen(false);
-                        }}
-                        role="menuitem"
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="gallery-toolbar-actions">
-                <button type="button" className="icon-button rail-new-folder-button" onClick={() => openCreateGalleryFolderDialog(currentGalleryCreateParentId)} aria-label={copy.galleryFolderCreate} data-tooltip={copy.galleryFolderCreate}>
-                  <FolderPlus size={15} />
-                </button>
-                <button type="button" className="icon-button rail-import-button" onClick={() => void importToGallery()} aria-label={copy.galleryImport} data-tooltip={copy.galleryImport}>
-                  <FileUp size={15} />
-                </button>
-              </div>
-            </div>
+            <GallerySortToolbar
+              copy={copy}
+              sort={gallerySort}
+              sortLabel={gallerySortLabel}
+              sortOptions={gallerySortOptions}
+              isSortMenuOpen={isGallerySortMenuOpen}
+              onToggleSortMenu={() => setIsGallerySortMenuOpen((current) => !current)}
+              onSortChange={(sort) => {
+                setGallerySort(sort);
+                setIsGallerySortMenuOpen(false);
+              }}
+              onCreateFolder={() => openCreateGalleryFolderDialog(currentGalleryCreateParentId)}
+              onImport={() => void importToGallery()}
+            />
             <div className="resource-explorer">
               <aside className={`gallery-directory-tree ${isGalleryBatchMode ? "batch-select" : ""}`} aria-label={copy.galleryFolders}>
                 <button
