@@ -1,7 +1,7 @@
 import type { DiscoveredModel, ProviderKind } from "../../shared/types.js";
 import { getProviderKindForFocusedModelId } from "../../shared/modelCatalog.js";
 import { DEFAULT_GEMINI_BASE_URL, normalizeBaseURL } from "../../shared/validation.js";
-import { buildEndpoint, fetchWithTimeout } from "./openaiImage.js";
+import { buildEndpoint, fetchWithTimeout } from "./openaiImageAdapter.js";
 
 interface OpenAIModelsResponse {
   data?: unknown;
