@@ -3,6 +3,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  nativeImage,
   protocol,
   safeStorage,
   shell,
@@ -78,6 +79,7 @@ import {
   startGalleryDiskWatchers,
   type GalleryWatchHandle
 } from "./services/galleryDiskSync.js";
+import { DEFAULT_GALLERY_THUMBNAIL_SIZE, galleryThumbnailCachePath } from "./services/galleryThumbnailCache.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
 import { verifyUpdateAssetBytes } from "./services/updateInstallerVerification.js";
@@ -162,6 +164,36 @@ let galleryWatchNeedsFullSync = false;
 let galleryWatchChangedRelPaths = new Set<string>();
 let stateWriteCount = 0;
 
+interface AssetProtocolPerfMetrics {
+  galleryOriginalRequests: number;
+  galleryOriginalBytes: number;
+  galleryThumbnailRequests: number;
+  galleryThumbnailBytes: number;
+  galleryThumbnailCacheHits: number;
+  galleryThumbnailCacheMisses: number;
+  galleryThumbnailFallbacks: number;
+  historyRequests: number;
+  historyBytes: number;
+  totalBytes: number;
+}
+
+function createAssetProtocolPerfMetrics(): AssetProtocolPerfMetrics {
+  return {
+    galleryOriginalRequests: 0,
+    galleryOriginalBytes: 0,
+    galleryThumbnailRequests: 0,
+    galleryThumbnailBytes: 0,
+    galleryThumbnailCacheHits: 0,
+    galleryThumbnailCacheMisses: 0,
+    galleryThumbnailFallbacks: 0,
+    historyRequests: 0,
+    historyBytes: 0,
+    totalBytes: 0
+  };
+}
+
+let assetProtocolPerfMetrics = createAssetProtocolPerfMetrics();
+
 interface WriteStateOptions {
   updateBackup?: boolean;
 }
@@ -229,14 +261,19 @@ function registerAssetProtocol(): void {
     const url = new URL(request.url);
     const assetPath = url.searchParams.get("path") ?? "";
     const galleryFileName = url.searchParams.get("gallery");
+    const galleryThumbnail = galleryFileName ? url.searchParams.get("thumb") === "1" : false;
     let normalized: string | null = null;
+    let galleryRelPath = "";
 
     try {
       const state = await readState();
       const galleryDir = getGalleryDir(state);
-      normalized = galleryFileName
-        ? resolveManagedFileName(galleryDir, galleryFileName)
-        : assertKnownHistoryAssetPath(state, assetPath);
+      if (galleryFileName) {
+        galleryRelPath = normalizeGalleryRelativePath(galleryFileName);
+        normalized = resolveManagedFileName(galleryDir, galleryRelPath);
+      } else {
+        normalized = assertKnownHistoryAssetPath(state, assetPath);
+      }
     } catch {
       return new Response("Forbidden", { status: 403 });
     }
@@ -251,13 +288,20 @@ function registerAssetProtocol(): void {
       const safePath = galleryFileName
         ? await assertManagedRegularFile(galleryDir, normalized)
         : await assertKnownHistoryRegularAsset(state, normalized);
-      const content = await fs.readFile(safePath);
-      const mimeType = mimeTypeForFile(safePath);
-      return new Response(new Blob([content], { type: mimeType }), {
+      const served = galleryThumbnail && galleryRelPath
+        ? await getOrCreateGalleryThumbnail(galleryRelPath, safePath)
+        : { filePath: safePath, mimeType: mimeTypeForFile(safePath), cacheable: false, cacheHit: false, fallback: false };
+      const content = await fs.readFile(served.filePath);
+      recordAssetProtocolResponse(
+        galleryFileName ? (galleryThumbnail ? "gallery-thumbnail" : "gallery-original") : "history",
+        content.byteLength,
+        served
+      );
+      return new Response(new Blob([content], { type: served.mimeType }), {
         headers: {
           "access-control-allow-origin": "*",
-          "cache-control": "no-store",
-          "content-type": mimeType
+          "cache-control": served.cacheable ? "private, max-age=31536000, immutable" : "no-store",
+          "content-type": served.mimeType
         }
       });
     } catch (error) {
@@ -296,6 +340,10 @@ function getImagesDir(state?: AppStateFile | null): string {
 
 function getGalleryDir(state?: AppStateFile | null): string {
   return getStorageSettings(state ?? stateCache).galleryDir;
+}
+
+function getGalleryThumbnailCacheDir(): string {
+  return path.join(app.getPath("userData"), "gallery-thumbnails");
 }
 
 function getHistoryImageRoots(state?: AppStateFile | null): string[] {
@@ -573,8 +621,63 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
+async function getOrCreateGalleryThumbnail(relPath: string, sourcePath: string): Promise<{ filePath: string; mimeType: string; cacheable: boolean; cacheHit: boolean; fallback: boolean }> {
+  const stat = await fs.stat(sourcePath);
+  const cacheDir = getGalleryThumbnailCacheDir();
+  const cachePath = galleryThumbnailCachePath(cacheDir, {
+    relPath,
+    sizeBytes: stat.size,
+    modifiedMs: stat.mtimeMs,
+    width: DEFAULT_GALLERY_THUMBNAIL_SIZE
+  });
+
+  if (await pathExists(cachePath)) {
+    return { filePath: cachePath, mimeType: "image/png", cacheable: true, cacheHit: true, fallback: false };
+  }
+
+  const source = await fs.readFile(sourcePath);
+  const image = nativeImage.createFromBuffer(source);
+  if (image.isEmpty()) {
+    return { filePath: sourcePath, mimeType: mimeTypeForFile(sourcePath), cacheable: false, cacheHit: false, fallback: true };
+  }
+
+  const resized = image.resize({ width: DEFAULT_GALLERY_THUMBNAIL_SIZE, quality: "best" });
+  const png = resized.toPNG();
+  if (png.length === 0) {
+    return { filePath: sourcePath, mimeType: mimeTypeForFile(sourcePath), cacheable: false, cacheHit: false, fallback: true };
+  }
+
+  await ensureDir(cacheDir);
+  const tmpPath = `${cachePath}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmpPath, png);
+  await fs.rename(tmpPath, cachePath).catch(async (error) => {
+    await fs.unlink(tmpPath).catch(() => undefined);
+    if (!isNodeError(error) || error.code !== "EEXIST") throw error;
+  });
+  return { filePath: cachePath, mimeType: "image/png", cacheable: true, cacheHit: false, fallback: false };
+}
+
 function sameResolvedPath(a: string, b: string): boolean {
   return path.resolve(a) === path.resolve(b);
+}
+
+function recordAssetProtocolResponse(kind: "gallery-original" | "gallery-thumbnail" | "history", bytes: number, served?: { cacheHit?: boolean; fallback?: boolean }): void {
+  assetProtocolPerfMetrics.totalBytes += bytes;
+  if (kind === "gallery-thumbnail") {
+    assetProtocolPerfMetrics.galleryThumbnailRequests += 1;
+    assetProtocolPerfMetrics.galleryThumbnailBytes += bytes;
+    if (served?.cacheHit) assetProtocolPerfMetrics.galleryThumbnailCacheHits += 1;
+    else assetProtocolPerfMetrics.galleryThumbnailCacheMisses += 1;
+    if (served?.fallback) assetProtocolPerfMetrics.galleryThumbnailFallbacks += 1;
+    return;
+  }
+  if (kind === "gallery-original") {
+    assetProtocolPerfMetrics.galleryOriginalRequests += 1;
+    assetProtocolPerfMetrics.galleryOriginalBytes += bytes;
+    return;
+  }
+  assetProtocolPerfMetrics.historyRequests += 1;
+  assetProtocolPerfMetrics.historyBytes += bytes;
 }
 
 async function fileContentHash(filePath: string): Promise<string> {
@@ -2527,6 +2630,7 @@ function sleep(ms: number): Promise<void> {
 
 async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: string): Promise<void> {
   await waitForWindowLoad(window);
+  assetProtocolPerfMetrics = createAssetProtocolPerfMetrics();
   const state = await readState();
   const expectedGalleryAssetCount = state.galleryAssets.length;
   const sampleGalleryAsset = state.galleryAssets[0];
@@ -2591,6 +2695,9 @@ async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: 
       const grid = await waitForGalleryGridReady();
       await new Promise((resolve) => requestAnimationFrame(() => resolve()));
       const gridReadyAt = performance.now();
+      const galleryImages = [...grid.querySelectorAll(".gallery-thumb img")];
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      const thumbnailWaitDoneAt = performance.now();
       const buttonsWithoutNames = [...document.querySelectorAll("button")].filter((button) => !accessibleName(button)).map((button) => button.className || button.outerHTML.slice(0, 120));
       const imagesMissingAlt = [...document.querySelectorAll("img:not([alt])")].map((image) => image.className || image.getAttribute("src") || image.outerHTML.slice(0, 120));
       const dialogsWithoutModal = [...document.querySelectorAll('[role="dialog"]')].filter((dialog) => dialog.getAttribute("aria-modal") !== "true").length;
@@ -2601,12 +2708,15 @@ async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: 
         title: document.title,
         timings: {
           pageToGalleryTabReadyMs: tabReadyAt - pageStartedAt,
-          timeToFirstGalleryGridRenderMs: gridReadyAt - galleryClickAt
+          timeToFirstGalleryGridRenderMs: gridReadyAt - galleryClickAt,
+          thumbnailWaitAfterGridReadyMs: thumbnailWaitDoneAt - gridReadyAt
         },
         galleryGrid: {
           totalCount: Number(grid.dataset.totalCount || "0"),
           renderedCount: Number(grid.dataset.renderedCount || "0"),
-          itemCount: grid.querySelectorAll(".gallery-item").length
+          itemCount: grid.querySelectorAll(".gallery-item").length,
+          imageCount: galleryImages.length,
+          thumbnailSrcCount: galleryImages.filter((image) => image.getAttribute("src")?.includes("thumb=1")).length
         },
         accessibilitySmoke: {
           status: buttonsWithoutNames.length === 0 && imagesMissingAlt.length === 0 && dialogsWithoutModal === 0 && !noticeMissingLiveRegion ? "ok" : "violations",
@@ -2651,6 +2761,7 @@ async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: 
     profilerEventCount: Array.isArray(profilerEvents) ? profilerEvents.length : 0,
     events: Array.isArray(profilerEvents) ? profilerEvents : []
   };
+  (rendererResult as Record<string, unknown>).assetProtocol = assetProtocolPerfMetrics;
   try {
     const axeSource = readFileSync(path.join(app.getAppPath(), "node_modules", "axe-core", "axe.min.js"), "utf8");
     await window.webContents.executeJavaScript(axeSource);

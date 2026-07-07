@@ -312,14 +312,24 @@ function commonMutationWriteScenarios(state, reconciledState, galleryCollections
   return scenarios;
 }
 
-function thumbnailBaselineEstimate(state, sampleSize = 40) {
+function thumbnailBaselineEstimate(state, electronRenderer, sampleSize = 40) {
   const sampledAssets = state.galleryAssets.slice(0, sampleSize);
+  const originalBytesForVisibleSample = sampledAssets.reduce((sum, asset) => sum + asset.sizeBytes, 0);
+  const assetProtocol = electronRenderer.status === "ok" ? electronRenderer.metrics?.result?.assetProtocol : null;
+  const thumbnailBytes = typeof assetProtocol?.galleryThumbnailBytes === "number" ? assetProtocol.galleryThumbnailBytes : null;
+  const thumbnailRequests = typeof assetProtocol?.galleryThumbnailRequests === "number" ? assetProtocol.galleryThumbnailRequests : null;
   return {
-    currentBehavior: "Gallery card images request full original asset URLs; Phase 3 should replace these with thumbnails.",
+    currentBehavior: "Gallery card images request managed thumbnail asset URLs.",
     sampledCardCount: sampledAssets.length,
-    requestCount: sampledAssets.length,
-    totalBytesServed: sampledAssets.reduce((sum, asset) => sum + asset.sizeBytes, 0),
-    averageBytesPerRequest: sampledAssets.length === 0 ? 0 : sampledAssets.reduce((sum, asset) => sum + asset.sizeBytes, 0) / sampledAssets.length
+    originalRequestCountBeforePhase3: sampledAssets.length,
+    originalBytesForVisibleSample,
+    thumbnailRequestCount: thumbnailRequests,
+    thumbnailBytesServed: thumbnailBytes,
+    thumbnailCacheHits: typeof assetProtocol?.galleryThumbnailCacheHits === "number" ? assetProtocol.galleryThumbnailCacheHits : null,
+    thumbnailCacheMisses: typeof assetProtocol?.galleryThumbnailCacheMisses === "number" ? assetProtocol.galleryThumbnailCacheMisses : null,
+    thumbnailFallbacks: typeof assetProtocol?.galleryThumbnailFallbacks === "number" ? assetProtocol.galleryThumbnailFallbacks : null,
+    bytesSavedForVisibleSample: thumbnailBytes === null ? null : originalBytesForVisibleSample - thumbnailBytes,
+    byteReductionRatio: thumbnailBytes === null || originalBytesForVisibleSample === 0 ? null : 1 - (thumbnailBytes / originalBytesForVisibleSample)
   };
 }
 
@@ -601,7 +611,7 @@ async function main() {
         bytes: stateStat.size,
         commonMutationWriteScenarios: commonMutationWriteScenarios(state, reconciledState, galleryCollectionsChanged)
       },
-      thumbnails: thumbnailBaselineEstimate(reconciledState),
+      thumbnails: thumbnailBaselineEstimate(reconciledState, electronRenderer),
       renderer: {
         electronRenderer,
         timeToFirstGalleryGridRender: electronRenderer.status === "ok"
