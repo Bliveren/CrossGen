@@ -2494,7 +2494,7 @@
   }
 
   .right-rail.collapsed {
-    --right-rail-collapsed-thumb-size: 156px;
+    --right-rail-collapsed-thumb-size: 184px;
     gap: 8px;
     padding-right: 20px;
     padding-left: 20px;
@@ -2522,7 +2522,7 @@
     border-top: 1px solid var(--border-subtle);
     background: transparent;
     padding-top: 14px;
-    padding-bottom: 0;
+    padding-bottom: 6px;
     box-shadow: none;
     backdrop-filter: none;
   }
@@ -2651,7 +2651,7 @@
     border-top: 1px solid var(--border-subtle);
     background: transparent;
     padding-top: 14px;
-    padding-bottom: 0;
+    padding-bottom: 6px;
     box-shadow: none;
     backdrop-filter: none;
     overflow: visible;
@@ -4811,7 +4811,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(560px, 1fr) 10px var(--history-width, 196px);
+      grid-template-columns: 76px 10px minmax(560px, 1fr) 10px var(--history-width, 224px);
     }
 
     .sidebar {
@@ -4859,7 +4859,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(360px, 1fr) 0 var(--history-width, 196px);
+      grid-template-columns: 76px 10px minmax(360px, 1fr) 0 var(--history-width, 224px);
     }
 
     .history {
@@ -4901,7 +4901,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(0, 1fr) 0 var(--history-width, 196px);
+      grid-template-columns: 76px 10px minmax(0, 1fr) 0 var(--history-width, 224px);
     }
 
     .right-rail-tabs span,
