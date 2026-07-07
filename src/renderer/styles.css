@@ -404,8 +404,12 @@
   .sidebar-mini-utility {
     display: grid;
     gap: 10px;
+    width: 100%;
     margin-top: auto;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 14px;
     padding-bottom: 6px;
+    justify-items: center;
   }
 
   .sidebar-full-stack {
@@ -2490,10 +2494,10 @@
   }
 
   .right-rail.collapsed {
-    --right-rail-collapsed-thumb-size: 128px;
+    --right-rail-collapsed-thumb-size: 156px;
     gap: 8px;
-    padding-right: 18px;
-    padding-left: 18px;
+    padding-right: 20px;
+    padding-left: 20px;
     overflow: visible;
   }
 
@@ -2518,6 +2522,9 @@
     border-top: 1px solid var(--border-subtle);
     background: transparent;
     padding-top: 14px;
+    padding-bottom: 0;
+    box-shadow: none;
+    backdrop-filter: none;
   }
 
   .right-rail-action-group {
@@ -2641,10 +2648,10 @@
     position: relative;
     z-index: 5000;
     justify-content: flex-end;
-    border: 0;
     border-top: 1px solid var(--border-subtle);
     background: transparent;
     padding-top: 14px;
+    padding-bottom: 0;
     box-shadow: none;
     backdrop-filter: none;
     overflow: visible;
@@ -4804,7 +4811,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(560px, 1fr) 10px var(--history-width, 96px);
+      grid-template-columns: 76px 10px minmax(560px, 1fr) 10px var(--history-width, 196px);
     }
 
     .sidebar {
@@ -4852,7 +4859,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(360px, 1fr) 0 var(--history-width, 96px);
+      grid-template-columns: 76px 10px minmax(360px, 1fr) 0 var(--history-width, 196px);
     }
 
     .history {
@@ -4894,7 +4901,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(0, 1fr) 0 var(--history-width, 96px);
+      grid-template-columns: 76px 10px minmax(0, 1fr) 0 var(--history-width, 196px);
     }
 
     .right-rail-tabs span,
