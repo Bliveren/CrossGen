@@ -2681,6 +2681,62 @@ async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: 
         node.textContent ||
         ""
       ).trim();
+      const dialogFocusableSelector = [
+        "a[href]",
+        "button:not([disabled])",
+        "input:not([disabled])",
+        "select:not([disabled])",
+        "textarea:not([disabled])",
+        "[tabindex]:not([tabindex='-1'])",
+        "[contenteditable='true']"
+      ].join(",");
+      const dialogFocusableElements = (root) => [...root.querySelectorAll(dialogFocusableSelector)].filter((element) => element.tabIndex >= 0);
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+      const runDialogKeyboardSmoke = async () => {
+        const storageButton = [...document.querySelectorAll("button")].find((button) => {
+          const name = accessibleName(button);
+          return name === "Library path settings" || name === "库路径配置";
+        });
+        if (!storageButton) {
+          return {
+            status: "violations",
+            reason: "Library path settings button was not found."
+          };
+        }
+
+        storageButton.focus();
+        const openerFocusedBeforeOpen = document.activeElement === storageButton;
+        storageButton.click();
+        const dialog = await waitForSelector(".storage-dialog");
+        await nextFrame();
+
+        const focusable = dialogFocusableElements(dialog);
+        const firstFocusable = focusable[0] ?? null;
+        const lastFocusable = focusable[focusable.length - 1] ?? null;
+        const initialFocusInside = document.activeElement instanceof HTMLElement && dialog.contains(document.activeElement);
+
+        if (firstFocusable) firstFocusable.focus();
+        dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+        await nextFrame();
+        const shiftTabWrappedToLast = Boolean(lastFocusable && document.activeElement === lastFocusable);
+
+        dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+        await nextFrame();
+        const closedOnEscape = !document.querySelector(".storage-dialog");
+        const focusReturnedToOpener = document.activeElement === storageButton;
+        const ok = openerFocusedBeforeOpen && initialFocusInside && shiftTabWrappedToLast && closedOnEscape && focusReturnedToOpener;
+
+        return {
+          status: ok ? "ok" : "violations",
+          openerFocusedBeforeOpen,
+          opened: Boolean(dialog),
+          initialFocusInside,
+          focusableCount: focusable.length,
+          shiftTabWrappedToLast,
+          closedOnEscape,
+          focusReturnedToOpener
+        };
+      };
       const pageStartedAt = performance.now();
       const galleryTab = await waitForSelector(".right-rail-tabs button:nth-child(2)");
       const tabReadyAt = performance.now();
@@ -2692,6 +2748,7 @@ async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: 
       const galleryImages = [...grid.querySelectorAll(".gallery-thumb img")];
       await new Promise((resolve) => setTimeout(resolve, 750));
       const thumbnailWaitDoneAt = performance.now();
+      const dialogKeyboardSmoke = await runDialogKeyboardSmoke();
       const buttonsWithoutNames = [...document.querySelectorAll("button")].filter((button) => !accessibleName(button)).map((button) => button.className || button.outerHTML.slice(0, 120));
       const imagesMissingAlt = [...document.querySelectorAll("img:not([alt])")].map((image) => image.className || image.getAttribute("src") || image.outerHTML.slice(0, 120));
       const dialogsWithoutModal = [...document.querySelectorAll('[role="dialog"]')].filter((dialog) => dialog.getAttribute("aria-modal") !== "true").length;
@@ -2713,13 +2770,14 @@ async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: 
           thumbnailSrcCount: galleryImages.filter((image) => image.getAttribute("src")?.includes("thumb=1")).length
         },
         accessibilitySmoke: {
-          status: buttonsWithoutNames.length === 0 && imagesMissingAlt.length === 0 && dialogsWithoutModal === 0 && !noticeMissingLiveRegion ? "ok" : "violations",
+          status: buttonsWithoutNames.length === 0 && imagesMissingAlt.length === 0 && dialogsWithoutModal === 0 && !noticeMissingLiveRegion && dialogKeyboardSmoke.status === "ok" ? "ok" : "violations",
           buttonsWithoutNames,
           imagesMissingAlt,
           dialogsWithoutModal,
           noticeMissingLiveRegion,
           noticeAriaLive: notice?.getAttribute("aria-live") ?? null,
-          noticeAriaAtomic: notice?.getAttribute("aria-atomic") ?? null
+          noticeAriaAtomic: notice?.getAttribute("aria-atomic") ?? null,
+          dialogKeyboardSmoke
         }
       };
     })();
