@@ -2494,10 +2494,10 @@
   }
 
   .right-rail.collapsed {
-    --right-rail-collapsed-thumb-size: calc(var(--history-width, 272px) - 40px);
+    --right-rail-collapsed-thumb-size: calc(var(--history-width, 304px) - 32px);
     gap: 8px;
-    padding-right: 20px;
-    padding-left: 20px;
+    padding-right: 16px;
+    padding-left: 16px;
     overflow: visible;
   }
 
@@ -2520,7 +2520,7 @@
     margin-top: auto;
     min-height: max(51px, calc(100vh - var(--rail-collapse-button-y, calc(100vh - 86px)) - var(--right-rail-padding-bottom, 22px)));
     border-top: 1px solid var(--border-subtle);
-    background: none;
+    background: transparent;
     padding-top: 14px;
     padding-bottom: 0;
     border-radius: 0;
@@ -2603,8 +2603,19 @@
   }
 
   .right-rail.collapsed .history-list.batch-select .history-item {
-    grid-template-columns: auto 1fr;
-    gap: 6px;
+    position: relative;
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .right-rail.collapsed .history-list.batch-select .history-entry-select,
+  .right-rail.collapsed .gallery-content-grid.batch-select .gallery-entry-select {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    border-radius: 4px;
+    background: var(--surface-panel);
   }
 
   .right-rail.collapsed .history-preview,
@@ -2635,6 +2646,7 @@
   }
 
   .right-rail.collapsed .gallery-item {
+    position: relative;
     grid-template-columns: 1fr;
     width: var(--right-rail-collapsed-thumb-size);
     min-height: var(--right-rail-collapsed-thumb-size);
@@ -2650,7 +2662,7 @@
     z-index: 5000;
     justify-content: flex-end;
     border-top: 1px solid var(--border-subtle);
-    background: none;
+    background: transparent;
     padding-top: 14px;
     padding-bottom: 0;
     border-radius: 0;
