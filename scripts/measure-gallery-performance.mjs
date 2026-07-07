@@ -218,11 +218,21 @@ function createReconcileOptions() {
   };
 }
 
-function galleryCollectionsChanged(before, after) {
-  return (
-    JSON.stringify(before.galleryFolders) !== JSON.stringify(after.galleryFolders) ||
-    JSON.stringify(before.galleryAssets) !== JSON.stringify(after.galleryAssets)
-  );
+function measureCommandFor(args) {
+  const parts = [
+    "node",
+    "scripts/measure-gallery-performance.mjs",
+    "--fixture",
+    path.relative(repoRoot, args.fixture),
+    "--output",
+    path.relative(repoRoot, args.output),
+    "--iterations",
+    String(args.iterations)
+  ];
+  if (args.skipBuild) parts.push("--skip-build");
+  if (args.noElectron) parts.push("--no-electron");
+  if (args.noRenderer) parts.push("--no-renderer");
+  return parts.join(" ");
 }
 
 function statePayloadBytes(state) {
@@ -245,7 +255,7 @@ function summarizeState(state) {
   };
 }
 
-function commonMutationWriteScenarios(state, reconciledState) {
+function commonMutationWriteScenarios(state, reconciledState, galleryCollectionsChanged) {
   const scenarios = [];
   scenarios.push({
     name: "full sync with no Gallery changes",
@@ -448,7 +458,7 @@ async function main() {
   }
 
   const galleryDiskSync = await import(pathToFileURL(path.join(repoRoot, "dist", "main", "services", "galleryDiskSync.js")).href);
-  const { scanGalleryDisk, reconcileGalleryDiskState, reconcileGalleryDiskChanges } = galleryDiskSync;
+  const { scanGalleryDisk, reconcileGalleryDiskState, reconcileGalleryDiskChanges, galleryCollectionsChanged } = galleryDiskSync;
 
   await fs.mkdir(args.output, { recursive: true });
 
@@ -499,33 +509,37 @@ async function main() {
 
   const handlerEquivalent = [];
   handlerEquivalent.push(await measureRepeated(
-    "app:getSnapshot handler-equivalent",
+    "app:getSnapshot handler-equivalent watcher-fresh",
+    args.iterations,
+    async () => {
+      return { ...summarizeState(reconciledState), stateWriteCountDelta: 0 };
+    },
+    (result) => result
+  ));
+  handlerEquivalent.push(await measureRepeated(
+    "gallery:list handler-equivalent watcher-fresh",
+    args.iterations,
+    async () => {
+      return { assetCount: reconciledState.galleryAssets.length, stateWriteCountDelta: 0 };
+    },
+    (result) => result
+  ));
+  handlerEquivalent.push(await measureRepeated(
+    "galleryFolders:list handler-equivalent watcher-fresh",
+    args.iterations,
+    async () => {
+      return { folderCount: reconciledState.galleryFolders.length, stateWriteCountDelta: 0 };
+    },
+    (result) => result
+  ));
+  handlerEquivalent.push(await measureRepeated(
+    "app:getSnapshot full-scan recovery-equivalent",
     args.iterations,
     async () => {
       const nextDisk = await scanGalleryDisk(manifest.galleryDir);
       const nextState = reconcileGalleryDiskState(state, nextDisk, createReconcileOptions());
       const changed = galleryCollectionsChanged(state, nextState);
       return { ...summarizeState(nextState), stateWriteCountDelta: changed ? 1 : 0 };
-    },
-    (result) => result
-  ));
-  handlerEquivalent.push(await measureRepeated(
-    "gallery:list handler-equivalent",
-    args.iterations,
-    async () => {
-      const nextDisk = await scanGalleryDisk(manifest.galleryDir);
-      const nextState = reconcileGalleryDiskState(state, nextDisk, createReconcileOptions());
-      return { assetCount: nextState.galleryAssets.length, stateWriteCountDelta: galleryCollectionsChanged(state, nextState) ? 1 : 0 };
-    },
-    (result) => result
-  ));
-  handlerEquivalent.push(await measureRepeated(
-    "galleryFolders:list handler-equivalent",
-    args.iterations,
-    async () => {
-      const nextDisk = await scanGalleryDisk(manifest.galleryDir);
-      const nextState = reconcileGalleryDiskState(state, nextDisk, createReconcileOptions());
-      return { folderCount: nextState.galleryFolders.length, stateWriteCountDelta: galleryCollectionsChanged(state, nextState) ? 1 : 0 };
     },
     (result) => result
   ));
@@ -573,7 +587,7 @@ async function main() {
     },
     commands: {
       fixture: manifest.commands?.regenerate,
-      measure: `node scripts/measure-gallery-performance.mjs --fixture ${path.relative(repoRoot, args.fixture)} --output ${path.relative(repoRoot, args.output)}`,
+      measure: measureCommandFor(args),
       mainHandlerCapture: `CROSSGEN_USER_DATA_DIR=${manifest.userDataDir} CROSSGEN_PERF_RESULT_PATH=${path.join(args.output, "electron-main-handler-metrics.json")} electron .`,
       rendererCapture: `VITE_DEV_SERVER_URL=http://127.0.0.1:<port> CROSSGEN_USER_DATA_DIR=${manifest.userDataDir} CROSSGEN_RENDERER_PERF_RESULT_PATH=${path.join(args.output, "electron-renderer-metrics.json")} electron .`
     },
@@ -585,7 +599,7 @@ async function main() {
       stateFile: {
         path: manifest.statePath,
         bytes: stateStat.size,
-        commonMutationWriteScenarios: commonMutationWriteScenarios(state, reconciledState)
+        commonMutationWriteScenarios: commonMutationWriteScenarios(state, reconciledState, galleryCollectionsChanged)
       },
       thumbnails: thumbnailBaselineEstimate(reconciledState),
       renderer: {

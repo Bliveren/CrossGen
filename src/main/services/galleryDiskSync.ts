@@ -30,6 +30,11 @@ export interface GalleryDiskReconcileOptions {
   createAssetId: () => string;
 }
 
+export interface GalleryDiskReconcileResult {
+  state: AppStateFile;
+  changed: boolean;
+}
+
 export interface ScanGalleryDiskOptions {
   rootRelPaths?: string[];
 }
@@ -323,8 +328,90 @@ export function reconcileGalleryDiskState(
   };
 }
 
+export function diskGalleryFoldersFromState(state: AppStateFile): DiskGalleryFolder[] {
+  const byId = new Map(state.galleryFolders.map((folder) => [folder.id, folder]));
+  const folders: DiskGalleryFolder[] = [];
+  for (const folder of state.galleryFolders) {
+    try {
+      const parent = folder.parentId ? byId.get(folder.parentId) : undefined;
+      if (folder.parentId && !parent) continue;
+      folders.push({
+        relPath: galleryFolderRelativePath(state, folder),
+        parentRelPath: parent ? galleryFolderRelativePath(state, parent) : null,
+        name: folder.name
+      });
+    } catch {
+      // Ignore malformed legacy folder hierarchies; disk reconciliation will rebuild them on full recovery.
+    }
+  }
+  return folders.sort((a, b) => a.relPath.localeCompare(b.relPath));
+}
+
 function isPathWithin(rootRelPath: string, candidateRelPath: string): boolean {
   return candidateRelPath === rootRelPath || candidateRelPath.startsWith(`${rootRelPath}/`);
+}
+
+function stringArraysEqual(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  if (!a?.length && !b?.length) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((item, index) => item === b[index]);
+}
+
+function galleryFoldersEqual(a: GalleryFolder, b: GalleryFolder): boolean {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    (a.parentId ?? null) === (b.parentId ?? null) &&
+    a.color === b.color &&
+    a.createdAt === b.createdAt &&
+    a.updatedAt === b.updatedAt
+  );
+}
+
+function galleryAssetsEqual(a: GalleryAsset, b: GalleryAsset): boolean {
+  return (
+    a.id === b.id &&
+    a.fileName === b.fileName &&
+    a.originalName === b.originalName &&
+    a.mimeType === b.mimeType &&
+    a.sizeBytes === b.sizeBytes &&
+    a.width === b.width &&
+    a.height === b.height &&
+    (a.folderId ?? null) === (b.folderId ?? null) &&
+    stringArraysEqual(a.tags, b.tags) &&
+    a.source === b.source &&
+    a.createdAt === b.createdAt &&
+    a.updatedAt === b.updatedAt &&
+    a.contentHash === b.contentHash &&
+    a.sourcePathHash === b.sourcePathHash &&
+    a.sourceJobId === b.sourceJobId &&
+    a.sourceAssetId === b.sourceAssetId &&
+    a.modifiedAt === b.modifiedAt
+  );
+}
+
+export function galleryCollectionsChanged(before: AppStateFile, after: AppStateFile): boolean {
+  if (before.galleryFolders.length !== after.galleryFolders.length) return true;
+  if (before.galleryAssets.length !== after.galleryAssets.length) return true;
+  for (let index = 0; index < before.galleryFolders.length; index += 1) {
+    if (!galleryFoldersEqual(before.galleryFolders[index], after.galleryFolders[index])) return true;
+  }
+  for (let index = 0; index < before.galleryAssets.length; index += 1) {
+    if (!galleryAssetsEqual(before.galleryAssets[index], after.galleryAssets[index])) return true;
+  }
+  return false;
+}
+
+export function reconcileGalleryDiskStateWithResult(
+  inputState: AppStateFile,
+  disk: { folders: DiskGalleryFolder[]; assets: DiskGalleryAsset[] },
+  options: GalleryDiskReconcileOptions
+): GalleryDiskReconcileResult {
+  const state = reconcileGalleryDiskState(inputState, disk, options);
+  return {
+    state,
+    changed: galleryCollectionsChanged(inputState, state)
+  };
 }
 
 export function reconcileGalleryDiskChanges(
@@ -463,5 +550,18 @@ export function reconcileGalleryDiskChanges(
     ...inputState,
     galleryFolders: folders,
     galleryAssets
+  };
+}
+
+export function reconcileGalleryDiskChangesWithResult(
+  inputState: AppStateFile,
+  disk: { folders: DiskGalleryFolder[]; assets: DiskGalleryAsset[] },
+  changedRelPaths: string[],
+  options: GalleryDiskReconcileOptions
+): GalleryDiskReconcileResult {
+  const state = reconcileGalleryDiskChanges(inputState, disk, changedRelPaths, options);
+  return {
+    state,
+    changed: galleryCollectionsChanged(inputState, state)
   };
 }

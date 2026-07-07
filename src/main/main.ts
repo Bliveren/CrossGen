@@ -70,9 +70,10 @@ import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./se
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
 import { assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
 import {
+  diskGalleryFoldersFromState,
   isIgnoredGalleryEntryName,
-  reconcileGalleryDiskChanges,
-  reconcileGalleryDiskState,
+  reconcileGalleryDiskChangesWithResult,
+  reconcileGalleryDiskStateWithResult,
   scanGalleryDisk,
   startGalleryDiskWatchers,
   type GalleryWatchHandle
@@ -935,7 +936,7 @@ function sendGalleryEvent(state: AppStateFile, reason: "disk" | "mutation"): voi
 }
 
 async function handleGetSnapshot(): Promise<AppSnapshot> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await syncGalleryForRead(await readState());
   return snapshotFromState(state);
 }
 
@@ -1435,26 +1436,61 @@ async function syncGalleryWithDisk(inputState: AppStateFile, changedRelPaths?: s
     createFolderId: () => `gallery_folder_${randomUUID()}`,
     createAssetId: () => `gallery_${randomUUID()}`
   };
-  const state = hasIncrementalChanges
-    ? reconcileGalleryDiskChanges(baseState, disk, changedRelPaths ?? [], reconcileOptions)
-    : reconcileGalleryDiskState(baseState, disk, reconcileOptions);
-  if (
-    JSON.stringify(baseState.galleryFolders) !== JSON.stringify(state.galleryFolders) ||
-    JSON.stringify(baseState.galleryAssets) !== JSON.stringify(state.galleryAssets)
-  ) {
-    await writeState(state, { updateBackup: false });
+  const result = hasIncrementalChanges
+    ? reconcileGalleryDiskChangesWithResult(baseState, disk, changedRelPaths ?? [], reconcileOptions)
+    : reconcileGalleryDiskStateWithResult(baseState, disk, reconcileOptions);
+  if (result.changed) {
+    await writeState(result.state, { updateBackup: false });
+    return result.state;
   }
 
-  return state;
+  return baseState;
+}
+
+function isGalleryWatchCurrentForState(state: AppStateFile): boolean {
+  return Boolean(
+    galleryWatchRoot &&
+    galleryWatchers.length > 0 &&
+    sameResolvedPath(galleryWatchRoot, getGalleryDir(state))
+  );
+}
+
+function takePendingGalleryWatchSync(): { changedRelPaths?: string[] } | null {
+  if (!galleryWatchNeedsFullSync && galleryWatchChangedRelPaths.size === 0) return null;
+  if (galleryWatchDebounce) {
+    clearTimeout(galleryWatchDebounce);
+    galleryWatchDebounce = null;
+  }
+  const needsFullSync = galleryWatchNeedsFullSync;
+  const changedRelPaths = needsFullSync ? undefined : [...galleryWatchChangedRelPaths];
+  galleryWatchNeedsFullSync = false;
+  galleryWatchChangedRelPaths = new Set();
+  return { changedRelPaths };
+}
+
+async function syncGalleryForRead(inputState: AppStateFile): Promise<AppStateFile> {
+  if (!isGalleryWatchCurrentForState(inputState)) {
+    return syncGalleryWithDisk(inputState);
+  }
+
+  const pendingSync = takePendingGalleryWatchSync();
+  if (!pendingSync) {
+    return stateCache ?? inputState;
+  }
+
+  const synced = await syncGalleryWithDisk(inputState, pendingSync.changedRelPaths);
+  await startGalleryWatcherForState(synced);
+  sendGalleryEvent(synced, "disk");
+  return synced;
 }
 
 async function handleListGallery(): Promise<GalleryAsset[]> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await syncGalleryForRead(await readState());
   return state.galleryAssets;
 }
 
 async function handleListGalleryFolders(): Promise<GalleryFolder[]> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await syncGalleryForRead(await readState());
   return state.galleryFolders;
 }
 
@@ -2381,10 +2417,9 @@ function stopGalleryWatcher(): void {
 async function startGalleryWatcherForState(state: AppStateFile): Promise<void> {
   const galleryDir = getGalleryDir(state);
   await ensureDir(galleryDir);
-  const disk = await scanGalleryDisk(galleryDir);
   stopGalleryWatcher();
   galleryWatchRoot = galleryDir;
-  galleryWatchers = startGalleryDiskWatchers(galleryDir, disk.folders, scheduleGalleryDiskSync, {
+  galleryWatchers = startGalleryDiskWatchers(galleryDir, diskGalleryFoldersFromState(state), scheduleGalleryDiskSync, {
     onWatchError: (error) => console.warn("[CrossGen] Failed to watch Gallery directory.", sanitizeError(error))
   });
 }
@@ -2441,6 +2476,9 @@ function summarizePerformanceResult(value: unknown): Record<string, unknown> {
 }
 
 async function runMainPerformanceCapture(resultPath: string): Promise<void> {
+  const initialState = await syncGalleryWithDisk(await readState());
+  await startGalleryWatcherForState(initialState);
+
   const measurements: Array<Record<string, unknown>> = [];
   const measure = async (channel: string, operation: () => Promise<unknown>) => {
     const writeCountBefore = stateWriteCount;
