@@ -5187,7 +5187,7 @@ export function App() {
           {showAdvanced && advancedControls}
         </section>
 
-        <section className="notice-area" data-kind={notice.kind}>
+        <section className="notice-area" data-kind={notice.kind} aria-live={notice.kind === "error" ? "assertive" : "polite"} aria-atomic="true">
           {notice.kind === "error" ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
           <span>{notice.text}</span>
         </section>
@@ -6392,7 +6392,7 @@ export function App() {
                     onContextMenu={(event) => openGalleryAssetContextMenu(event, entry.asset)}
                     title={copy.galleryOpenItem(entry.asset.originalName)}
                   >
-                    <img src={galleryAssetPath(entry.asset)} alt={entry.asset.originalName} draggable={false} />
+                    <img src={galleryAssetPath(entry.asset)} alt={entry.asset.originalName} draggable={false} loading="lazy" decoding="async" />
                   </button>
                   <div className="gallery-meta">
                     <strong title={entry.asset.originalName}>{entry.asset.originalName}</strong>
@@ -7176,18 +7176,18 @@ export function App() {
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="context-menu-item" onClick={handleContextMenuSaveImage}>
+          <button type="button" className="context-menu-item" onClick={handleContextMenuSaveImage} role="menuitem">
             <Download size={14} />
             {copy.saveImage}
-          </div>
-          <div className="context-menu-item" onClick={handleContextMenuCopyPath}>
+          </button>
+          <button type="button" className="context-menu-item" onClick={handleContextMenuCopyPath} role="menuitem">
             <Copy size={14} />
             {copy.copyImagePath}
-          </div>
-          <div className="context-menu-item" onClick={handleContextMenuCopyPrompt}>
+          </button>
+          <button type="button" className="context-menu-item" onClick={handleContextMenuCopyPrompt} role="menuitem">
             <Copy size={14} />
             {copy.copyPrompt}
-          </div>
+          </button>
         </div>
       )}
       {galleryAssetContextMenu && (() => {
@@ -7199,67 +7199,79 @@ export function App() {
             style={{ left: galleryAssetContextMenu.x, top: galleryAssetContextMenu.y }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div
+            <button
+              type="button"
               className="context-menu-item"
               onClick={() => {
                 setGalleryAssetContextMenu(null);
                 void pickGalleryAsset(asset);
               }}
+              role="menuitem"
             >
               <ImageUp size={14} />
               {copy.galleryChoose}
-            </div>
-            <div
+            </button>
+            <button
+              type="button"
               className="context-menu-item"
               onClick={() => {
                 setGalleryAssetContextMenu(null);
                 openRenameGalleryAssetDialog(asset);
               }}
+              role="menuitem"
             >
               <Pencil size={14} />
               {copy.galleryAssetRename}
-            </div>
-            <div
+            </button>
+            <button
+              type="button"
               className="context-menu-item"
               onClick={() => {
                 setGalleryAssetContextMenu(null);
                 editGalleryTags(asset);
               }}
+              role="menuitem"
             >
               <Tags size={14} />
               {copy.galleryEditTags}
-            </div>
-            <div
+            </button>
+            <button
+              type="button"
               className="context-menu-item"
               onClick={() => {
                 setGalleryAssetContextMenu(null);
                 void openStorageFolder("gallery", asset.folderId ?? null);
               }}
+              role="menuitem"
             >
               <FolderOpen size={14} />
               {copy.openFolder}
-            </div>
-            <div
+            </button>
+            <button
+              type="button"
               className="context-menu-item"
               onClick={() => {
                 setGalleryAssetContextMenu(null);
                 void copyImagePath(galleryAssetAbsolutePath(asset), `copy:path:${asset.id}`);
               }}
+              role="menuitem"
             >
               <Copy size={14} />
               {copy.copyImagePath}
-            </div>
+            </button>
             <div className="context-menu-divider" />
-            <div
+            <button
+              type="button"
               className="context-menu-item danger"
               onClick={() => {
                 setGalleryAssetContextMenu(null);
                 void removeGalleryAsset(asset);
               }}
+              role="menuitem"
             >
               <Trash2 size={14} />
               {copy.delete}
-            </div>
+            </button>
           </div>
         );
       })()}
@@ -7273,51 +7285,59 @@ export function App() {
             style={{ left: galleryFolderContextMenu.x, top: galleryFolderContextMenu.y }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div
+            <button
+              type="button"
               className="context-menu-item"
               onClick={() => {
                 closeGalleryFolderContextMenu();
                 void openStorageFolder("gallery", openFolderId);
               }}
+              role="menuitem"
             >
               <FolderOpen size={14} />
               {copy.openFolder}
-            </div>
+            </button>
             {canManageFolder && (
               <>
-                <div
+                <button
+                  type="button"
                   className="context-menu-item"
                   onClick={() => {
                     closeGalleryFolderContextMenu();
                     openRenameGalleryFolderDialog(folder!);
                   }}
+                  role="menuitem"
                 >
                   <Pencil size={14} />
                   {copy.galleryFolderRename}
-                </div>
-                <div
+                </button>
+                <button
+                  type="button"
                   className="context-menu-item danger"
                   onClick={() => {
                     closeGalleryFolderContextMenu();
                     void deleteGalleryFolder(folder!);
                   }}
+                  role="menuitem"
                 >
                   <Trash2 size={14} />
                   {copy.galleryFolderDelete}
-                </div>
+                </button>
                 <div className="context-menu-divider" />
               </>
             )}
-            <div
+            <button
+              type="button"
               className="context-menu-item"
               onClick={() => {
                 closeGalleryFolderContextMenu();
                 openCreateGalleryFolderDialog(openFolderId);
               }}
+              role="menuitem"
             >
               <FolderPlus size={14} />
               {copy.galleryFolderCreate}
-            </div>
+            </button>
           </div>
         );
       })()}

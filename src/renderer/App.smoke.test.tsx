@@ -511,11 +511,16 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
 
     await openGalleryRail();
+    const thumbnailImage = document.querySelector<HTMLImageElement>(".gallery-thumb img")!;
+    expect(thumbnailImage.getAttribute("loading")).toBe("lazy");
+    expect(thumbnailImage.getAttribute("decoding")).toBe("async");
     await click(document.querySelector<HTMLButtonElement>(".gallery-thumb")!);
 
     expect(bridge.pickGalleryAsset).not.toHaveBeenCalled();
     expect(document.querySelector<HTMLImageElement>(".preview-image-frame img")?.src).toContain(`image2tools-asset://image?gallery=${asset.fileName}`);
     expect(document.body.textContent).toContain("gallery-preview.png opened in the editor.");
+    expect(document.querySelector(".notice-area")?.getAttribute("aria-live")).toBe("polite");
+    expect(document.querySelector(".notice-area")?.getAttribute("aria-atomic")).toBe("true");
   });
 
   it("picks a Gallery image as a reference asset from the context menu", async () => {
@@ -524,6 +529,8 @@ describe("renderer multi-model smoke", () => {
 
     await openGalleryRail();
     await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
+    expect(elementByText("Choose from Gallery", ".context-menu-item").tagName).toBe("BUTTON");
+    expect(elementByText("Choose from Gallery", ".context-menu-item").getAttribute("role")).toBe("menuitem");
     await click(elementByText("Choose from Gallery", ".context-menu-item"));
 
     expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(asset.id);
@@ -1092,6 +1099,8 @@ describe("renderer multi-model smoke", () => {
 
     await openGalleryRail();
     await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
+    expect(elementByText("Open folder", ".context-menu-item").tagName).toBe("BUTTON");
+    expect(elementByText("Open folder", ".context-menu-item").getAttribute("role")).toBe("menuitem");
     await click(elementByText("Open folder", ".context-menu-item"));
 
     expect(bridge.openStorageFolder).toHaveBeenCalledWith("gallery", null);

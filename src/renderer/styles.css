@@ -3094,7 +3094,7 @@
   }
 
   .notice-area[data-kind="success"] {
-    color: var(--accent);
+    color: var(--success-strong);
   }
 
   .notice-area[data-kind="error"] {
@@ -4765,16 +4765,21 @@
   }
 
   .context-menu-item {
-    padding: 8px 16px;
-    cursor: pointer;
     display: flex;
     align-items: center;
+    width: 100%;
     gap: 8px;
+    border: 0;
+    background: transparent;
     color: var(--text-primary);
+    padding: 8px 16px;
     font-size: 13px;
+    text-align: left;
+    cursor: pointer;
   }
 
-  .context-menu-item:hover {
+  .context-menu-item:hover,
+  .context-menu-item:focus-visible {
     background: var(--surface-hover);
   }
 
