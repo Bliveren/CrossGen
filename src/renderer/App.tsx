@@ -110,17 +110,13 @@ import {
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
+import { useImageEditor } from "./useImageEditor";
 import {
   MIN_TEXT_BOX_SIZE,
-  type AnnotationDrawingLayer,
   type AnnotationTextBox,
-  type AnnotationTool,
   type CanvasPoint,
   type CanvasRect,
-  type CropSelection,
-  type CropShape,
-  type EditorSnapshot,
-  type PreviewMode
+  type EditorSnapshot
 } from "./imageEditorTypes";
 import { serializePromptTokens, type PromptToken } from "./promptTokens";
 
@@ -913,26 +909,67 @@ export function App() {
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
-  const [previewZoom, setPreviewZoom] = useState(1);
-  const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [previewMode, setPreviewMode] = useState<PreviewMode>("idle");
-  const [annotationTool, setAnnotationTool] = useState<AnnotationTool>("draw");
-  const [annotationColor, setAnnotationColor] = useState("#FF3B30");
-  const [annotationSize, setAnnotationSize] = useState(6);
-  const [annotationTextSize, setAnnotationTextSize] = useState(24);
-  const [isAnnotationTextBold, setIsAnnotationTextBold] = useState(false);
-  const [annotationDrawingLayers, setAnnotationDrawingLayers] = useState<AnnotationDrawingLayer[]>([]);
-  const [annotationTextBoxes, setAnnotationTextBoxes] = useState<AnnotationTextBox[]>([]);
-  const [activeAnnotationTextBoxId, setActiveAnnotationTextBoxId] = useState<string | null>(null);
-  const [draftTextRect, setDraftTextRect] = useState<CanvasRect | null>(null);
-  const [isDrawingAnnotation, setIsDrawingAnnotation] = useState(false);
-  const [hasAnnotationMarks, setHasAnnotationMarks] = useState(false);
-  const [editedImageDataUrl, setEditedImageDataUrl] = useState<string | null>(null);
-  const [editorUndoStack, setEditorUndoStack] = useState<EditorSnapshot[]>([]);
-  const [isAnnotationColorPickerOpen, setIsAnnotationColorPickerOpen] = useState(false);
-  const [cropShape, setCropShape] = useState<CropShape>("rect");
-  const [cropSelection, setCropSelection] = useState<CropSelection | null>(null);
+  const {
+    previewZoom,
+    setPreviewZoom,
+    previewPan,
+    setPreviewPan,
+    isPanning,
+    setIsPanning,
+    previewMode,
+    setPreviewMode,
+    annotationTool,
+    setAnnotationTool,
+    annotationColor,
+    setAnnotationColor,
+    annotationSize,
+    setAnnotationSize,
+    annotationTextSize,
+    setAnnotationTextSize,
+    isAnnotationTextBold,
+    setIsAnnotationTextBold,
+    annotationDrawingLayers,
+    setAnnotationDrawingLayers,
+    annotationTextBoxes,
+    setAnnotationTextBoxes,
+    activeAnnotationTextBoxId,
+    setActiveAnnotationTextBoxId,
+    draftTextRect,
+    setDraftTextRect,
+    isDrawingAnnotation,
+    setIsDrawingAnnotation,
+    hasAnnotationMarks,
+    setHasAnnotationMarks,
+    editedImageDataUrl,
+    setEditedImageDataUrl,
+    editorUndoStack,
+    setEditorUndoStack,
+    isAnnotationColorPickerOpen,
+    setIsAnnotationColorPickerOpen,
+    cropShape,
+    setCropShape,
+    cropSelection,
+    setCropSelection,
+    annotationCanvasRef,
+    annotationImageRef,
+    annotationFrameRef,
+    annotationLastPointRef,
+    isAnnotationPointerActiveRef,
+    textDragStartRef,
+    textResizeRef,
+    annotationOrderRef,
+    cropDragStartRef,
+    panStartRef,
+    resultCanvasRef,
+    zoomSurfaceRef,
+    previewZoomPercent,
+    isEditingPreview,
+    isCroppingPreview,
+    isPreviewCanvasInteractive,
+    hasEditorOverlay,
+    hasExportableEditorOverlay,
+    hasEditedPreviewChanges
+  } = useImageEditor();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isReferenceDragOver, setIsReferenceDragOver] = useState(false);
   const [referenceLimitToast, setReferenceLimitToast] = useState<{ id: number; text: string } | null>(null);
@@ -946,25 +983,13 @@ export function App() {
   const [railCollapseButtonY, setRailCollapseButtonY] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight - 86));
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const annotationCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const annotationImageRef = useRef<HTMLImageElement | null>(null);
-  const annotationFrameRef = useRef<HTMLDivElement | null>(null);
   const galleryContentRef = useRef<HTMLDivElement | null>(null);
   const historyListRef = useRef<HTMLDivElement | null>(null);
-  const annotationLastPointRef = useRef<CanvasPoint | null>(null);
-  const isAnnotationPointerActiveRef = useRef(false);
-  const textDragStartRef = useRef<CanvasPoint | null>(null);
-  const textResizeRef = useRef<{ id: string; startX: number; startY: number; startWidth: number; startHeight: number } | null>(null);
-  const annotationOrderRef = useRef(0);
-  const cropDragStartRef = useRef<CanvasPoint | null>(null);
   const referenceLimitToastTimerRef = useRef<number | null>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
   const paintedDuringStrokeRef = useRef(false);
   const hasAutoTestedConnectionRef = useRef(false);
-  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const previewLayoutRef = useRef<HTMLDivElement | null>(null);
-  const resultCanvasRef = useRef<HTMLDivElement | null>(null);
-  const zoomSurfaceRef = useRef<HTMLDivElement | null>(null);
   const promptActionsRef = useRef<HTMLDivElement | null>(null);
   const primaryRunButtonRef = useRef<HTMLButtonElement | null>(null);
   const promptTemplateButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -1028,13 +1053,6 @@ export function App() {
   const activeInpaintCapability = inpaintCapabilityForParams(params);
   const usesExactMask = activeInpaintCapability === "exact-mask";
   const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
-  const previewZoomPercent = Math.round(previewZoom * 100);
-  const isEditingPreview = previewMode === "edit";
-  const isCroppingPreview = previewMode === "crop";
-  const isPreviewCanvasInteractive = isEditingPreview || isCroppingPreview;
-  const hasEditorOverlay = hasAnnotationMarks || annotationDrawingLayers.length > 0 || annotationTextBoxes.length > 0 || isDrawingAnnotation;
-  const hasExportableEditorOverlay = annotationDrawingLayers.length > 0 || annotationTextBoxes.some((box) => box.text.trim().length > 0);
-  const hasEditedPreviewChanges = Boolean(editedImageDataUrl || hasExportableEditorOverlay);
   const apiKeyPlaceholder = selectedApiConfig.apiKeyPreview ?? (selectedApiConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
   const launchButtons = useMemo(() => getLaunchButtonStates(activeConfig, copy), [copy, activeConfig]);
   const activeLaunchDisplay = launchButtons.find((button) => button.launchId === activeConfig.activeLaunchId)?.displayName ?? modelLabelFromId(activeConfig.activeModelId);
