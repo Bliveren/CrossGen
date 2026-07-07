@@ -18,6 +18,7 @@ import {
   GPT_IMAGE_2_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
+  getFocusedModelDefinition,
   generalFallbackSupportsReferenceImages,
   isGeneralFallbackProvider
 } from "./modelCatalog.js";
@@ -349,7 +350,9 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
   const kind = isOneOf(input.kind, PROVIDER_KIND_OPTIONS) ? input.kind : undefined;
   const activeLaunchId = isOneOf(input.activeLaunchId, FOCUSED_LAUNCH_OPTIONS) ? input.activeLaunchId : undefined;
   const defaultModel = input.defaultModel.trim();
-  if ((kind === undefined || kind === "openai") && activeLaunchId !== GENERAL_LAUNCH_ID && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
+  const nanoDefinition = getFocusedModelDefinition(NANO_BANANA_3_LAUNCH_ID);
+  const isNanoModel = activeLaunchId === NANO_BANANA_3_LAUNCH_ID && Boolean(nanoDefinition?.modelIds.some((modelId) => modelId === defaultModel));
+  if ((kind === undefined || kind === "openai") && activeLaunchId !== GENERAL_LAUNCH_ID && !isNanoModel && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
     return { ok: false, message: `默认模型仅支持 ${DEFAULT_IMAGE_PARAMS.model}。` };
   }
   const defaultSize = input.defaultSize.trim();

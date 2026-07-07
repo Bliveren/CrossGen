@@ -154,12 +154,17 @@ export interface GalleryAsset {
   sizeBytes: number;
   width?: number;
   height?: number;
+  previewUrl?: string;
   folderId?: string | null;
   tags: string[];
   source: "import" | "result";
   createdAt: string;
   updatedAt: string;
   modifiedAt?: string;
+  contentHash?: string;
+  sourcePathHash?: string;
+  sourceJobId?: string;
+  sourceAssetId?: string;
 }
 
 export interface GalleryFolder {
@@ -183,10 +188,21 @@ export interface GalleryAssetPatch {
   folderId?: string | null;
 }
 
+export interface HistoryJobPatch {
+  name?: string;
+  tags?: string[];
+}
+
 export interface EditedGalleryImageInput {
   dataUrl: string;
   originalName?: string;
   folderId?: string | null;
+  tags?: string[];
+}
+
+export interface EditedImageDownloadRequest {
+  dataUrl: string;
+  suggestedName?: string;
 }
 
 export interface GalleryFolderDeleteResult {
@@ -223,6 +239,8 @@ export interface UsageDetails {
 
 export interface GenerationJob {
   id: string;
+  name: string;
+  tags: string[];
   providerKind: ProviderKind;
   providerId: string;
   launchId: FocusedLaunchId;
@@ -377,8 +395,9 @@ export interface AppBridge {
   moveGalleryFolder: (id: string, parentId: string | null) => Promise<GalleryFolder>;
   deleteGalleryFolder: (id: string) => Promise<GalleryFolderDeleteResult>;
   importToGallery: (paths?: string[], folderId?: string | null) => Promise<GalleryAsset[]>;
-  addHistoryAssetToGallery: (assetPath: string, folderId?: string | null) => Promise<GalleryAsset>;
-  addEditedImageToGallery: (input: EditedGalleryImageInput) => Promise<GalleryAsset>;
+  addHistoryAssetToGallery: (assetPath: string, folderId?: string | null, tags?: string[]) => Promise<GalleryAsset | null>;
+  addEditedImageToGallery: (input: EditedGalleryImageInput) => Promise<GalleryAsset | null>;
+  replaceGalleryAssetImage: (id: string, input: EditedGalleryImageInput) => Promise<GalleryAsset>;
   updateGalleryAsset: (id: string, patch: GalleryAssetPatch) => Promise<GalleryAsset>;
   moveGalleryAsset: (id: string, folderId: string | null) => Promise<GalleryAsset>;
   removeGalleryAsset: (id: string) => Promise<GalleryAsset[]>;
@@ -389,12 +408,14 @@ export interface AppBridge {
   selectMask: () => Promise<InputAsset | null>;
   runJob: (request: RunJobRequest) => Promise<GenerationJob>;
   downloadAsset: (request: DownloadRequest) => Promise<string | null>;
+  downloadEditedImage: (request: EditedImageDownloadRequest) => Promise<string | null>;
   openAssetFolder: (assetPath: string) => Promise<void>;
   openStorageFolder: (kind: StorageKind, folderId?: string | null) => Promise<void>;
   chooseStorageFolder: (kind: StorageKind, options?: StorageFolderOptions) => Promise<AppSnapshot>;
   checkForUpdates: () => Promise<UpdateCheckResult>;
   downloadAndInstallUpdate: () => Promise<UpdateInstallResult>;
   deleteJob: (jobId: string) => Promise<GenerationJob[]>;
+  updateHistoryJob: (jobId: string, patch: HistoryJobPatch) => Promise<GenerationJob>;
   clearHistory: () => Promise<GenerationJob[]>;
   onJobEvent: (callback: (event: JobProgressEvent) => void) => () => void;
   onGalleryEvent: (callback: (event: GallerySyncEvent) => void) => () => void;

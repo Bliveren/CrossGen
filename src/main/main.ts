@@ -17,6 +17,7 @@ import type {
   AppSnapshot,
   ConnectionTestResult,
   DownloadRequest,
+  EditedImageDownloadRequest,
   EditedGalleryImageInput,
   GalleryAsset,
   GalleryAssetPatch,
@@ -24,6 +25,8 @@ import type {
   GalleryFolderDeleteResult,
   GalleryFolderInput,
   GenerationJob,
+  HistoryJobPatch,
+  ImageAsset,
   InputAsset,
   JobProgressEvent,
   PromptTemplate,
@@ -109,6 +112,13 @@ const WINDOWS_RESERVED_FILE_NAMES = new Set([
   "LPT8",
   "LPT9"
 ]);
+
+type GalleryDuplicateChoice = "cancel" | "replace" | "copy";
+
+interface GalleryAssetCreateResult {
+  asset: GalleryAsset | null;
+  replacedAssetId?: string;
+}
 const ASSET_PROTOCOL = "image2tools-asset";
 const UPDATE_CHECK_TIMEOUT_MS = 30000;
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 600000; // 10 minutes for large installer downloads
@@ -121,6 +131,7 @@ protocol.registerSchemesAsPrivileged([
     privileges: {
       standard: true,
       secure: true,
+      corsEnabled: true,
       supportFetchAPI: true
     }
   }
@@ -147,6 +158,14 @@ let galleryWatchChangedRelPaths = new Set<string>();
 
 interface WriteStateOptions {
   updateBackup?: boolean;
+}
+
+interface GalleryAssetSourceMetadata {
+  tags?: string[];
+  contentHash?: string;
+  sourcePathHash?: string;
+  sourceJobId?: string;
+  sourceAssetId?: string;
 }
 
 async function runGalleryOperation<T>(operation: () => Promise<T>): Promise<T> {
@@ -224,6 +243,7 @@ function registerAssetProtocol(): void {
       const mimeType = mimeTypeForFile(safePath);
       return new Response(new Blob([content], { type: mimeType }), {
         headers: {
+          "access-control-allow-origin": "*",
           "cache-control": "no-store",
           "content-type": mimeType
         }
@@ -544,6 +564,15 @@ function sameResolvedPath(a: string, b: string): boolean {
   return path.resolve(a) === path.resolve(b);
 }
 
+async function fileContentHash(filePath: string): Promise<string> {
+  const bytes = await fs.readFile(filePath);
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function filePathHash(filePath: string): string {
+  return createHash("sha256").update(path.resolve(filePath)).digest("hex");
+}
+
 async function copyOrMoveFile(sourcePath: string, targetPath: string, removeSource = false): Promise<void> {
   if (sameResolvedPath(sourcePath, targetPath)) return;
   await ensureDir(path.dirname(targetPath));
@@ -622,6 +651,78 @@ function galleryRelativePathFor(state: AppStateFile, sourcePath: string, folder?
 
 function galleryAssetBaseName(asset: GalleryAsset): string {
   return path.posix.basename(normalizeGalleryRelativePath(asset.fileName));
+}
+
+function sameGalleryFolder(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a ?? null) === (b ?? null);
+}
+
+function mergeStoredTags(current: string[], incoming: unknown): string[] {
+  const seen = new Set<string>();
+  return [...current, ...normalizeTemplateTags(incoming)].flatMap((tag) => {
+    if (seen.has(tag)) return [];
+    seen.add(tag);
+    return [tag];
+  });
+}
+
+async function findDuplicateGalleryAsset(state: AppStateFile, folderId: string | null, contentHash: string, sourcePathHash?: string): Promise<GalleryAsset | undefined> {
+  const galleryDir = getGalleryDir(state);
+  for (const asset of state.galleryAssets) {
+    if (!sameGalleryFolder(asset.folderId, folderId)) continue;
+    if (sourcePathHash && asset.sourcePathHash === sourcePathHash) return asset;
+    if (asset.contentHash === contentHash) return asset;
+    if (asset.contentHash) continue;
+    const assetPath = resolveManagedFileName(galleryDir, normalizeGalleryRelativePath(asset.fileName));
+    if (!(await pathExists(assetPath))) continue;
+    try {
+      if ((await fileContentHash(assetPath)) === contentHash) return asset;
+    } catch {
+      // Ignore unreadable stale files while checking for duplicates.
+    }
+  }
+  return undefined;
+}
+
+async function chooseGalleryDuplicateAction(originalName: string, folderName: string): Promise<GalleryDuplicateChoice> {
+  const result = await dialog.showMessageBox({
+    type: "question",
+    title: "图库中已存在相同文件",
+    message: `"${originalName}" 已存在于「${folderName}」。`,
+    detail: "请选择取消添加、替换已有文件，或保留已有文件并创建一份副本。",
+    buttons: ["取消", "替换", "复制"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+  if (result.response === 1) return "replace";
+  if (result.response === 2) return "copy";
+  return "cancel";
+}
+
+function galleryFolderDuplicateDisplayName(state: AppStateFile, folderId: string | null): string {
+  const folder = galleryFolderForId(state, folderId);
+  return folder ? folder.name : "未分类";
+}
+
+function findHistorySourceForPath(state: AppStateFile, sourcePath: string): { job: GenerationJob; asset: ImageAsset } | undefined {
+  const normalizedSourcePath = path.resolve(sourcePath);
+  for (const job of state.history) {
+    for (const asset of job.outputs) {
+      if (path.resolve(asset.path) === normalizedSourcePath) return { job, asset };
+    }
+  }
+  return undefined;
+}
+
+function historySourceMetadata(state: AppStateFile, sourcePath: string, extraTags: unknown = []): GalleryAssetSourceMetadata {
+  const source = findHistorySourceForPath(state, sourcePath);
+  if (!source) return { tags: normalizeTemplateTags(extraTags) };
+  return {
+    tags: mergeStoredTags(source.job.tags, extraTags),
+    sourceJobId: source.job.id,
+    sourceAssetId: source.asset.id
+  };
 }
 
 function normalizeGalleryAssetNameInput(value: unknown, currentName: string): string {
@@ -770,6 +871,8 @@ function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAs
   const modelId = request.params.model;
   return {
     id: `job_${randomUUID()}`,
+    name: "",
+    tags: [],
     providerKind: request.params.providerKind,
     providerId: config.id,
     launchId,
@@ -785,6 +888,11 @@ function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAs
     updatedAt: now,
     outputs: []
   };
+}
+
+function defaultHistoryJobName(job: GenerationJob): string {
+  const result = job.outputs.find((asset) => asset.sourceType === "result") ?? job.outputs[job.outputs.length - 1];
+  return result?.fileName ? path.basename(result.fileName) : job.name.trim() || `${job.modelDisplayName || job.modelId || "image"}-${job.id.slice(-8)}.png`;
 }
 
 async function upsertJob(job: GenerationJob): Promise<void> {
@@ -1149,31 +1257,75 @@ async function uniqueGalleryRelativePath(galleryDir: string, desiredRelPath: str
   throw new Error("无法创建唯一的 Gallery 文件名。");
 }
 
-async function createGalleryAssetFromFile(state: AppStateFile, sourcePath: string, source: GalleryAsset["source"], now: string, folderId: string | null): Promise<GalleryAsset> {
+async function createGalleryAssetFromFile(
+  state: AppStateFile,
+  sourcePath: string,
+  source: GalleryAsset["source"],
+  now: string,
+  folderId: string | null,
+  metadata: GalleryAssetSourceMetadata = {}
+): Promise<GalleryAssetCreateResult> {
   const galleryDir = getGalleryDir(state);
   await ensureGalleryFolderDirs(state);
   const stat = await fs.stat(sourcePath);
   if (!stat.isFile()) throw new Error("Gallery 只能导入图片文件。");
+  const originalName = path.basename(sourcePath);
+  const contentHash = metadata.contentHash ?? await fileContentHash(sourcePath);
+  const sourcePathHash = metadata.sourcePathHash ?? filePathHash(sourcePath);
+  const duplicate = await findDuplicateGalleryAsset(state, folderId, contentHash, sourcePathHash);
+  if (duplicate) {
+    const action = await chooseGalleryDuplicateAction(originalName, galleryFolderDuplicateDisplayName(state, folderId));
+    if (action === "cancel") return { asset: null };
+    if (action === "replace") {
+      const targetPath = resolveManagedFileName(galleryDir, normalizeGalleryRelativePath(duplicate.fileName));
+      await ensureDir(path.dirname(targetPath));
+      if (!sameResolvedPath(sourcePath, targetPath)) await fs.copyFile(sourcePath, targetPath);
+      const nextStat = await fs.stat(targetPath);
+      return {
+        replacedAssetId: duplicate.id,
+        asset: {
+          ...duplicate,
+          originalName,
+          mimeType: mimeTypeForFile(sourcePath),
+          sizeBytes: nextStat.size,
+          tags: mergeStoredTags(duplicate.tags, metadata.tags ?? []),
+          source,
+          updatedAt: now,
+          contentHash,
+          sourcePathHash,
+          sourceJobId: metadata.sourceJobId,
+          sourceAssetId: metadata.sourceAssetId,
+          modifiedAt: nextStat.mtime.toISOString()
+        }
+      };
+    }
+  }
   const folder = galleryFolderForId(state, folderId);
   const fileName = await uniqueGalleryRelativePath(galleryDir, galleryRelativePathFor(state, sourcePath, folder));
   const targetPath = resolveManagedFileName(galleryDir, fileName);
   await fs.copyFile(sourcePath, targetPath);
   return {
-    id: `gallery_${randomUUID()}`,
-    fileName,
-    originalName: path.basename(sourcePath),
-    mimeType: mimeTypeForFile(sourcePath),
-    sizeBytes: stat.size,
-    folderId,
-    tags: [],
-    source,
-    createdAt: now,
-    updatedAt: now,
-    modifiedAt: stat.mtime.toISOString()
+    asset: {
+      id: `gallery_${randomUUID()}`,
+      fileName,
+      originalName,
+      mimeType: mimeTypeForFile(sourcePath),
+      sizeBytes: stat.size,
+      folderId,
+      tags: normalizeTemplateTags(metadata.tags ?? []),
+      source,
+      createdAt: now,
+      updatedAt: now,
+      contentHash,
+      sourcePathHash,
+      sourceJobId: metadata.sourceJobId,
+      sourceAssetId: metadata.sourceAssetId,
+      modifiedAt: stat.mtime.toISOString()
+    }
   };
 }
 
-async function createGalleryAssetFromDataUrl(state: AppStateFile, input: EditedGalleryImageInput, source: GalleryAsset["source"], now: string, folderId: string | null): Promise<GalleryAsset> {
+async function createGalleryAssetFromDataUrl(state: AppStateFile, input: EditedGalleryImageInput, source: GalleryAsset["source"], now: string, folderId: string | null): Promise<GalleryAssetCreateResult> {
   if (!input || typeof input !== "object" || typeof input.dataUrl !== "string") {
     throw new Error("Gallery 图片内容无效。");
   }
@@ -1185,9 +1337,38 @@ async function createGalleryAssetFromDataUrl(state: AppStateFile, input: EditedG
   const originalName = normalizeGalleryAssetNameInput(requestedName, `edited.${ext}`);
   const buffer = Buffer.from(dataUrlToBase64(input.dataUrl), "base64");
   if (buffer.length === 0) throw new Error("Gallery 图片内容为空。");
+  const contentHash = createHash("sha256").update(buffer).digest("hex");
 
   const galleryDir = getGalleryDir(state);
   await ensureGalleryFolderDirs(state);
+  const duplicate = await findDuplicateGalleryAsset(state, folderId, contentHash);
+  if (duplicate) {
+    const action = await chooseGalleryDuplicateAction(originalName, galleryFolderDuplicateDisplayName(state, folderId));
+    if (action === "cancel") return { asset: null };
+    if (action === "replace") {
+      const targetPath = resolveManagedFileName(galleryDir, normalizeGalleryRelativePath(duplicate.fileName));
+      await ensureDir(path.dirname(targetPath));
+      await fs.writeFile(targetPath, buffer);
+      const stat = await fs.stat(targetPath);
+      return {
+        replacedAssetId: duplicate.id,
+        asset: {
+          ...duplicate,
+          originalName,
+          mimeType,
+          sizeBytes: stat.size,
+          tags: mergeStoredTags(duplicate.tags, input.tags),
+          source,
+          updatedAt: now,
+          contentHash,
+          sourcePathHash: undefined,
+          sourceJobId: undefined,
+          sourceAssetId: undefined,
+          modifiedAt: stat.mtime.toISOString()
+        }
+      };
+    }
+  }
   const folder = galleryFolderForId(state, folderId);
   const folderName = folder ? galleryFolderRelativePath(state, folder) : "";
   const desiredRelPath = folderName ? `${folderName}/${originalName}` : originalName;
@@ -1198,17 +1379,34 @@ async function createGalleryAssetFromDataUrl(state: AppStateFile, input: EditedG
   const stat = await fs.stat(targetPath);
 
   return {
-    id: `gallery_${randomUUID()}`,
-    fileName,
-    originalName: path.posix.basename(fileName),
-    mimeType,
-    sizeBytes: stat.size,
-    folderId,
-    tags: [],
-    source,
-    createdAt: now,
-    updatedAt: now,
-    modifiedAt: stat.mtime.toISOString()
+    asset: {
+      id: `gallery_${randomUUID()}`,
+      fileName,
+      originalName: path.posix.basename(fileName),
+      mimeType,
+      sizeBytes: stat.size,
+      folderId,
+      tags: normalizeTemplateTags(input.tags),
+      source,
+      createdAt: now,
+      updatedAt: now,
+      contentHash,
+      modifiedAt: stat.mtime.toISOString()
+    }
+  };
+}
+
+function applyGalleryAssetCreateResult(state: AppStateFile, result: GalleryAssetCreateResult): AppStateFile {
+  if (!result.asset) return state;
+  if (result.replacedAssetId) {
+    return {
+      ...state,
+      galleryAssets: state.galleryAssets.map((asset) => asset.id === result.replacedAssetId ? result.asset! : asset)
+    };
+  }
+  return {
+    ...state,
+    galleryAssets: [result.asset, ...state.galleryAssets]
   };
 }
 
@@ -1433,7 +1631,7 @@ async function handleDeleteGalleryFolder(_event: IpcMainInvokeEvent, id: string)
 }
 
 async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[], folderId?: string | null): Promise<GalleryAsset[]> {
-  const state = await syncGalleryWithDisk(await readState());
+  let state = await syncGalleryWithDisk(await readState());
   const targetFolderId = normalizeGalleryFolderId(state, folderId);
   let sourcePaths = Array.isArray(paths) ? paths : [];
   if (sourcePaths.length === 0) {
@@ -1450,34 +1648,74 @@ async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[
   for (const sourcePath of sourcePaths) {
     if (typeof sourcePath !== "string") continue;
     if (!IMAGE_EXTENSIONS.has(path.extname(sourcePath).toLowerCase())) continue;
-    imported.push(await createGalleryAssetFromFile(state, sourcePath, "import", now, targetFolderId));
+    const result = await createGalleryAssetFromFile(state, sourcePath, "import", now, targetFolderId);
+    if (!result.asset) continue;
+    imported.push(result.asset);
+    state = applyGalleryAssetCreateResult(state, result);
   }
   if (imported.length === 0) return [];
-  const nextState = { ...state, galleryAssets: [...imported, ...state.galleryAssets] };
+  const nextState = state;
   await writeState(nextState);
   sendGalleryEvent(nextState, "mutation");
   return imported;
 }
 
-async function handleAddHistoryAssetToGallery(_event: IpcMainInvokeEvent, assetPath: string, folderId?: string | null): Promise<GalleryAsset> {
+async function handleAddHistoryAssetToGallery(_event: IpcMainInvokeEvent, assetPath: string, folderId?: string | null, tags?: string[]): Promise<GalleryAsset | null> {
   const state = await syncGalleryWithDisk(await readState());
   const targetFolderId = normalizeGalleryFolderId(state, folderId);
   const sourcePath = await assertKnownHistoryRegularAsset(state, assetPath);
-  const asset = await createGalleryAssetFromFile(state, sourcePath, "result", new Date().toISOString(), targetFolderId);
-  const nextState = { ...state, galleryAssets: [asset, ...state.galleryAssets] };
+  const result = await createGalleryAssetFromFile(state, sourcePath, "result", new Date().toISOString(), targetFolderId, historySourceMetadata(state, sourcePath, tags));
+  if (!result.asset) return null;
+  const nextState = applyGalleryAssetCreateResult(state, result);
   await writeState(nextState);
   sendGalleryEvent(nextState, "mutation");
-  return asset;
+  return result.asset;
 }
 
-async function handleAddEditedImageToGallery(_event: IpcMainInvokeEvent, input: EditedGalleryImageInput): Promise<GalleryAsset> {
+async function handleAddEditedImageToGallery(_event: IpcMainInvokeEvent, input: EditedGalleryImageInput): Promise<GalleryAsset | null> {
   const state = await syncGalleryWithDisk(await readState());
   const targetFolderId = normalizeGalleryFolderId(state, input?.folderId);
-  const asset = await createGalleryAssetFromDataUrl(state, input, "result", new Date().toISOString(), targetFolderId);
-  const nextState = { ...state, galleryAssets: [asset, ...state.galleryAssets] };
+  const result = await createGalleryAssetFromDataUrl(state, input, "result", new Date().toISOString(), targetFolderId);
+  if (!result.asset) return null;
+  const nextState = applyGalleryAssetCreateResult(state, result);
   await writeState(nextState);
   sendGalleryEvent(nextState, "mutation");
-  return asset;
+  return result.asset;
+}
+
+async function handleReplaceGalleryAssetImage(_event: IpcMainInvokeEvent, id: string, input: EditedGalleryImageInput): Promise<GalleryAsset> {
+  if (!input || typeof input !== "object" || typeof input.dataUrl !== "string") {
+    throw new Error("Gallery 图片内容无效。");
+  }
+  const mimeMatch = /^data:(image\/(?:png|jpeg|webp));base64,/.exec(input.dataUrl);
+  if (!mimeMatch) throw new Error("Gallery 只能保存 png、jpg、jpeg 或 webp 图片。");
+  const buffer = Buffer.from(dataUrlToBase64(input.dataUrl), "base64");
+  if (buffer.length === 0) throw new Error("Gallery 图片内容为空。");
+
+  const state = await syncGalleryWithDisk(await readState());
+  const asset = state.galleryAssets.find((item) => item.id === id);
+  if (!asset) throw new Error("Gallery 资源不存在。");
+  const galleryDir = getGalleryDir(state);
+  const targetPath = await assertManagedRegularFile(galleryDir, resolveManagedFileName(galleryDir, asset.fileName));
+  await fs.writeFile(targetPath, buffer);
+  const stat = await fs.stat(targetPath);
+  const updated: GalleryAsset = {
+    ...asset,
+    mimeType: mimeMatch[1],
+    sizeBytes: stat.size,
+    tags: input.tags ? normalizeTemplateTags(input.tags) : asset.tags,
+    source: "result",
+    updatedAt: new Date().toISOString(),
+    modifiedAt: stat.mtime.toISOString(),
+    contentHash: createHash("sha256").update(buffer).digest("hex"),
+    sourcePathHash: undefined,
+    sourceJobId: undefined,
+    sourceAssetId: undefined
+  };
+  const nextState = { ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) };
+  await writeState(nextState);
+  sendGalleryEvent(nextState, "mutation");
+  return updated;
 }
 
 async function handleUpdateGalleryAsset(_event: IpcMainInvokeEvent, id: string, patch: GalleryAssetPatch = {}): Promise<GalleryAsset> {
@@ -1740,6 +1978,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     });
     job = {
       ...job,
+      name: job.name.trim() || defaultHistoryJobName(job),
       durationMs: Date.now() - startedAt,
       updatedAt: new Date().toISOString()
     };
@@ -1773,7 +2012,12 @@ function canRunRequestWithConfig(request: RunJobRequest, config: StoredProviderC
 
 async function handleDownloadAsset(_event: IpcMainInvokeEvent, request: DownloadRequest): Promise<string | null> {
   const state = await readState();
-  const sourcePath = await assertKnownHistoryRegularAsset(state, request.assetPath);
+  let sourcePath: string;
+  try {
+    sourcePath = await assertKnownHistoryRegularAsset(state, request.assetPath);
+  } catch {
+    sourcePath = await assertManagedRegularFile(getGalleryDir(state), request.assetPath);
+  }
 
   const result = await dialog.showSaveDialog({
     title: "Save image",
@@ -1782,6 +2026,29 @@ async function handleDownloadAsset(_event: IpcMainInvokeEvent, request: Download
 
   if (result.canceled || !result.filePath) return null;
   await fs.copyFile(sourcePath, result.filePath);
+  return result.filePath;
+}
+
+async function handleDownloadEditedImage(_event: IpcMainInvokeEvent, request: EditedImageDownloadRequest): Promise<string | null> {
+  if (!request || typeof request !== "object" || typeof request.dataUrl !== "string") {
+    throw new Error("图片内容无效。");
+  }
+  const mimeMatch = /^data:(image\/(?:png|jpeg|webp));base64,/.exec(request.dataUrl);
+  if (!mimeMatch) throw new Error("只能下载 png、jpg、jpeg 或 webp 图片。");
+  const mimeType = mimeMatch[1];
+  const ext = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png";
+  const suggestedName = normalizeGalleryAssetNameInput(request.suggestedName || `edited.${ext}`, `edited.${ext}`);
+  const buffer = Buffer.from(dataUrlToBase64(request.dataUrl), "base64");
+  if (buffer.length === 0) throw new Error("图片内容为空。");
+
+  const result = await dialog.showSaveDialog({
+    title: "Save image",
+    defaultPath: suggestedName,
+    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }]
+  });
+
+  if (result.canceled || !result.filePath) return null;
+  await fs.writeFile(result.filePath, buffer);
   return result.filePath;
 }
 
@@ -2052,6 +2319,26 @@ async function handleDeleteJob(_event: IpcMainInvokeEvent, jobId: string): Promi
   return history;
 }
 
+async function handleUpdateHistoryJob(_event: IpcMainInvokeEvent, jobId: string, patch: HistoryJobPatch = {}): Promise<GenerationJob> {
+  const normalizedPatch = patch && typeof patch === "object" ? patch : {};
+  const state = await readState();
+  const job = state.history.find((item) => item.id === jobId);
+  if (!job) throw new Error("历史记录不存在。");
+  const hasNamePatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "name");
+  const hasTagsPatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "tags");
+  const name = typeof normalizedPatch.name === "string" && normalizedPatch.name.trim()
+    ? normalizedPatch.name.trim().replace(/\s+/g, " ")
+    : job.name || defaultHistoryJobName(job);
+  const updated: GenerationJob = {
+    ...job,
+    name: hasNamePatch ? name : job.name || defaultHistoryJobName(job),
+    tags: hasTagsPatch ? normalizeTemplateTags(normalizedPatch.tags) : job.tags ?? [],
+    updatedAt: new Date().toISOString()
+  };
+  await writeState({ ...state, history: state.history.map((item) => item.id === jobId ? updated : item) });
+  return updated;
+}
+
 async function handleClearHistory(): Promise<GenerationJob[]> {
   const state = await readState();
   const paths = state.history.flatMap((job) => pathsOwnedByJob(state, job));
@@ -2146,6 +2433,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("gallery:import", galleryIpc(handleImportToGallery));
   ipcMain.handle("gallery:addHistoryAsset", galleryIpc(handleAddHistoryAssetToGallery));
   ipcMain.handle("gallery:addEditedImage", galleryIpc(handleAddEditedImageToGallery));
+  ipcMain.handle("gallery:replaceImage", galleryIpc(handleReplaceGalleryAssetImage));
   ipcMain.handle("gallery:update", galleryIpc(handleUpdateGalleryAsset));
   ipcMain.handle("gallery:move", galleryIpc(handleMoveGalleryAsset));
   ipcMain.handle("gallery:remove", galleryIpc(handleRemoveGalleryAsset));
@@ -2155,12 +2443,14 @@ function registerIpcHandlers(): void {
   ipcMain.handle("dialog:selectMask", handleSelectMask);
   ipcMain.handle("job:run", handleRunJob);
   ipcMain.handle("asset:download", handleDownloadAsset);
+  ipcMain.handle("asset:downloadEdited", handleDownloadEditedImage);
   ipcMain.handle("asset:openFolder", handleOpenAssetFolder);
   ipcMain.handle("storage:openFolder", handleOpenStorageFolder);
   ipcMain.handle("storage:chooseFolder", handleChooseStorageFolder);
   ipcMain.handle("updates:check", handleCheckForUpdates);
   ipcMain.handle("updates:downloadAndInstall", handleDownloadAndInstallUpdate);
   ipcMain.handle("history:deleteJob", handleDeleteJob);
+  ipcMain.handle("history:updateJob", handleUpdateHistoryJob);
   ipcMain.handle("history:clear", handleClearHistory);
 }
 

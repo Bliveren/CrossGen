@@ -98,6 +98,7 @@ import type {
   StorageKind,
   WorkMode,
   UpdateCheckResult,
+  HistoryJobPatch,
   WorkspaceDraft
 } from "../shared/types";
 import {
@@ -158,6 +159,13 @@ type GalleryViewMode = "grid" | "list";
 type GalleryExplorerEntry =
   | { kind: "folder"; id: string; folder: GalleryFolder }
   | { kind: "asset"; id: string; asset: GalleryAsset };
+interface GallerySaveChoiceDialogState {
+  asset: GalleryAsset;
+  dataUrl: string;
+  suggestedName: string;
+}
+type BatchTagTarget = "history" | "gallery";
+type ImageContextMenuState = { x: number; y: number; asset: ImageAsset; jobPrompt: string };
 
 const sizePresets = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x1152", "2048x2048", "3840x2160", "2160x3840"];
 const qualityOptions: ImageQuality[] = ["auto", "low", "medium", "high"];
@@ -176,6 +184,7 @@ const MAX_HISTORY_WIDTH = 460;
 const MIN_WORKSPACE_WIDTH = 620;
 const COMPACT_SIDEBAR_WIDTH = 76;
 const COMPACT_HISTORY_WIDTH = 260;
+const RIGHT_RAIL_COLLAPSED_WIDTH = 96;
 const DEFAULT_PREVIEW_PANEL_RATIO = 0.618;
 const MIN_PREVIEW_PANEL_RATIO = 0.48;
 const MAX_PREVIEW_PANEL_RATIO = 0.74;
@@ -206,6 +215,7 @@ interface CanvasPoint {
 
 interface AnnotationTextBox {
   id: string;
+  order: number;
   x: number;
   y: number;
   width: number;
@@ -214,6 +224,12 @@ interface AnnotationTextBox {
   color: string;
   fontSize: number;
   bold: boolean;
+}
+
+interface AnnotationDrawingLayer {
+  id: string;
+  order: number;
+  dataUrl: string;
 }
 
 interface CanvasRect {
@@ -228,8 +244,7 @@ interface CropSelection extends CanvasRect {
 }
 
 interface EditorSnapshot {
-  annotationDataUrl: string | null;
-  hasAnnotationMarks: boolean;
+  drawingLayers: AnnotationDrawingLayer[];
   textBoxes: AnnotationTextBox[];
   editedImageDataUrl: string | null;
 }
@@ -238,8 +253,6 @@ const GALLERY_ALL_FILTER = "__all__";
 const GALLERY_UNCATEGORIZED_FILTER = "__uncategorized__";
 const ANNOTATION_COLOR_SWATCHES = ["#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF", "#5856D6", "#111827", "#FFFFFF"];
 const MIN_TEXT_BOX_SIZE = 34;
-const DEFAULT_TEXT_BOX_WIDTH = 180;
-const DEFAULT_TEXT_BOX_HEIGHT = 72;
 
 function getReferenceImageLimit(params: ImageParams): number {
   if (isOpenAIImageParams(params)) {
@@ -336,6 +349,33 @@ function getResultAssets(job?: GenerationJob | null): ImageAsset[] {
 function getBestResult(job?: GenerationJob | null): ImageAsset | undefined {
   const results = getResultAssets(job);
   return results[results.length - 1] ?? job?.outputs[job.outputs.length - 1];
+}
+
+function historyDisplayName(job: GenerationJob): string {
+  const name = job.name?.trim();
+  if (name) return name;
+  const result = getBestResult(job);
+  return result?.fileName ?? `${job.modelDisplayName || job.modelId || "image"}-${job.id.slice(-8)}.png`;
+}
+
+function historySystemTagLabel(mode: WorkMode, language: Language): string {
+  if (mode === "generate") return language === "zh" ? "生成" : "Generate";
+  return language === "zh" ? "编辑" : "Edit";
+}
+
+function normalizeTagList(value: string | string[]): string[] {
+  const rawTags = Array.isArray(value) ? value : value.split(",");
+  const seen = new Set<string>();
+  return rawTags.flatMap((item) => {
+    const tag = item.trim();
+    if (!tag || seen.has(tag)) return [];
+    seen.add(tag);
+    return [tag];
+  });
+}
+
+function mergeTags(existing: string[], additions: string[]): string[] {
+  return normalizeTagList([...existing, ...additions]);
 }
 
 function getJobError(job?: GenerationJob | null): string | null {
@@ -510,14 +550,18 @@ function createParamsForConfig(config: ProviderConfig, current: ImageParams): Im
 
 function defaultModelForConfigSave(kind: ProviderKind, params: ImageParams, config: ProviderConfig): string {
   if (isGeneralImageParams(params)) return params.model;
+  if (isGeminiImageParams(params)) return params.model;
   if (kind === "openai") {
     return isOpenAIImageParams(params) ? params.model : GPT_IMAGE_2_MODEL_ID;
   }
-  if (kind === "gemini") {
-    return isGeminiImageParams(params) ? params.model : NANO_BANANA_3_MODEL_ID;
-  }
+  if (kind === "gemini") return NANO_BANANA_3_MODEL_ID;
   if (kind === config.kind && config.defaultModel) return config.defaultModel;
   return defaultModelForProvider(kind);
+}
+
+function hasDiscoveredProviderModel(config: ProviderConfig, providerKind: ProviderKind, modelId: string): boolean {
+  const normalizedModelId = normalizeModelId(modelId);
+  return config.discoveredModels.some((model) => model.providerKind === providerKind && normalizeModelId(model.id) === normalizedModelId);
 }
 
 function defaultSizeForConfigSave(params: ImageParams, config: ProviderConfig): string {
@@ -533,7 +577,9 @@ function runtimeSelectionError(params: ImageParams, config: ProviderConfig, copy
     return config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ? null : copy.selectLaunchToRun("GPT Image 2");
   }
   if (isGeminiImageParams(params)) {
-    return config.activeLaunchId === NANO_BANANA_3_LAUNCH_ID ? null : copy.selectLaunchToRun("Nano Banana 3");
+    if (config.activeLaunchId !== NANO_BANANA_3_LAUNCH_ID) return copy.selectLaunchToRun("Nano Banana 3");
+    if (config.kind === "gemini" || hasDiscoveredProviderModel(config, "gemini", params.model)) return null;
+    return copy.launchUnavailableModel(params.model);
   }
   if (!isGeneralImageParams(params)) return copy.generalRuntimeUnsupported;
   if (config.activeLaunchId !== GENERAL_LAUNCH_ID) return copy.selectLaunchToRun("General");
@@ -841,11 +887,16 @@ export function App() {
   const [historySort, setHistorySort] = useState<"newest" | "oldest">("newest");
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [historyPageSize, setHistoryPageSize] = useState(HISTORY_COLLAPSED_LIMIT);
+  const [historyPageIndex, setHistoryPageIndex] = useState(0);
   const [historyViewMode, setHistoryViewMode] = useState<GalleryViewMode>("list");
   const [isHistoryBatchMode, setIsHistoryBatchMode] = useState(false);
   const [selectedHistoryJobIds, setSelectedHistoryJobIds] = useState<Set<string>>(() => new Set());
   const [isHistoryPageSizeMenuOpen, setIsHistoryPageSizeMenuOpen] = useState(false);
-  const [historyListScrollState, setHistoryListScrollState] = useState({ top: 0, clientHeight: 0, scrollHeight: 0 });
+  const [editingHistoryNameId, setEditingHistoryNameId] = useState<string | null>(null);
+  const [historyNameDraft, setHistoryNameDraft] = useState("");
+  const [editingHistoryTagsId, setEditingHistoryTagsId] = useState<string | null>(null);
+  const [historyTagsInput, setHistoryTagsInput] = useState("");
+  const [historyGalleryMenuJobId, setHistoryGalleryMenuJobId] = useState<string | null>(null);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateTagFilter, setTemplateTagFilter] = useState("");
@@ -855,9 +906,12 @@ export function App() {
   const [templateTags, setTemplateTags] = useState("");
   const [templateCategory, setTemplateCategory] = useState("");
   const [rightRailView, setRightRailView] = useState<"history" | "gallery">("history");
+  const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(false);
+  const [isRightRailActionDrawerOpen, setIsRightRailActionDrawerOpen] = useState(false);
   const [gallerySearch, setGallerySearch] = useState("");
   const [galleryTagFilter, setGalleryTagFilter] = useState("");
   const [gallerySort, setGallerySort] = useState<GallerySortMode>("newest");
+  const [isGallerySortMenuOpen, setIsGallerySortMenuOpen] = useState(false);
   const [galleryViewMode, setGalleryViewMode] = useState<GalleryViewMode>("grid");
   const [isGalleryBatchMode, setIsGalleryBatchMode] = useState(false);
   const [galleryContentScrollTop, setGalleryContentScrollTop] = useState(0);
@@ -879,10 +933,16 @@ export function App() {
   const [galleryAssetDialog, setGalleryAssetDialog] = useState<GalleryAssetDialogState | null>(null);
   const [galleryAssetDialogName, setGalleryAssetDialogName] = useState("");
   const [galleryAssetDialogError, setGalleryAssetDialogError] = useState("");
+  const [activeGalleryAssetId, setActiveGalleryAssetId] = useState<string | null>(null);
+  const [gallerySaveChoiceDialog, setGallerySaveChoiceDialog] = useState<GallerySaveChoiceDialogState | null>(null);
   const [editingGalleryFolderId, setEditingGalleryFolderId] = useState<string | null>(null);
   const [editingGalleryFolderName, setEditingGalleryFolderName] = useState("");
   const [editingGalleryId, setEditingGalleryId] = useState<string | null>(null);
   const [galleryTagsInput, setGalleryTagsInput] = useState("");
+  const [batchTagMenuTarget, setBatchTagMenuTarget] = useState<BatchTagTarget | null>(null);
+  const [batchTagInput, setBatchTagInput] = useState("");
+  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+  const [tagRenameDrafts, setTagRenameDrafts] = useState<Record<string, string>>({});
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [storageDialogKind, setStorageDialogKind] = useState<StorageKind | null>(null);
   const [syncStorageFolders, setSyncStorageFolders] = useState(false);
@@ -903,6 +963,7 @@ export function App() {
   const [annotationSize, setAnnotationSize] = useState(6);
   const [annotationTextSize, setAnnotationTextSize] = useState(24);
   const [isAnnotationTextBold, setIsAnnotationTextBold] = useState(false);
+  const [annotationDrawingLayers, setAnnotationDrawingLayers] = useState<AnnotationDrawingLayer[]>([]);
   const [annotationTextBoxes, setAnnotationTextBoxes] = useState<AnnotationTextBox[]>([]);
   const [activeAnnotationTextBoxId, setActiveAnnotationTextBoxId] = useState<string | null>(null);
   const [draftTextRect, setDraftTextRect] = useState<CanvasRect | null>(null);
@@ -910,6 +971,7 @@ export function App() {
   const [hasAnnotationMarks, setHasAnnotationMarks] = useState(false);
   const [editedImageDataUrl, setEditedImageDataUrl] = useState<string | null>(null);
   const [editorUndoStack, setEditorUndoStack] = useState<EditorSnapshot[]>([]);
+  const [isAnnotationColorPickerOpen, setIsAnnotationColorPickerOpen] = useState(false);
   const [cropShape, setCropShape] = useState<CropShape>("rect");
   const [cropSelection, setCropSelection] = useState<CropSelection | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -921,15 +983,20 @@ export function App() {
   const [historyWidth, setHistoryWidth] = useState(() => readStoredWidth("image2tools.historyWidth", DEFAULT_HISTORY_WIDTH, MIN_HISTORY_WIDTH, MAX_HISTORY_WIDTH));
   const [previewPanelRatio, setPreviewPanelRatio] = useState(() => readStoredWidth("image2tools.previewPanelRatio", DEFAULT_PREVIEW_PANEL_RATIO, MIN_PREVIEW_PANEL_RATIO, MAX_PREVIEW_PANEL_RATIO));
   const [resizingColumn, setResizingColumn] = useState<"sidebar" | "history" | "preview" | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; assetId: string; jobPrompt: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<ImageContextMenuState | null>(null);
+  const [railCollapseButtonY, setRailCollapseButtonY] = useState(86);
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const annotationCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const annotationImageRef = useRef<HTMLImageElement | null>(null);
+  const annotationFrameRef = useRef<HTMLDivElement | null>(null);
   const galleryContentRef = useRef<HTMLDivElement | null>(null);
   const historyListRef = useRef<HTMLDivElement | null>(null);
   const annotationLastPointRef = useRef<CanvasPoint | null>(null);
+  const isAnnotationPointerActiveRef = useRef(false);
   const textDragStartRef = useRef<CanvasPoint | null>(null);
+  const textResizeRef = useRef<{ id: string; startX: number; startY: number; startWidth: number; startHeight: number } | null>(null);
+  const annotationOrderRef = useRef(0);
   const cropDragStartRef = useRef<CanvasPoint | null>(null);
   const referenceLimitToastTimerRef = useRef<number | null>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
@@ -943,6 +1010,7 @@ export function App() {
   const primaryRunButtonRef = useRef<HTMLButtonElement | null>(null);
   const promptTemplateButtonRef = useRef<HTMLButtonElement | null>(null);
   const promptCopyButtonRef = useRef<HTMLButtonElement | null>(null);
+  const sidebarUtilityBarRef = useRef<HTMLElement | null>(null);
 
   const activeConfig = snapshot.providers.find(p => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
   const isSidebarCompact = isSidebarCollapsed || isAutoSidebarCollapsed;
@@ -962,8 +1030,20 @@ export function App() {
   const maskPreview = maskDataUrl ?? assetSource(maskAsset);
   const activeResults = getResultAssets(activeJob);
   const selectedResult = activeResults.find((asset) => asset.id === selectedResultId);
-  const activeImage = selectedResult ?? getBestResult(activeJob) ?? partialImages[partialImages.length - 1];
-  const activeImageSource = assetSource(activeImage);
+  const activeGalleryAsset = activeGalleryAssetId ? snapshot.galleryAssets.find((asset) => asset.id === activeGalleryAssetId) : undefined;
+  const activeGalleryPreviewImage: ImageAsset | undefined = activeGalleryAsset ? {
+    id: `gallery_preview_${activeGalleryAsset.id}_${activeGalleryAsset.updatedAt}`,
+    jobId: `gallery:${activeGalleryAsset.id}`,
+    path: galleryAssetAbsolutePath(activeGalleryAsset),
+    fileName: activeGalleryAsset.originalName,
+    mimeType: activeGalleryAsset.mimeType,
+    width: activeGalleryAsset.width,
+    height: activeGalleryAsset.height,
+    sourceType: "result",
+    createdAt: activeGalleryAsset.createdAt
+  } : undefined;
+  const activeImage = activeGalleryPreviewImage ?? selectedResult ?? getBestResult(activeJob) ?? partialImages[partialImages.length - 1];
+  const activeImageSource = activeGalleryAsset ? galleryAssetPath(activeGalleryAsset) : assetSource(activeImage);
   const activePreviewSource = editedImageDataUrl ?? activeImageSource;
   const activeJobError = getJobError(activeJob);
   const openAIParams = isOpenAIImageParams(params) ? params : null;
@@ -993,7 +1073,9 @@ export function App() {
   const isEditingPreview = previewMode === "edit";
   const isCroppingPreview = previewMode === "crop";
   const isPreviewCanvasInteractive = isEditingPreview || isCroppingPreview;
-  const hasEditorOverlay = hasAnnotationMarks || annotationTextBoxes.length > 0;
+  const hasEditorOverlay = hasAnnotationMarks || annotationDrawingLayers.length > 0 || annotationTextBoxes.length > 0 || isDrawingAnnotation;
+  const hasExportableEditorOverlay = annotationDrawingLayers.length > 0 || annotationTextBoxes.some((box) => box.text.trim().length > 0);
+  const hasEditedPreviewChanges = Boolean(editedImageDataUrl || hasExportableEditorOverlay);
   const apiKeyPlaceholder = selectedApiConfig.apiKeyPreview ?? (selectedApiConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
   const launchButtons = useMemo(() => getLaunchButtonStates(activeConfig, copy), [copy, activeConfig]);
   const activeLaunchDisplay = launchButtons.find((button) => button.launchId === activeConfig.activeLaunchId)?.displayName ?? modelLabelFromId(activeConfig.activeModelId);
@@ -1018,7 +1100,8 @@ export function App() {
       ? statusMatched
       : statusMatched.filter((job) => {
           const modelDetails = getHistoryModelDetails(job);
-          const haystack = `${job.prompt} ${job.mode} ${job.status} ${job.error ?? ""} ${job.createdAt} ${modelDetails.searchText}`.toLowerCase();
+          const systemTag = historySystemTagLabel(job.mode, language);
+          const haystack = `${historyDisplayName(job)} ${job.tags.join(" ")} ${systemTag} ${job.prompt} ${job.mode} ${job.status} ${job.error ?? ""} ${job.createdAt} ${modelDetails.searchText}`.toLowerCase();
           return haystack.includes(query);
         });
     const sorted = [...matched];
@@ -1028,7 +1111,17 @@ export function App() {
       sorted.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
     }
     return sorted;
-  }, [historySearch, historySort, historyStatusFilter, snapshot.history]);
+  }, [historySearch, historySort, historyStatusFilter, language, snapshot.history]);
+  const historyTagsAvailable = useMemo(() => {
+    const tags = new Set<string>();
+    snapshot.history.forEach((job) => job.tags.forEach((tag) => tags.add(tag)));
+    return [...tags].sort((a, b) => a.localeCompare(b));
+  }, [snapshot.history]);
+  const historySystemTagsAvailable = useMemo(() => {
+    const tags = new Set<string>();
+    snapshot.history.forEach((job) => tags.add(historySystemTagLabel(job.mode, language)));
+    return [...tags].sort((a, b) => a.localeCompare(b));
+  }, [language, snapshot.history]);
   const templateTagsAvailable = useMemo(() => {
     const tags = new Set<string>();
     snapshot.promptTemplates.forEach((template) => template.tags.forEach((tag) => tags.add(tag)));
@@ -1049,6 +1142,16 @@ export function App() {
     snapshot.galleryAssets.forEach((asset) => asset.tags.forEach((tag) => tags.add(tag)));
     return [...tags].sort((a, b) => a.localeCompare(b));
   }, [snapshot.galleryAssets]);
+  const globalTagOptions = useMemo(() => {
+    const tags = new Set<string>();
+    [...historyTagsAvailable, ...historySystemTagsAvailable, ...galleryTagsAvailable].forEach((tag) => tags.add(tag));
+    return [...tags].sort((a, b) => a.localeCompare(b));
+  }, [galleryTagsAvailable, historySystemTagsAvailable, historyTagsAvailable]);
+  const managedTagOptions = useMemo(() => {
+    const tags = new Set<string>();
+    [...historyTagsAvailable, ...galleryTagsAvailable].forEach((tag) => tags.add(tag));
+    return [...tags].sort((a, b) => a.localeCompare(b));
+  }, [galleryTagsAvailable, historyTagsAvailable]);
   const galleryFolderById = useMemo(() => new Map(snapshot.galleryFolders.map((folder) => [folder.id, folder])), [snapshot.galleryFolders]);
   const galleryFoldersByParent = useMemo(() => {
     const foldersByParent = new Map<string | null, GalleryFolder[]>();
@@ -1085,21 +1188,11 @@ export function App() {
   }, [galleryFolderById, snapshot.galleryAssets]);
   const currentImportFolderId = activeGalleryFolderId === GALLERY_ALL_FILTER || activeGalleryFolderId === GALLERY_UNCATEGORIZED_FILTER ? null : activeGalleryFolderId;
   const currentGalleryCreateParentId = galleryFolderById.has(activeGalleryFolderId) ? activeGalleryFolderId : null;
-  const activeGalleryBreadcrumb = useMemo(() => {
-    if (activeGalleryFolderId === GALLERY_UNCATEGORIZED_FILTER) return [{ id: GALLERY_UNCATEGORIZED_FILTER, name: copy.galleryUncategorized }];
-    if (activeGalleryFolderId === GALLERY_ALL_FILTER) return [{ id: GALLERY_ALL_FILTER, name: copy.galleryAllFolders }];
-    const path: Array<{ id: GalleryFolderFilter; name: string }> = [{ id: GALLERY_ALL_FILTER, name: copy.galleryAllFolders }];
-    const seen = new Set<string>();
-    let current = galleryFolderById.get(activeGalleryFolderId);
-    const folders: GalleryFolder[] = [];
-    while (current && !seen.has(current.id)) {
-      seen.add(current.id);
-      folders.push(current);
-      current = current.parentId ? galleryFolderById.get(current.parentId) : undefined;
-    }
-    folders.reverse().forEach((folder) => path.push({ id: folder.id, name: folder.name }));
-    return path;
-  }, [activeGalleryFolderId, copy.galleryAllFolders, copy.galleryUncategorized, galleryFolderById]);
+  const galleryFolderSelectOptions = useMemo(() => [
+    { id: GALLERY_ALL_FILTER, name: copy.galleryAllFolders },
+    { id: GALLERY_UNCATEGORIZED_FILTER, name: copy.galleryUncategorized },
+    ...snapshot.galleryFolders.map((folder) => ({ id: folder.id, name: galleryFolderDisplayPath(folder) }))
+  ], [copy.galleryAllFolders, copy.galleryUncategorized, snapshot.galleryFolders, galleryFolderById]);
   const activeGalleryChildFolders = useMemo(() => {
     if (activeGalleryFolderId === GALLERY_UNCATEGORIZED_FILTER) return [];
     const parentId = galleryFolderById.has(activeGalleryFolderId) ? activeGalleryFolderId : null;
@@ -1160,8 +1253,28 @@ export function App() {
   const galleryVirtualBottomSpacer = Math.max(0, galleryVirtualTotalRows - galleryVirtualEndRow) * galleryVirtualRowHeight;
   const selectedGalleryItemCount = selectedGalleryAssetIds.size + selectedGalleryFolderIds.size;
   const selectedHistoryItemCount = selectedHistoryJobIds.size;
+  const canTagSelectedHistory = isHistoryBatchMode && selectedHistoryJobIds.size > 0;
+  const canTagSelectedGallery = isGalleryBatchMode && selectedGalleryAssetIds.size > 0;
+  const selectedHistoryJobs = useMemo(
+    () => snapshot.history.filter((job) => selectedHistoryJobIds.has(job.id)),
+    [selectedHistoryJobIds, snapshot.history]
+  );
+  const selectedGalleryAssets = useMemo(
+    () => snapshot.galleryAssets.filter((asset) => selectedGalleryAssetIds.has(asset.id)),
+    [selectedGalleryAssetIds, snapshot.galleryAssets]
+  );
   const historyDisplayActionLabel = historyViewMode === "grid" ? copy.historyListView : copy.historyGridView;
   const galleryDisplayActionLabel = galleryViewMode === "grid" ? copy.galleryListView : copy.galleryGridView;
+  const gallerySortOptions: Array<{ value: GallerySortMode; label: string }> = [
+    { value: "newest", label: copy.sortNewest },
+    { value: "oldest", label: copy.sortOldest },
+    { value: "name", label: copy.sortName },
+    { value: "size", label: copy.sortSize },
+    { value: "modified", label: copy.sortModified }
+  ];
+  const gallerySortLabel = gallerySortOptions.find((option) => option.value === gallerySort)?.label ?? copy.sortNewest;
+  const selectedTagTarget: BatchTagTarget = rightRailView === "history" ? "history" : "gallery";
+  const canTagCurrentSelection = selectedTagTarget === "history" ? canTagSelectedHistory : canTagSelectedGallery;
 
   function galleryFolderPathForId(folderId: string | null | undefined): GalleryFolder[] {
     if (!folderId) return [];
@@ -1178,6 +1291,29 @@ export function App() {
 
   function galleryFolderDisplayPath(folder: GalleryFolder): string {
     return galleryFolderPathForId(folder.id).map((item) => item.name).join(" / ") || folder.name;
+  }
+
+  function localPathJoin(basePath: string, relativePath: string): string {
+    const separator = basePath.includes("\\") ? "\\" : "/";
+    const normalizedBase = basePath.replace(/[\\/]+$/, "");
+    const normalizedRelative = relativePath.split("/").join(separator);
+    return normalizedBase ? `${normalizedBase}${separator}${normalizedRelative}` : normalizedRelative;
+  }
+
+  function galleryAssetAbsolutePath(asset: GalleryAsset): string {
+    return localPathJoin(snapshot.storage.galleryDir, asset.fileName);
+  }
+
+  function historyGalleryTags(job: GenerationJob): string[] {
+    return mergeTags(job.tags, [historySystemTagLabel(job.mode, language)]);
+  }
+
+  function historyResultIsInGallery(result?: ImageAsset): boolean {
+    if (!result) return false;
+    return snapshot.galleryAssets.some((asset) =>
+      asset.source === "result" &&
+      (asset.sourceAssetId === result.id || (asset.sourceJobId === result.jobId && asset.originalName === result.fileName))
+    );
   }
 
   function isGalleryFolderDescendant(folderId: string, maybeAncestorId: string): boolean {
@@ -1226,9 +1362,23 @@ export function App() {
     setSelectedGalleryAssetIds(new Set(entry.kind === "asset" ? [entry.id] : []));
   }
 
-  function applyGalleryEntrySelection(entries: GalleryExplorerEntry[]) {
-    setSelectedGalleryFolderIds(new Set(entries.filter((entry) => entry.kind === "folder").map((entry) => entry.id)));
-    setSelectedGalleryAssetIds(new Set(entries.filter((entry) => entry.kind === "asset").map((entry) => entry.id)));
+  function mergeGalleryEntrySelection(entries: GalleryExplorerEntry[], checked = true) {
+    setSelectedGalleryFolderIds((current) => {
+      const next = new Set(current);
+      entries.filter((entry) => entry.kind === "folder").forEach((entry) => {
+        if (checked) next.add(entry.id);
+        else next.delete(entry.id);
+      });
+      return next;
+    });
+    setSelectedGalleryAssetIds((current) => {
+      const next = new Set(current);
+      entries.filter((entry) => entry.kind === "asset").forEach((entry) => {
+        if (checked) next.add(entry.id);
+        else next.delete(entry.id);
+      });
+      return next;
+    });
   }
 
   function toggleGalleryEntrySelection(entry: GalleryExplorerEntry, index: number, event: React.MouseEvent<HTMLInputElement>) {
@@ -1236,8 +1386,8 @@ export function App() {
     if (event.shiftKey && lastGallerySelectionIndex !== null) {
       const start = Math.min(lastGallerySelectionIndex, index);
       const end = Math.max(lastGallerySelectionIndex, index);
-      applyGalleryEntrySelection(galleryExplorerEntries.slice(start, end + 1));
-    } else if (event.metaKey || event.ctrlKey) {
+      mergeGalleryEntrySelection(galleryExplorerEntries.slice(start, end + 1), checked);
+    } else if (isGalleryBatchMode || event.metaKey || event.ctrlKey) {
       if (entry.kind === "folder") {
         setSelectedGalleryFolderIds((current) => {
           const next = new Set(current);
@@ -1311,20 +1461,18 @@ export function App() {
     const isSelected = isGalleryEntrySelected(entry);
     const assetIds = isSelected ? [...selectedGalleryAssetIds] : entry.kind === "asset" ? [entry.id] : [];
     const folderIds = isSelected ? [...selectedGalleryFolderIds] : entry.kind === "folder" ? [entry.id] : [];
-    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.effectAllowed = "copyMove";
     event.dataTransfer.setData("application/x-image2tools-gallery-selection", JSON.stringify({ assetIds, folderIds }));
     if (entry.kind === "asset") event.dataTransfer.setData("application/x-image2tools-gallery-id", entry.id);
     if (entry.kind === "folder") event.dataTransfer.setData("application/x-image2tools-gallery-folder-id", entry.id);
   }
 
   const hasHistoryOverflow = filteredHistory.length > historyPageSize;
-  const visibleHistory = isHistoryExpanded ? filteredHistory : filteredHistory.slice(0, historyPageSize);
+  const historyPageCount = Math.max(1, Math.ceil(filteredHistory.length / historyPageSize));
+  const normalizedHistoryPageIndex = Math.min(historyPageIndex, historyPageCount - 1);
+  const historyPageStartIndex = normalizedHistoryPageIndex * historyPageSize;
+  const visibleHistory = isHistoryExpanded ? filteredHistory : filteredHistory.slice(historyPageStartIndex, historyPageStartIndex + historyPageSize);
   const isSearchingHistory = historySearch.trim().length > 0;
-  const historyPagerVisible = hasHistoryOverflow && (
-    historyListScrollState.scrollHeight === 0 ||
-    historyListScrollState.clientHeight === 0 ||
-    historyListScrollState.top + historyListScrollState.clientHeight >= historyListScrollState.scrollHeight - 120
-  );
 
   const modeError = useMemo(() => {
     if (generalParams && !generalFallbackSupportsReferenceImages(generalParams.providerKind) && effectiveInputAssets.length > 0) {
@@ -1351,6 +1499,74 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("image2tools.language", language);
   }, [language]);
+
+  useEffect(() => {
+    if (!editingHistoryTagsId) return undefined;
+
+    const closeHistoryTagPopover = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".history-tag-popover, .history-add-tag-button")) return;
+      setEditingHistoryTagsId(null);
+      setHistoryTagsInput("");
+    };
+
+    window.addEventListener("pointerdown", closeHistoryTagPopover, true);
+    return () => window.removeEventListener("pointerdown", closeHistoryTagPopover, true);
+  }, [editingHistoryTagsId]);
+
+  useEffect(() => {
+    if (!editingGalleryId) return undefined;
+
+    const closeGalleryTagPopover = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".gallery-tag-popover, .gallery-add-tag-button")) return;
+      setEditingGalleryId(null);
+      setGalleryTagsInput("");
+    };
+
+    window.addEventListener("pointerdown", closeGalleryTagPopover, true);
+    return () => window.removeEventListener("pointerdown", closeGalleryTagPopover, true);
+  }, [editingGalleryId]);
+
+  useEffect(() => {
+    if (!isGallerySortMenuOpen) return undefined;
+
+    const closeGallerySortMenu = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".gallery-sort-control")) return;
+      setIsGallerySortMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsGallerySortMenuOpen(false);
+    };
+
+    window.addEventListener("pointerdown", closeGallerySortMenu, true);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeGallerySortMenu, true);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isGallerySortMenuOpen]);
+
+  useEffect(() => {
+    if (!isTagManagerOpen) return undefined;
+
+    const closeTagManager = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".right-rail-tag-action")) return;
+      setIsTagManagerOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsTagManagerOpen(false);
+    };
+
+    window.addEventListener("pointerdown", closeTagManager, true);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeTagManager, true);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isTagManagerOpen]);
 
   useEffect(() => {
     const updateCompactState = () => setIsAutoSidebarCollapsed(window.innerWidth <= 1320);
@@ -1452,14 +1668,50 @@ export function App() {
   }, [previewPanelRatio]);
 
   useEffect(() => {
-    const node = historyListRef.current;
-    if (!node) return;
-    setHistoryListScrollState({
-      top: node.scrollTop,
-      clientHeight: node.clientHeight,
-      scrollHeight: node.scrollHeight
-    });
-  }, [filteredHistory.length, historyPageSize, historyViewMode, isHistoryExpanded, rightRailView]);
+    let frameId: number | null = null;
+    const measureRailCollapseButtonY = () => {
+      frameId = null;
+      const node = sidebarUtilityBarRef.current;
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) return;
+      const next = Math.round(Math.max(48, window.innerHeight - rect.top));
+      setRailCollapseButtonY((current) => (Math.abs(current - next) > 1 ? next : current));
+    };
+    const scheduleMeasure = () => {
+      if (frameId !== null && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(frameId);
+      }
+      if (typeof window.requestAnimationFrame === "function") {
+        frameId = window.requestAnimationFrame(measureRailCollapseButtonY);
+      } else {
+        measureRailCollapseButtonY();
+      }
+    };
+
+    scheduleMeasure();
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleMeasure);
+    const node = sidebarUtilityBarRef.current;
+    if (node) resizeObserver?.observe(node);
+    const sidebarNode = node?.closest(".sidebar");
+    if (sidebarNode instanceof HTMLElement) resizeObserver?.observe(sidebarNode);
+    window.addEventListener("resize", scheduleMeasure);
+    return () => {
+      if (frameId !== null && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(frameId);
+      }
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", scheduleMeasure);
+    };
+  }, [isSidebarCompact, notice.text, showAdvanced, updateCheck?.status]);
+
+  useEffect(() => {
+    setHistoryPageIndex(0);
+  }, [historySearch, historySort, historyStatusFilter, historyPageSize]);
+
+  useEffect(() => {
+    setHistoryPageIndex((current) => Math.min(current, historyPageCount - 1));
+  }, [historyPageCount]);
 
   useEffect(() => {
     if (!isActiveApiConfigOpen) return;
@@ -1493,6 +1745,7 @@ export function App() {
       const next = new Set([...current].filter((id) => folderIds.has(id)));
       return next.size === current.size ? current : next;
     });
+    setActiveGalleryAssetId((current) => (current && !assetIds.has(current) ? null : current));
   }, [snapshot.galleryAssets, snapshot.galleryFolders]);
 
   useEffect(() => {
@@ -1523,6 +1776,10 @@ export function App() {
     setGalleryContentScrollTop(0);
     if (galleryContentRef.current) galleryContentRef.current.scrollTop = 0;
   }, [activeGalleryFolderId, gallerySearch, gallerySort, galleryTagFilter, galleryViewMode]);
+
+  useEffect(() => {
+    setIsRightRailActionDrawerOpen(false);
+  }, [isRightRailCollapsed, rightRailView]);
 
   useEffect(() => {
     if (historyGalleryFolderId && !snapshot.galleryFolders.some((folder) => folder.id === historyGalleryFolderId)) {
@@ -1859,7 +2116,9 @@ export function App() {
   }
 
   function galleryAssetPath(asset: GalleryAsset): string {
-    return `image2tools-asset://image?gallery=${encodeURIComponent(asset.fileName)}`;
+    if (asset.previewUrl) return asset.previewUrl;
+    const version = encodeURIComponent(asset.modifiedAt ?? asset.updatedAt ?? asset.createdAt);
+    return `image2tools-asset://image?gallery=${encodeURIComponent(asset.fileName)}&v=${version}`;
   }
 
   async function importToGallery() {
@@ -1867,9 +2126,9 @@ export function App() {
     try {
       const assets = await bridge.importToGallery(undefined, currentImportFolderId);
       if (assets.length > 0) {
-        setSnapshot((current) => ({ ...current, galleryAssets: [...assets, ...current.galleryAssets] }));
+        mergeGalleryAssetsIntoSnapshot(assets);
       }
-      setNotice({ kind: "success", text: copy.galleryImported(assets.length) });
+      setNotice({ kind: assets.length > 0 ? "success" : "info", text: assets.length > 0 ? copy.galleryImported(assets.length) : copy.galleryImportCanceled });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -1923,18 +2182,35 @@ export function App() {
     if (paths.length === 0) return false;
     const assets = await bridge.importToGallery(paths, folderId);
     if (assets.length > 0) {
-      setSnapshot((current) => ({ ...current, galleryAssets: [...assets, ...current.galleryAssets] }));
+      mergeGalleryAssetsIntoSnapshot(assets);
     }
-    setNotice({ kind: "success", text: copy.galleryImported(assets.length) });
+    setNotice({ kind: assets.length > 0 ? "success" : "info", text: assets.length > 0 ? copy.galleryImported(assets.length) : copy.galleryImportCanceled });
     return true;
   }
 
-  async function addHistoryAssetToGallery(asset?: ImageAsset) {
+  function mergeGalleryAssetsIntoSnapshot(assets: GalleryAsset[]) {
+    if (assets.length === 0) return;
+    setSnapshot((current) => {
+      const incomingIds = new Set(assets.map((asset) => asset.id));
+      return {
+        ...current,
+        galleryAssets: [
+          ...assets,
+          ...current.galleryAssets
+            .filter((asset) => !incomingIds.has(asset.id))
+            .map((asset) => assets.find((incoming) => incoming.id === asset.id) ?? asset)
+        ]
+      };
+    });
+  }
+
+  async function addHistoryAssetToGallery(asset?: ImageAsset, folderId: string | null = historyGalleryTargetFolderId, job?: GenerationJob) {
     if (!bridge || !asset) return;
     try {
-      const galleryAsset = await bridge.addHistoryAssetToGallery(asset.path, historyGalleryTargetFolderId);
-      setSnapshot((current) => ({ ...current, galleryAssets: [galleryAsset, ...current.galleryAssets] }));
-      setNotice({ kind: "success", text: copy.galleryAdded });
+      const galleryAsset = await bridge.addHistoryAssetToGallery(asset.path, folderId, job ? historyGalleryTags(job) : []);
+      if (galleryAsset) mergeGalleryAssetsIntoSnapshot([galleryAsset]);
+      setHistoryGalleryMenuJobId(null);
+      setNotice({ kind: galleryAsset ? "success" : "info", text: galleryAsset ? copy.galleryAdded : copy.galleryAddCanceled });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -1944,8 +2220,8 @@ export function App() {
     if (!bridge || !assetPath) return;
     try {
       const galleryAsset = await bridge.addHistoryAssetToGallery(assetPath, folderId);
-      setSnapshot((current) => ({ ...current, galleryAssets: [galleryAsset, ...current.galleryAssets] }));
-      setNotice({ kind: "success", text: copy.galleryAdded });
+      if (galleryAsset) mergeGalleryAssetsIntoSnapshot([galleryAsset]);
+      setNotice({ kind: galleryAsset ? "success" : "info", text: galleryAsset ? copy.galleryAdded : copy.galleryAddCanceled });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -1960,6 +2236,15 @@ export function App() {
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
+  }
+
+  function previewGalleryAsset(asset: GalleryAsset) {
+    setActiveGalleryAssetId(asset.id);
+    setActiveJob(null);
+    setSelectedResultId(null);
+    setPartialImages([]);
+    resetPreviewView();
+    setNotice({ kind: "info", text: copy.galleryOpenedForPreview(asset.originalName) });
   }
 
   async function addGalleryPromptToken(asset: GalleryAsset) {
@@ -2254,14 +2539,20 @@ export function App() {
 
   function editGalleryTags(asset: GalleryAsset) {
     setEditingGalleryId(asset.id);
-    setGalleryTagsInput(asset.tags.join(", "));
+    setGalleryTagsInput("");
   }
 
   async function saveGalleryTags(asset: GalleryAsset) {
     if (!bridge) return;
+    const [tag] = normalizeTagList(galleryTagsInput);
+    if (!tag) {
+      setEditingGalleryId(null);
+      setGalleryTagsInput("");
+      return;
+    }
     try {
       const updated = await bridge.updateGalleryAsset(asset.id, {
-        tags: galleryTagsInput.split(",").map((tag) => tag.trim()).filter(Boolean)
+        tags: mergeTags(asset.tags, [tag])
       });
       setSnapshot((current) => ({ ...current, galleryAssets: current.galleryAssets.map((item) => item.id === asset.id ? updated : item) }));
       setEditingGalleryId(null);
@@ -2775,6 +3066,26 @@ export function App() {
     return language === "zh" ? "已最新" : "Latest";
   }
 
+  function versionBadgeStatus(result: UpdateCheckResult | null): "ok" | "available" | "error" | "checking" {
+    if (isCheckingUpdate) return "checking";
+    if (result?.status === "available") return "available";
+    if (result?.status === "error") return "error";
+    return "ok";
+  }
+
+  function movePreviewToolbarTowardPointer(event: React.MouseEvent<HTMLElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / Math.max(1, rect.width) - 0.5) * 8;
+    const y = ((event.clientY - rect.top) / Math.max(1, rect.height) - 0.5) * 5;
+    event.currentTarget.style.setProperty("--toolbar-drift-x", `${x.toFixed(2)}px`);
+    event.currentTarget.style.setProperty("--toolbar-drift-y", `${y.toFixed(2)}px`);
+  }
+
+  function resetPreviewToolbarDrift(event: React.MouseEvent<HTMLElement>) {
+    event.currentTarget.style.setProperty("--toolbar-drift-x", "0px");
+    event.currentTarget.style.setProperty("--toolbar-drift-y", "0px");
+  }
+
   function toggleLanguage() {
     setLanguage((current) => (current === "en" ? "zh" : "en"));
   }
@@ -2882,6 +3193,7 @@ export function App() {
     setIsRunning(true);
     setPartialImages([]);
     setActiveJob(null);
+    setActiveGalleryAssetId(null);
     setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[requestMode].action) });
 
     try {
@@ -2991,11 +3303,188 @@ export function App() {
     }
   }
 
+  function updateHistoryJobState(updated: GenerationJob) {
+    setSnapshot((current) => ({
+      ...current,
+      history: current.history.map((item) => item.id === updated.id ? updated : item)
+    }));
+    setActiveJob((current) => current?.id === updated.id ? updated : current);
+  }
+
+  async function updateHistoryJob(job: GenerationJob, patch: HistoryJobPatch, successText?: string): Promise<GenerationJob | null> {
+    if (!bridge) return null;
+    try {
+      const updated = await bridge.updateHistoryJob(job.id, patch);
+      updateHistoryJobState(updated);
+      if (successText) setNotice({ kind: "success", text: successText });
+      return updated;
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+      return null;
+    }
+  }
+
+  function beginEditHistoryName(job: GenerationJob) {
+    setEditingHistoryNameId(job.id);
+    setHistoryNameDraft(historyDisplayName(job));
+  }
+
+  async function saveHistoryName(job: GenerationJob) {
+    const name = historyNameDraft.trim() || historyDisplayName(job);
+    const updated = await updateHistoryJob(job, { name }, copy.historyRenamed);
+    if (updated) {
+      setEditingHistoryNameId(null);
+      setHistoryNameDraft("");
+    }
+  }
+
+  function cancelHistoryNameEdit() {
+    setEditingHistoryNameId(null);
+    setHistoryNameDraft("");
+  }
+
+  function editHistoryTags(job: GenerationJob) {
+    setEditingHistoryTagsId(job.id);
+    setHistoryTagsInput("");
+  }
+
+  async function saveHistoryTags(job: GenerationJob) {
+    const [tag] = normalizeTagList(historyTagsInput);
+    if (!tag) {
+      cancelHistoryTagsEdit();
+      return;
+    }
+    const updated = await updateHistoryJob(job, { tags: mergeTags(job.tags, [tag]) }, copy.historyTagsUpdated);
+    if (updated) {
+      cancelHistoryTagsEdit();
+    }
+  }
+
+  function cancelHistoryTagsEdit() {
+    setEditingHistoryTagsId(null);
+    setHistoryTagsInput("");
+  }
+
+  async function applyBatchTag(target: BatchTagTarget, rawTag: string) {
+    if (!bridge) return;
+    const [tag] = normalizeTagList(rawTag);
+    if (!tag) return;
+    try {
+      if (target === "history") {
+        let nextHistory = snapshot.history;
+        let nextActiveJob = activeJob;
+        for (const job of selectedHistoryJobs) {
+          const updated = await bridge.updateHistoryJob(job.id, { tags: mergeTags(job.tags, [tag]) });
+          nextHistory = nextHistory.map((item) => item.id === updated.id ? updated : item);
+          if (nextActiveJob?.id === updated.id) nextActiveJob = updated;
+        }
+        setSnapshot((current) => ({ ...current, history: nextHistory }));
+        setActiveJob(nextActiveJob);
+      } else {
+        let nextAssets = snapshot.galleryAssets;
+        for (const asset of selectedGalleryAssets) {
+          const updated = await bridge.updateGalleryAsset(asset.id, { tags: mergeTags(asset.tags, [tag]) });
+          nextAssets = nextAssets.map((item) => item.id === updated.id ? updated : item);
+        }
+        setSnapshot((current) => ({ ...current, galleryAssets: nextAssets }));
+      }
+      setBatchTagInput("");
+      setNotice({ kind: "success", text: copy.batchTagsUpdated });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function renameTagEverywhere(oldTag: string, rawNewTag: string) {
+    if (!bridge) return;
+    const [newTag] = normalizeTagList(rawNewTag);
+    if (!newTag || newTag === oldTag) {
+      setTagRenameDrafts((current) => ({ ...current, [oldTag]: oldTag }));
+      return;
+    }
+    try {
+      let nextHistory = snapshot.history;
+      let nextActiveJob = activeJob;
+      for (const job of snapshot.history) {
+        if (!job.tags.includes(oldTag)) continue;
+        const updated = await bridge.updateHistoryJob(job.id, {
+          tags: normalizeTagList(job.tags.map((tag) => tag === oldTag ? newTag : tag))
+        });
+        nextHistory = nextHistory.map((item) => item.id === updated.id ? updated : item);
+        if (nextActiveJob?.id === updated.id) nextActiveJob = updated;
+      }
+
+      let nextAssets = snapshot.galleryAssets;
+      for (const asset of snapshot.galleryAssets) {
+        if (!asset.tags.includes(oldTag)) continue;
+        const updated = await bridge.updateGalleryAsset(asset.id, {
+          tags: normalizeTagList(asset.tags.map((tag) => tag === oldTag ? newTag : tag))
+        });
+        nextAssets = nextAssets.map((item) => item.id === updated.id ? updated : item);
+      }
+
+      setSnapshot((current) => ({ ...current, history: nextHistory, galleryAssets: nextAssets }));
+      setActiveJob(nextActiveJob);
+      setTagRenameDrafts((current) => {
+        const { [oldTag]: _removed, ...rest } = current;
+        return rest;
+      });
+      setNotice({ kind: "success", text: copy.tagRenamed });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function deleteTagEverywhere(tagToDelete: string) {
+    if (!bridge) return;
+    try {
+      let nextHistory = snapshot.history;
+      let nextActiveJob = activeJob;
+      for (const job of snapshot.history) {
+        if (!job.tags.includes(tagToDelete)) continue;
+        const updated = await bridge.updateHistoryJob(job.id, {
+          tags: job.tags.filter((tag) => tag !== tagToDelete)
+        });
+        nextHistory = nextHistory.map((item) => item.id === updated.id ? updated : item);
+        if (nextActiveJob?.id === updated.id) nextActiveJob = updated;
+      }
+
+      let nextAssets = snapshot.galleryAssets;
+      for (const asset of snapshot.galleryAssets) {
+        if (!asset.tags.includes(tagToDelete)) continue;
+        const updated = await bridge.updateGalleryAsset(asset.id, {
+          tags: asset.tags.filter((tag) => tag !== tagToDelete)
+        });
+        nextAssets = nextAssets.map((item) => item.id === updated.id ? updated : item);
+      }
+
+      setSnapshot((current) => ({ ...current, history: nextHistory, galleryAssets: nextAssets }));
+      setActiveJob(nextActiveJob);
+      setTagRenameDrafts((current) => {
+        const { [tagToDelete]: _removed, ...rest } = current;
+        return rest;
+      });
+      setNotice({ kind: "success", text: copy.tagDeleted });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
   async function copyPrompt(value: string, feedbackId = "copy:prompt") {
     try {
       await navigator.clipboard.writeText(value);
       flashButton(feedbackId);
       setNotice({ kind: "success", text: copy.notices.promptCopied });
+    } catch {
+      setNotice({ kind: "error", text: copy.notices.clipboardUnavailable });
+    }
+  }
+
+  async function copyImagePath(value: string, feedbackId = "copy:image-path") {
+    try {
+      await navigator.clipboard.writeText(value);
+      flashButton(feedbackId);
+      setNotice({ kind: "success", text: copy.imagePathCopied });
     } catch {
       setNotice({ kind: "error", text: copy.notices.clipboardUnavailable });
     }
@@ -3022,6 +3511,7 @@ export function App() {
     setMaskAsset(isGeneralImageParams(reusedParams) ? null : job.maskAsset ?? null);
     setMaskDataUrl(null);
     setActiveJob(job);
+    setActiveGalleryAssetId(null);
     setHasUserChangedDraft(true);
     setNotice({ kind: "info", text: paramsNotice(reusedParams, copy.notices.jobLoaded, copy) });
   }
@@ -3061,30 +3551,37 @@ export function App() {
     setPreviewPan({ x: 0, y: 0 });
   }
 
+  function nextAnnotationOrder(): number {
+    const order = annotationOrderRef.current;
+    annotationOrderRef.current += 1;
+    return order;
+  }
+
+  function resetAnnotationOrder(drawingLayers = annotationDrawingLayers, textBoxes = annotationTextBoxes) {
+    const maxOrder = Math.max(
+      -1,
+      ...drawingLayers.map((layer) => layer.order),
+      ...textBoxes.map((box) => box.order)
+    );
+    annotationOrderRef.current = maxOrder + 1;
+  }
+
   function resizeAnnotationCanvas(clear = false) {
-    const host = resultCanvasRef.current;
+    const host = annotationFrameRef.current;
     const canvas = annotationCanvasRef.current;
     if (!host || !canvas) return;
-    const previousDataUrl = !clear && hasAnnotationMarks && canvas.width > 0 && canvas.height > 0 ? canvas.toDataURL("image/png") : null;
     const rect = host.getBoundingClientRect();
+    const image = annotationImageRef.current;
     const scale = window.devicePixelRatio || 1;
-    const width = Math.max(1, Math.round(rect.width * scale));
-    const height = Math.max(1, Math.round(rect.height * scale));
-    let didResize = false;
+    const width = Math.max(1, Math.round(image?.naturalWidth || rect.width * scale));
+    const height = Math.max(1, Math.round(image?.naturalHeight || rect.height * scale));
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      didResize = true;
     }
     if (clear) {
       const context = canvas.getContext("2d");
       context?.clearRect(0, 0, canvas.width, canvas.height);
-      return;
-    }
-    if (didResize && previousDataUrl) {
-      void drawAnnotationDataUrl(previousDataUrl);
     }
   }
 
@@ -3109,7 +3606,27 @@ export function App() {
     return annotationPointFromClient(event.clientX, event.clientY, normalizePointerPressure(event.nativeEvent), event.currentTarget);
   }
 
-  function normalizeCanvasRect(from: CanvasPoint, to: CanvasPoint, fallbackWidth = MIN_TEXT_BOX_SIZE, fallbackHeight = MIN_TEXT_BOX_SIZE): CanvasRect {
+  function canvasUnitsForCssPixels(cssPixels: number, axis: "x" | "y" = "x"): number {
+    const canvas = annotationCanvasRef.current;
+    const host = annotationFrameRef.current;
+    const rect = host?.getBoundingClientRect();
+    if (!canvas || !rect) return cssPixels * (window.devicePixelRatio || 1);
+    const cssSize = axis === "x" ? rect.width : rect.height;
+    const canvasSize = axis === "x" ? canvas.width : canvas.height;
+    return cssSize > 0 ? cssPixels * (canvasSize / cssSize) : cssPixels;
+  }
+
+  function cssPixelsForCanvasUnits(canvasPixels: number, axis: "x" | "y" = "x"): number {
+    const canvas = annotationCanvasRef.current;
+    const host = annotationFrameRef.current;
+    const rect = host?.getBoundingClientRect();
+    if (!canvas || !rect) return canvasPixels / (window.devicePixelRatio || 1);
+    const cssSize = axis === "x" ? rect.width : rect.height;
+    const canvasSize = axis === "x" ? canvas.width : canvas.height;
+    return canvasSize > 0 ? canvasPixels * (cssSize / canvasSize) : canvasPixels;
+  }
+
+  function normalizeCanvasRect(from: CanvasPoint, to: CanvasPoint, minWidth = 0, minHeight = 0): CanvasRect {
     const canvas = annotationCanvasRef.current;
     const maxWidth = canvas?.width ?? Number.MAX_SAFE_INTEGER;
     const maxHeight = canvas?.height ?? Number.MAX_SAFE_INTEGER;
@@ -3117,18 +3634,16 @@ export function App() {
     const rawY = Math.min(from.y, to.y);
     const rawWidth = Math.abs(to.x - from.x);
     const rawHeight = Math.abs(to.y - from.y);
-    const width = rawWidth < MIN_TEXT_BOX_SIZE ? fallbackWidth * (window.devicePixelRatio || 1) : rawWidth;
-    const height = rawHeight < MIN_TEXT_BOX_SIZE ? fallbackHeight * (window.devicePixelRatio || 1) : rawHeight;
+    const width = Math.max(rawWidth, minWidth);
+    const height = Math.max(rawHeight, minHeight);
     const x = clamp(rawX, 0, Math.max(0, maxWidth - width));
     const y = clamp(rawY, 0, Math.max(0, maxHeight - height));
     return { x, y, width: Math.min(width, maxWidth), height: Math.min(height, maxHeight) };
   }
 
   function captureEditorSnapshot(): EditorSnapshot {
-    const canvas = annotationCanvasRef.current;
     return {
-      annotationDataUrl: canvas && hasAnnotationMarks ? canvas.toDataURL("image/png") : null,
-      hasAnnotationMarks,
+      drawingLayers: annotationDrawingLayers.map((layer) => ({ ...layer })),
       textBoxes: annotationTextBoxes.map((box) => ({ ...box })),
       editedImageDataUrl
     };
@@ -3139,31 +3654,19 @@ export function App() {
     setEditorUndoStack((current) => [...current.slice(-24), snapshot]);
   }
 
-  async function drawAnnotationDataUrl(dataUrl: string | null) {
-    const canvas = annotationCanvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    if (!dataUrl) return;
-    const image = new Image();
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error(copy.annotationRestoreFailed));
-      image.src = dataUrl;
-    });
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  }
-
   function restoreEditorSnapshot(snapshot: EditorSnapshot) {
     setEditedImageDataUrl(snapshot.editedImageDataUrl);
-    setAnnotationTextBoxes(snapshot.textBoxes.map((box) => ({ ...box })));
+    const drawingLayers = snapshot.drawingLayers.map((layer) => ({ ...layer }));
+    const textBoxes = snapshot.textBoxes.map((box) => ({ ...box }));
+    setAnnotationDrawingLayers(drawingLayers);
+    setAnnotationTextBoxes(textBoxes);
     setActiveAnnotationTextBoxId(null);
     setDraftTextRect(null);
     setCropSelection(null);
-    setHasAnnotationMarks(snapshot.hasAnnotationMarks);
+    setHasAnnotationMarks(drawingLayers.length > 0);
+    resetAnnotationOrder(drawingLayers, textBoxes);
     window.requestAnimationFrame(() => {
       resizeAnnotationCanvas(true);
-      void drawAnnotationDataUrl(snapshot.annotationDataUrl);
     });
   }
 
@@ -3178,6 +3681,7 @@ export function App() {
     if (!isPreviewCanvasInteractive || !activePreviewSource) return;
     resizeAnnotationCanvas();
     event.currentTarget.setPointerCapture(event.pointerId);
+    isAnnotationPointerActiveRef.current = true;
     setIsDrawingAnnotation(true);
     const point = annotationPoint(event);
     if (isCroppingPreview) {
@@ -3187,24 +3691,28 @@ export function App() {
     }
     if (annotationTool === "text") {
       textDragStartRef.current = point;
-      setDraftTextRect(normalizeCanvasRect(point, point, DEFAULT_TEXT_BOX_WIDTH, DEFAULT_TEXT_BOX_HEIGHT));
+      setDraftTextRect(null);
       return;
     }
     pushEditorUndoSnapshot();
+    clearAnnotationScratchCanvas();
     annotationLastPointRef.current = point;
     drawAnnotationLine(point, point);
     setHasAnnotationMarks(true);
   }
 
   function continueAnnotation(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (!isDrawingAnnotation) return;
+    if (!isAnnotationPointerActiveRef.current) return;
     const nextPoint = annotationPoint(event);
     if (isCroppingPreview && cropDragStartRef.current) {
       setCropSelection({ ...normalizeCanvasRect(cropDragStartRef.current, nextPoint, 0, 0), shape: cropShape });
       return;
     }
     if (annotationTool === "text" && textDragStartRef.current) {
-      setDraftTextRect(normalizeCanvasRect(textDragStartRef.current, nextPoint, DEFAULT_TEXT_BOX_WIDTH, DEFAULT_TEXT_BOX_HEIGHT));
+      const thresholdX = canvasUnitsForCssPixels(4, "x");
+      const thresholdY = canvasUnitsForCssPixels(4, "y");
+      const rect = normalizeCanvasRect(textDragStartRef.current, nextPoint, 0, 0);
+      setDraftTextRect(rect.width >= thresholdX || rect.height >= thresholdY ? rect : null);
       return;
     }
     if (!annotationLastPointRef.current) return;
@@ -3223,30 +3731,71 @@ export function App() {
   }
 
   function finishAnnotation(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (!isDrawingAnnotation) return;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (!isAnnotationPointerActiveRef.current) return;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     const endPoint = annotationPoint(event);
     if (isCroppingPreview && cropDragStartRef.current) {
       setCropSelection({ ...normalizeCanvasRect(cropDragStartRef.current, endPoint, 0, 0), shape: cropShape });
       cropDragStartRef.current = null;
     } else if (annotationTool === "text" && textDragStartRef.current) {
-      const rect = normalizeCanvasRect(textDragStartRef.current, endPoint, DEFAULT_TEXT_BOX_WIDTH, DEFAULT_TEXT_BOX_HEIGHT);
-      const id = `text_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      pushEditorUndoSnapshot();
-      setAnnotationTextBoxes((current) => [...current, {
-        id,
-        ...rect,
-        text: "",
-        color: annotationColor,
-        fontSize: annotationTextSize,
-        bold: isAnnotationTextBold
-      }]);
-      setActiveAnnotationTextBoxId(id);
+      const rawRect = normalizeCanvasRect(textDragStartRef.current, endPoint, 0, 0);
+      const thresholdX = canvasUnitsForCssPixels(12, "x");
+      const thresholdY = canvasUnitsForCssPixels(12, "y");
+      if (rawRect.width >= thresholdX && rawRect.height >= thresholdY) {
+        const minWidth = canvasUnitsForCssPixels(MIN_TEXT_BOX_SIZE, "x");
+        const minHeight = canvasUnitsForCssPixels(MIN_TEXT_BOX_SIZE, "y");
+        const rect = normalizeCanvasRect(textDragStartRef.current, endPoint, minWidth, minHeight);
+        const id = `text_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        pushEditorUndoSnapshot();
+        const box: AnnotationTextBox = {
+          id,
+          order: nextAnnotationOrder(),
+          ...rect,
+          text: "",
+          color: annotationColor,
+          fontSize: canvasUnitsForCssPixels(annotationTextSize, "y"),
+          bold: isAnnotationTextBold
+        };
+        setAnnotationTextBoxes((current) => [...current, box]);
+        setActiveAnnotationTextBoxId(id);
+        window.requestAnimationFrame(() => {
+          const editor = document.querySelector<HTMLTextAreaElement>(`[data-annotation-text-box-id="${id}"]`);
+          editor?.focus();
+        });
+      }
       setDraftTextRect(null);
       textDragStartRef.current = null;
+    } else if (annotationLastPointRef.current) {
+      commitAnnotationDrawingLayer();
     }
+    isAnnotationPointerActiveRef.current = false;
     setIsDrawingAnnotation(false);
     annotationLastPointRef.current = null;
+  }
+
+  function clearAnnotationScratchCanvas() {
+    const canvas = annotationCanvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function commitAnnotationDrawingLayer() {
+    const canvas = annotationCanvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    setAnnotationDrawingLayers((current) => [
+      ...current,
+      {
+        id: `draw_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        order: nextAnnotationOrder(),
+        dataUrl
+      }
+    ]);
+    clearAnnotationScratchCanvas();
+    setHasAnnotationMarks(true);
   }
 
   function drawAnnotationLine(from: CanvasPoint, to: CanvasPoint) {
@@ -3255,7 +3804,7 @@ export function App() {
     if (!canvas || !context) return;
     context.save();
     context.strokeStyle = annotationColor;
-    context.lineWidth = annotationSize * (window.devicePixelRatio || 1) * ((from.pressure + to.pressure) / 2);
+    context.lineWidth = canvasUnitsForCssPixels(annotationSize, "x") * ((from.pressure + to.pressure) / 2);
     context.lineCap = "round";
     context.lineJoin = "round";
     context.beginPath();
@@ -3267,14 +3816,13 @@ export function App() {
 
   function clearAnnotations() {
     pushEditorUndoSnapshot();
-    const canvas = annotationCanvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
-    context.clearRect(0, 0, canvas.width, canvas.height);
+    clearAnnotationScratchCanvas();
+    setAnnotationDrawingLayers([]);
     setHasAnnotationMarks(false);
     setAnnotationTextBoxes([]);
     setActiveAnnotationTextBoxId(null);
     setDraftTextRect(null);
+    annotationOrderRef.current = 0;
   }
 
   function updateAnnotationTextBox(id: string, patch: Partial<AnnotationTextBox>) {
@@ -3288,7 +3836,7 @@ export function App() {
 
   function applyAnnotationTextSize(fontSize: number) {
     setAnnotationTextSize(fontSize);
-    if (activeAnnotationTextBoxId) updateAnnotationTextBox(activeAnnotationTextBoxId, { fontSize });
+    if (activeAnnotationTextBoxId) updateAnnotationTextBox(activeAnnotationTextBoxId, { fontSize: canvasUnitsForCssPixels(fontSize, "y") });
   }
 
   function toggleAnnotationTextBold() {
@@ -3301,25 +3849,29 @@ export function App() {
 
   function cssRectForCanvasRect(rect: CanvasRect): React.CSSProperties {
     const canvas = annotationCanvasRef.current;
-    const host = resultCanvasRef.current;
-    const hostRect = host?.getBoundingClientRect();
-    const scaleX = canvas && hostRect ? hostRect.width / canvas.width : 1;
-    const scaleY = canvas && hostRect ? hostRect.height / canvas.height : 1;
+    const width = canvas?.width || 1;
+    const height = canvas?.height || 1;
     return {
-      left: `${rect.x * scaleX}px`,
-      top: `${rect.y * scaleY}px`,
-      width: `${rect.width * scaleX}px`,
-      height: `${rect.height * scaleY}px`
+      left: `${(rect.x / width) * 100}%`,
+      top: `${(rect.y / height) * 100}%`,
+      width: `${(rect.width / width) * 100}%`,
+      height: `${(rect.height / height) * 100}%`
     };
   }
 
-  function drawWrappedText(context: CanvasRenderingContext2D, box: AnnotationTextBox) {
+  function cssSizeForCanvasUnits(canvasPixels: number): string {
     const canvas = annotationCanvasRef.current;
-    const host = resultCanvasRef.current;
-    const hostRect = host?.getBoundingClientRect();
-    const scale = canvas && hostRect ? canvas.width / hostRect.width : (window.devicePixelRatio || 1);
-    const fontSize = box.fontSize * scale;
-    const padding = 8 * scale;
+    if (!canvas?.width) return `${canvasPixels}px`;
+    return `${(canvasPixels / canvas.width) * 100}cqw`;
+  }
+
+  function textBoxDisplayFontSize(box: AnnotationTextBox): number {
+    return Math.max(8, cssPixelsForCanvasUnits(box.fontSize, "y"));
+  }
+
+  function drawWrappedText(context: CanvasRenderingContext2D, box: AnnotationTextBox) {
+    const fontSize = Math.max(1, box.fontSize);
+    const padding = Math.max(2, fontSize / 3);
     const lineHeight = fontSize * 1.25;
     const maxWidth = Math.max(1, box.width - padding * 2);
     const maxLines = Math.max(1, Math.floor((box.height - padding * 2) / lineHeight));
@@ -3353,16 +3905,57 @@ export function App() {
     context.restore();
   }
 
-  function drawAnnotationTextBoxes(context: CanvasRenderingContext2D) {
-    for (const box of annotationTextBoxes) {
-      if (!box.text.trim()) continue;
-      drawWrappedText(context, box);
-    }
+  function annotationLayerStyle(order: number): React.CSSProperties {
+    return { zIndex: 20 + order };
   }
 
-  function editedFileName(suffix = "edited"): string {
-    const baseName = activeImage?.fileName.replace(/\.[^.]+$/, "") || "CrossGen";
-    return `${baseName}-${suffix}.png`;
+  function pruneEmptyAnnotationTextBox(id: string) {
+    setAnnotationTextBoxes((current) => current.filter((box) => box.id !== id || box.text.trim().length > 0));
+    setActiveAnnotationTextBoxId((current) => (current === id ? null : current));
+  }
+
+  function discardEmptyAnnotationTextBoxes() {
+    setAnnotationTextBoxes((current) => current.filter((box) => box.text.trim().length > 0));
+    setActiveAnnotationTextBoxId((current) => {
+      const activeBox = annotationTextBoxes.find((box) => box.id === current);
+      return activeBox?.text.trim() ? current : null;
+    });
+  }
+
+  function startTextBoxResize(event: React.PointerEvent<HTMLElement>, box: AnnotationTextBox) {
+    event.preventDefault();
+    event.stopPropagation();
+    pushEditorUndoSnapshot();
+    setActiveAnnotationTextBoxId(box.id);
+    setAnnotationColor(box.color);
+    setAnnotationTextSize(Math.round(textBoxDisplayFontSize(box)));
+    setIsAnnotationTextBold(box.bold);
+    textResizeRef.current = {
+      id: box.id,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: box.width,
+      startHeight: box.height
+    };
+  }
+
+  function extensionForImageMime(mimeType = "image/png"): string {
+    if (mimeType === "image/jpeg") return "jpg";
+    if (mimeType === "image/webp") return "webp";
+    return "png";
+  }
+
+  function exportMimeForGalleryAsset(asset?: GalleryAsset): string {
+    const extension = (asset?.fileName ?? asset?.originalName ?? "").toLowerCase().split(".").pop();
+    if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+    if (extension === "webp") return "image/webp";
+    return "image/png";
+  }
+
+  function editedFileName(suffix = "edited", mimeType = "image/png"): string {
+    const sourceName = activeGalleryAsset?.originalName ?? activeImage?.fileName ?? "CrossGen";
+    const baseName = sourceName.replace(/\.[^.]+$/, "") || "CrossGen";
+    return `${baseName}-${suffix}.${extensionForImageMime(mimeType)}`;
   }
 
   function imageLoadError(): Error {
@@ -3371,6 +3964,9 @@ export function App() {
 
   async function loadPreviewImage(source: string): Promise<HTMLImageElement> {
     const image = new Image();
+    if (/^(?:https?:|image2tools-asset:)/i.test(source)) {
+      image.crossOrigin = "anonymous";
+    }
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve();
       image.onerror = () => reject(imageLoadError());
@@ -3380,57 +3976,103 @@ export function App() {
     return image;
   }
 
-  async function getRenderablePreviewImage(): Promise<HTMLImageElement> {
-    const renderedImage = annotationImageRef.current;
-    if (
-      renderedImage?.complete &&
-      ((renderedImage.naturalWidth || renderedImage.width) > 0) &&
-      ((renderedImage.naturalHeight || renderedImage.height) > 0)
-    ) {
-      return renderedImage;
+  async function getExportablePreviewImage(source: string): Promise<HTMLImageElement> {
+    try {
+      return await loadPreviewImage(source);
+    } catch (error) {
+      const renderedImage = annotationImageRef.current;
+      if (
+        renderedImage?.complete &&
+        ((renderedImage.naturalWidth || renderedImage.width) > 0) &&
+        ((renderedImage.naturalHeight || renderedImage.height) > 0)
+      ) {
+        return renderedImage;
+      }
+      throw error;
     }
-    if (!activePreviewSource) throw imageLoadError();
-    return loadPreviewImage(activePreviewSource);
   }
 
   async function renderEditedPreviewCanvas(): Promise<HTMLCanvasElement> {
-    const annotationCanvas = annotationCanvasRef.current;
-    if (!activePreviewSource || !annotationCanvas) throw imageLoadError();
+    if (!activePreviewSource) throw imageLoadError();
     resizeAnnotationCanvas();
-    const image = await getRenderablePreviewImage();
+    const image = await getExportablePreviewImage(activePreviewSource);
     const output = document.createElement("canvas");
-    output.width = annotationCanvas.width;
-    output.height = annotationCanvas.height;
-    const context = output.getContext("2d");
-    if (!context) throw imageLoadError();
     const imageWidth = image.naturalWidth || image.width;
     const imageHeight = image.naturalHeight || image.height;
     if (!imageWidth || !imageHeight) throw imageLoadError();
-    const imageRatio = imageWidth / imageHeight;
-    const canvasRatio = output.width / output.height;
-    const drawWidth = canvasRatio > imageRatio ? output.height * imageRatio : output.width;
-    const drawHeight = canvasRatio > imageRatio ? output.height : output.width / imageRatio;
-    const x = (output.width - drawWidth) / 2;
-    const y = (output.height - drawHeight) / 2;
+    output.width = imageWidth;
+    output.height = imageHeight;
+    const context = output.getContext("2d");
+    if (!context) throw imageLoadError();
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, output.width, output.height);
-    context.drawImage(image, x, y, drawWidth, drawHeight);
-    if (hasAnnotationMarks) context.drawImage(annotationCanvas, 0, 0);
-    drawAnnotationTextBoxes(context);
+    context.drawImage(image, 0, 0, output.width, output.height);
+    const layers = [
+      ...annotationDrawingLayers.map((layer) => ({ kind: "drawing" as const, order: layer.order, layer })),
+      ...annotationTextBoxes
+        .filter((box) => box.text.trim())
+        .map((box) => ({ kind: "text" as const, order: box.order, box }))
+    ].sort((a, b) => a.order - b.order);
+
+    for (const item of layers) {
+      if (item.kind === "drawing") {
+        const layerImage = await loadPreviewImage(item.layer.dataUrl);
+        context.drawImage(layerImage, 0, 0, output.width, output.height);
+      } else {
+        drawWrappedText(context, item.box);
+      }
+    }
     return output;
   }
 
   async function downloadEditedPreview() {
     try {
+      discardEmptyAnnotationTextBoxes();
       const output = await renderEditedPreviewCanvas();
-      const link = document.createElement("a");
-      link.href = output.toDataURL("image/png");
-      link.download = editedFileName();
-      link.click();
+      await downloadCanvasAsImage(output, "edited");
       flashButton("download:edited");
-      setNotice({ kind: "success", text: copy.editedDownloadStarted });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function downloadCurrentPreview() {
+    if (isCroppingPreview && cropSelection) {
+      try {
+        const output = await renderCropSelectionCanvas();
+        await downloadCanvasAsImage(output, "cropped");
+        flashButton("download:edited");
+      } catch (error) {
+        setNotice({ kind: "error", text: normalizeNotice(error) });
+      }
+      return;
+    }
+    if (hasEditedPreviewChanges) {
+      await downloadEditedPreview();
+      return;
+    }
+    await downloadAsset(activeImage);
+  }
+
+  async function downloadCanvasAsImage(output: HTMLCanvasElement, suffix: string) {
+    const dataUrl = output.toDataURL("image/png");
+    const suggestedName = editedFileName(suffix);
+    if (bridge) {
+      const savedPath = await bridge.downloadEditedImage({
+        dataUrl,
+        suggestedName
+      });
+      if (savedPath) {
+        setNotice({ kind: "success", text: copy.notices.savedTo(savedPath) });
+      }
+    } else {
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = suggestedName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setNotice({ kind: "success", text: copy.editedDownloadStarted });
     }
   }
 
@@ -3440,15 +4082,149 @@ export function App() {
       return;
     }
     try {
+      discardEmptyAnnotationTextBoxes();
       const output = await renderEditedPreviewCanvas();
+      if (activeGalleryAsset) {
+        openGallerySaveChoice(output, activeGalleryAsset, "edited");
+        return;
+      }
       const galleryAsset = await bridge.addEditedImageToGallery({
         dataUrl: output.toDataURL("image/png"),
         originalName: editedFileName(),
-        folderId: historyGalleryTargetFolderId
+        folderId: historyGalleryTargetFolderId,
+        tags: activeJob ? historyGalleryTags(activeJob) : []
       });
-      setSnapshot((current) => ({ ...current, galleryAssets: [galleryAsset, ...current.galleryAssets] }));
+      if (galleryAsset) mergeGalleryAssetsIntoSnapshot([galleryAsset]);
       flashButton("gallery:edited");
-      setNotice({ kind: "success", text: copy.galleryAdded });
+      setNotice({ kind: galleryAsset ? "success" : "info", text: galleryAsset ? copy.galleryAdded : copy.galleryAddCanceled });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function saveCurrentPreviewToGallery() {
+    if (isCroppingPreview && cropSelection) {
+      await saveCropSelectionToGallery();
+      return;
+    }
+    if (hasEditedPreviewChanges) {
+      await saveEditedPreviewToGallery();
+      return;
+    }
+    if (activeGalleryAsset) {
+      setNotice({ kind: "info", text: copy.galleryAlreadyInGallery });
+      return;
+    }
+    if (activeImage) {
+      await addHistoryAssetToGallery(activeImage);
+      flashButton("gallery:current");
+    }
+  }
+
+  async function renderCropSelectionCanvas(): Promise<HTMLCanvasElement> {
+    if (!cropSelection || cropSelection.width < 4 || cropSelection.height < 4) throw imageLoadError();
+    const sourceCanvas = await renderEditedPreviewCanvas();
+    const cropCanvas = document.createElement("canvas");
+    cropCanvas.width = Math.max(1, Math.round(cropSelection.width));
+    cropCanvas.height = Math.max(1, Math.round(cropSelection.height));
+    const context = cropCanvas.getContext("2d");
+    if (!context) throw imageLoadError();
+    if (cropSelection.shape === "ellipse") {
+      context.save();
+      context.beginPath();
+      context.ellipse(cropCanvas.width / 2, cropCanvas.height / 2, cropCanvas.width / 2, cropCanvas.height / 2, 0, 0, Math.PI * 2);
+      context.clip();
+    }
+    context.drawImage(
+      sourceCanvas,
+      cropSelection.x,
+      cropSelection.y,
+      cropSelection.width,
+      cropSelection.height,
+      0,
+      0,
+      cropCanvas.width,
+      cropCanvas.height
+    );
+    if (cropSelection.shape === "ellipse") context.restore();
+    return cropCanvas;
+  }
+
+  async function saveCropSelectionToGallery() {
+    if (!bridge) {
+      setNotice({ kind: "error", text: copy.notices.bridgeSelectImages });
+      return;
+    }
+    try {
+      const output = await renderCropSelectionCanvas();
+      if (activeGalleryAsset) {
+        openGallerySaveChoice(output, activeGalleryAsset, "cropped");
+        return;
+      }
+      const galleryAsset = await bridge.addEditedImageToGallery({
+        dataUrl: output.toDataURL("image/png"),
+        originalName: editedFileName("cropped"),
+        folderId: historyGalleryTargetFolderId,
+        tags: activeJob ? historyGalleryTags(activeJob) : []
+      });
+      if (galleryAsset) mergeGalleryAssetsIntoSnapshot([galleryAsset]);
+      flashButton("gallery:cropped");
+      setNotice({ kind: galleryAsset ? "success" : "info", text: galleryAsset ? copy.galleryAdded : copy.galleryAddCanceled });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  function openGallerySaveChoice(output: HTMLCanvasElement, asset: GalleryAsset, suffix: string) {
+    const mimeType = exportMimeForGalleryAsset(asset);
+    setGallerySaveChoiceDialog({
+      asset,
+      dataUrl: output.toDataURL(mimeType),
+      suggestedName: editedFileName(suffix, mimeType)
+    });
+  }
+
+  async function replaceActiveGalleryImage() {
+    if (!bridge || !gallerySaveChoiceDialog) return;
+    try {
+      const updated = await bridge.replaceGalleryAssetImage(gallerySaveChoiceDialog.asset.id, {
+        dataUrl: gallerySaveChoiceDialog.dataUrl,
+        originalName: gallerySaveChoiceDialog.asset.originalName,
+        folderId: gallerySaveChoiceDialog.asset.folderId ?? null,
+        tags: gallerySaveChoiceDialog.asset.tags
+      });
+      setSnapshot((current) => ({ ...current, galleryAssets: current.galleryAssets.map((asset) => asset.id === updated.id ? updated : asset) }));
+      setActiveGalleryAssetId(updated.id);
+      setGallerySaveChoiceDialog(null);
+      setEditedImageDataUrl(null);
+      setPreviewMode("idle");
+      setCropSelection(null);
+      flashButton("gallery:edited");
+      setNotice({ kind: "success", text: copy.galleryReplaced });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function saveActiveGalleryImageAsCopy() {
+    if (!bridge || !gallerySaveChoiceDialog) return;
+    try {
+      const galleryAsset = await bridge.addEditedImageToGallery({
+        dataUrl: gallerySaveChoiceDialog.dataUrl,
+        originalName: gallerySaveChoiceDialog.suggestedName,
+        folderId: gallerySaveChoiceDialog.asset.folderId ?? null,
+        tags: gallerySaveChoiceDialog.asset.tags
+      });
+      if (galleryAsset) {
+        mergeGalleryAssetsIntoSnapshot([galleryAsset]);
+        setActiveGalleryAssetId(galleryAsset.id);
+      }
+      setGallerySaveChoiceDialog(null);
+      setEditedImageDataUrl(null);
+      setPreviewMode("idle");
+      setCropSelection(null);
+      flashButton("gallery:edited");
+      setNotice({ kind: galleryAsset ? "success" : "info", text: galleryAsset ? copy.gallerySavedAsCopy : copy.galleryAddCanceled });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -3458,35 +4234,14 @@ export function App() {
     if (!cropSelection || cropSelection.width < 4 || cropSelection.height < 4) return;
     try {
       pushEditorUndoSnapshot();
-      const sourceCanvas = await renderEditedPreviewCanvas();
-      const cropCanvas = document.createElement("canvas");
-      cropCanvas.width = Math.max(1, Math.round(cropSelection.width));
-      cropCanvas.height = Math.max(1, Math.round(cropSelection.height));
-      const context = cropCanvas.getContext("2d");
-      if (!context) throw imageLoadError();
-      if (cropSelection.shape === "ellipse") {
-        context.save();
-        context.beginPath();
-        context.ellipse(cropCanvas.width / 2, cropCanvas.height / 2, cropCanvas.width / 2, cropCanvas.height / 2, 0, 0, Math.PI * 2);
-        context.clip();
-      }
-      context.drawImage(
-        sourceCanvas,
-        cropSelection.x,
-        cropSelection.y,
-        cropSelection.width,
-        cropSelection.height,
-        0,
-        0,
-        cropCanvas.width,
-        cropCanvas.height
-      );
-      if (cropSelection.shape === "ellipse") context.restore();
+      const cropCanvas = await renderCropSelectionCanvas();
       setEditedImageDataUrl(cropCanvas.toDataURL("image/png"));
       setCropSelection(null);
+      setAnnotationDrawingLayers([]);
       setAnnotationTextBoxes([]);
       setActiveAnnotationTextBoxId(null);
       setHasAnnotationMarks(false);
+      annotationOrderRef.current = 0;
       window.requestAnimationFrame(() => resizeAnnotationCanvas(true));
       setNotice({ kind: "success", text: copy.cropApplied });
     } catch (error) {
@@ -3500,7 +4255,7 @@ export function App() {
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
-      assetId: asset.id,
+      asset,
       jobPrompt
     });
   }
@@ -3511,9 +4266,20 @@ export function App() {
 
   async function handleContextMenuSaveImage() {
     if (!contextMenu) return;
-    const asset = activeImage?.id === contextMenu.assetId ? activeImage : undefined;
+    const asset = contextMenu.asset;
     closeContextMenu();
+    if (asset && hasEditedPreviewChanges) {
+      await downloadEditedPreview();
+      return;
+    }
     await downloadAsset(asset);
+  }
+
+  async function handleContextMenuCopyPath() {
+    if (!contextMenu) return;
+    const path = contextMenu.asset.path;
+    closeContextMenu();
+    await copyImagePath(path, `copy:path:${contextMenu.asset.id}`);
   }
 
   async function handleContextMenuCopyPrompt() {
@@ -3547,11 +4313,14 @@ export function App() {
     setAnnotationTool("draw");
     setEditedImageDataUrl(null);
     setEditorUndoStack([]);
+    setAnnotationDrawingLayers([]);
     setAnnotationTextBoxes([]);
     setActiveAnnotationTextBoxId(null);
     setDraftTextRect(null);
     setCropSelection(null);
     setHasAnnotationMarks(false);
+    setIsAnnotationColorPickerOpen(false);
+    annotationOrderRef.current = 0;
   }, [activeImage?.id, activeImageSource]);
 
   useEffect(() => {
@@ -3654,6 +4423,37 @@ export function App() {
       document.removeEventListener("keydown", handleEscape);
     };
   }, [galleryAssetContextMenu, galleryFolderContextMenu, isGalleryFolderMenuOpen]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const resizeState = textResizeRef.current;
+      const canvas = annotationCanvasRef.current;
+      const host = annotationFrameRef.current;
+      const hostRect = host?.getBoundingClientRect();
+      if (!resizeState || !canvas || !hostRect) return;
+      const scaleX = hostRect.width > 0 ? canvas.width / hostRect.width : 1;
+      const scaleY = hostRect.height > 0 ? canvas.height / hostRect.height : 1;
+      setAnnotationTextBoxes((current) => current.map((box) => {
+        if (box.id !== resizeState.id) return box;
+        return {
+          ...box,
+          width: clamp(resizeState.startWidth + (event.clientX - resizeState.startX) * scaleX, canvasUnitsForCssPixels(MIN_TEXT_BOX_SIZE, "x"), Math.max(canvasUnitsForCssPixels(MIN_TEXT_BOX_SIZE, "x"), canvas.width - box.x)),
+          height: clamp(resizeState.startHeight + (event.clientY - resizeState.startY) * scaleY, canvasUnitsForCssPixels(MIN_TEXT_BOX_SIZE, "y"), Math.max(canvasUnitsForCssPixels(MIN_TEXT_BOX_SIZE, "y"), canvas.height - box.y))
+        };
+      }));
+    };
+    const handlePointerUp = () => {
+      textResizeRef.current = null;
+    };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+  }, []);
 
   useEffect(() => {
     if (!galleryFolderDialog) return;
@@ -4001,6 +4801,124 @@ export function App() {
     </div>
   );
 
+  function renderBatchTagMenu(target: BatchTagTarget, embedded = false) {
+    const tags = globalTagOptions;
+    const selectedItems = target === "history" ? selectedHistoryJobs : selectedGalleryAssets;
+    return (
+      <div
+        className={embedded ? "batch-tag-panel" : "batch-tag-menu"}
+        role="menu"
+        aria-label={copy.tagManager}
+        onMouseMove={embedded ? undefined : movePreviewToolbarTowardPointer}
+        onMouseLeave={embedded ? undefined : resetPreviewToolbarDrift}
+      >
+        <div className="batch-tag-menu-title">
+          <Tags size={14} />
+          <span>{copy.batchAddTags}</span>
+        </div>
+        <div className="batch-tag-options">
+          {tags.length > 0 ? tags.map((tag) => {
+            const isApplied = selectedItems.length > 0 && selectedItems.every((item) => item.tags.includes(tag));
+            return (
+              <button
+                key={tag}
+                type="button"
+                className={isApplied ? "active" : undefined}
+                onClick={() => void applyBatchTag(target, tag)}
+                role="menuitem"
+              >
+                {tag}
+              </button>
+            );
+          }) : <span className="batch-tag-empty">{copy.noTagsYet}</span>}
+        </div>
+        <form
+          className="batch-tag-new"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void applyBatchTag(target, batchTagInput);
+          }}
+        >
+          <input
+            value={batchTagInput}
+            onChange={(event) => setBatchTagInput(event.target.value)}
+            placeholder={copy.newTagPlaceholder}
+            aria-label={copy.newTagPlaceholder}
+          />
+          <button type="submit" className="icon-button" disabled={!batchTagInput.trim()} aria-label={copy.addTag} data-tooltip={copy.addTag}>
+            <Plus size={14} />
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  function renderTagManagerMenu() {
+    return (
+      <div
+        className="batch-tag-menu tag-manager-menu"
+        role="menu"
+        aria-label={copy.tagManager}
+        onMouseMove={movePreviewToolbarTowardPointer}
+        onMouseLeave={resetPreviewToolbarDrift}
+      >
+        {canTagCurrentSelection && (
+          <div className="tag-manager-section">
+            {renderBatchTagMenu(selectedTagTarget, true)}
+          </div>
+        )}
+        <div className="batch-tag-menu-title">
+          <Tags size={14} />
+          <span>{copy.tagManager}</span>
+        </div>
+        <div className="tag-manager-list">
+          {managedTagOptions.length > 0 ? managedTagOptions.map((tag) => {
+            const draft = tagRenameDrafts[tag] ?? tag;
+            return (
+              <div key={tag} className="tag-manager-row">
+                <input
+                  value={draft}
+                  onChange={(event) => setTagRenameDrafts((current) => ({ ...current, [tag]: event.target.value }))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void renameTagEverywhere(tag, draft);
+                    }
+                  }}
+                  aria-label={copy.tagRename}
+                />
+                <button type="button" className="icon-button" onClick={() => void renameTagEverywhere(tag, draft)} aria-label={copy.tagRename} data-tooltip={copy.tagRename}>
+                  <Save size={13} />
+                </button>
+                <button type="button" className="icon-button danger" onClick={() => void deleteTagEverywhere(tag)} aria-label={copy.tagDelete} data-tooltip={copy.tagDelete}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            );
+          }) : <span className="batch-tag-empty">{copy.noTagsYet}</span>}
+        </div>
+      </div>
+    );
+  }
+
+  function renderHistoryGalleryTargetMenu(result: ImageAsset | undefined, job: GenerationJob) {
+    if (!result || historyGalleryMenuJobId !== job.id) return null;
+    return (
+      <div className="history-gallery-target-menu" role="menu" aria-label={copy.galleryAddTargetFolder}>
+        <button type="button" onClick={() => void addHistoryAssetToGallery(result, null, job)} role="menuitem">
+          <Folder size={14} />
+          <span>{copy.galleryUncategorized}</span>
+        </button>
+        {snapshot.galleryFolders.map((folder) => (
+          <button key={folder.id} type="button" onClick={() => void addHistoryAssetToGallery(result, folder.id, job)} role="menuitem">
+            <FolderOpen size={14} />
+            <span>{galleryFolderDisplayPath(folder)}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   const renderGalleryTreeRows = (parentId: string | null, depth = 0): React.ReactNode[] => {
     const folders = galleryFoldersByParent.get(parentId) ?? [];
     return folders.flatMap((folder) => {
@@ -4067,13 +4985,18 @@ export function App() {
 
   return (
     <main
-      className={isSidebarCompact ? "app-shell sidebar-collapsed" : "app-shell"}
+      className={[
+        "app-shell",
+        isSidebarCompact ? "sidebar-collapsed" : "",
+        isRightRailCollapsed ? "right-rail-collapsed" : ""
+      ].filter(Boolean).join(" ")}
       style={
         {
           "--sidebar-width": `${isSidebarCompact ? COMPACT_SIDEBAR_WIDTH : sidebarWidth}px`,
-          "--history-width": `${historyWidth}px`,
+          "--history-width": `${isRightRailCollapsed ? RIGHT_RAIL_COLLAPSED_WIDTH : historyWidth}px`,
           "--compact-history-width": `${Math.min(historyWidth, COMPACT_HISTORY_WIDTH)}px`,
-          "--preview-ratio": previewPanelRatio
+          "--preview-ratio": previewPanelRatio,
+          "--rail-collapse-button-y": `${railCollapseButtonY}px`
         } as React.CSSProperties
       }
     >
@@ -4084,16 +5007,19 @@ export function App() {
             <h1>CrossGen</h1>
             <p className="muted">{copy.tagline}</p>
           </div>
-          <button
-            type="button"
-            className="icon-button sidebar-collapse-button"
-            onClick={() => setIsSidebarCollapsed((current) => !current)}
-            aria-label={isSidebarCompact ? copy.show : copy.hide}
-            data-tooltip={isSidebarCompact ? copy.show : copy.hide}
-          >
-            {isSidebarCompact ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
         </header>
+
+        <button
+          type="button"
+          className={`icon-button sidebar-collapse-button ${isSidebarCompact ? "collapsed" : ""}`}
+          onClick={() => setIsSidebarCollapsed((current) => !current)}
+          onMouseMove={movePreviewToolbarTowardPointer}
+          onMouseLeave={resetPreviewToolbarDrift}
+          aria-label={isSidebarCompact ? copy.show : copy.hide}
+          data-tooltip={isSidebarCompact ? copy.show : copy.hide}
+        >
+          <ChevronLeft size={16} />
+        </button>
 
         <div className="sidebar-mini-stack" aria-label={copy.parameters}>
           <button type="button" className="icon-button" onClick={() => openApiConfigDialog(activeConfig)} aria-label={copy.provider} data-tooltip={copy.provider}>
@@ -4105,6 +5031,8 @@ export function App() {
           <button type="button" className="icon-button" onClick={() => setShowAdvanced((current) => !current)} aria-label={copy.parameters} data-tooltip={copy.parameters}>
             <SlidersHorizontal size={17} />
           </button>
+        </div>
+        <div className="sidebar-mini-utility">
           <button type="button" className="icon-button" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
             <span className="language-short">{language === "en" ? "En" : "简"}</span>
           </button>
@@ -4244,7 +5172,7 @@ export function App() {
           <span>{notice.text}</span>
         </section>
 
-        <section className="sidebar-utility-bar sidebar-bottom">
+        <section className="sidebar-utility-bar sidebar-bottom" ref={sidebarUtilityBarRef}>
           <div className="sidebar-utility-left">
             <button type="button" className="language-pill" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
               {language === "en" ? "En" : "简"}
@@ -4260,7 +5188,7 @@ export function App() {
             )}
           </div>
           <div className="sidebar-utility-version">
-            <span className="connection-badge version-status-badge" data-status={updateCheck?.status ?? "idle"} title={formatUpdateStatusShort(updateCheck)}>
+            <span className="connection-badge version-status-badge" data-status={versionBadgeStatus(updateCheck)} title={formatUpdateStatusShort(updateCheck)}>
               {isCheckingUpdate ? (
                 <Loader2 className="spin" size={12} />
               ) : updateCheck?.status === "error" ? (
@@ -4309,122 +5237,252 @@ export function App() {
                     onPointerUp={handlePreviewPanEnd}
                     onPointerCancel={handlePreviewPanEnd}
                   >
-                    <img
-                      ref={annotationImageRef}
-                      src={activePreviewSource}
-                      alt={copy.generatedResult}
-                      draggable={false}
+                    <div
+                      ref={annotationFrameRef}
+                      className="preview-image-frame"
                       style={{ width: `${previewZoom * 100}%`, transform: `translate(${previewPan.x}px, ${previewPan.y}px)` }}
-                      onContextMenu={(e) => handleImageContextMenu(e, activeImage, activeJob?.prompt ?? '')}
-                    />
+                    >
+                      <img
+                        ref={annotationImageRef}
+                        src={activePreviewSource}
+                        alt={copy.generatedResult}
+                        crossOrigin={/^(?:https?:|image2tools-asset:)/i.test(activePreviewSource) ? "anonymous" : undefined}
+                        draggable={false}
+                        onLoad={() => resizeAnnotationCanvas(true)}
+                        onContextMenu={(e) => handleImageContextMenu(e, activeImage, activeJob?.prompt ?? '')}
+                      />
+                      {annotationDrawingLayers.map((layer) => (
+                        <img
+                          key={layer.id}
+                          className="annotation-drawing-layer"
+                          src={layer.dataUrl}
+                          alt=""
+                          draggable={false}
+                          style={annotationLayerStyle(layer.order)}
+                        />
+                      ))}
+                      <canvas
+                        ref={annotationCanvasRef}
+                        className={[
+                          "annotation-canvas",
+                          isPreviewCanvasInteractive ? "active" : hasEditorOverlay ? "visible" : "",
+                          isCroppingPreview ? "crop-mode" : annotationTool === "text" ? "text-mode" : ""
+                        ].filter(Boolean).join(" ")}
+                        style={{
+                          zIndex: isCroppingPreview || (isEditingPreview && annotationTool === "draw") ? 1000 : 10
+                        }}
+                        onPointerDown={startAnnotation}
+                        onPointerMove={continueAnnotation}
+                        onPointerUp={finishAnnotation}
+                        onPointerCancel={finishAnnotation}
+                      />
+                      {draftTextRect && isEditingPreview && (
+                        <div className="annotation-text-draft" style={cssRectForCanvasRect(draftTextRect)} />
+                      )}
+                      {cropSelection && isCroppingPreview && (
+                        <div
+                          className={`crop-selection ${cropSelection.shape}`}
+                          style={cssRectForCanvasRect(cropSelection)}
+                        />
+                      )}
+                      {annotationTextBoxes.map((box) => (
+                        isEditingPreview ? (
+                          <div
+                            key={box.id}
+                            className={activeAnnotationTextBoxId === box.id ? "annotation-text-box-wrap active" : "annotation-text-box-wrap"}
+                            style={{ ...cssRectForCanvasRect(box), ...annotationLayerStyle(box.order) }}
+                            onPointerDown={(event) => event.stopPropagation()}
+                          >
+                            <textarea
+                              data-annotation-text-box-id={box.id}
+                              className="annotation-text-box-input"
+                              value={box.text}
+                              onFocus={() => {
+                                setActiveAnnotationTextBoxId(box.id);
+                                setAnnotationColor(box.color);
+                                setAnnotationTextSize(Math.round(textBoxDisplayFontSize(box)));
+                                setIsAnnotationTextBold(box.bold);
+                              }}
+                              onBlur={(event) => {
+                                const nextTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+                                if (nextTarget && event.currentTarget.parentElement?.contains(nextTarget)) return;
+                                if (!event.currentTarget.value.trim()) pruneEmptyAnnotationTextBox(box.id);
+                              }}
+                              onChange={(event) => updateAnnotationTextBox(box.id, { text: event.target.value })}
+                              aria-label={copy.textBox}
+                              style={{
+                                color: box.color,
+                                fontSize: cssSizeForCanvasUnits(box.fontSize),
+                                fontWeight: box.bold ? 700 : 400,
+                                padding: cssSizeForCanvasUnits(Math.max(2, box.fontSize / 3))
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="annotation-text-resize-handle"
+                              onPointerDown={(event) => startTextBoxResize(event, box)}
+                              aria-label={language === "zh" ? "调整文本框大小" : "Resize text box"}
+                              data-tooltip={language === "zh" ? "调整文本框大小" : "Resize text box"}
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            key={box.id}
+                            className="annotation-text-box readonly"
+                            style={{
+                              ...cssRectForCanvasRect(box),
+                              ...annotationLayerStyle(box.order),
+                              color: box.color,
+                              fontSize: cssSizeForCanvasUnits(box.fontSize),
+                              fontWeight: box.bold ? 700 : 400,
+                              padding: cssSizeForCanvasUnits(Math.max(2, box.fontSize / 3))
+                            }}
+                          >
+                            {box.text}
+                          </div>
+                        )
+                      ))}
+                    </div>
                   </div>
-                  <div className="preview-control-strip">
-                    {!isPreviewCanvasInteractive && (
+                  <div
+                    className="preview-control-strip"
+                    onMouseMove={movePreviewToolbarTowardPointer}
+                    onMouseLeave={resetPreviewToolbarDrift}
+                  >
+                    <div className="preview-primary-actions" aria-label={copy.resultViewer}>
                       <button
                         type="button"
-                        className={activeImage ? buttonFeedbackClass(`download:${activeImage.id}`) : "icon-button"}
+                        className={isEditingPreview ? "icon-button active" : "icon-button"}
+                        disabled={!activePreviewSource}
+                        onClick={() => {
+                          if (isEditingPreview) {
+                            discardEmptyAnnotationTextBoxes();
+                            setPreviewMode("idle");
+                            setDraftTextRect(null);
+                            return;
+                          }
+                          setPreviewMode("edit");
+                          setCropSelection(null);
+                          resizeAnnotationCanvas();
+                        }}
+                        aria-label={isEditingPreview ? copy.back : copy.editImage}
+                        data-tooltip={isEditingPreview ? copy.back : copy.editImage}
+                      >
+                        {isEditingPreview ? <ArrowLeft size={16} /> : <Pencil size={16} />}
+                      </button>
+                      <button
+                        type="button"
+                        className={isCroppingPreview ? "icon-button active" : "icon-button"}
+                        disabled={!activePreviewSource}
+                        onClick={() => {
+                          if (isCroppingPreview) {
+                            setPreviewMode("idle");
+                            setCropSelection(null);
+                            return;
+                          }
+                          discardEmptyAnnotationTextBoxes();
+                          setPreviewMode("crop");
+                          setDraftTextRect(null);
+                          resizeAnnotationCanvas();
+                        }}
+                        aria-label={isCroppingPreview ? copy.back : copy.cropImage}
+                        data-tooltip={isCroppingPreview ? copy.back : copy.cropImage}
+                      >
+                        {isCroppingPreview ? <ArrowLeft size={16} /> : <Crop size={16} />}
+                      </button>
+                      <button
+                        type="button"
+                        className={hasEditedPreviewChanges || cropSelection ? buttonFeedbackClass("download:edited") : activeImage ? buttonFeedbackClass(`download:${activeImage.id}`) : "icon-button"}
                         disabled={!activeImage}
-                        onClick={() => downloadAsset(activeImage)}
-                        aria-label={copy.download}
-                        data-tooltip={copy.download}
+                        onClick={() => void downloadCurrentPreview()}
+                        aria-label={hasEditedPreviewChanges || cropSelection ? copy.downloadEditedImage : copy.download}
+                        data-tooltip={hasEditedPreviewChanges || cropSelection ? copy.downloadEditedImage : copy.download}
                       >
                         <Download size={16} />
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      className={isEditingPreview ? "icon-button active" : "icon-button"}
-                      disabled={!activePreviewSource}
-                      onClick={() => {
-                        if (isEditingPreview) {
-                          setPreviewMode("idle");
-                          setDraftTextRect(null);
-                          return;
-                        }
-                        setPreviewMode("edit");
-                        setCropSelection(null);
-                        resizeAnnotationCanvas();
-                      }}
-                      aria-label={isEditingPreview ? copy.back : copy.editImage}
-                      data-tooltip={isEditingPreview ? copy.back : copy.editImage}
-                    >
-                      {isEditingPreview ? <ArrowLeft size={16} /> : <Pencil size={16} />}
-                    </button>
-                    <button
-                      type="button"
-                      className={isCroppingPreview ? "icon-button active" : "icon-button"}
-                      disabled={!activePreviewSource}
-                      onClick={() => {
-                        if (isCroppingPreview) {
-                          setPreviewMode("idle");
-                          setCropSelection(null);
-                          return;
-                        }
-                        setPreviewMode("crop");
-                        setDraftTextRect(null);
-                        resizeAnnotationCanvas();
-                      }}
-                      aria-label={isCroppingPreview ? copy.back : copy.cropImage}
-                      data-tooltip={isCroppingPreview ? copy.back : copy.cropImage}
-                    >
-                      {isCroppingPreview ? <ArrowLeft size={16} /> : <Crop size={16} />}
-                    </button>
-                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(-PREVIEW_ZOOM_STEP)} aria-label={copy.zoomOut} data-tooltip={copy.zoomOut}>
-                      <ZoomOut size={16} />
-                    </button>
-                    <span className="zoom-readout" title={copy.zoomLevel}>{previewZoomPercent}%</span>
-                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(PREVIEW_ZOOM_STEP)} aria-label={copy.zoomIn} data-tooltip={copy.zoomIn}>
-                      <ZoomIn size={16} />
-                    </button>
-                    <button type="button" className="icon-button" disabled={previewZoom === 1 && previewPan.x === 0 && previewPan.y === 0} onClick={resetPreviewView} aria-label={copy.resetZoom} data-tooltip={copy.resetZoom}>
-                      <Maximize2 size={16} />
-                    </button>
+                      <button
+                        type="button"
+                        className={buttonFeedbackClass(isCroppingPreview && cropSelection ? "gallery:cropped" : hasEditedPreviewChanges ? "gallery:edited" : "gallery:current")}
+                        disabled={!activeImage}
+                        onClick={() => void saveCurrentPreviewToGallery()}
+                        aria-label={copy.saveToGallery}
+                        data-tooltip={copy.saveToGallery}
+                      >
+                        <Save size={16} />
+                      </button>
+                    </div>
                     {isEditingPreview && (
-                      <div className="annotation-tools">
-                        <button type="button" className={annotationTool === "draw" ? "icon-button active" : "icon-button"} onClick={() => setAnnotationTool("draw")} aria-label={copy.drawTool} data-tooltip={copy.drawTool}>
+                      <div className="annotation-tools preview-secondary-actions">
+                        <button type="button" className={annotationTool === "draw" ? "icon-button active" : "icon-button"} onClick={() => {
+                          discardEmptyAnnotationTextBoxes();
+                          setAnnotationTool("draw");
+                        }} aria-label={copy.drawTool} data-tooltip={copy.drawTool}>
                           <Brush size={15} />
                         </button>
                         <button type="button" className={annotationTool === "text" ? "icon-button active" : "icon-button"} onClick={() => setAnnotationTool("text")} aria-label={copy.textTool} data-tooltip={copy.textTool}>
                           <Type size={15} />
                         </button>
-                        <div className="annotation-swatches" aria-label={copy.quickColors}>
-                          {ANNOTATION_COLOR_SWATCHES.map((color) => (
-                            <button
-                              key={color}
-                              type="button"
-                              className={annotationColor.toLowerCase() === color.toLowerCase() ? "annotation-swatch active" : "annotation-swatch"}
-                              style={{ background: color }}
-                              onClick={() => applyAnnotationColor(color)}
-                              aria-label={copy.chooseColor(color)}
-                              data-tooltip={copy.chooseColor(color)}
-                            />
-                          ))}
+                        <div className="annotation-color-picker">
+                          <button
+                            type="button"
+                            className="icon-button annotation-color-button"
+                            onClick={() => setIsAnnotationColorPickerOpen((current) => !current)}
+                            aria-label={copy.annotationColor}
+                            data-tooltip={copy.annotationColor}
+                            aria-expanded={isAnnotationColorPickerOpen}
+                          >
+                            <span className="annotation-current-color" style={{ background: annotationColor }} />
+                          </button>
+                          {isAnnotationColorPickerOpen && (
+                            <div className="annotation-color-popover">
+                              <input
+                                type="color"
+                                value={annotationColor}
+                                onChange={(event) => applyAnnotationColor(event.target.value)}
+                                aria-label={copy.annotationColor}
+                              />
+                              <div className="annotation-swatches" aria-label={copy.quickColors}>
+                                {ANNOTATION_COLOR_SWATCHES.map((color) => (
+                                  <button
+                                    key={color}
+                                    type="button"
+                                    className={annotationColor.toLowerCase() === color.toLowerCase() ? "annotation-swatch active" : "annotation-swatch"}
+                                    style={{ background: color }}
+                                    onClick={() => {
+                                      applyAnnotationColor(color);
+                                      setIsAnnotationColorPickerOpen(false);
+                                    }}
+                                    aria-label={copy.chooseColor(color)}
+                                    data-tooltip={copy.chooseColor(color)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <input
-                          type="color"
-                          value={annotationColor}
-                          onChange={(event) => applyAnnotationColor(event.target.value)}
-                          aria-label={copy.annotationColor}
-                        />
                         {annotationTool === "draw" ? (
-                          <input
-                            type="range"
-                            min="2"
-                            max="32"
-                            value={annotationSize}
-                            onChange={(event) => setAnnotationSize(Number(event.target.value))}
-                            aria-label={copy.strokeWidth}
-                          />
-                        ) : (
-                          <>
+                          <span className="range-tooltip" data-tooltip={`${copy.strokeWidth}: ${annotationSize}px`}>
                             <input
                               type="range"
-                              min="12"
-                              max="72"
-                              value={annotationTextSize}
-                              onChange={(event) => applyAnnotationTextSize(Number(event.target.value))}
-                              aria-label={copy.textSize}
+                              min="2"
+                              max="32"
+                              value={annotationSize}
+                              onChange={(event) => setAnnotationSize(Number(event.target.value))}
+                              aria-label={copy.strokeWidth}
                             />
+                          </span>
+                        ) : (
+                          <>
+                            <span className="range-tooltip" data-tooltip={`${copy.textSize}: ${annotationTextSize}px`}>
+                              <input
+                                type="range"
+                                min="12"
+                                max="72"
+                                value={annotationTextSize}
+                                onChange={(event) => applyAnnotationTextSize(Number(event.target.value))}
+                                aria-label={copy.textSize}
+                              />
+                            </span>
                             <button type="button" className={isAnnotationTextBold ? "icon-button active" : "icon-button"} onClick={toggleAnnotationTextBold} aria-label={copy.boldText} data-tooltip={copy.boldText}>
                               <Bold size={15} />
                             </button>
@@ -4436,16 +5494,10 @@ export function App() {
                         <button type="button" className="icon-button" onClick={clearAnnotations} aria-label={copy.clearAnnotations} data-tooltip={copy.clearAnnotations}>
                           <Trash2 size={15} />
                         </button>
-                        <button type="button" className={buttonFeedbackClass("gallery:edited")} onClick={() => void saveEditedPreviewToGallery()} aria-label={copy.saveToGallery} data-tooltip={copy.saveToGallery}>
-                          <Save size={15} />
-                        </button>
-                        <button type="button" className={buttonFeedbackClass("download:edited")} onClick={() => void downloadEditedPreview()} aria-label={copy.downloadEditedImage} data-tooltip={copy.downloadEditedImage}>
-                          <Download size={15} />
-                        </button>
                       </div>
                     )}
                     {isCroppingPreview && (
-                      <div className="annotation-tools crop-tools">
+                      <div className="annotation-tools crop-tools preview-secondary-actions">
                         <button type="button" className={cropShape === "rect" ? "icon-button active" : "icon-button"} onClick={() => setCropShape("rect")} aria-label={copy.cropRectangle} data-tooltip={copy.cropRectangle}>
                           <RectangleHorizontal size={15} />
                         </button>
@@ -4455,70 +5507,31 @@ export function App() {
                         <button type="button" className="icon-button" onClick={undoEditorAction} disabled={editorUndoStack.length === 0} aria-label={copy.undo} data-tooltip={copy.undo}>
                           <RotateCcw size={15} />
                         </button>
+                        <button type="button" className={buttonFeedbackClass("gallery:cropped")} onClick={() => void saveCropSelectionToGallery()} disabled={!cropSelection} aria-label={copy.saveCropSelectionToGallery} data-tooltip={copy.saveCropSelectionToGallery}>
+                          <FolderInput size={15} />
+                        </button>
                         <button type="button" className="icon-button" onClick={() => void applyCropSelection()} disabled={!cropSelection} aria-label={copy.applyCrop} data-tooltip={copy.applyCrop}>
                           <CheckCircle2 size={15} />
                         </button>
                       </div>
                     )}
                   </div>
-                  <canvas
-                    ref={annotationCanvasRef}
-                    className={[
-                      "annotation-canvas",
-                      isPreviewCanvasInteractive ? "active" : hasEditorOverlay ? "visible" : "",
-                      isCroppingPreview ? "crop-mode" : annotationTool === "text" ? "text-mode" : ""
-                    ].filter(Boolean).join(" ")}
-                    onPointerDown={startAnnotation}
-                    onPointerMove={continueAnnotation}
-                    onPointerUp={finishAnnotation}
-                    onPointerCancel={finishAnnotation}
-                  />
-                  {draftTextRect && isEditingPreview && (
-                    <div className="annotation-text-draft" style={cssRectForCanvasRect(draftTextRect)} />
-                  )}
-                  {cropSelection && isCroppingPreview && (
-                    <div
-                      className={`crop-selection ${cropSelection.shape}`}
-                      style={cssRectForCanvasRect(cropSelection)}
-                    />
-                  )}
-                  {annotationTextBoxes.map((box) => (
-                    isEditingPreview ? (
-                      <textarea
-                        key={box.id}
-                        className={activeAnnotationTextBoxId === box.id ? "annotation-text-box active" : "annotation-text-box"}
-                        value={box.text}
-                        onFocus={() => {
-                          setActiveAnnotationTextBoxId(box.id);
-                          setAnnotationColor(box.color);
-                          setAnnotationTextSize(box.fontSize);
-                          setIsAnnotationTextBold(box.bold);
-                        }}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onChange={(event) => updateAnnotationTextBox(box.id, { text: event.target.value })}
-                        aria-label={copy.textBox}
-                        style={{
-                          ...cssRectForCanvasRect(box),
-                          color: box.color,
-                          fontSize: `${box.fontSize}px`,
-                          fontWeight: box.bold ? 700 : 400
-                        }}
-                      />
-                    ) : (
-                      <div
-                        key={box.id}
-                        className="annotation-text-box readonly"
-                        style={{
-                          ...cssRectForCanvasRect(box),
-                          color: box.color,
-                          fontSize: `${box.fontSize}px`,
-                          fontWeight: box.bold ? 700 : 400
-                        }}
-                      >
-                        {box.text}
-                      </div>
-                    )
-                  ))}
+                  <div
+                    className="preview-zoom-strip"
+                    onMouseMove={movePreviewToolbarTowardPointer}
+                    onMouseLeave={resetPreviewToolbarDrift}
+                  >
+                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(-PREVIEW_ZOOM_STEP)} aria-label={copy.zoomOut} data-tooltip={copy.zoomOut}>
+                      <ZoomOut size={16} />
+                    </button>
+                    <span className="zoom-readout" title={copy.zoomLevel}>{previewZoomPercent}%</span>
+                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(PREVIEW_ZOOM_STEP)} aria-label={copy.zoomIn} data-tooltip={copy.zoomIn}>
+                      <ZoomIn size={16} />
+                    </button>
+                    <button type="button" className="icon-button" disabled={previewZoom === 1 && previewPan.x === 0 && previewPan.y === 0} onClick={resetPreviewView} aria-label={copy.resetZoom} data-tooltip={copy.resetZoom}>
+                      <Maximize2 size={16} />
+                    </button>
+                  </div>
                 </>
               ) : activeJobError ? (
                 <div className="job-error-panel" role="alert">
@@ -4554,7 +5567,10 @@ export function App() {
             {partialImages.length > 0 && (
               <div className="partial-strip">
                 {partialImages.map((asset, index) => (
-                  <button key={asset.id} type="button" onClick={() => setActiveJob((job) => (job ? { ...job, outputs: [...job.outputs, asset] } : job))}>
+                  <button key={asset.id} type="button" onClick={() => {
+                    setActiveGalleryAssetId(null);
+                    setActiveJob((job) => (job ? { ...job, outputs: [...job.outputs, asset] } : job));
+                  }}>
                     <img src={assetSource(asset)} alt={`${copy.partialImages} ${index + 1}`} />
                     <span>P{index + 1}</span>
                   </button>
@@ -4566,7 +5582,7 @@ export function App() {
           <div
             className="preview-resizer"
             role="separator"
-            aria-label={language === "zh" ? "调整图片预览宽度" : "Resize preview"}
+            aria-label="Resize preview"
             aria-orientation="vertical"
             aria-valuemin={Math.round(MIN_PREVIEW_PANEL_RATIO * 100)}
             aria-valuemax={Math.round(MAX_PREVIEW_PANEL_RATIO * 100)}
@@ -4818,14 +5834,29 @@ export function App() {
         onKeyDown={(event) => resizeHandleKeyDown("history", event)}
       />
 
-      <aside className="history right-rail">
+      <aside className={isRightRailCollapsed ? "history right-rail collapsed" : "history right-rail"}>
+        <button
+          type="button"
+          className={`icon-button right-rail-collapse-button ${isRightRailCollapsed ? "collapsed" : ""}`}
+          onClick={() => setIsRightRailCollapsed((current) => !current)}
+          onMouseMove={movePreviewToolbarTowardPointer}
+          onMouseLeave={resetPreviewToolbarDrift}
+          aria-label={isRightRailCollapsed ? copy.show : copy.hide}
+          data-tooltip={isRightRailCollapsed ? copy.show : copy.hide}
+        >
+          <ChevronRight size={16} />
+        </button>
         <div className="right-rail-tabs" role="tablist" aria-label={copy.library}>
           <button
             type="button"
             role="tab"
             aria-selected={rightRailView === "history"}
             className={rightRailView === "history" ? "active" : undefined}
-            onClick={() => setRightRailView("history")}
+            onClick={() => {
+              setRightRailView("history");
+              setBatchTagMenuTarget(null);
+              setHistoryGalleryMenuJobId(null);
+            }}
           >
             <History size={15} />
             <span>{copy.history}</span>
@@ -4835,7 +5866,11 @@ export function App() {
             role="tab"
             aria-selected={rightRailView === "gallery"}
             className={rightRailView === "gallery" ? "active" : undefined}
-            onClick={() => setRightRailView("gallery")}
+            onClick={() => {
+              setRightRailView("gallery");
+              setBatchTagMenuTarget(null);
+              setHistoryGalleryMenuJobId(null);
+            }}
           >
             <Images size={15} />
             <span>{copy.gallery}</span>
@@ -4884,13 +5919,6 @@ export function App() {
               <div
                 ref={historyListRef}
                 className={`history-list ${historyViewMode} ${isHistoryBatchMode ? "batch-select" : ""}`}
-                onScroll={(event) => {
-                  setHistoryListScrollState({
-                    top: event.currentTarget.scrollTop,
-                    clientHeight: event.currentTarget.clientHeight,
-                    scrollHeight: event.currentTarget.scrollHeight
-                  });
-                }}
               >
                 {filteredHistory.length === 0 ? (
                   <div className="history-empty">{copy.noJobsYet}</div>
@@ -4899,8 +5927,10 @@ export function App() {
                     const result = getBestResult(job);
                     const jobError = getJobError(job);
                     const modelDetails = getHistoryModelDetails(job);
-                    const paramsSummary = isOpenAIImageParams(job.params) ? `${job.params.size} · ${job.params.quality}` : modelDetails.modelDisplayName;
                     const isSelected = selectedHistoryJobIds.has(job.id);
+                    const displayName = historyDisplayName(job);
+                    const systemTag = historySystemTagLabel(job.mode, language);
+                    const isGalleryAdded = historyResultIsInGallery(result);
                     return (
                       <article key={job.id} className={`${activeJob?.id === job.id ? "history-item active" : "history-item"} ${isSelected ? "selected" : ""}`}>
                         {isHistoryBatchMode && (
@@ -4915,7 +5945,11 @@ export function App() {
                         <button
                           type="button"
                           className="history-preview"
-                          onClick={() => setActiveJob(job)}
+                          onClick={() => {
+                            setActiveGalleryAssetId(null);
+                            setActiveJob(job);
+                          }}
+                          onContextMenu={(event) => handleImageContextMenu(event, result, job.prompt)}
                           title={jobError ?? job.status}
                           aria-label={jobError ? `${copy.jobFailed}: ${jobError}` : `${copy.openJob}: ${job.status}`}
                         >
@@ -4936,23 +5970,91 @@ export function App() {
                         </button>
                         <div className="history-copy">
                           <div className="history-meta">
-                            <strong>{modeLabels[job.mode].title}</strong>
-                            <span>{formatDate(job.createdAt)}</span>
-                          </div>
-                          <div className="history-chip-row" aria-label={copy.model}>
-                            <span className="history-chip model-chip" title={modelDetails.modelTitle}>
-                              {modelDetails.modelDisplayName}
+                            <div className="history-name-wrap">
+                              {editingHistoryNameId === job.id ? (
+                                <input
+                                  className="history-name-input"
+                                  value={historyNameDraft}
+                                  onChange={(event) => setHistoryNameDraft(event.target.value)}
+                                  onBlur={() => void saveHistoryName(job)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      void saveHistoryName(job);
+                                    }
+                                    if (event.key === "Escape") {
+                                      event.preventDefault();
+                                      cancelHistoryNameEdit();
+                                    }
+                                  }}
+                                  aria-label={copy.historyImageName}
+                                  autoFocus
+                                />
+                              ) : (
+                                <button type="button" className="history-name-button" onClick={() => beginEditHistoryName(job)} aria-label={copy.historyEditName} data-tooltip={copy.historyEditName}>
+                                  {displayName}
+                                </button>
+                              )}
+                            </div>
+                            <span className="history-date-model">
+                              <span>{formatDate(job.createdAt)}</span>
+                              <span title={modelDetails.modelTitle}>{modelDetails.modelDisplayName}</span>
                             </span>
-                            {modelDetails.providerDisplayName && (
-                              <span className="history-chip provider-chip" title={modelDetails.providerTitle ?? modelDetails.providerDisplayName}>
-                                {modelDetails.providerDisplayName}
-                              </span>
-                            )}
+                          </div>
+                          <div className="history-chip-row history-tag-row" aria-label={copy.historyEditTags}>
+                            <span className="history-chip system-tag" title={copy.historySystemTag}>{systemTag}</span>
+                            {job.tags.map((tag) => (
+                              <span key={tag} className="history-chip">{tag}</span>
+                            ))}
+                            <span className="history-add-tag-anchor">
+                              <button
+                                type="button"
+                                className="history-chip history-add-tag-button"
+                                onClick={() => editHistoryTags(job)}
+                                aria-label={copy.addTag}
+                                data-tooltip={copy.addTag}
+                              >
+                                {copy.addTag}
+                              </button>
+                              {editingHistoryTagsId === job.id && (
+                                <div
+                                  className="history-tag-popover"
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onMouseMove={movePreviewToolbarTowardPointer}
+                                  onMouseLeave={resetPreviewToolbarDrift}
+                                >
+                                  <input
+                                    value={historyTagsInput}
+                                    onChange={(event) => setHistoryTagsInput(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        void saveHistoryTags(job);
+                                      }
+                                      if (event.key === "Escape") {
+                                        event.preventDefault();
+                                        cancelHistoryTagsEdit();
+                                      }
+                                    }}
+                                    placeholder={copy.templateTags}
+                                    aria-label={copy.addTag}
+                                    autoFocus
+                                  />
+                                  <button
+                                    type="button"
+                                    className="icon-button"
+                                    disabled={!historyTagsInput.trim()}
+                                    onClick={() => void saveHistoryTags(job)}
+                                    aria-label={copy.historySaveTags}
+                                    data-tooltip={copy.historySaveTags}
+                                  >
+                                    <Save size={14} />
+                                  </button>
+                                </div>
+                              )}
+                            </span>
                           </div>
                           <p>{job.prompt}</p>
-                          <small>
-                            {job.status} · {paramsSummary} · {formatDuration(job.durationMs)}
-                          </small>
                           {jobError && <p className="history-error">{jobError}</p>}
                         </div>
                         <div className="history-actions">
@@ -4977,31 +6079,25 @@ export function App() {
                           </button>
                           <button
                             type="button"
-                            className={result ? "history-action-button" : "history-action-button"}
+                            className={[
+                              result ? "history-action-button history-gallery-menu-button" : "history-action-button",
+                              isGalleryAdded ? "already-in-gallery" : ""
+                            ].filter(Boolean).join(" ")}
                             disabled={!result}
-                            onClick={() => void addHistoryAssetToGallery(result)}
+                            onClick={() => setHistoryGalleryMenuJobId((current) => current === job.id ? null : job.id)}
                             aria-label={copy.galleryAddHistory}
                             data-tooltip={copy.galleryAddHistory}
+                            aria-expanded={historyGalleryMenuJobId === job.id}
                           >
+                            {isGalleryAdded && <CheckCircle2 className="history-gallery-check" size={12} />}
                             <FolderInput size={15} />
                             <span>{copy.galleryAddHistory}</span>
                           </button>
+                          {renderHistoryGalleryTargetMenu(result, job)}
                           <button type="button" className="history-action-button danger" onClick={() => deleteJob(job.id)} aria-label={copy.delete} data-tooltip={copy.delete}>
                             <Trash2 size={15} />
                             <span>{copy.delete}</span>
                           </button>
-                          <select
-                            className="history-gallery-folder-select"
-                            value={historyGalleryFolderId}
-                            onChange={(event) => setHistoryGalleryFolderId(event.target.value)}
-                            aria-label={copy.galleryAddTargetFolder}
-                            data-tooltip={copy.galleryAddTargetFolder}
-                          >
-                            <option value="">{copy.galleryUncategorized}</option>
-                            {snapshot.galleryFolders.map((folder) => (
-                              <option key={folder.id} value={folder.id}>{galleryFolderDisplayPath(folder)}</option>
-                            ))}
-                          </select>
                         </div>
                       </article>
                     );
@@ -5009,7 +6105,11 @@ export function App() {
                 )}
               </div>
               {hasHistoryOverflow && (
-                <div className={`history-floating-pager ${historyPagerVisible ? "visible" : ""}`}>
+                <div
+                  className="history-floating-pager visible"
+                  onMouseMove={movePreviewToolbarTowardPointer}
+                  onMouseLeave={resetPreviewToolbarDrift}
+                >
                   <div className="history-page-size-control">
                     <button
                       type="button"
@@ -5030,6 +6130,7 @@ export function App() {
                             onClick={() => {
                               setHistoryPageSize(size);
                               setIsHistoryExpanded(false);
+                              setHistoryPageIndex(0);
                               setIsHistoryPageSizeMenuOpen(false);
                             }}
                             role="menuitem"
@@ -5043,12 +6144,45 @@ export function App() {
                   <button type="button" className="history-expand-button" onClick={() => setIsHistoryExpanded((current) => !current)}>
                     <span>{isHistoryExpanded ? copy.collapseHistory : copy.showAllHistory(filteredHistory.length)}</span>
                   </button>
+                  <button
+                    type="button"
+                    className="history-page-nav"
+                    onClick={() => setHistoryPageIndex((current) => Math.max(0, current - 1))}
+                    disabled={isHistoryExpanded || normalizedHistoryPageIndex === 0}
+                    aria-label={language === "zh" ? "上一页" : "Previous page"}
+                    data-tooltip={language === "zh" ? "上一页" : "Previous page"}
+                  >
+                    <span aria-hidden="true">&lt;</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="history-page-nav"
+                    onClick={() => setHistoryPageIndex((current) => Math.min(historyPageCount - 1, current + 1))}
+                    disabled={isHistoryExpanded || normalizedHistoryPageIndex >= historyPageCount - 1}
+                    aria-label={language === "zh" ? "下一页" : "Next page"}
+                    data-tooltip={language === "zh" ? "下一页" : "Next page"}
+                  >
+                    <span aria-hidden="true">&gt;</span>
+                  </button>
                 </div>
               )}
             </div>
           </div>
         ) : (
           <div className="right-rail-panel gallery-panel gallery-explorer-panel" role="tabpanel">
+            <div className="gallery-compact-controls">
+              <select value={activeGalleryFolderId} onChange={(event) => navigateGalleryFolder(event.target.value as GalleryFolderFilter)} aria-label={copy.galleryFolders}>
+                {galleryFolderSelectOptions.map((folder) => (
+                  <option key={folder.id} value={folder.id}>{folder.name}</option>
+                ))}
+              </select>
+              <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)} aria-label={copy.galleryTagFilter}>
+                <option value="">{copy.galleryAllTags}</option>
+                {globalTagOptions.map((tag) => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+            </div>
             <div className="rail-filter-row gallery-toolbar">
               <label className="search-box">
                 <Search size={15} />
@@ -5056,68 +6190,53 @@ export function App() {
               </label>
               <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)} aria-label={copy.galleryTagFilter}>
                 <option value="">{copy.galleryAllTags}</option>
-                {galleryTagsAvailable.map((tag) => (
+                {globalTagOptions.map((tag) => (
                   <option key={tag} value={tag}>{tag}</option>
                 ))}
               </select>
             </div>
 
-            <div className="history-sort rail-sort-row gallery-explorer-toolbar">
-              <ArrowDownUp size={14} />
-              <button
-                type="button"
-                className={gallerySort === "newest" ? "history-sort-option active" : "history-sort-option"}
-                onClick={() => setGallerySort("newest")}
-              >
-                {copy.sortNewest}
-              </button>
-              <button
-                type="button"
-                className={gallerySort === "oldest" ? "history-sort-option active" : "history-sort-option"}
-                onClick={() => setGallerySort("oldest")}
-              >
-                {copy.sortOldest}
-              </button>
-              <button
-                type="button"
-                className={gallerySort === "name" ? "history-sort-option active" : "history-sort-option"}
-                onClick={() => setGallerySort("name")}
-              >
-                {copy.sortName}
-              </button>
-              <button
-                type="button"
-                className={gallerySort === "size" ? "history-sort-option active" : "history-sort-option"}
-                onClick={() => setGallerySort("size")}
-              >
-                {copy.sortSize}
-              </button>
-              <button
-                type="button"
-                className={gallerySort === "modified" ? "history-sort-option active" : "history-sort-option"}
-                onClick={() => setGallerySort("modified")}
-              >
-                {copy.sortModified}
-              </button>
-              <button type="button" className="icon-button rail-import-button" onClick={() => void importToGallery()} aria-label={copy.galleryImport} data-tooltip={copy.galleryImport}>
-                <FileUp size={15} />
-              </button>
-              <nav className="gallery-breadcrumb" aria-label={copy.galleryBreadcrumb}>
-                {activeGalleryBreadcrumb.map((crumb, index) => (
-                  <button
-                    key={`${crumb.id}:${index}`}
-                    type="button"
-                    onClick={() => navigateGalleryFolder(crumb.id)}
-                    className={index === activeGalleryBreadcrumb.length - 1 ? "active" : undefined}
-                  >
-                    {index === 0 ? <FolderOpen size={13} /> : <ChevronRight size={12} />}
-                    <span>{crumb.name}</span>
-                  </button>
-                ))}
-              </nav>
-              <button type="button" className="icon-button rail-new-folder-button" onClick={() => openCreateGalleryFolderDialog(currentGalleryCreateParentId)} aria-label={copy.galleryFolderCreate} data-tooltip={copy.galleryFolderCreate}>
-                <FolderPlus size={15} />
-              </button>
+            <div className="rail-sort-row gallery-explorer-toolbar">
+              <div className={`gallery-sort-control ${isGallerySortMenuOpen ? "open" : ""}`}>
+                <button
+                  type="button"
+                  className="gallery-sort-trigger"
+                  onClick={() => setIsGallerySortMenuOpen((current) => !current)}
+                  aria-label={gallerySortLabel}
+                  aria-expanded={isGallerySortMenuOpen}
+                  data-tooltip={gallerySortLabel}
+                >
+                  <ArrowDownUp size={14} />
+                  <span>{gallerySortLabel}</span>
+                  <ChevronDown size={13} />
+                </button>
+                {isGallerySortMenuOpen && (
+                  <div className="gallery-sort-menu" role="menu">
+                    {gallerySortOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={gallerySort === option.value ? "active" : undefined}
+                        onClick={() => {
+                          setGallerySort(option.value);
+                          setIsGallerySortMenuOpen(false);
+                        }}
+                        role="menuitem"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="gallery-toolbar-actions">
+                <button type="button" className="icon-button rail-new-folder-button" onClick={() => openCreateGalleryFolderDialog(currentGalleryCreateParentId)} aria-label={copy.galleryFolderCreate} data-tooltip={copy.galleryFolderCreate}>
+                  <FolderPlus size={15} />
+                </button>
+                <button type="button" className="icon-button rail-import-button" onClick={() => void importToGallery()} aria-label={copy.galleryImport} data-tooltip={copy.galleryImport}>
+                  <FileUp size={15} />
+                </button>
+              </div>
             </div>
             <div className="resource-explorer">
               <aside className={`gallery-directory-tree ${isGalleryBatchMode ? "batch-select" : ""}`} aria-label={copy.galleryFolders}>
@@ -5232,38 +6351,59 @@ export function App() {
                     onDragStart={(event) => {
                       prepareGalleryEntryDrag(event, entry);
                     }}
-                    onClick={() => void pickGalleryAsset(entry.asset)}
+                    onClick={() => previewGalleryAsset(entry.asset)}
                     onContextMenu={(event) => openGalleryAssetContextMenu(event, entry.asset)}
-                    title={copy.galleryChoose}
+                    title={copy.galleryOpenItem(entry.asset.originalName)}
                   >
                     <img src={galleryAssetPath(entry.asset)} alt={entry.asset.originalName} draggable={false} />
                   </button>
                   <div className="gallery-meta">
                     <strong title={entry.asset.originalName}>{entry.asset.originalName}</strong>
-                    {editingGalleryId === entry.asset.id ? (
-                      <div className="gallery-tag-editor">
-                        <input value={galleryTagsInput} onChange={(event) => setGalleryTagsInput(event.target.value)} placeholder={copy.templateTags} />
-                        <button type="button" className="icon-button" onClick={() => void saveGalleryTags(entry.asset)} aria-label={copy.gallerySaveTags} data-tooltip={copy.gallerySaveTags}>
-                          <Save size={14} />
+                    <div className="template-tags gallery-tag-row">
+                      {entry.asset.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                      <span className="history-add-tag-anchor gallery-add-tag-anchor">
+                        <button
+                          type="button"
+                          className="history-chip history-add-tag-button gallery-add-tag-button"
+                          onClick={() => editGalleryTags(entry.asset)}
+                          aria-label={copy.addTag}
+                          data-tooltip={copy.addTag}
+                        >
+                          {copy.addTag}
                         </button>
-                      </div>
-                    ) : (
-                      <div className="template-tags">
-                        {entry.asset.tags.map((tag) => <span key={tag}>{tag}</span>)}
-                      </div>
-                    )}
+                        {editingGalleryId === entry.asset.id && (
+                          <div
+                            className="history-tag-popover gallery-tag-popover"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onMouseMove={movePreviewToolbarTowardPointer}
+                            onMouseLeave={resetPreviewToolbarDrift}
+                          >
+                            <input
+                              value={galleryTagsInput}
+                              onChange={(event) => setGalleryTagsInput(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void saveGalleryTags(entry.asset);
+                                }
+                                if (event.key === "Escape") {
+                                  event.preventDefault();
+                                  setEditingGalleryId(null);
+                                  setGalleryTagsInput("");
+                                }
+                              }}
+                              placeholder={copy.templateTags}
+                              aria-label={copy.addTag}
+                              autoFocus
+                            />
+                            <button type="button" className="icon-button" disabled={!galleryTagsInput.trim()} onClick={() => void saveGalleryTags(entry.asset)} aria-label={copy.gallerySaveTags} data-tooltip={copy.gallerySaveTags}>
+                              <Save size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </span>
+                    </div>
                     <small>{formatBytes(entry.asset.sizeBytes)} · {formatDate(entry.asset.modifiedAt ?? entry.asset.updatedAt ?? entry.asset.createdAt)}</small>
-                    <select
-                      className="gallery-folder-select"
-                      value={entry.asset.folderId ?? ""}
-                      onChange={(event) => void moveGalleryAsset(entry.asset, event.target.value || null)}
-                      aria-label={copy.galleryMoveToFolder}
-                    >
-                      <option value="">{copy.galleryUncategorized}</option>
-                      {snapshot.galleryFolders.map((folder) => (
-                        <option key={folder.id} value={folder.id}>{galleryFolderDisplayPath(folder)}</option>
-                      ))}
-                    </select>
                   </div>
                   <div className="gallery-actions">
                     <button type="button" className="icon-button" onClick={() => openRenameGalleryAssetDialog(entry.asset)} aria-label={copy.galleryAssetRename} data-tooltip={copy.galleryAssetRename}>
@@ -5285,16 +6425,28 @@ export function App() {
             </div>
           </div>
         )}
-        <div className="right-rail-actions">
+        <div className={`right-rail-actions ${isRightRailActionDrawerOpen ? "drawer-open" : ""}`}>
           <span className="right-rail-summary">
             {rightRailView === "history"
               ? isHistoryBatchMode ? copy.historySelectionCount(selectedHistoryItemCount) : copy.historyStats(snapshot.history.length)
               : isGalleryBatchMode ? copy.gallerySelectionCount(selectedGalleryItemCount) : copy.galleryStats(snapshot.galleryAssets.length, snapshot.galleryFolders.length)}
           </span>
-          <div className="right-rail-action-group">
+          <button
+            type="button"
+            className={`icon-button secondary right-rail-drawer-toggle ${isRightRailActionDrawerOpen ? "active" : ""}`}
+            onClick={() => setIsRightRailActionDrawerOpen((current) => !current)}
+            onMouseMove={movePreviewToolbarTowardPointer}
+            onMouseLeave={resetPreviewToolbarDrift}
+            aria-label={copy.parameters}
+            data-tooltip={copy.parameters}
+            aria-expanded={isRightRailActionDrawerOpen}
+          >
+            <SlidersHorizontal size={15} />
+          </button>
+          <div className="right-rail-action-group" onMouseMove={movePreviewToolbarTowardPointer} onMouseLeave={resetPreviewToolbarDrift}>
             <button
               type="button"
-              className="icon-button secondary"
+              className="icon-button secondary right-rail-view-toggle"
               onClick={rightRailView === "history" ? () => setHistoryViewMode((current) => current === "grid" ? "list" : "grid") : () => setGalleryViewMode((current) => current === "grid" ? "list" : "grid")}
               aria-label={rightRailView === "history" ? historyDisplayActionLabel : galleryDisplayActionLabel}
               data-tooltip={rightRailView === "history" ? historyDisplayActionLabel : galleryDisplayActionLabel}
@@ -5309,12 +6461,32 @@ export function App() {
             <button
               type="button"
               className={`icon-button secondary ${rightRailView === "history" ? isHistoryBatchMode ? "active" : "" : isGalleryBatchMode ? "active" : ""}`}
-              onClick={rightRailView === "history" ? toggleHistoryBatchMode : toggleGalleryBatchMode}
+              onClick={() => {
+                setBatchTagMenuTarget(null);
+                if (rightRailView === "history") toggleHistoryBatchMode();
+                else toggleGalleryBatchMode();
+              }}
               aria-label={rightRailView === "history" ? (isHistoryBatchMode ? copy.exitBatchSelect : copy.batchSelect) : (isGalleryBatchMode ? copy.exitBatchSelect : copy.batchSelect)}
               data-tooltip={rightRailView === "history" ? (isHistoryBatchMode ? copy.exitBatchSelect : copy.batchSelect) : (isGalleryBatchMode ? copy.exitBatchSelect : copy.batchSelect)}
             >
               <CheckSquare size={15} />
             </button>
+            <div className="right-rail-tag-action">
+              <button
+                type="button"
+                className={`icon-button secondary ${isTagManagerOpen ? "active" : ""}`}
+                onClick={() => {
+                  setBatchTagMenuTarget(null);
+                  setIsTagManagerOpen((current) => !current);
+                }}
+                aria-label={copy.tagManager}
+                data-tooltip={copy.tagManager}
+                aria-expanded={isTagManagerOpen}
+              >
+                <Tags size={15} />
+              </button>
+              {isTagManagerOpen && renderTagManagerMenu()}
+            </div>
             <button
               type="button"
               className="icon-button secondary danger"
@@ -5911,6 +7083,35 @@ export function App() {
           </section>
         </div>
       )}
+      {gallerySaveChoiceDialog && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setGallerySaveChoiceDialog(null);
+          }}
+        >
+          <section className="confirm-dialog gallery-save-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="gallery-save-choice-title">
+            <div>
+              <h2 id="gallery-save-choice-title">{copy.gallerySaveEditedTitle}</h2>
+              <p>{copy.gallerySaveEditedBody(gallerySaveChoiceDialog.asset.originalName)}</p>
+            </div>
+            <div className="dialog-actions">
+              <button type="button" className="ghost" onClick={() => setGallerySaveChoiceDialog(null)}>
+                {copy.cancel}
+              </button>
+              <button type="button" className="secondary" onClick={() => void saveActiveGalleryImageAsCopy()}>
+                <FolderInput size={16} />
+                {copy.gallerySaveAsCopy}
+              </button>
+              <button type="button" onClick={() => void replaceActiveGalleryImage()}>
+                <Save size={16} />
+                {copy.galleryOverwrite}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {isPreviewOpen && activePreviewSource && (
         <div
           className="preview-modal-backdrop"
@@ -5939,6 +7140,10 @@ export function App() {
           <div className="context-menu-item" onClick={handleContextMenuSaveImage}>
             <Download size={14} />
             {copy.saveImage}
+          </div>
+          <div className="context-menu-item" onClick={handleContextMenuCopyPath}>
+            <Copy size={14} />
+            {copy.copyImagePath}
           </div>
           <div className="context-menu-item" onClick={handleContextMenuCopyPrompt}>
             <Copy size={14} />
@@ -5994,6 +7199,16 @@ export function App() {
             >
               <FolderOpen size={14} />
               {copy.openFolder}
+            </div>
+            <div
+              className="context-menu-item"
+              onClick={() => {
+                setGalleryAssetContextMenu(null);
+                void copyImagePath(galleryAssetAbsolutePath(asset), `copy:path:${asset.id}`);
+              }}
+            >
+              <Copy size={14} />
+              {copy.copyImagePath}
             </div>
             <div className="context-menu-divider" />
             <div

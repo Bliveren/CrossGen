@@ -25,6 +25,10 @@ import {
   validateRunJobRequest,
   validateWorkspaceDraftInput
 } from "./validation";
+import {
+  NANO_BANANA_3_LAUNCH_ID,
+  NANO_BANANA_3_MODEL_ID
+} from "./modelCatalog";
 
 describe("gpt-image-2 validation", () => {
   it("accepts auto and supported popular sizes", () => {
@@ -119,6 +123,7 @@ describe("gpt-image-2 validation", () => {
     expect(validateProviderConfigInput(valid).ok).toBe(true);
     expect(validateProviderConfigInput({ ...valid, kind: "openai", activeLaunchId: "gpt-image-2", activeModelId: "gpt-image-2" }).ok).toBe(true);
     expect(validateProviderConfigInput({ ...valid, kind: "openai", defaultModel: "dall-e-3", activeLaunchId: "general", activeModelId: "dall-e-3" }).ok).toBe(true);
+    expect(validateProviderConfigInput({ ...valid, kind: "openai", defaultModel: NANO_BANANA_3_MODEL_ID, activeLaunchId: NANO_BANANA_3_LAUNCH_ID, activeModelId: NANO_BANANA_3_MODEL_ID }).ok).toBe(true);
     expect(validateProviderConfigInput({ ...valid, kind: "openai", defaultModel: "dall-e-3", activeLaunchId: "gpt-image-2", activeModelId: "dall-e-3" }).ok).toBe(false);
     expect(validateProviderConfigInput({ ...valid, kind: "gemini", defaultModel: "gemini-3.1-flash-image", activeLaunchId: "nano-banana-3" }).ok).toBe(true);
     expect(validateProviderConfigInput({ ...valid, kind: "custom", defaultModel: "image-model-x", activeLaunchId: "general" }).ok).toBe(true);

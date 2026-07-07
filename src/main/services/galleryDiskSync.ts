@@ -308,6 +308,10 @@ export function reconcileGalleryDiskState(
       source: existing?.source ?? "import",
       createdAt: existing?.createdAt ?? options.now,
       updatedAt: existing?.updatedAt ?? options.now,
+      contentHash: existing?.contentHash,
+      sourcePathHash: existing?.sourcePathHash,
+      sourceJobId: existing?.sourceJobId,
+      sourceAssetId: existing?.sourceAssetId,
       modifiedAt: diskAsset.modifiedAt
     };
   });
@@ -447,6 +451,10 @@ export function reconcileGalleryDiskChanges(
       source: existing?.source ?? "import",
       createdAt: existing?.createdAt ?? options.now,
       updatedAt: existing?.updatedAt ?? options.now,
+      contentHash: existing?.contentHash,
+      sourcePathHash: existing?.sourcePathHash,
+      sourceJobId: existing?.sourceJobId,
+      sourceAssetId: existing?.sourceAssetId,
       modifiedAt: diskAsset.modifiedAt
     });
   }

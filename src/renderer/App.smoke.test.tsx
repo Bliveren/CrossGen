@@ -36,6 +36,12 @@ beforeEach(() => {
   vi.restoreAllMocks();
   installLocalStorageMock();
   Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: vi.fn(async () => undefined)
+    }
+  });
 });
 
 afterEach(() => {
@@ -182,7 +188,7 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
-  it("enables focused launches from discovered API models instead of the selected provider", async () => {
+  it("enables discovered Nano Banana 3 models on OpenAI-compatible access", async () => {
     const defaultConfig = providerConfig({
       kind: "openai",
       name: "OpenAI",
@@ -206,32 +212,24 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("Nano Banana 3").disabled).toBe(false);
 
     await click(launchButton("Nano Banana 3"));
-    const modelOption = launchModelOption("Gemini 3 Pro Image");
-    expect(modelOption).toBeTruthy();
-    await click(modelOption);
+    await changeSelect(selectByLabel("Aspect ratio"), "4:3");
     await click(buttonByText("Generate", ".primary-run"));
 
-    expect(bridge.saveConfig).toHaveBeenCalledWith(
-      expect.objectContaining({
-        baseURL: "https://gateway.example.com/v1",
-        activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
-        activeModelId: GEMINI_3_PRO_IMAGE_MODEL_ID
-      })
-    );
+    expect(bridge.saveConfig).toHaveBeenCalledWith(expect.objectContaining({
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID
+    }));
     expect(bridge.runJob).toHaveBeenCalledWith(
       expect.objectContaining({
-        mode: "generate",
         params: expect.objectContaining({
           providerKind: "gemini",
           launchId: NANO_BANANA_3_LAUNCH_ID,
-          model: GEMINI_3_PRO_IMAGE_MODEL_ID
+          model: NANO_BANANA_3_MODEL_ID,
+          aspectRatio: "4:3"
         })
       })
     );
-
-    // Guided-region copy must remain for Gemini when the image-to-image mask area is shown.
-    await click(buttonByText("Image to image", ".mode-tab"));
-    expect(document.body.textContent).toContain("guidance");
   });
 
   it("keeps the single API config path working", async () => {
@@ -388,7 +386,8 @@ describe("renderer multi-model smoke", () => {
 
     await changeTextArea(textAreaByLabel("Prompt"), "Keep this prompt");
     await openGalleryRail();
-    await click(document.querySelector<HTMLButtonElement>(".gallery-thumb")!);
+    await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
+    await click(elementByText("Choose from Gallery", ".context-menu-item"));
     expect(document.querySelector(".asset-tile")?.textContent).toContain("switch-reference.png");
 
     await openSavedApiAccess();
@@ -507,12 +506,25 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Templates exported to /tmp/templates.json");
   });
 
-  it("picks a Gallery image as a reference asset", async () => {
-    const asset = galleryAsset("gallery-product.png", { tags: ["product"] });
+  it("opens a Gallery image in the editor from the thumbnail", async () => {
+    const asset = galleryAsset("gallery-preview.png", { tags: ["product"] });
     const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
 
     await openGalleryRail();
     await click(document.querySelector<HTMLButtonElement>(".gallery-thumb")!);
+
+    expect(bridge.pickGalleryAsset).not.toHaveBeenCalled();
+    expect(document.querySelector<HTMLImageElement>(".preview-image-frame img")?.src).toContain(`image2tools-asset://image?gallery=${asset.fileName}`);
+    expect(document.body.textContent).toContain("gallery-preview.png opened in the editor.");
+  });
+
+  it("picks a Gallery image as a reference asset from the context menu", async () => {
+    const asset = galleryAsset("gallery-product.png", { tags: ["product"] });
+    const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
+
+    await openGalleryRail();
+    await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
+    await click(elementByText("Choose from Gallery", ".context-menu-item"));
 
     expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(asset.id);
     expect(document.body.textContent).toContain("gallery-product.png added as a reference.");
@@ -730,29 +742,77 @@ describe("renderer multi-model smoke", () => {
     const job = geminiJob(0, { outputs: [result] });
     const bridge = await renderApp(snapshot({ history: [job], galleryFolders: [folder] }));
 
-    await changeSelect(document.querySelector<HTMLSelectElement>(".history-gallery-folder-select")!, folder.id);
     await click(buttonByText("Add to Gallery", ".history-action-button"));
+    await click(buttonByText("History picks", ".history-gallery-target-menu button"));
 
-    expect(bridge.addHistoryAssetToGallery).toHaveBeenCalledWith(result.path, folder.id);
+    expect(bridge.addHistoryAssetToGallery).toHaveBeenCalledWith(result.path, folder.id, ["Generate"]);
     expect(document.body.textContent).toContain("Added to Gallery.");
 
     await openGalleryRail();
     expect(document.body.textContent).toContain("history.png");
   });
 
-  it("edits Gallery tags and updates the visible filter state", async () => {
+  it("marks a history result as already in Gallery only when provenance matches", async () => {
+    const linkedResult = imageAsset("already.png", "job_gemini_0");
+    const unrelatedResult = imageAsset("already.png", "job_gemini_1");
+    const linkedJob = geminiJob(0, { outputs: [linkedResult] });
+    const unrelatedJob = geminiJob(1, { outputs: [unrelatedResult] });
+    const linked = galleryAsset("linked.png", {
+      source: "result",
+      originalName: linkedResult.fileName,
+      sourceJobId: linkedJob.id
+    });
+    await renderApp(snapshot({ history: [linkedJob, unrelatedJob], galleryAssets: [linked] }));
+
+    const buttons = [...document.querySelectorAll<HTMLElement>(".history-gallery-menu-button")];
+    expect(buttons).toHaveLength(2);
+    expect(buttons.filter((button) => button.classList.contains("already-in-gallery"))).toHaveLength(1);
+    expect(document.querySelector(".history-gallery-check")).toBeTruthy();
+  });
+
+  it("edits History image names and user tags while keeping the mode system tag", async () => {
+    const job = geminiJob(0, { name: "original-name.png", tags: ["draft"] });
+    const bridge = await renderApp(snapshot({ history: [job] }));
+
+    await click(buttonByText("original-name.png", ".history-name-button"));
+    await changeInput(document.querySelector<HTMLInputElement>(".history-name-input")!, "renamed-history.png");
+    await keyDown(document.querySelector<HTMLInputElement>(".history-name-input")!, "Enter");
+
+    expect(bridge.updateHistoryJob).toHaveBeenCalledWith(job.id, { name: "renamed-history.png" });
+    expect(document.body.textContent).toContain("History image renamed.");
+
+    const tagRow = document.querySelector<HTMLElement>(".history-tag-row")!;
+    const tagChips = [...tagRow.querySelectorAll<HTMLElement>(".history-chip")].map((chip) => chip.textContent);
+    expect(tagChips).toEqual(["Generate", "draft", "Add tag"]);
+
+    await click(document.querySelector<HTMLButtonElement>(".history-add-tag-button")!);
+    expect(document.querySelector(".history-tag-popover")).not.toBeNull();
+    await pointer(document.body, "pointerdown");
+    expect(document.querySelector(".history-tag-popover")).toBeNull();
+
+    await click(document.querySelector<HTMLButtonElement>(".history-add-tag-button")!);
+    await changeInput(document.querySelector<HTMLInputElement>(".history-tag-popover input")!, "product");
+    await click(document.querySelector<HTMLButtonElement>('.history-tag-popover button[aria-label="Save history tags"]')!);
+
+    expect(bridge.updateHistoryJob).toHaveBeenCalledWith(job.id, { tags: ["draft", "product"] });
+    expect(document.body.textContent).toContain("Generate");
+    expect(document.body.textContent).toContain("draft");
+    expect(document.body.textContent).toContain("product");
+  });
+
+  it("adds Gallery tags from the card popover and updates the visible filter state", async () => {
     const asset = galleryAsset("gallery-tags.png", { tags: ["old"] });
     const other = galleryAsset("gallery-other.png", { tags: ["draft"] });
     const bridge = await renderApp(snapshot({ galleryAssets: [asset, other] }));
 
     await openGalleryRail();
-    await click(document.querySelector<HTMLButtonElement>('.gallery-actions button[aria-label="Edit tags"]')!);
-    await changeInput(document.querySelector<HTMLInputElement>(".gallery-tag-editor input")!, "product, hero");
-    await click(document.querySelector<HTMLButtonElement>('.gallery-tag-editor button[aria-label="Save tags"]')!);
+    await click(document.querySelector<HTMLButtonElement>(".gallery-add-tag-button")!);
+    await changeInput(document.querySelector<HTMLInputElement>(".gallery-tag-popover input")!, "hero");
+    await click(document.querySelector<HTMLButtonElement>('.gallery-tag-popover button[aria-label="Save tags"]')!);
 
-    expect(bridge.updateGalleryAsset).toHaveBeenCalledWith(asset.id, { tags: ["product", "hero"] });
+    expect(bridge.updateGalleryAsset).toHaveBeenCalledWith(asset.id, { tags: ["old", "hero"] });
     expect(document.body.textContent).toContain("Gallery tags updated.");
-    expect(document.body.textContent).toContain("product");
+    expect(document.body.textContent).toContain("old");
     expect(document.body.textContent).toContain("hero");
 
     await changeSelect(document.querySelector<HTMLSelectElement>('select[aria-label="Gallery tag filter"]')!, "hero");
@@ -760,7 +820,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).not.toContain("gallery-other.png");
   });
 
-  it("creates Gallery folders, imports and moves assets, then deletes folders back to Uncategorized", async () => {
+  it("creates Gallery folders, imports assets, then deletes folders back to Unsorted", async () => {
     const bridge = await renderApp(snapshot());
 
     await openGalleryRail();
@@ -776,21 +836,6 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.importToGallery).toHaveBeenCalledWith(undefined, "folder-product-refs");
     expect(document.body.textContent).toContain("imported.png");
 
-    await changeSelect(document.querySelector<HTMLSelectElement>(".gallery-folder-select")!, "");
-    expect(bridge.moveGalleryAsset).toHaveBeenLastCalledWith("gallery_imported.png", null);
-    expect(document.body.textContent).toContain("Gallery image moved.");
-
-    await changeInput(inputByPlaceholder("Search Gallery"), "imported");
-    expect(document.body.textContent).toContain("No matching Gallery images.");
-
-    await selectGalleryFolder("Uncategorized");
-    expect(document.body.textContent).toContain("imported.png");
-
-    await changeSelect(document.querySelector<HTMLSelectElement>(".gallery-folder-select")!, "folder-product-refs");
-    expect(bridge.moveGalleryAsset).toHaveBeenLastCalledWith("gallery_imported.png", "folder-product-refs");
-    expect(document.body.textContent).toContain("No matching Gallery images.");
-
-    await changeInput(inputByPlaceholder("Search Gallery"), "");
     await selectGalleryFolder("Product refs");
     expect(document.body.textContent).toContain("imported.png");
 
@@ -803,8 +848,19 @@ describe("renderer multi-model smoke", () => {
     await click(buttonByText("Delete folder", ".confirm-dialog .danger-button"));
 
     expect(bridge.deleteGalleryFolder).toHaveBeenCalledWith("folder-product-refs");
-    expect(document.body.textContent).toContain("Uncategorized");
+    expect(document.body.textContent).toContain("Unsorted");
     expect(document.body.textContent).toContain("imported.png");
+  });
+
+  it("shows a canceled notice when Gallery import returns no assets", async () => {
+    const bridge = await renderApp(snapshot());
+    vi.mocked(bridge.importToGallery).mockResolvedValueOnce([]);
+
+    await openGalleryRail();
+    await click(document.querySelector<HTMLButtonElement>(".rail-import-button")!);
+
+    expect(document.body.textContent).toContain("Gallery import canceled.");
+    expect(document.body.textContent).not.toContain("0 images imported to Gallery.");
   });
 
   it("shows a clean duplicate Gallery folder error from Electron IPC", async () => {
@@ -855,7 +911,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector(".gallery-folder-dialog")).toBeTruthy();
   });
 
-  it("renders nested Gallery folders with a tree, breadcrumb, and child creation target", async () => {
+  it("renders nested Gallery folders with a tree, compact sort control, and child creation target", async () => {
     const parent = galleryFolder("Products");
     const child = galleryFolder("Hero shots", { parentId: parent.id });
     const asset = galleryAsset("hero.png", { folderId: child.id });
@@ -865,11 +921,12 @@ describe("renderer multi-model smoke", () => {
     await click(buttonByText("Products", ".gallery-tree-folder-button"));
     await flushAsync();
 
-    expect(document.querySelector(".gallery-breadcrumb")?.textContent).toContain("AllProducts");
+    expect(document.querySelector(".gallery-breadcrumb")).toBeNull();
+    expect(document.querySelector(".gallery-sort-trigger")?.textContent).toContain("Newest");
     expect(document.body.textContent).toContain("Hero shots");
 
     await click(buttonByText("Hero shots", ".gallery-tree-folder-button"));
-    expect(document.querySelector(".gallery-breadcrumb")?.textContent).toContain("ProductsHero shots");
+    expect(document.querySelector(".gallery-breadcrumb")).toBeNull();
     expect(document.body.textContent).toContain("hero.png");
 
     await click(buttonByText("Products", ".gallery-tree-folder-button"));
@@ -878,6 +935,20 @@ describe("renderer multi-model smoke", () => {
     await click(buttonByText("Create folder", ".gallery-folder-dialog button"));
 
     expect(bridge.createGalleryFolder).toHaveBeenLastCalledWith({ name: "Campaign", parentId: parent.id });
+  });
+
+  it("opens Gallery sort options from the compact sort button", async () => {
+    await renderApp(snapshot({ galleryAssets: [galleryAsset("newest.png"), galleryAsset("oldest.png", { createdAt: new Date(1).toISOString() })] }));
+
+    await openGalleryRail();
+    expect(document.querySelector(".gallery-sort-menu")).toBeNull();
+    await click(document.querySelector<HTMLButtonElement>(".gallery-sort-trigger")!);
+
+    expect(document.querySelector(".gallery-sort-menu")?.textContent).toContain("Oldest");
+    await click(buttonByText("Oldest", ".gallery-sort-menu button"));
+
+    expect(document.querySelector(".gallery-sort-menu")).toBeNull();
+    expect(document.querySelector(".gallery-sort-trigger")?.textContent).toContain("Oldest");
   });
 
   it("moves nested Gallery folders by dragging them into another folder", async () => {
@@ -914,16 +985,82 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Selected Gallery items deleted.");
   });
 
-  it("uses four unified Library actions and single-button display toggles", async () => {
+  it("keeps Gallery checkbox selections additive and applies batch tags", async () => {
+    const first = galleryAsset("batch-tag-a.png", { tags: ["old"] });
+    const second = galleryAsset("batch-tag-b.png");
+    const bridge = await renderApp(snapshot({ galleryAssets: [first, second] }));
+
+    await openGalleryRail();
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Batch select"]')!);
+    await click(document.querySelector<HTMLInputElement>('input[aria-label="Select batch-tag-a.png"]')!);
+    await click(document.querySelector<HTMLInputElement>('input[aria-label="Select batch-tag-b.png"]')!);
+
+    expect(document.body.textContent).toContain("2 selected");
+
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Manage tags"]')!);
+    await changeInput(document.querySelector<HTMLInputElement>('.batch-tag-new input[aria-label="New tag"]')!, "selected");
+    await click(document.querySelector<HTMLButtonElement>('.batch-tag-new button[aria-label="Add tag"]')!);
+
+    expect(bridge.updateGalleryAsset).toHaveBeenCalledWith(first.id, { tags: ["old", "selected"] });
+    expect(bridge.updateGalleryAsset).toHaveBeenCalledWith(second.id, { tags: ["selected"] });
+    expect(document.body.textContent).toContain("Selected tags updated.");
+  });
+
+  it("applies batch tags to selected History jobs", async () => {
+    const first = geminiJob(0, { tags: ["old"] });
+    const second = geminiJob(1, { tags: ["draft"], outputs: [imageAsset("history-b.png", "job_gemini_1")] });
+    const bridge = await renderApp(snapshot({ history: [first, second] }));
+
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Batch select"]')!);
+    const checkboxes = document.querySelectorAll<HTMLInputElement>(".history-entry-select");
+    expect(checkboxes).toHaveLength(2);
+    await click(checkboxes[0]!);
+    await click(checkboxes[1]!);
+
+    expect(document.body.textContent).toContain("2 selected");
+
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Manage tags"]')!);
+    await changeInput(document.querySelector<HTMLInputElement>('.batch-tag-new input[aria-label="New tag"]')!, "review");
+    await click(document.querySelector<HTMLButtonElement>('.batch-tag-new button[aria-label="Add tag"]')!);
+
+    expect(bridge.updateHistoryJob).toHaveBeenCalledWith(first.id, { tags: ["old", "review"] });
+    expect(bridge.updateHistoryJob).toHaveBeenCalledWith(second.id, { tags: ["draft", "review"] });
+    expect(document.body.textContent).toContain("Selected tags updated.");
+  });
+
+  it("renames and deletes tags across History and Gallery from the tag manager", async () => {
+    const job = geminiJob(0, { tags: ["draft"] });
+    const asset = galleryAsset("tagged-gallery.png", { tags: ["draft", "asset-only"] });
+    const bridge = await renderApp(snapshot({ history: [job], galleryAssets: [asset] }));
+
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Manage tags"]')!);
+    const draftInput = [...document.querySelectorAll<HTMLInputElement>(".tag-manager-row input")]
+      .find((input) => input.value === "draft")!;
+    await changeInput(draftInput, "review");
+    await click(draftInput.closest<HTMLElement>(".tag-manager-row")!.querySelector<HTMLButtonElement>('button[aria-label="Rename tag"]')!);
+    await flushAsync();
+
+    expect(bridge.updateHistoryJob).toHaveBeenCalledWith(job.id, { tags: ["review"] });
+    expect(bridge.updateGalleryAsset).toHaveBeenCalledWith(asset.id, { tags: ["review", "asset-only"] });
+
+    const assetOnlyInput = [...document.querySelectorAll<HTMLInputElement>(".tag-manager-row input")]
+      .find((input) => input.value === "asset-only")!;
+    await click(assetOnlyInput.closest<HTMLElement>(".tag-manager-row")!.querySelector<HTMLButtonElement>('button[aria-label="Delete tag"]')!);
+
+    expect(bridge.updateGalleryAsset).toHaveBeenCalledWith(asset.id, { tags: ["review"] });
+  });
+
+  it("uses unified Library actions and single-button display toggles", async () => {
     const asset = galleryAsset("view-toggle.png");
     await renderApp(snapshot({ history: [geminiJob(0)], galleryAssets: [asset] }));
 
     let actionButtons = document.querySelectorAll<HTMLButtonElement>(".right-rail-action-group button");
-    expect(actionButtons).toHaveLength(4);
+    expect(actionButtons).toHaveLength(5);
     expect([...actionButtons].map((button) => button.getAttribute("aria-label"))).toEqual([
       "Grid view",
       "Library path settings",
       "Batch select",
+      "Manage tags",
       "Clear all history records"
     ]);
     expect(Boolean(document.querySelector(".right-rail-summary")!.compareDocumentPosition(document.querySelector(".right-rail-action-group")!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
@@ -934,11 +1071,12 @@ describe("renderer multi-model smoke", () => {
 
     await openGalleryRail();
     actionButtons = document.querySelectorAll<HTMLButtonElement>(".right-rail-action-group button");
-    expect(actionButtons).toHaveLength(4);
+    expect(actionButtons).toHaveLength(5);
     expect([...actionButtons].map((button) => button.getAttribute("aria-label"))).toEqual([
       "List view",
       "Library path settings",
       "Batch select",
+      "Manage tags",
       "Clear all Gallery items"
     ]);
     expect(document.querySelector(".gallery-entry-select")).toBeNull();
@@ -957,6 +1095,22 @@ describe("renderer multi-model smoke", () => {
     await click(elementByText("Open folder", ".context-menu-item"));
 
     expect(bridge.openStorageFolder).toHaveBeenCalledWith("gallery", null);
+  });
+
+  it("copies image paths from History and Gallery card context menus", async () => {
+    const result = imageAsset("copy-history.png");
+    const job = geminiJob(0, { outputs: [result] });
+    const asset = galleryAsset("Products/copy-gallery.png", { originalName: "copy-gallery.png" });
+    await renderApp(snapshot({ history: [job], galleryAssets: [asset] }));
+
+    await contextMenu(document.querySelector<HTMLElement>(".history-preview")!);
+    await click(elementByText("Copy image path", ".context-menu-item"));
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(result.path);
+
+    await openGalleryRail();
+    await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
+    await click(elementByText("Copy image path", ".context-menu-item"));
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("/tmp/crossgen/gallery/Products/copy-gallery.png");
   });
 
   it("renames a Gallery image from the file context menu", async () => {
@@ -1085,6 +1239,35 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("passes the selected Nano Banana 3 aspect ratio through runJob", async () => {
+    const geminiConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [geminiConfig], activeProviderId: geminiConfig.id }));
+
+    await click(launchButton("Nano Banana 3"));
+    await changeSelect(selectByLabel("Aspect ratio"), "1:1");
+    await click(buttonByText("Generate", ".primary-run"));
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          providerKind: "gemini",
+          launchId: NANO_BANANA_3_LAUNCH_ID,
+          aspectRatio: "1:1"
+        })
+      })
+    );
+  });
+
   it("shows Gemini upload rights reminder beside reference tools", async () => {
     const defaultConfig = providerConfig({
       kind: "gemini",
@@ -1179,10 +1362,10 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("Nano Banana 3").disabled).toBe(false);
     expect(launchButton("General").disabled).toBe(false);
     expect(document.querySelectorAll(".history-item")).toHaveLength(6);
-    expect(document.body.textContent).toContain("Show all 8");
+    expect(document.body.textContent).toContain("Show all");
     expect(document.body.textContent).toContain("Nano Banana 3");
 
-    await click(buttonByText("Show all 8"));
+    await click(buttonByText("Show all"));
 
     expect(document.querySelectorAll(".history-item")).toHaveLength(8);
     expect(document.body.textContent).toContain("Show fewer");
@@ -1218,7 +1401,8 @@ describe("renderer multi-model smoke", () => {
 
     await click(buttonByText("Image to image", ".mode-tab"));
     await openGalleryRail();
-    await click(document.querySelector<HTMLButtonElement>(".gallery-thumb")!);
+    await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
+    await click(elementByText("Choose from Gallery", ".context-menu-item"));
     await flushAsync();
     await click(launchButton("General"));
 
@@ -1305,6 +1489,7 @@ describe("renderer multi-model smoke", () => {
     await click(document.querySelector<HTMLButtonElement>(".sidebar-collapse-button")!);
 
     expect(shell.classList.contains("sidebar-collapsed")).toBe(true);
+    expect(document.querySelector(".sidebar-resizer")).toBeTruthy();
     expect(document.querySelector(".workspace")).toBeTruthy();
     expect(document.querySelector(".history")).toBeTruthy();
     const compactStack = document.querySelector<HTMLElement>(".sidebar-mini-stack")!;
@@ -1312,6 +1497,12 @@ describe("renderer multi-model smoke", () => {
     expect(compactStack.querySelector('button[aria-label="API config"]')).toBeTruthy();
     expect(compactStack.querySelector('button[aria-label="Launch"]')).toBeTruthy();
     expect(compactStack.querySelector('button[aria-label="Parameters"]')).toBeTruthy();
+
+    await click(document.querySelector<HTMLButtonElement>(".right-rail-collapse-button")!);
+
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
+    expect(document.querySelector(".right-rail.collapsed")).toBeTruthy();
+    expect(document.querySelector(".right-rail-drawer-toggle")).toBeTruthy();
   });
 
   it("keeps compact controls and history from overflowing their layout contracts", async () => {
@@ -1345,7 +1536,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector(".launch-button span")).toBeTruthy();
     expect(document.querySelector(".launch-button small")).toBeTruthy();
     expect(document.querySelectorAll(".history-item")).toHaveLength(6);
-    expect(buttonByText("Show all 10")).toBeTruthy();
+    expect(buttonByText("Show all")).toBeTruthy();
     expect(launchButton("General").textContent).toContain("Gemini image fallback with a very long display name");
   });
 
@@ -1417,17 +1608,25 @@ describe("renderer multi-model smoke", () => {
 
     await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Edit"]')!);
 
-    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Back"]')).toBeTruthy();
-    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Text box"]')).toBeTruthy();
-    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Clear annotations"]')?.dataset.tooltip).toBe("Clear annotations");
-    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Save to Gallery"]')).toBeTruthy();
-    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Download"]')).toBeNull();
+    const primaryActions = previewControls.querySelector<HTMLElement>(".preview-primary-actions")!;
+    const secondaryActions = previewControls.querySelector<HTMLElement>(".preview-secondary-actions")!;
+    expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Back"]')).toBeTruthy();
+    expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Download"]')).toBeTruthy();
+    expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Save to Gallery"]')).toBeTruthy();
+    expect(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Text box"]')).toBeTruthy();
+    expect(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Clear annotations"]')?.dataset.tooltip).toBe("Clear annotations");
+    expect(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Download"]')).toBeNull();
+    expect(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Save to Gallery"]')).toBeNull();
 
     await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!);
     await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Crop"]')!);
 
-    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Rectangle crop"]')).toBeTruthy();
-    expect(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Apply crop"]')).toBeTruthy();
+    const cropSecondaryActions = previewControls.querySelector<HTMLElement>(".preview-secondary-actions")!;
+    expect(cropSecondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Rectangle crop"]')).toBeTruthy();
+    expect(cropSecondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Apply crop"]')).toBeTruthy();
+    expect(cropSecondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Save selected area to Gallery"]')).toBeTruthy();
+    const cropActionLabels = [...cropSecondaryActions.querySelectorAll<HTMLButtonElement>("button")].map((button) => button.getAttribute("aria-label"));
+    expect(cropActionLabels.indexOf("Save selected area to Gallery")).toBeLessThan(cropActionLabels.indexOf("Apply crop"));
   });
 
   it("saves the edited preview to Gallery through the bridge", async () => {
@@ -1445,7 +1644,7 @@ describe("renderer multi-model smoke", () => {
       }
       set src(value: string) {
         this.#src = value;
-        queueMicrotask(() => this.onerror?.());
+        queueMicrotask(() => this.onload?.());
       }
     }
     window.Image = MockImage as unknown as typeof Image;
@@ -1454,19 +1653,95 @@ describe("renderer multi-model smoke", () => {
       const bridge = await renderApp(snapshot({ history: [job] }));
 
       await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
-      const previewImage = document.querySelector<HTMLImageElement>(".zoom-surface img")!;
-      Object.defineProperty(previewImage, "complete", { configurable: true, value: true });
-      Object.defineProperty(previewImage, "naturalWidth", { configurable: true, value: 100 });
-      Object.defineProperty(previewImage, "naturalHeight", { configurable: true, value: 100 });
       await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Edit"]')!);
+      await createPreviewTextAnnotation("Pinned label");
       await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Save to Gallery"]')!);
       await flushAsync();
 
       expect(bridge.addEditedImageToGallery).toHaveBeenCalledWith({
         dataUrl: "data:image/png;base64,ZmFrZQ==",
         originalName: "result_gemini-edited.png",
-        folderId: null
+        folderId: null,
+        tags: ["Generate"]
       });
+    } finally {
+      window.Image = OriginalImage;
+    }
+  });
+
+  it("downloads the edited preview through the bridge", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(mockCanvasContext() as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,ZmFrZQ==");
+    const OriginalImage = window.Image;
+    class MockImage {
+      naturalWidth = 100;
+      naturalHeight = 100;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      #src = "";
+      get src() {
+        return this.#src;
+      }
+      set src(value: string) {
+        this.#src = value;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    window.Image = MockImage as unknown as typeof Image;
+    try {
+      const job = geminiJob(0, { outputs: [imageAsset("result_gemini.png")] });
+      const bridge = await renderApp(snapshot({ history: [job] }));
+
+      await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
+      await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Edit"]')!);
+      await createPreviewTextAnnotation("Pinned label");
+      await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Download edited image"]')!);
+      await flushAsync();
+
+      expect(bridge.downloadEditedImage).toHaveBeenCalledWith({
+        dataUrl: "data:image/png;base64,ZmFrZQ==",
+        suggestedName: "result_gemini-edited.png"
+      });
+    } finally {
+      window.Image = OriginalImage;
+    }
+  });
+
+  it("downloads the composited preview after leaving edit mode", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(mockCanvasContext() as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,ZmFrZQ==");
+    const OriginalImage = window.Image;
+    class MockImage {
+      naturalWidth = 100;
+      naturalHeight = 100;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      #src = "";
+      get src() {
+        return this.#src;
+      }
+      set src(value: string) {
+        this.#src = value;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    window.Image = MockImage as unknown as typeof Image;
+    try {
+      const job = geminiJob(0, { outputs: [imageAsset("result_gemini.png")] });
+      const bridge = await renderApp(snapshot({ history: [job] }));
+
+      await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
+      await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Edit"]')!);
+      await createPreviewTextAnnotation("Pinned label");
+      await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Back"]')!);
+      await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Download edited image"]')!);
+      await flushAsync();
+
+      expect(bridge.downloadEditedImage).toHaveBeenCalledWith({
+        dataUrl: "data:image/png;base64,ZmFrZQ==",
+        suggestedName: "result_gemini-edited.png"
+      });
+      expect(bridge.downloadAsset).not.toHaveBeenCalled();
     } finally {
       window.Image = OriginalImage;
     }
@@ -1633,15 +1908,37 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
       currentSnapshot = { ...currentSnapshot, galleryAssets: [asset, ...currentSnapshot.galleryAssets] };
       return [asset];
     }),
-    addHistoryAssetToGallery: vi.fn(async (_assetPath, folderId) => {
-      const asset = galleryAsset("history.png", { source: "result", folderId: folderId ?? null });
+    addHistoryAssetToGallery: vi.fn(async (assetPath, folderId, tags) => {
+      const source = currentSnapshot.history
+        .flatMap((job) => job.outputs.map((asset) => ({ job, asset })))
+        .find((item) => item.asset.path === assetPath);
+      const asset = galleryAsset("history.png", {
+        source: "result",
+        folderId: folderId ?? null,
+        tags: tags ?? source?.job.tags ?? [],
+        sourceJobId: source?.job.id,
+        sourceAssetId: source?.asset.id
+      });
       currentSnapshot = { ...currentSnapshot, galleryAssets: [asset, ...currentSnapshot.galleryAssets] };
       return asset;
     }),
     addEditedImageToGallery: vi.fn(async (input) => {
-      const asset = galleryAsset(input.originalName ?? "edited.png", { source: "result", folderId: input.folderId ?? null });
+      const asset = galleryAsset(input.originalName ?? "edited.png", { source: "result", folderId: input.folderId ?? null, tags: input.tags ?? [] });
       currentSnapshot = { ...currentSnapshot, galleryAssets: [asset, ...currentSnapshot.galleryAssets] };
       return asset;
+    }),
+    replaceGalleryAssetImage: vi.fn(async (id, input) => {
+      const asset = currentSnapshot.galleryAssets.find((item) => item.id === id) ?? galleryAsset(input.originalName ?? "replaced.png", { id });
+      const updated = {
+        ...asset,
+        source: "result" as const,
+        mimeType: input.dataUrl.startsWith("data:image/jpeg") ? "image/jpeg" : input.dataUrl.startsWith("data:image/webp") ? "image/webp" : "image/png",
+        tags: input.tags ?? asset.tags,
+        updatedAt: now,
+        modifiedAt: now
+      };
+      currentSnapshot = { ...currentSnapshot, galleryAssets: currentSnapshot.galleryAssets.map((item) => item.id === id ? updated : item) };
+      return updated;
     }),
     updateGalleryAsset: vi.fn(async (id, patch) => {
       const asset = currentSnapshot.galleryAssets.find((item) => item.id === id) ?? galleryAsset("missing.png", { id });
@@ -1688,12 +1985,24 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
       return job;
     }),
     downloadAsset: vi.fn(async () => "/tmp/downloaded.png"),
+    downloadEditedImage: vi.fn(async () => "/tmp/edited.png"),
     openAssetFolder: vi.fn(async () => undefined),
     openStorageFolder: vi.fn(async () => undefined),
     chooseStorageFolder: vi.fn(async () => currentSnapshot),
     checkForUpdates: vi.fn(async () => updateCheckResult),
     downloadAndInstallUpdate: vi.fn(async () => ({ version: "0.0.0", filePath: "/tmp/update", message: "opened" })),
     deleteJob: vi.fn(async () => initialSnapshot.history),
+    updateHistoryJob: vi.fn(async (jobId, patch) => {
+      const job = currentSnapshot.history.find((item) => item.id === jobId) ?? geminiJob(0, { id: jobId });
+      const updated = {
+        ...job,
+        name: patch.name?.trim() || job.name,
+        tags: patch.tags ?? job.tags,
+        updatedAt: now
+      };
+      currentSnapshot = { ...currentSnapshot, history: currentSnapshot.history.map((item) => item.id === jobId ? updated : item) };
+      return updated;
+    }),
     clearHistory: vi.fn(async () => []),
     onJobEvent: vi.fn(() => () => undefined),
     onGalleryEvent: vi.fn(() => () => undefined),
@@ -1740,6 +2049,8 @@ function jobFromRequest(request: RunJobRequest, config: ProviderConfig): Generat
   const modelId = request.params.model;
   return {
     id: "job_bridge_result",
+    name: "bridge_result.png",
+    tags: [],
     providerKind: request.params.providerKind,
     providerId: config.id,
     launchId: request.params.launchId,
@@ -1801,6 +2112,8 @@ function geminiJob(index: number, patch: Partial<GenerationJob> = {}): Generatio
   const id = `job_gemini_${index}`;
   return {
     id,
+    name: `result_${index}.png`,
+    tags: [],
     providerKind: "gemini",
     providerId: "gemini",
     launchId: NANO_BANANA_3_LAUNCH_ID,
@@ -1957,6 +2270,33 @@ async function selectGalleryFolder(text: string) {
   await click(buttonByText(text, ".gallery-tree-folder-button, .gallery-tree-root"));
 }
 
+async function createPreviewTextAnnotation(text: string) {
+  const previewImage = document.querySelector<HTMLImageElement>(".preview-image-frame > img, .zoom-surface img");
+  if (!previewImage) throw new Error("Preview image was not found.");
+  Object.defineProperty(previewImage, "complete", { configurable: true, value: true });
+  Object.defineProperty(previewImage, "naturalWidth", { configurable: true, value: 100 });
+  Object.defineProperty(previewImage, "naturalHeight", { configurable: true, value: 100 });
+
+  await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Text box"]')!);
+
+  const canvas = document.querySelector<HTMLCanvasElement>(".annotation-canvas")!;
+  const frame = document.querySelector<HTMLElement>(".preview-image-frame")!;
+  const rect = { left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100, x: 0, y: 0, toJSON: () => undefined };
+  Object.defineProperty(frame, "getBoundingClientRect", { configurable: true, value: () => rect });
+  Object.defineProperty(canvas, "getBoundingClientRect", { configurable: true, value: () => rect });
+  canvas.setPointerCapture = vi.fn();
+  canvas.hasPointerCapture = vi.fn(() => true);
+  canvas.releasePointerCapture = vi.fn();
+
+  await pointer(canvas, "pointerdown", { clientX: 10, clientY: 10 });
+  await pointer(canvas, "pointerup", { clientX: 80, clientY: 42 });
+  await flushAsync();
+
+  const textarea = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Text box"]');
+  if (!textarea) throw new Error("Annotation text box was not created.");
+  await changeTextArea(textarea, text);
+}
+
 function buttonByText(text: string, selector = "button"): HTMLButtonElement {
   const button = [...document.querySelectorAll<HTMLButtonElement>(selector)].find((item) => item.textContent?.includes(text));
   if (!button) throw new Error(`Button containing "${text}" was not found.`);
@@ -1973,6 +2313,17 @@ async function flushAsync() {
 async function click(element: HTMLElement) {
   await act(async () => {
     element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+async function pointer(element: HTMLElement, type: string, init: MouseEventInit = {}) {
+  await act(async () => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+    Object.defineProperty(event, "pointerId", { value: 1 });
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    Object.defineProperty(event, "pressure", { value: 0 });
+    element.dispatchEvent(event);
+    await Promise.resolve();
   });
 }
 

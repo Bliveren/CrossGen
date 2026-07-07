@@ -22,6 +22,8 @@ function job(providerKind: ProviderKind = "gemini", model = "gemini-3-pro-image"
   const now = new Date(0).toISOString();
   return {
     id: "job_general_test",
+    name: "general.png",
+    tags: [],
     providerKind,
     providerId: providerKind,
     launchId: "general",

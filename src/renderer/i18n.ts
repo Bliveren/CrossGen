@@ -179,7 +179,6 @@ export interface UiCopy {
   galleryFolderRename: string;
   galleryFolderDelete: string;
   galleryFolderContents: string;
-  galleryBreadcrumb: string;
   galleryViewMode: string;
   galleryGridView: string;
   galleryListView: string;
@@ -218,8 +217,31 @@ export interface UiCopy {
   galleryAssetRenamed: string;
   galleryAddHistory: string;
   galleryAddTargetFolder: string;
+  galleryOpenedForPreview: (name: string) => string;
+  galleryAlreadyInGallery: string;
+  gallerySaveEditedTitle: string;
+  gallerySaveEditedBody: (name: string) => string;
+  galleryOverwrite: string;
+  gallerySaveAsCopy: string;
+  galleryReplaced: string;
+  gallerySavedAsCopy: string;
   galleryEditTags: string;
   gallerySaveTags: string;
+  galleryAddCanceled: string;
+  galleryImportCanceled: string;
+  copyImagePath: string;
+  imagePathCopied: string;
+  tagManager: string;
+  tagManagerDescription: string;
+  tagRename: string;
+  tagDelete: string;
+  tagRenamed: string;
+  tagDeleted: string;
+  batchAddTags: string;
+  newTagPlaceholder: string;
+  addTag: string;
+  noTagsYet: string;
+  batchTagsUpdated: string;
   galleryEmpty: string;
   galleryNoMatch: string;
   galleryDeleteConfirm: (name: string) => string;
@@ -316,6 +338,14 @@ export interface UiCopy {
   historyDeleteSelectedTooltip: (count: number) => string;
   historySelectedDeleteConfirm: (count: number) => string;
   historySelectedDeleted: (count: number) => string;
+  historyTagsUpdated: string;
+  historyRenamed: string;
+  historyEditName: string;
+  historyEditTags: string;
+  historySaveName: string;
+  historySaveTags: string;
+  historySystemTag: string;
+  historyImageName: string;
   historyPageSizeMenu: string;
   historyPageSizeOption: (count: number) => string;
   noJobsYet: string;
@@ -371,6 +401,7 @@ export interface UiCopy {
   undo: string;
   clearAnnotations: string;
   saveToGallery: string;
+  saveCropSelectionToGallery: string;
   downloadEditedImage: string;
   editedDownloadStarted: string;
   annotationRestoreFailed: string;
@@ -488,7 +519,7 @@ export const translations: Record<Language, UiCopy> = {
     galleryDescription: "Reference images ready for reuse.",
     galleryFolders: "Gallery folders",
     galleryAllFolders: "All",
-    galleryUncategorized: "Uncategorized",
+    galleryUncategorized: "Unsorted",
     galleryFolderFilter: "Gallery folder filter",
     galleryTagFilter: "Gallery tag filter",
     galleryFolderNew: "New folder",
@@ -497,7 +528,6 @@ export const translations: Record<Language, UiCopy> = {
     galleryFolderRename: "Rename folder",
     galleryFolderDelete: "Delete folder",
     galleryFolderContents: "Gallery folder contents",
-    galleryBreadcrumb: "Gallery path",
     galleryViewMode: "Gallery view mode",
     galleryGridView: "Grid view",
     galleryListView: "List view",
@@ -505,7 +535,7 @@ export const translations: Record<Language, UiCopy> = {
     galleryOpenItem: (name: string) => `Open ${name}`,
     galleryFolderItemMeta: (count: number, modifiedAt: string) => `${count} image${count === 1 ? "" : "s"} · ${modifiedAt}`,
     galleryFolderDialogDescription: "Folders map to local folders in your Gallery storage path.",
-    galleryFolderDeleteConfirm: (name: string) => `Delete Gallery folder "${name}"? Images stay in Gallery and move to Uncategorized.`,
+    galleryFolderDeleteConfirm: (name: string) => `Delete Gallery folder "${name}"? Images stay in Gallery and move to Unsorted.`,
     galleryFolderCreated: "Gallery folder created.",
     galleryFolderRenamed: "Gallery folder renamed.",
     galleryFolderMoved: "Gallery folder moved.",
@@ -536,8 +566,31 @@ export const translations: Record<Language, UiCopy> = {
     galleryAssetRenamed: "Gallery image renamed.",
     galleryAddHistory: "Add to Gallery",
     galleryAddTargetFolder: "Gallery target folder",
+    galleryOpenedForPreview: (name: string) => `${name} opened in the editor.`,
+    galleryAlreadyInGallery: "This image is already in Gallery.",
+    gallerySaveEditedTitle: "Save edited Gallery image",
+    gallerySaveEditedBody: (name: string) => `Overwrite "${name}" or save the edit as a new Gallery image?`,
+    galleryOverwrite: "Overwrite",
+    gallerySaveAsCopy: "Save as copy",
+    galleryReplaced: "Gallery image overwritten.",
+    gallerySavedAsCopy: "Saved as a new Gallery image.",
     galleryEditTags: "Edit tags",
     gallerySaveTags: "Save tags",
+    galleryAddCanceled: "Gallery add canceled.",
+    galleryImportCanceled: "Gallery import canceled.",
+    copyImagePath: "Copy image path",
+    imagePathCopied: "Image path copied.",
+    tagManager: "Manage tags",
+    tagManagerDescription: "Rename or delete tags across History and Gallery.",
+    tagRename: "Rename tag",
+    tagDelete: "Delete tag",
+    tagRenamed: "Tag renamed.",
+    tagDeleted: "Tag deleted.",
+    batchAddTags: "Add tag to selected",
+    newTagPlaceholder: "New tag",
+    addTag: "Add tag",
+    noTagsYet: "No tags yet",
+    batchTagsUpdated: "Selected tags updated.",
     galleryEmpty: "No Gallery images yet.",
     galleryNoMatch: "No matching Gallery images.",
     galleryDeleteConfirm: (name: string) => `Delete Gallery image "${name}"?`,
@@ -625,7 +678,7 @@ export const translations: Record<Language, UiCopy> = {
     sortSize: "Size",
     sortModified: "Modified",
     historyMatchCount: (count: number) => `${count} match${count === 1 ? "" : "es"}`,
-    showAllHistory: (count: number) => `Show all ${count}`,
+    showAllHistory: () => "Show all",
     collapseHistory: "Show fewer",
     historyGridView: "Grid view",
     historyListView: "List view",
@@ -635,6 +688,14 @@ export const translations: Record<Language, UiCopy> = {
     historyDeleteSelectedTooltip: (count: number) => count > 0 ? `Delete ${count} selected history item${count === 1 ? "" : "s"}` : "Select history items to delete",
     historySelectedDeleteConfirm: (count: number) => `Delete ${count} selected history item${count === 1 ? "" : "s"}?`,
     historySelectedDeleted: (count: number) => `${count} history item${count === 1 ? "" : "s"} deleted.`,
+    historyTagsUpdated: "History tags updated.",
+    historyRenamed: "History image renamed.",
+    historyEditName: "Edit image name",
+    historyEditTags: "Edit history tags",
+    historySaveName: "Save image name",
+    historySaveTags: "Save history tags",
+    historySystemTag: "System tag",
+    historyImageName: "Image name",
     historyPageSizeMenu: "History page size",
     historyPageSizeOption: (count: number) => `Show ${count} per page`,
     noJobsYet: "No jobs yet.",
@@ -689,6 +750,7 @@ export const translations: Record<Language, UiCopy> = {
     undo: "Undo",
     clearAnnotations: "Clear annotations",
     saveToGallery: "Save to Gallery",
+    saveCropSelectionToGallery: "Save selected area to Gallery",
     downloadEditedImage: "Download edited image",
     editedDownloadStarted: "Edited image download started.",
     annotationRestoreFailed: "Cannot restore edit layer.",
@@ -869,7 +931,7 @@ export const translations: Record<Language, UiCopy> = {
     galleryDescription: "方便随时调用的参考图库。",
     galleryFolders: "图库文件夹",
     galleryAllFolders: "全部",
-    galleryUncategorized: "未分类",
+    galleryUncategorized: "未整理",
     galleryFolderFilter: "图库文件夹筛选",
     galleryTagFilter: "图库标签筛选",
     galleryFolderNew: "新建文件夹",
@@ -878,7 +940,6 @@ export const translations: Record<Language, UiCopy> = {
     galleryFolderRename: "重命名文件夹",
     galleryFolderDelete: "删除文件夹",
     galleryFolderContents: "图库文件夹内容",
-    galleryBreadcrumb: "图库路径",
     galleryViewMode: "图库视图模式",
     galleryGridView: "网格视图",
     galleryListView: "列表视图",
@@ -886,7 +947,7 @@ export const translations: Record<Language, UiCopy> = {
     galleryOpenItem: (name: string) => `打开 ${name}`,
     galleryFolderItemMeta: (count: number, modifiedAt: string) => `${count} 张图片 · ${modifiedAt}`,
     galleryFolderDialogDescription: "图库文件夹会对应本地图库存储目录下的文件夹。",
-    galleryFolderDeleteConfirm: (name: string) => `确认删除图库文件夹“${name}”？图片会保留在图库并移到未分类。`,
+    galleryFolderDeleteConfirm: (name: string) => `确认删除图库文件夹“${name}”？图片会保留在图库并移到未整理。`,
     galleryFolderCreated: "图库文件夹已创建。",
     galleryFolderRenamed: "图库文件夹已重命名。",
     galleryFolderMoved: "图库文件夹已移动。",
@@ -917,8 +978,31 @@ export const translations: Record<Language, UiCopy> = {
     galleryAssetRenamed: "图库图片已重命名。",
     galleryAddHistory: "加入图库",
     galleryAddTargetFolder: "加入图库目标文件夹",
+    galleryOpenedForPreview: (name: string) => `已在编辑区打开 ${name}。`,
+    galleryAlreadyInGallery: "该图片已在图库中。",
+    gallerySaveEditedTitle: "保存编辑后的图库图片",
+    gallerySaveEditedBody: (name: string) => `覆盖“${name}”，还是将本次编辑另存为新的图库图片？`,
+    galleryOverwrite: "覆盖",
+    gallerySaveAsCopy: "另存为",
+    galleryReplaced: "图库图片已覆盖。",
+    gallerySavedAsCopy: "已另存为新的图库图片。",
     galleryEditTags: "编辑标签",
     gallerySaveTags: "保存标签",
+    galleryAddCanceled: "已取消加入图库。",
+    galleryImportCanceled: "已取消导入图库。",
+    copyImagePath: "复制图片路径",
+    imagePathCopied: "图片路径已复制。",
+    tagManager: "管理标签",
+    tagManagerDescription: "统一重命名或删除历史与图库中的标签。",
+    tagRename: "重命名标签",
+    tagDelete: "删除标签",
+    tagRenamed: "标签已重命名。",
+    tagDeleted: "标签已删除。",
+    batchAddTags: "给所选添加标签",
+    newTagPlaceholder: "新标签",
+    addTag: "添加标签",
+    noTagsYet: "暂无标签",
+    batchTagsUpdated: "所选标签已更新。",
     galleryEmpty: "暂无图库图片。",
     galleryNoMatch: "没有匹配的图库图片。",
     galleryDeleteConfirm: (name: string) => `确认删除图库图片“${name}”？`,
@@ -1006,7 +1090,7 @@ export const translations: Record<Language, UiCopy> = {
     sortSize: "按大小",
     sortModified: "修改时间",
     historyMatchCount: (count: number) => `${count} 条匹配`,
-    showAllHistory: (count: number) => `显示全部 ${count} 条`,
+    showAllHistory: () => "全部显示",
     collapseHistory: "收起",
     historyGridView: "网格视图",
     historyListView: "列表视图",
@@ -1016,6 +1100,14 @@ export const translations: Record<Language, UiCopy> = {
     historyDeleteSelectedTooltip: (count: number) => count > 0 ? `删除 ${count} 个所选历史项目` : "选择要删除的历史项目",
     historySelectedDeleteConfirm: (count: number) => `确认删除 ${count} 个所选历史项目？`,
     historySelectedDeleted: (count: number) => `已删除 ${count} 个历史项目。`,
+    historyTagsUpdated: "历史标签已更新。",
+    historyRenamed: "历史图片名称已更新。",
+    historyEditName: "编辑图片名称",
+    historyEditTags: "编辑历史标签",
+    historySaveName: "保存图片名称",
+    historySaveTags: "保存历史标签",
+    historySystemTag: "系统标签",
+    historyImageName: "图片名称",
     historyPageSizeMenu: "历史每页数量",
     historyPageSizeOption: (count: number) => `每页显示 ${count} 条`,
     noJobsYet: "暂无任务。",
@@ -1070,6 +1162,7 @@ export const translations: Record<Language, UiCopy> = {
     undo: "回退",
     clearAnnotations: "清除批注",
     saveToGallery: "保存到图库",
+    saveCropSelectionToGallery: "将选定区域存储到图库",
     downloadEditedImage: "下载编辑图",
     editedDownloadStarted: "编辑图下载已开始。",
     annotationRestoreFailed: "无法恢复编辑图层。",

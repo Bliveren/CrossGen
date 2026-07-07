@@ -315,6 +315,10 @@ function normalizeGalleryAssets(value: unknown, folders: GalleryFolder[]): Galle
         source: item.source === "result" ? "result" : "import",
         createdAt,
         updatedAt,
+        ...(optionalString(item.contentHash) ? { contentHash: optionalString(item.contentHash) } : {}),
+        ...(optionalString(item.sourcePathHash) ? { sourcePathHash: optionalString(item.sourcePathHash) } : {}),
+        ...(optionalString(item.sourceJobId) ? { sourceJobId: optionalString(item.sourceJobId) } : {}),
+        ...(optionalString(item.sourceAssetId) ? { sourceAssetId: optionalString(item.sourceAssetId) } : {}),
         ...(optionalString(item.modifiedAt) ? { modifiedAt: optionalString(item.modifiedAt) } : {})
       }
     ];
@@ -351,9 +355,15 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
   const providerKind = normalizeProviderKind(input.providerKind, params.providerKind);
   const launchId = normalizeFocusedLaunchId(input.launchId, params.launchId);
   const modelId = nonEmptyString(input.modelId, params.model);
+  const outputs = Array.isArray(input.outputs) ? input.outputs : [];
+  const firstOutput = outputs.find((item) => isRecord(item) && nonEmptyString(item.sourceType, "") === "result") ?? outputs[outputs.length - 1];
+  const outputFileName = isRecord(firstOutput) ? path.basename(nonEmptyString(firstOutput.fileName, "")) : "";
+  const fallbackName = outputFileName || `${getModelDisplayName(launchId, modelId)}-${nonEmptyString(input.id, "image").slice(-8)}.png`;
 
   return {
     ...(input as unknown as GenerationJob),
+    name: nonEmptyString(input.name, fallbackName),
+    tags: normalizeStringList(input.tags),
     providerKind,
     providerId: nonEmptyString(input.providerId, fallbackProviderId),
     launchId,

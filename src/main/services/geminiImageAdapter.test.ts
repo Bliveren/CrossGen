@@ -48,6 +48,8 @@ function baseJob(): GeminiTestJob {
   const now = new Date(0).toISOString();
   return {
     id: "job_gemini_test",
+    name: "gemini.png",
+    tags: [],
     providerKind: "gemini" as const,
     providerId: "gemini",
     launchId: "nano-banana-3" as const,

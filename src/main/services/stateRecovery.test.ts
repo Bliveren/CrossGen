@@ -6,6 +6,8 @@ import { INTERRUPTED_JOB_MESSAGE, recoverInterruptedJobs } from "./stateRecovery
 function job(status: GenerationJob["status"]): GenerationJob {
   return {
     id: `job_${status}`,
+    name: `${status}.png`,
+    tags: [],
     providerKind: "openai",
     providerId: "default",
     launchId: "gpt-image-2",

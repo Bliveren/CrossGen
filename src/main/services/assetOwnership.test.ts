@@ -27,6 +27,8 @@ function makeJob(imagesDir: string, outputPath = path.join(imagesDir, "result.pn
   const now = new Date(0).toISOString();
   return {
     id: "job_test",
+    name: "result.png",
+    tags: [],
     providerKind: "openai",
     providerId: "default",
     launchId: "gpt-image-2",
