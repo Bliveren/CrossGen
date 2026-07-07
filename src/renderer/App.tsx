@@ -108,6 +108,7 @@ import {
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
+import { ApiConfigCard } from "./ProviderConfigPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -5930,139 +5931,61 @@ export function App() {
                   <span>{copy.apiAccessCurrentSlot}</span>
                   <small>{copy.apiAccessEditHint}</small>
                 </div>
-                <article
-                  className={[
-                    "api-config-card",
-                    "active",
-                    activeConfig.id === selectedApiConfig.id ? "selected" : "",
-                    promotedApiConfigId === activeConfig.id ? "promoted" : ""
-                  ].filter(Boolean).join(" ")}
-                  title={discoveredModelTooltip(activeConfig, copy)}
-                >
-                  <button
-                    type="button"
-                    className="icon-button api-config-use-button"
-                    disabled
-                    aria-label={copy.currentApiAccess}
-                    data-tooltip={copy.currentApiAccess}
-                  >
-                    <ChevronUp size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    className="api-config-card-main"
-                    onClick={() => selectApiConfigForEditing(activeConfig)}
-                    aria-current={activeConfig.id === selectedApiConfig.id ? "true" : undefined}
-                    title={discoveredModelTooltip(activeConfig, copy)}
-                  >
-                    <span className="api-config-card-title-row">
-                      <span className="api-config-card-title">{apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}</span>
-                      {renderApiConfigConnectionBadge(activeConfig)}
-                    </span>
-                    <span className="api-config-card-meta-row">
-                      <span className="api-config-card-meta">{providerLabelFromKind(activeConfig.kind)}</span>
-                      <span className="api-config-card-meta api-config-card-meta-url">{summarizeBaseURL(activeConfig.baseURL)}</span>
-                    </span>
-                    <span className="api-config-card-meta-row">
-                      <span className="api-config-card-key">
-                        <span className={activeConfig.apiKeySaved ? "dot ok" : "dot"} />
-                        {activeConfig.apiKeySaved ? activeConfig.apiKeyPreview ?? copy.keySaved : copy.noKeySaved}
-                      </span>
-                      <span className="api-config-card-models" data-kind={activeConfig.lastModelDiscoveryError ? "error" : "info"}>
-                        {discoverySummary(activeConfig, copy)}
-                      </span>
-                    </span>
-                  </button>
-                  <div className="api-config-card-actions">
-                    <button
-                      type="button"
-                      className="icon-button ghost danger"
-                      onClick={() => void deleteApiAccess(activeConfig)}
-                      disabled={!canDeleteActiveApiAccess || isSavingConfig}
-                      aria-label={canDeleteActiveApiAccess ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
-                      data-tooltip={canDeleteActiveApiAccess ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      onClick={() => void discoverModels(activeConfig)}
-                      disabled={!bridge || isDiscoveringModels || !activeConfig.apiKeySaved}
-                      aria-label={copy.discoverModels}
-                      data-tooltip={copy.discoverModels}
-                    >
-                      {discoveringProviderId === activeConfig.id ? <Loader2 className="spin" size={15} /> : <Radar size={15} />}
-                    </button>
-                  </div>
-                </article>
+                <ApiConfigCard
+                  copy={copy}
+                  config={activeConfig}
+                  active
+                  selected={activeConfig.id === selectedApiConfig.id}
+                  promoted={promotedApiConfigId === activeConfig.id}
+                  canUse={false}
+                  canDelete={canDeleteActiveApiAccess}
+                  saving={isSavingConfig}
+                  bridgeAvailable={Boolean(bridge)}
+                  discovering={discoveringProviderId === activeConfig.id}
+                  discoveringAny={isDiscoveringModels}
+                  tooltip={discoveredModelTooltip(activeConfig, copy)}
+                  displayName={apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}
+                  providerLabel={providerLabelFromKind(activeConfig.kind)}
+                  baseUrlSummary={summarizeBaseURL(activeConfig.baseURL)}
+                  connectionBadge={renderApiConfigConnectionBadge(activeConfig)}
+                  keyLabel={activeConfig.apiKeySaved ? activeConfig.apiKeyPreview ?? copy.keySaved : copy.noKeySaved}
+                  modelSummary={discoverySummary(activeConfig, copy)}
+                  modelSummaryKind={activeConfig.lastModelDiscoveryError ? "error" : "info"}
+                  onUse={() => undefined}
+                  onSelect={() => selectApiConfigForEditing(activeConfig)}
+                  onDelete={() => void deleteApiAccess(activeConfig)}
+                  onDiscover={() => void discoverModels(activeConfig)}
+                />
                 <div className="api-config-card-list" aria-label={copy.apiAccessList}>
                   {inactiveApiConfigs.map((config) => {
                     const isSelectedConfig = config.id === selectedApiConfig.id;
                     return (
-                      <article
+                      <ApiConfigCard
                         key={config.id}
-                        className={isSelectedConfig ? "api-config-card selected" : "api-config-card"}
-                        title={discoveredModelTooltip(config, copy)}
-                      >
-                        <button
-                          type="button"
-                          className="icon-button api-config-use-button"
-                          onClick={() => void switchApiAccess(config.id)}
-                          disabled={!bridge || isSavingConfig}
-                          aria-label={copy.apiAccessUseNow}
-                          data-tooltip={copy.apiAccessUseNow}
-                        >
-                          <ChevronUp size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          className="api-config-card-main"
-                          onClick={() => selectApiConfigForEditing(config)}
-                          aria-current={isSelectedConfig ? "true" : undefined}
-                          title={discoveredModelTooltip(config, copy)}
-                        >
-                          <span className="api-config-card-title-row">
-                            <span className="api-config-card-title">{apiAccessDisplayName(config, copy.apiAccessUntitled)}</span>
-                            {renderApiConfigConnectionBadge(config)}
-                          </span>
-                          <span className="api-config-card-meta-row">
-                            <span className="api-config-card-meta">{providerLabelFromKind(config.kind)}</span>
-                            <span className="api-config-card-meta api-config-card-meta-url">{summarizeBaseURL(config.baseURL)}</span>
-                          </span>
-                          <span className="api-config-card-meta-row">
-                            <span className="api-config-card-key">
-                              <span className={config.apiKeySaved ? "dot ok" : "dot"} />
-                              {config.apiKeySaved ? config.apiKeyPreview ?? copy.keySaved : copy.noKeySaved}
-                            </span>
-                            <span className="api-config-card-models" data-kind={config.lastModelDiscoveryError ? "error" : "info"}>
-                              {discoverySummary(config, copy)}
-                            </span>
-                          </span>
-                        </button>
-                        <div className="api-config-card-actions">
-                          <button
-                            type="button"
-                            className="icon-button ghost danger"
-                            onClick={() => void deleteApiAccess(config)}
-                            disabled={!canDeleteSelectedApiAccess || isSavingConfig}
-                            aria-label={canDeleteSelectedApiAccess ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
-                            data-tooltip={canDeleteSelectedApiAccess ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button"
-                            onClick={() => void discoverModels(config)}
-                            disabled={!bridge || isDiscoveringModels || !config.apiKeySaved}
-                            aria-label={copy.discoverModels}
-                            data-tooltip={copy.discoverModels}
-                          >
-                            {discoveringProviderId === config.id ? <Loader2 className="spin" size={15} /> : <Radar size={15} />}
-                          </button>
-                        </div>
-                      </article>
+                        copy={copy}
+                        config={config}
+                        active={false}
+                        selected={isSelectedConfig}
+                        promoted={false}
+                        canUse
+                        canDelete={canDeleteSelectedApiAccess}
+                        saving={isSavingConfig}
+                        bridgeAvailable={Boolean(bridge)}
+                        discovering={discoveringProviderId === config.id}
+                        discoveringAny={isDiscoveringModels}
+                        tooltip={discoveredModelTooltip(config, copy)}
+                        displayName={apiAccessDisplayName(config, copy.apiAccessUntitled)}
+                        providerLabel={providerLabelFromKind(config.kind)}
+                        baseUrlSummary={summarizeBaseURL(config.baseURL)}
+                        connectionBadge={renderApiConfigConnectionBadge(config)}
+                        keyLabel={config.apiKeySaved ? config.apiKeyPreview ?? copy.keySaved : copy.noKeySaved}
+                        modelSummary={discoverySummary(config, copy)}
+                        modelSummaryKind={config.lastModelDiscoveryError ? "error" : "info"}
+                        onUse={() => void switchApiAccess(config.id)}
+                        onSelect={() => selectApiConfigForEditing(config)}
+                        onDelete={() => void deleteApiAccess(config)}
+                        onDiscover={() => void discoverModels(config)}
+                      />
                     );
                   })}
                 </div>
