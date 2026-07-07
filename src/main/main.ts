@@ -1907,7 +1907,7 @@ async function handleRemoveGalleryAsset(_event: IpcMainInvokeEvent, id: string):
 }
 
 async function handlePickGalleryAsset(_event: IpcMainInvokeEvent, id: string): Promise<InputAsset> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await syncGalleryForRead(await readState());
   const asset = state.galleryAssets.find((item) => item.id === id);
   if (!asset) throw new Error("Gallery 资源不存在。");
   const galleryDir = getGalleryDir(state);
@@ -2593,6 +2593,10 @@ async function runMainPerformanceCapture(resultPath: string): Promise<void> {
   await measure("app:getSnapshot", handleGetSnapshot);
   await measure("gallery:list", handleListGallery);
   await measure("galleryFolders:list", handleListGalleryFolders);
+  const sampleGalleryAsset = initialState.galleryAssets[0];
+  if (sampleGalleryAsset) {
+    await measure("gallery:pick", () => handlePickGalleryAsset(null as unknown as IpcMainInvokeEvent, sampleGalleryAsset.id));
+  }
 
   const state = await readState();
   await ensureDir(path.dirname(resultPath));
