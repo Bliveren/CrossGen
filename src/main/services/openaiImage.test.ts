@@ -452,6 +452,39 @@ describe("OpenAI image service", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("saves Responses-style image generation output results", async () => {
+    const fetchImpl = (async () => Response.json({
+      output: [
+        {
+          type: "image_generation_call",
+          status: "completed",
+          result: tinyPngBase64
+        }
+      ],
+      usage: { total_tokens: 7 }
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.usage?.total_tokens).toBe(7);
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("includes response diagnostics when no savable image is present", async () => {
+    const fetchImpl = (async () => Response.json({
+      output: [
+        { type: "output_text", text: "The request was blocked by the safety system." }
+      ]
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime)).rejects.toThrow(
+      "响应摘要：output 1 项，类型：output_text；文本信息：The request was blocked by the safety system."
+    );
+  });
+
   it("reports non-json image responses clearly", async () => {
     const fetchImpl = (async () => new Response("<!doctype html><title>Not found</title>", {
       headers: { "content-type": "text/html" }

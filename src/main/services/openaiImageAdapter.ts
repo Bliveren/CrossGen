@@ -26,6 +26,7 @@ import type { StoredProviderConfig } from "./stateMigration.js";
 
 export interface ImagesResponse {
   data?: Array<{ b64_json?: string; url?: string; revised_prompt?: string }>;
+  output?: unknown[];
   usage?: UsageDetails;
 }
 
@@ -58,6 +59,7 @@ interface ApiErrorPayload {
 interface JsonImagesResult {
   outputs: ImageAsset[];
   usage?: UsageDetails;
+  emptyReason?: string;
 }
 
 export type OpenAIImageRuntime = ImageJobRuntime;
@@ -375,10 +377,10 @@ async function handleJsonImagesResponse(
   job: OpenAIImageJob,
   runtime: OpenAIImageRuntime
 ): Promise<GenerationJob> {
-  const { outputs, usage } = await readAndSaveJsonImagesResponse(response, job, runtime, 0, job.params.n);
+  const { outputs, usage, emptyReason } = await readAndSaveJsonImagesResponse(response, job, runtime, 0, job.params.n);
 
   if (outputs.length === 0) {
-    throw new Error("OpenAI API 没有返回可保存的图片。");
+    throw new Error(noSavableOpenAIImageMessage(emptyReason));
   }
 
   return {
@@ -402,7 +404,7 @@ async function handleJsonImagesWithBackfill(
   let usage = firstResult.usage;
 
   if (outputs.length === 0) {
-    throw new Error("OpenAI API 没有返回可保存的图片。");
+    throw new Error(noSavableOpenAIImageMessage(firstResult.emptyReason));
   }
 
   while (outputs.length < requestedCount) {
@@ -460,9 +462,10 @@ async function readAndSaveJsonImagesResponse(
   } catch {
     throw new Error("OpenAI API 返回的图片结果不是有效 JSON。请检查 Base URL 是否指向 OpenAI 兼容的 /v1 接口。");
   }
-  const outputs = await saveImageItems(job, (payload.data ?? []).slice(0, maxResults), "result", runtime, firstIndex);
+  const imageItems = collectImageItemsFromPayload(payload).slice(0, maxResults);
+  const outputs = await saveImageItems(job, imageItems, "result", runtime, firstIndex);
 
-  return { outputs, usage: payload.usage };
+  return { outputs, usage: payload.usage, emptyReason: outputs.length === 0 ? describeNoImagePayload(payload) : undefined };
 }
 
 function mergeUsageDetails(current: UsageDetails | undefined, next: UsageDetails | undefined): UsageDetails | undefined {
@@ -494,6 +497,143 @@ function mergeUsageTokenDetails(
 function sumOptionalNumbers(current: number | undefined, next: number | undefined): number | undefined {
   if (current === undefined && next === undefined) return undefined;
   return (current ?? 0) + (next ?? 0);
+}
+
+type OpenAIImageItem = { b64_json?: string; url?: string };
+
+function collectImageItemsFromPayload(payload: unknown): OpenAIImageItem[] {
+  const items: OpenAIImageItem[] = [];
+
+  const pushItem = (item: OpenAIImageItem) => {
+    if (!item.b64_json && !item.url) return;
+    items.push(item);
+  };
+
+  const pushBase64OrDataUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (trimmed.startsWith("data:image/")) {
+      pushItem({ url: trimmed });
+      return;
+    }
+    pushItem({ b64_json: trimmed });
+  };
+
+  const visit = (value: unknown, key = "", parentType = "", depth = 0) => {
+    if (depth > 8 || value == null) return;
+
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, key, parentType, depth + 1);
+      return;
+    }
+
+    if (typeof value === "string") {
+      if ((key === "url" || key === "image_url") && value.trim()) {
+        pushItem({ url: value.trim() });
+      }
+      if (key === "result" && /image_(?:generation|edit)_call|image/i.test(parentType)) {
+        pushBase64OrDataUrl(value);
+      }
+      return;
+    }
+
+    if (!isRecord(value)) return;
+
+    const type = typeof value.type === "string" ? value.type : parentType;
+    if (typeof value.b64_json === "string") pushBase64OrDataUrl(value.b64_json);
+    if (typeof value.image_base64 === "string") pushBase64OrDataUrl(value.image_base64);
+    if (typeof value.base64 === "string") pushBase64OrDataUrl(value.base64);
+    if (typeof value.result === "string" && /image_(?:generation|edit)_call|image/i.test(type)) pushBase64OrDataUrl(value.result);
+    if (typeof value.url === "string" && value.url.trim()) pushItem({ url: value.url.trim() });
+
+    if (typeof value.image_url === "string" && value.image_url.trim()) {
+      pushItem({ url: value.image_url.trim() });
+    } else if (isRecord(value.image_url) && typeof value.image_url.url === "string" && value.image_url.url.trim()) {
+      pushItem({ url: value.image_url.url.trim() });
+    }
+
+    const mimeType = typeof value.mimeType === "string" ? value.mimeType : typeof value.mime_type === "string" ? value.mime_type : "";
+    if (typeof value.data === "string" && (/^image\//i.test(mimeType) || key === "inlineData" || /inlineData|image/i.test(type))) {
+      pushBase64OrDataUrl(value.data);
+    }
+
+    for (const nestedKey of ["data", "output", "content", "images", "image", "result", "inlineData", "inline_data"]) {
+      if (nestedKey in value && typeof value[nestedKey] !== "string") {
+        visit(value[nestedKey], nestedKey, type, depth + 1);
+      }
+    }
+  };
+
+  visit(payload);
+  return items;
+}
+
+function noSavableOpenAIImageMessage(reason?: string): string {
+  return reason
+    ? `OpenAI API 没有返回可保存的图片。可能被安全策略拦截，或兼容接口未返回图片字段。${reason}`
+    : "OpenAI API 没有返回可保存的图片。可能被安全策略拦截，或兼容接口未返回图片字段。";
+}
+
+function describeNoImagePayload(payload: unknown): string | undefined {
+  if (!isRecord(payload)) return undefined;
+  const details: string[] = [];
+
+  if (Array.isArray(payload.data)) {
+    const firstKeys = payload.data
+      .slice(0, 3)
+      .filter(isRecord)
+      .map((item) => Object.keys(item).slice(0, 6).join(","))
+      .filter(Boolean);
+    details.push(`data ${payload.data.length} 项${firstKeys.length ? `，字段：${firstKeys.join(" / ")}` : ""}`);
+  }
+
+  if (Array.isArray(payload.output)) {
+    const outputTypes = payload.output
+      .slice(0, 4)
+      .map((item) => isRecord(item) && typeof item.type === "string" ? item.type : typeof item)
+      .join(", ");
+    details.push(`output ${payload.output.length} 项${outputTypes ? `，类型：${outputTypes}` : ""}`);
+  }
+
+  const textDetails = collectOpenAITextDiagnostics(payload);
+  if (textDetails.length > 0) {
+    details.push(`文本信息：${textDetails.slice(0, 2).join(" / ")}`);
+  }
+
+  return details.length > 0 ? `响应摘要：${details.join("；")}` : undefined;
+}
+
+function collectOpenAITextDiagnostics(payload: unknown): string[] {
+  const values: string[] = [];
+  const seen = new Set<string>();
+  const interestingKeys = new Set(["message", "refusal", "reason", "status", "code", "finish_reason", "text"]);
+
+  const push = (value: string) => {
+    const text = redactLikelySecrets(value.trim()).replace(/\s+/g, " ").slice(0, 180);
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    values.push(text);
+  };
+
+  const visit = (value: unknown, key = "", parentType = "", depth = 0) => {
+    if (depth > 6 || value == null || values.length >= 4) return;
+    if (typeof value === "string") {
+      if (interestingKeys.has(key) || (parentType === "output_text" && key !== "type")) push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, key, parentType, depth + 1);
+      return;
+    }
+    if (!isRecord(value)) return;
+    const type = typeof value.type === "string" ? value.type : parentType;
+    for (const [childKey, childValue] of Object.entries(value)) {
+      visit(childValue, childKey, type, depth + 1);
+    }
+  };
+
+  visit(payload);
+  return values;
 }
 
 async function readModelsResponse(response: Response): Promise<DiscoveredModel[]> {

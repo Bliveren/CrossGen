@@ -2512,12 +2512,9 @@
     justify-content: space-between;
     gap: 10px;
     margin-top: auto;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--surface-floating-radius);
-    background: var(--surface-floating);
-    padding: 6px;
-    box-shadow: var(--shadow-soft);
-    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border-subtle);
+    background: transparent;
+    padding-top: 14px;
   }
 
   .right-rail-action-group {
@@ -2583,9 +2580,9 @@
 
   .right-rail.collapsed .history-item {
     grid-template-columns: 1fr;
-    width: 56px;
-    height: 56px;
-    min-height: 56px;
+    width: 88px;
+    height: 88px;
+    min-height: 88px;
     gap: 0;
     border: 0;
     background: transparent;
@@ -2602,8 +2599,8 @@
   .right-rail.collapsed .history-preview,
   .right-rail.collapsed .gallery-thumb,
   .right-rail.collapsed .gallery-folder-thumb {
-    width: 56px;
-    height: 56px;
+    width: 88px;
+    height: 88px;
     min-height: 0;
     border-radius: var(--radius-lg);
   }
@@ -2628,8 +2625,8 @@
 
   .right-rail.collapsed .gallery-item {
     grid-template-columns: 1fr;
-    width: 56px;
-    min-height: 56px;
+    width: 88px;
+    min-height: 88px;
     gap: 0;
     border: 0;
     background: transparent;
@@ -2642,8 +2639,9 @@
     z-index: 5000;
     justify-content: flex-end;
     border: 0;
+    border-top: 1px solid var(--border-subtle);
     background: transparent;
-    padding: 0;
+    padding-top: 14px;
     box-shadow: none;
     backdrop-filter: none;
     overflow: visible;
