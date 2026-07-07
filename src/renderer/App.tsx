@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
   ArrowDownUp,
   BookOpen,
-  Bold,
   Brush,
   ChevronDown,
   ChevronLeft,
@@ -12,9 +10,7 @@ import {
   ChevronUp,
   CheckCircle2,
   CheckSquare,
-  Circle,
   Copy,
-  Crop,
   Download,
   FileDown,
   FileUp,
@@ -32,7 +28,6 @@ import {
   List,
   Loader2,
   LibraryBig,
-  Maximize2,
   Paintbrush,
   Pencil,
   Radar,
@@ -43,16 +38,13 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
-  RectangleHorizontal,
   SquarePen,
   Tags,
   Trash2,
   Plus,
   Type,
   Wrench,
-  X,
-  ZoomIn,
-  ZoomOut
+  X
 } from "lucide-react";
 import {
   DEFAULT_BASE_URL,
@@ -116,7 +108,20 @@ import {
   normalizeModelId
 } from "../shared/modelCatalog";
 import { PromptComposer } from "./PromptComposer";
+import { ImageEditor } from "./ImageEditor";
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
+import {
+  MIN_TEXT_BOX_SIZE,
+  type AnnotationDrawingLayer,
+  type AnnotationTextBox,
+  type AnnotationTool,
+  type CanvasPoint,
+  type CanvasRect,
+  type CropSelection,
+  type CropShape,
+  type EditorSnapshot,
+  type PreviewMode
+} from "./imageEditorTypes";
 import { serializePromptTokens, type PromptToken } from "./promptTokens";
 
 type NoticeKind = "info" | "success" | "error";
@@ -203,56 +208,9 @@ const GALLERY_CONTENT_DEFAULT_WIDTH = 320;
 
 type TabMode = "text2img" | "img2img";
 type GalleryFolderFilter = "__all__" | "__uncategorized__" | string;
-type PreviewMode = "idle" | "edit" | "crop";
-type AnnotationTool = "draw" | "text";
-type CropShape = "rect" | "ellipse";
-
-interface CanvasPoint {
-  x: number;
-  y: number;
-  pressure: number;
-}
-
-interface AnnotationTextBox {
-  id: string;
-  order: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  text: string;
-  color: string;
-  fontSize: number;
-  bold: boolean;
-}
-
-interface AnnotationDrawingLayer {
-  id: string;
-  order: number;
-  dataUrl: string;
-}
-
-interface CanvasRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface CropSelection extends CanvasRect {
-  shape: CropShape;
-}
-
-interface EditorSnapshot {
-  drawingLayers: AnnotationDrawingLayer[];
-  textBoxes: AnnotationTextBox[];
-  editedImageDataUrl: string | null;
-}
 
 const GALLERY_ALL_FILTER = "__all__";
 const GALLERY_UNCATEGORIZED_FILTER = "__uncategorized__";
-const ANNOTATION_COLOR_SWATCHES = ["#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF", "#5856D6", "#111827", "#FFFFFF"];
-const MIN_TEXT_BOX_SIZE = 34;
 
 function getReferenceImageLimit(params: ImageParams): number {
   if (isOpenAIImageParams(params)) {
@@ -3872,6 +3830,42 @@ export function App() {
     });
   }
 
+  function focusAnnotationTextBox(box: AnnotationTextBox) {
+    setActiveAnnotationTextBoxId(box.id);
+    setAnnotationColor(box.color);
+    setAnnotationTextSize(Math.round(textBoxDisplayFontSize(box)));
+    setIsAnnotationTextBold(box.bold);
+  }
+
+  function togglePreviewEditMode() {
+    if (isEditingPreview) {
+      discardEmptyAnnotationTextBoxes();
+      setPreviewMode("idle");
+      setDraftTextRect(null);
+      return;
+    }
+    setPreviewMode("edit");
+    setCropSelection(null);
+    resizeAnnotationCanvas();
+  }
+
+  function togglePreviewCropMode() {
+    if (isCroppingPreview) {
+      setPreviewMode("idle");
+      setCropSelection(null);
+      return;
+    }
+    discardEmptyAnnotationTextBoxes();
+    setPreviewMode("crop");
+    setDraftTextRect(null);
+    resizeAnnotationCanvas();
+  }
+
+  function activatePartialImage(asset: ImageAsset) {
+    setActiveGalleryAssetId(null);
+    setActiveJob((job) => (job ? { ...job, outputs: [...job.outputs, asset] } : job));
+  }
+
   function cssRectForCanvasRect(rect: CanvasRect): React.CSSProperties {
     const canvas = annotationCanvasRef.current;
     const width = canvas?.width || 1;
@@ -5254,360 +5248,87 @@ export function App() {
 
       <section className="workspace">
         <div className="preview-layout" ref={previewLayoutRef}>
-          <section className="result-stage">
-            <div className="result-canvas" ref={resultCanvasRef}>
-              {activePreviewSource ? (
-                <>
-                  <div
-                    ref={zoomSurfaceRef}
-                    className={isPanning ? "zoom-surface panning" : previewZoom > 1 ? "zoom-surface pannable" : "zoom-surface"}
-                    onDoubleClick={() => setIsPreviewOpen(true)}
-                    onPointerDown={handlePreviewPanStart}
-                    onPointerMove={handlePreviewPanMove}
-                    onPointerUp={handlePreviewPanEnd}
-                    onPointerCancel={handlePreviewPanEnd}
-                  >
-                    <div
-                      ref={annotationFrameRef}
-                      className="preview-image-frame"
-                      style={{ width: `${previewZoom * 100}%`, transform: `translate(${previewPan.x}px, ${previewPan.y}px)` }}
-                    >
-                      <img
-                        ref={annotationImageRef}
-                        src={activePreviewSource}
-                        alt={copy.generatedResult}
-                        crossOrigin={/^(?:https?:|image2tools-asset:)/i.test(activePreviewSource) ? "anonymous" : undefined}
-                        draggable={false}
-                        onLoad={() => resizeAnnotationCanvas(true)}
-                        onContextMenu={(e) => handleImageContextMenu(e, activeImage, activeJob?.prompt ?? '')}
-                      />
-                      {annotationDrawingLayers.map((layer) => (
-                        <img
-                          key={layer.id}
-                          className="annotation-drawing-layer"
-                          src={layer.dataUrl}
-                          alt=""
-                          draggable={false}
-                          style={annotationLayerStyle(layer.order)}
-                        />
-                      ))}
-                      <canvas
-                        ref={annotationCanvasRef}
-                        className={[
-                          "annotation-canvas",
-                          isPreviewCanvasInteractive ? "active" : hasEditorOverlay ? "visible" : "",
-                          isCroppingPreview ? "crop-mode" : annotationTool === "text" ? "text-mode" : ""
-                        ].filter(Boolean).join(" ")}
-                        style={{
-                          zIndex: isCroppingPreview || (isEditingPreview && annotationTool === "draw") ? 1000 : 10
-                        }}
-                        onPointerDown={startAnnotation}
-                        onPointerMove={continueAnnotation}
-                        onPointerUp={finishAnnotation}
-                        onPointerCancel={finishAnnotation}
-                      />
-                      {draftTextRect && isEditingPreview && (
-                        <div className="annotation-text-draft" style={cssRectForCanvasRect(draftTextRect)} />
-                      )}
-                      {cropSelection && isCroppingPreview && (
-                        <div
-                          className={`crop-selection ${cropSelection.shape}`}
-                          style={cssRectForCanvasRect(cropSelection)}
-                        />
-                      )}
-                      {annotationTextBoxes.map((box) => (
-                        isEditingPreview ? (
-                          <div
-                            key={box.id}
-                            className={activeAnnotationTextBoxId === box.id ? "annotation-text-box-wrap active" : "annotation-text-box-wrap"}
-                            style={{ ...cssRectForCanvasRect(box), ...annotationLayerStyle(box.order) }}
-                            onPointerDown={(event) => event.stopPropagation()}
-                          >
-                            <textarea
-                              data-annotation-text-box-id={box.id}
-                              className="annotation-text-box-input"
-                              value={box.text}
-                              onFocus={() => {
-                                setActiveAnnotationTextBoxId(box.id);
-                                setAnnotationColor(box.color);
-                                setAnnotationTextSize(Math.round(textBoxDisplayFontSize(box)));
-                                setIsAnnotationTextBold(box.bold);
-                              }}
-                              onBlur={(event) => {
-                                const nextTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null;
-                                if (nextTarget && event.currentTarget.parentElement?.contains(nextTarget)) return;
-                                if (!event.currentTarget.value.trim()) pruneEmptyAnnotationTextBox(box.id);
-                              }}
-                              onChange={(event) => updateAnnotationTextBox(box.id, { text: event.target.value })}
-                              aria-label={copy.textBox}
-                              style={{
-                                color: box.color,
-                                fontSize: cssSizeForCanvasUnits(box.fontSize),
-                                fontWeight: box.bold ? 700 : 400,
-                                padding: cssSizeForCanvasUnits(Math.max(2, box.fontSize / 3))
-                              }}
-                            />
-                            <button
-                              type="button"
-                              className="annotation-text-resize-handle"
-                              onPointerDown={(event) => startTextBoxResize(event, box)}
-                              aria-label={language === "zh" ? "调整文本框大小" : "Resize text box"}
-                              data-tooltip={language === "zh" ? "调整文本框大小" : "Resize text box"}
-                            />
-                          </div>
-                        ) : (
-                          <div
-                            key={box.id}
-                            className="annotation-text-box readonly"
-                            style={{
-                              ...cssRectForCanvasRect(box),
-                              ...annotationLayerStyle(box.order),
-                              color: box.color,
-                              fontSize: cssSizeForCanvasUnits(box.fontSize),
-                              fontWeight: box.bold ? 700 : 400,
-                              padding: cssSizeForCanvasUnits(Math.max(2, box.fontSize / 3))
-                            }}
-                          >
-                            {box.text}
-                          </div>
-                        )
-                      ))}
-                    </div>
-                  </div>
-                  <div
-                    className="preview-control-strip"
-                    onMouseMove={movePreviewToolbarTowardPointer}
-                    onMouseLeave={resetPreviewToolbarDrift}
-                  >
-                    <div className="preview-primary-actions" aria-label={copy.resultViewer}>
-                      <button
-                        type="button"
-                        className={isEditingPreview ? "icon-button active" : "icon-button"}
-                        disabled={!activePreviewSource}
-                        onClick={() => {
-                          if (isEditingPreview) {
-                            discardEmptyAnnotationTextBoxes();
-                            setPreviewMode("idle");
-                            setDraftTextRect(null);
-                            return;
-                          }
-                          setPreviewMode("edit");
-                          setCropSelection(null);
-                          resizeAnnotationCanvas();
-                        }}
-                        aria-label={isEditingPreview ? copy.back : copy.editImage}
-                        data-tooltip={isEditingPreview ? copy.back : copy.editImage}
-                      >
-                        {isEditingPreview ? <ArrowLeft size={16} /> : <Pencil size={16} />}
-                      </button>
-                      <button
-                        type="button"
-                        className={isCroppingPreview ? "icon-button active" : "icon-button"}
-                        disabled={!activePreviewSource}
-                        onClick={() => {
-                          if (isCroppingPreview) {
-                            setPreviewMode("idle");
-                            setCropSelection(null);
-                            return;
-                          }
-                          discardEmptyAnnotationTextBoxes();
-                          setPreviewMode("crop");
-                          setDraftTextRect(null);
-                          resizeAnnotationCanvas();
-                        }}
-                        aria-label={isCroppingPreview ? copy.back : copy.cropImage}
-                        data-tooltip={isCroppingPreview ? copy.back : copy.cropImage}
-                      >
-                        {isCroppingPreview ? <ArrowLeft size={16} /> : <Crop size={16} />}
-                      </button>
-                      <button
-                        type="button"
-                        className={hasEditedPreviewChanges || cropSelection ? buttonFeedbackClass("download:edited") : activeImage ? buttonFeedbackClass(`download:${activeImage.id}`) : "icon-button"}
-                        disabled={!activeImage}
-                        onClick={() => void downloadCurrentPreview()}
-                        aria-label={hasEditedPreviewChanges || cropSelection ? copy.downloadEditedImage : copy.download}
-                        data-tooltip={hasEditedPreviewChanges || cropSelection ? copy.downloadEditedImage : copy.download}
-                      >
-                        <Download size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        className={buttonFeedbackClass(isCroppingPreview && cropSelection ? "gallery:cropped" : hasEditedPreviewChanges ? "gallery:edited" : "gallery:current")}
-                        disabled={!activeImage}
-                        onClick={() => void saveCurrentPreviewToGallery()}
-                        aria-label={copy.saveToGallery}
-                        data-tooltip={copy.saveToGallery}
-                      >
-                        <Save size={16} />
-                      </button>
-                    </div>
-                    {isEditingPreview && (
-                      <div className="annotation-tools preview-secondary-actions" data-drift="subtle">
-                        <button type="button" className={annotationTool === "draw" ? "icon-button active" : "icon-button"} onClick={() => {
-                          discardEmptyAnnotationTextBoxes();
-                          setAnnotationTool("draw");
-                        }} aria-label={copy.drawTool} data-tooltip={copy.drawTool}>
-                          <Brush size={15} />
-                        </button>
-                        <button type="button" className={annotationTool === "text" ? "icon-button active" : "icon-button"} onClick={() => setAnnotationTool("text")} aria-label={copy.textTool} data-tooltip={copy.textTool}>
-                          <Type size={15} />
-                        </button>
-                        <div className="annotation-color-picker">
-                          <button
-                            type="button"
-                            className="icon-button annotation-color-button"
-                            onClick={() => setIsAnnotationColorPickerOpen((current) => !current)}
-                            aria-label={copy.annotationColor}
-                            data-tooltip={copy.annotationColor}
-                            aria-expanded={isAnnotationColorPickerOpen}
-                          >
-                            <span className="annotation-current-color" style={{ background: annotationColor }} />
-                          </button>
-                          {isAnnotationColorPickerOpen && (
-                            <div className="annotation-color-popover">
-                              <input
-                                type="color"
-                                value={annotationColor}
-                                onChange={(event) => applyAnnotationColor(event.target.value)}
-                                aria-label={copy.annotationColor}
-                              />
-                              <div className="annotation-swatches" aria-label={copy.quickColors}>
-                                {ANNOTATION_COLOR_SWATCHES.map((color) => (
-                                  <button
-                                    key={color}
-                                    type="button"
-                                    className={annotationColor.toLowerCase() === color.toLowerCase() ? "annotation-swatch active" : "annotation-swatch"}
-                                    style={{ background: color }}
-                                    onClick={() => {
-                                      applyAnnotationColor(color);
-                                      setIsAnnotationColorPickerOpen(false);
-                                    }}
-                                    aria-label={copy.chooseColor(color)}
-                                    data-tooltip={copy.chooseColor(color)}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        {annotationTool === "draw" ? (
-                          <span className="range-tooltip" data-tooltip={`${copy.strokeWidth}: ${annotationSize}px`}>
-                            <input
-                              type="range"
-                              min="2"
-                              max="32"
-                              value={annotationSize}
-                              onChange={(event) => setAnnotationSize(Number(event.target.value))}
-                              aria-label={copy.strokeWidth}
-                            />
-                          </span>
-                        ) : (
-                          <>
-                            <span className="range-tooltip" data-tooltip={`${copy.textSize}: ${annotationTextSize}px`}>
-                              <input
-                                type="range"
-                                min="12"
-                                max="72"
-                                value={annotationTextSize}
-                                onChange={(event) => applyAnnotationTextSize(Number(event.target.value))}
-                                aria-label={copy.textSize}
-                              />
-                            </span>
-                            <button type="button" className={isAnnotationTextBold ? "icon-button active" : "icon-button"} onClick={toggleAnnotationTextBold} aria-label={copy.boldText} data-tooltip={copy.boldText}>
-                              <Bold size={15} />
-                            </button>
-                          </>
-                        )}
-                        <button type="button" className="icon-button" onClick={undoEditorAction} disabled={editorUndoStack.length === 0} aria-label={copy.undo} data-tooltip={copy.undo}>
-                          <RotateCcw size={15} />
-                        </button>
-                        <button type="button" className="icon-button" onClick={clearAnnotations} aria-label={copy.clearAnnotations} data-tooltip={copy.clearAnnotations}>
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    )}
-                    {isCroppingPreview && (
-                      <div className="annotation-tools crop-tools preview-secondary-actions" data-drift="subtle">
-                        <button type="button" className={cropShape === "rect" ? "icon-button active" : "icon-button"} onClick={() => setCropShape("rect")} aria-label={copy.cropRectangle} data-tooltip={copy.cropRectangle}>
-                          <RectangleHorizontal size={15} />
-                        </button>
-                        <button type="button" className={cropShape === "ellipse" ? "icon-button active" : "icon-button"} onClick={() => setCropShape("ellipse")} aria-label={copy.cropEllipse} data-tooltip={copy.cropEllipse}>
-                          <Circle size={15} />
-                        </button>
-                        <button type="button" className="icon-button" onClick={undoEditorAction} disabled={editorUndoStack.length === 0} aria-label={copy.undo} data-tooltip={copy.undo}>
-                          <RotateCcw size={15} />
-                        </button>
-                        <button type="button" className={buttonFeedbackClass("gallery:cropped")} onClick={() => void saveCropSelectionToGallery()} disabled={!cropSelection} aria-label={copy.saveCropSelectionToGallery} data-tooltip={copy.saveCropSelectionToGallery}>
-                          <FolderInput size={15} />
-                        </button>
-                        <button type="button" className="icon-button" onClick={() => void applyCropSelection()} disabled={!cropSelection} aria-label={copy.applyCrop} data-tooltip={copy.applyCrop}>
-                          <CheckCircle2 size={15} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <div
-                    className="preview-zoom-strip"
-                    onMouseMove={movePreviewToolbarTowardPointer}
-                    onMouseLeave={resetPreviewToolbarDrift}
-                  >
-                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(-PREVIEW_ZOOM_STEP)} aria-label={copy.zoomOut} data-tooltip={copy.zoomOut}>
-                      <ZoomOut size={16} />
-                    </button>
-                    <span className="zoom-readout" title={copy.zoomLevel}>{previewZoomPercent}%</span>
-                    <button type="button" className="icon-button" onClick={() => adjustPreviewZoom(PREVIEW_ZOOM_STEP)} aria-label={copy.zoomIn} data-tooltip={copy.zoomIn}>
-                      <ZoomIn size={16} />
-                    </button>
-                    <button type="button" className="icon-button" disabled={previewZoom === 1 && previewPan.x === 0 && previewPan.y === 0} onClick={resetPreviewView} aria-label={copy.resetZoom} data-tooltip={copy.resetZoom}>
-                      <Maximize2 size={16} />
-                    </button>
-                  </div>
-                </>
-              ) : activeJobError ? (
-                <div className="job-error-panel" role="alert">
-                  <AlertTriangle size={30} />
-                  <strong>{copy.jobFailed}</strong>
-                  <span>{activeJobError}</span>
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <Sparkles size={30} />
-                  <span>{copy.outputEmpty}</span>
-                </div>
-              )}
-            </div>
-
-            {activeResults.length > 1 && (
-              <div className="result-strip">
-                {activeResults.map((asset, index) => (
-                  <button
-                    key={asset.id}
-                    type="button"
-                    className={asset.id === activeImage?.id ? "active" : undefined}
-                    onClick={() => setSelectedResultId(asset.id)}
-                    title={`${copy.generatedResult} ${index + 1}`}
-                  >
-                    <img src={assetSource(asset)} alt={`${copy.generatedResult} ${index + 1}`} />
-                    <span>{index + 1}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {partialImages.length > 0 && (
-              <div className="partial-strip">
-                {partialImages.map((asset, index) => (
-                  <button key={asset.id} type="button" onClick={() => {
-                    setActiveGalleryAssetId(null);
-                    setActiveJob((job) => (job ? { ...job, outputs: [...job.outputs, asset] } : job));
-                  }}>
-                    <img src={assetSource(asset)} alt={`${copy.partialImages} ${index + 1}`} />
-                    <span>P{index + 1}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
+          <ImageEditor
+            copy={copy}
+            language={language}
+            resultCanvasRef={resultCanvasRef}
+            zoomSurfaceRef={zoomSurfaceRef}
+            annotationFrameRef={annotationFrameRef}
+            annotationImageRef={annotationImageRef}
+            annotationCanvasRef={annotationCanvasRef}
+            activePreviewSource={activePreviewSource}
+            activeJobError={activeJobError}
+            activeImage={activeImage}
+            activeResults={activeResults}
+            partialImages={partialImages}
+            previewZoom={previewZoom}
+            previewPan={previewPan}
+            previewZoomPercent={previewZoomPercent}
+            isPanning={isPanning}
+            isPreviewCanvasInteractive={isPreviewCanvasInteractive}
+            hasEditorOverlay={hasEditorOverlay}
+            isEditingPreview={isEditingPreview}
+            isCroppingPreview={isCroppingPreview}
+            hasEditedPreviewChanges={hasEditedPreviewChanges}
+            annotationDrawingLayers={annotationDrawingLayers}
+            annotationTextBoxes={annotationTextBoxes}
+            activeAnnotationTextBoxId={activeAnnotationTextBoxId}
+            draftTextRect={draftTextRect}
+            cropSelection={cropSelection}
+            annotationTool={annotationTool}
+            annotationColor={annotationColor}
+            annotationSize={annotationSize}
+            annotationTextSize={annotationTextSize}
+            isAnnotationTextBold={isAnnotationTextBold}
+            isAnnotationColorPickerOpen={isAnnotationColorPickerOpen}
+            editorUndoStackLength={editorUndoStack.length}
+            cropShape={cropShape}
+            assetSource={assetSource}
+            buttonFeedbackClass={buttonFeedbackClass}
+            annotationLayerStyle={annotationLayerStyle}
+            cssRectForCanvasRect={cssRectForCanvasRect}
+            cssSizeForCanvasUnits={cssSizeForCanvasUnits}
+            onOpenPreview={() => setIsPreviewOpen(true)}
+            onPreviewPanStart={handlePreviewPanStart}
+            onPreviewPanMove={handlePreviewPanMove}
+            onPreviewPanEnd={handlePreviewPanEnd}
+            onResizeAnnotationCanvas={resizeAnnotationCanvas}
+            onImageContextMenu={(event) => handleImageContextMenu(event, activeImage, activeJob?.prompt ?? "")}
+            onStartAnnotation={startAnnotation}
+            onContinueAnnotation={continueAnnotation}
+            onFinishAnnotation={finishAnnotation}
+            onTextBoxFocus={focusAnnotationTextBox}
+            onTextBoxChange={(id, text) => updateAnnotationTextBox(id, { text })}
+            onPruneEmptyTextBox={pruneEmptyAnnotationTextBox}
+            onStartTextBoxResize={startTextBoxResize}
+            onMoveToolbarTowardPointer={movePreviewToolbarTowardPointer}
+            onResetToolbarDrift={resetPreviewToolbarDrift}
+            onToggleEditMode={togglePreviewEditMode}
+            onToggleCropMode={togglePreviewCropMode}
+            onDownloadCurrentPreview={() => void downloadCurrentPreview()}
+            onSaveCurrentPreviewToGallery={() => void saveCurrentPreviewToGallery()}
+            onSelectDrawTool={() => {
+              discardEmptyAnnotationTextBoxes();
+              setAnnotationTool("draw");
+            }}
+            onSelectTextTool={() => setAnnotationTool("text")}
+            onToggleAnnotationColorPicker={() => setIsAnnotationColorPickerOpen((current) => !current)}
+            onApplyAnnotationColor={applyAnnotationColor}
+            onCloseAnnotationColorPicker={() => setIsAnnotationColorPickerOpen(false)}
+            onAnnotationSizeChange={setAnnotationSize}
+            onAnnotationTextSizeChange={applyAnnotationTextSize}
+            onToggleAnnotationTextBold={toggleAnnotationTextBold}
+            onUndoEditorAction={undoEditorAction}
+            onClearAnnotations={clearAnnotations}
+            onCropShapeChange={setCropShape}
+            onSaveCropSelectionToGallery={() => void saveCropSelectionToGallery()}
+            onApplyCropSelection={() => void applyCropSelection()}
+            onZoomOut={() => adjustPreviewZoom(-PREVIEW_ZOOM_STEP)}
+            onZoomIn={() => adjustPreviewZoom(PREVIEW_ZOOM_STEP)}
+            onResetPreviewView={resetPreviewView}
+            onSelectResult={setSelectedResultId}
+            onActivatePartialImage={activatePartialImage}
+          />
 
           <div
             className="preview-resizer"
