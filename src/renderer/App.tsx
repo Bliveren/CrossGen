@@ -41,7 +41,6 @@ import {
   Trash2,
   Plus,
   Type,
-  Wrench,
   X
 } from "lucide-react";
 import {
@@ -108,7 +107,7 @@ import {
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
-import { ApiConfigDialog } from "./ProviderConfigPanel";
+import { ApiConfigDialog, ProviderSummarySection } from "./ProviderConfigPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -5027,41 +5026,19 @@ export function App() {
         </div>
         <div className="sidebar-full-stack">
 
-        <section className="tool-section model-config-section api-access-section">
-          <div className="section-title config-title">
-            <div className="section-title-label">
-              <KeyRound size={16} />
-              <h2>{copy.provider}</h2>
-            </div>
-            <span className="connection-badge" data-status={connectionCheck.status} title={connectionTitle}>
-              {isTestingConnection || connectionCheck.status === "checking" ? (
-                <Loader2 className="spin" size={13} />
-              ) : connectionCheck.status === "ok" ? (
-                <CheckCircle2 size={13} />
-              ) : connectionCheck.status === "error" ? (
-                <AlertTriangle size={13} />
-              ) : (
-                <span className="connection-dot" />
-              )}
-              {connectionLabel}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            className="api-access-current"
-            onClick={() => openApiConfigDialog(activeConfig)}
-          >
-            <span>
-              <strong>{apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}</strong>
-              <small>{providerLabelFromKind(activeConfig.kind)} · {summarizeBaseURL(activeConfig.baseURL)}</small>
-              <small>
-                {activeConfig.apiKeySaved ? copy.keySaved : copy.noKeySaved} · {discoveryText}
-              </small>
-            </span>
-            <Wrench size={16} />
-          </button>
-        </section>
+        <ProviderSummarySection
+          copy={copy}
+          activeConfig={activeConfig}
+          displayName={apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}
+          providerLabel={providerLabelFromKind(activeConfig.kind)}
+          baseUrlSummary={summarizeBaseURL(activeConfig.baseURL)}
+          discoveryText={discoveryText}
+          connectionStatus={connectionCheck.status}
+          connectionLabel={connectionLabel}
+          connectionTitle={connectionTitle}
+          testingConnection={isTestingConnection}
+          onOpen={() => openApiConfigDialog(activeConfig)}
+        />
 
         <section className="tool-section launch-section">
           <div className="section-title launch-title">
