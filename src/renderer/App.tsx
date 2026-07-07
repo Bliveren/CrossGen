@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   BookOpen,
   Brush,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -108,6 +107,7 @@ import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
 import { ApiConfigDialog, LaunchSection, ProviderSummarySection } from "./ProviderConfigPanel";
+import { ParameterSection } from "./ParameterConfigPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -5055,24 +5055,13 @@ export function App() {
           onSelectModel={(launchId, model) => void selectLaunchModel(launchId, model)}
         />
 
-        <section className="tool-section">
-          <button type="button" className="section-toggle" onClick={() => setShowAdvanced((current) => !current)}>
-            <span className="section-toggle-label">
-              <SlidersHorizontal size={16} />
-              <span>{copy.parameters}</span>
-            </span>
-            <span className="section-toggle-state">
-              {showAdvanced ? copy.hide : copy.show}
-              {showAdvanced ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-            </span>
-          </button>
-
-          <div className="compact-grid">
-            {parameterSummary}
-          </div>
-
-          {showAdvanced && advancedControls}
-        </section>
+        <ParameterSection
+          copy={copy}
+          expanded={showAdvanced}
+          summary={parameterSummary}
+          controls={advancedControls}
+          onToggle={() => setShowAdvanced((current) => !current)}
+        />
 
         <section className="notice-area" data-kind={notice.kind} aria-live={notice.kind === "error" ? "assertive" : "polite"} aria-atomic="true">
           {notice.kind === "error" ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
