@@ -32,7 +32,6 @@ import {
   Pencil,
   Radar,
   RefreshCw,
-  RotateCcw,
   Rocket,
   Save,
   Search,
@@ -109,6 +108,7 @@ import {
 } from "../shared/modelCatalog";
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
+import { HistoryItemCard } from "./HistoryPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -5653,175 +5653,57 @@ export function App() {
                     const systemTag = historySystemTagLabel(job.mode, language);
                     const isGalleryAdded = historyResultIsInGallery(result);
                     return (
-                      <article key={job.id} className={`${activeJob?.id === job.id ? "history-item active" : "history-item"} ${isSelected ? "selected" : ""}`}>
-                        {isHistoryBatchMode && (
-                          <input
-                            className="history-entry-select"
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(event) => toggleHistoryJobSelection(job.id, event.currentTarget.checked)}
-                            aria-label={copy.historySelectItem(formatDate(job.createdAt))}
-                          />
-                        )}
-                        <button
-                          type="button"
-                          className="history-preview"
-                          onClick={() => {
-                            setActiveGalleryAssetId(null);
-                            setActiveJob(job);
-                          }}
-                          onContextMenu={(event) => handleImageContextMenu(event, result, job.prompt)}
-                          title={jobError ?? job.status}
-                          aria-label={jobError ? `${copy.jobFailed}: ${jobError}` : `${copy.openJob}: ${job.status}`}
-                        >
-                          {result ? (
-                            <img
-                              src={assetSource(result)}
-                              alt={copy.historyResult}
-                              draggable={Boolean(result.path)}
-                              onDragStart={(event) => {
-                                if (!result.path) return;
-                                event.dataTransfer.setData("application/x-image2tools-asset", result.path);
-                                event.dataTransfer.effectAllowed = "copy";
-                              }}
-                            />
-                          ) : (
-                            <span>{job.status}</span>
-                          )}
-                        </button>
-                        <div className="history-copy">
-                          <div className="history-meta">
-                            <div className="history-name-wrap">
-                              {editingHistoryNameId === job.id ? (
-                                <input
-                                  className="history-name-input"
-                                  value={historyNameDraft}
-                                  onChange={(event) => setHistoryNameDraft(event.target.value)}
-                                  onBlur={() => void saveHistoryName(job)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === "Enter") {
-                                      event.preventDefault();
-                                      void saveHistoryName(job);
-                                    }
-                                    if (event.key === "Escape") {
-                                      event.preventDefault();
-                                      cancelHistoryNameEdit();
-                                    }
-                                  }}
-                                  aria-label={copy.historyImageName}
-                                  autoFocus
-                                />
-                              ) : (
-                                <button type="button" className="history-name-button" onClick={() => beginEditHistoryName(job)} aria-label={copy.historyEditName} data-tooltip={copy.historyEditName}>
-                                  {displayName}
-                                </button>
-                              )}
-                            </div>
-                            <span className="history-date-model">
-                              <span>{formatDate(job.createdAt)}</span>
-                              <span title={modelDetails.modelTitle}>{modelDetails.modelDisplayName}</span>
-                            </span>
-                          </div>
-                          <div className="history-chip-row history-tag-row" aria-label={copy.historyEditTags}>
-                            <span className="history-chip system-tag" title={copy.historySystemTag}>{systemTag}</span>
-                            {job.tags.map((tag) => (
-                              <span key={tag} className="history-chip">{tag}</span>
-                            ))}
-                            <span className="history-add-tag-anchor">
-                              <button
-                                type="button"
-                                className="history-chip history-add-tag-button"
-                                onClick={() => editHistoryTags(job)}
-                                aria-label={copy.addTag}
-                                data-tooltip={copy.addTag}
-                              >
-                                {copy.addTag}
-                              </button>
-                              {editingHistoryTagsId === job.id && (
-                                <div
-                                  className="history-tag-popover"
-                                  data-drift="subtle"
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                  onMouseMove={movePreviewToolbarTowardPointer}
-                                  onMouseLeave={resetPreviewToolbarDrift}
-                                >
-                                  <input
-                                    value={historyTagsInput}
-                                    onChange={(event) => setHistoryTagsInput(event.target.value)}
-                                    onKeyDown={(event) => {
-                                      if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        void saveHistoryTags(job);
-                                      }
-                                      if (event.key === "Escape") {
-                                        event.preventDefault();
-                                        cancelHistoryTagsEdit();
-                                      }
-                                    }}
-                                    placeholder={copy.templateTags}
-                                    aria-label={copy.addTag}
-                                    autoFocus
-                                  />
-                                  <button
-                                    type="button"
-                                    className="icon-button"
-                                    disabled={!historyTagsInput.trim()}
-                                    onClick={() => void saveHistoryTags(job)}
-                                    aria-label={copy.historySaveTags}
-                                    data-tooltip={copy.historySaveTags}
-                                  >
-                                    <Save size={14} />
-                                  </button>
-                                </div>
-                              )}
-                            </span>
-                          </div>
-                          <p>{job.prompt}</p>
-                          {jobError && <p className="history-error">{jobError}</p>}
-                        </div>
-                        <div className="history-actions">
-                          <button type="button" className={buttonFeedbackClass(`reuse:${job.id}`, "history-action-button")} onClick={() => reuseJob(job)} aria-label={copy.reuse} data-tooltip={copy.reuse}>
-                            <RotateCcw size={15} />
-                            <span>{buttonFeedback[`reuse:${job.id}`] ? copy.clicked : copy.reuse}</span>
-                          </button>
-                          <button type="button" className={buttonFeedbackClass(`copy:${job.id}`, "history-action-button")} onClick={() => copyPrompt(job.prompt, `copy:${job.id}`)} aria-label={copy.copyPrompt} data-tooltip={copy.copyPrompt}>
-                            <Copy size={15} />
-                            <span>{buttonFeedback[`copy:${job.id}`] ? copy.clicked : copy.copy}</span>
-                          </button>
-                          <button
-                            type="button"
-                            className={result ? buttonFeedbackClass(`download:${result.id}`, "history-action-button") : "history-action-button"}
-                            disabled={!result}
-                            onClick={() => downloadAsset(result)}
-                            aria-label={copy.download}
-                            data-tooltip={copy.download}
-                          >
-                            <Download size={15} />
-                            <span>{result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}</span>
-                          </button>
-                          <button
-                            type="button"
-                            className={[
-                              result ? "history-action-button history-gallery-menu-button" : "history-action-button",
-                              isGalleryAdded ? "already-in-gallery" : ""
-                            ].filter(Boolean).join(" ")}
-                            disabled={!result}
-                            onClick={() => setHistoryGalleryMenuJobId((current) => current === job.id ? null : job.id)}
-                            aria-label={copy.galleryAddHistory}
-                            data-tooltip={copy.galleryAddHistory}
-                            aria-expanded={historyGalleryMenuJobId === job.id}
-                          >
-                            {isGalleryAdded && <CheckCircle2 className="history-gallery-check" size={12} />}
-                            <FolderInput size={15} />
-                            <span>{copy.galleryAddHistory}</span>
-                          </button>
-                          {renderHistoryGalleryTargetMenu(result, job)}
-                          <button type="button" className="history-action-button danger" onClick={() => deleteJob(job.id)} aria-label={copy.delete} data-tooltip={copy.delete}>
-                            <Trash2 size={15} />
-                            <span>{copy.delete}</span>
-                          </button>
-                        </div>
-                      </article>
+                      <HistoryItemCard
+                        key={job.id}
+                        copy={copy}
+                        job={job}
+                        result={result}
+                        resultSrc={result ? assetSource(result) : undefined}
+                        jobError={jobError}
+                        active={activeJob?.id === job.id}
+                        selected={isSelected}
+                        batchMode={isHistoryBatchMode}
+                        displayName={displayName}
+                        createdAtLabel={formatDate(job.createdAt)}
+                        modelDisplayName={modelDetails.modelDisplayName}
+                        modelTitle={modelDetails.modelTitle}
+                        systemTag={systemTag}
+                        isGalleryAdded={isGalleryAdded}
+                        galleryMenuOpen={historyGalleryMenuJobId === job.id}
+                        galleryTargetMenu={renderHistoryGalleryTargetMenu(result, job)}
+                        editingName={editingHistoryNameId === job.id}
+                        nameDraft={historyNameDraft}
+                        editingTags={editingHistoryTagsId === job.id}
+                        tagsInput={historyTagsInput}
+                        reuseButtonClass={buttonFeedbackClass(`reuse:${job.id}`, "history-action-button")}
+                        copyButtonClass={buttonFeedbackClass(`copy:${job.id}`, "history-action-button")}
+                        downloadButtonClass={result ? buttonFeedbackClass(`download:${result.id}`, "history-action-button") : "history-action-button"}
+                        reuseButtonLabel={buttonFeedback[`reuse:${job.id}`] ? copy.clicked : copy.reuse}
+                        copyButtonLabel={buttonFeedback[`copy:${job.id}`] ? copy.clicked : copy.copy}
+                        downloadButtonLabel={result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}
+                        onToggleSelection={(checked) => toggleHistoryJobSelection(job.id, checked)}
+                        onOpen={() => {
+                          setActiveGalleryAssetId(null);
+                          setActiveJob(job);
+                        }}
+                        onImageContextMenu={(event) => handleImageContextMenu(event, result, job.prompt)}
+                        onStartEditName={() => beginEditHistoryName(job)}
+                        onNameDraftChange={setHistoryNameDraft}
+                        onSaveName={() => void saveHistoryName(job)}
+                        onCancelName={cancelHistoryNameEdit}
+                        onEditTags={() => editHistoryTags(job)}
+                        onTagsInputChange={setHistoryTagsInput}
+                        onSaveTags={() => void saveHistoryTags(job)}
+                        onCancelTags={cancelHistoryTagsEdit}
+                        onMoveTagPopoverPointerDown={(event) => event.stopPropagation()}
+                        onMoveToolbarTowardPointer={movePreviewToolbarTowardPointer}
+                        onResetToolbarDrift={resetPreviewToolbarDrift}
+                        onReuse={() => reuseJob(job)}
+                        onCopyPrompt={() => copyPrompt(job.prompt, `copy:${job.id}`)}
+                        onDownload={() => downloadAsset(result)}
+                        onToggleGalleryMenu={() => setHistoryGalleryMenuJobId((current) => current === job.id ? null : job.id)}
+                        onDelete={() => deleteJob(job.id)}
+                      />
                     );
                   })
                 )}
