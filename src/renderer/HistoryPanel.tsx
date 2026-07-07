@@ -1,7 +1,47 @@
 import type React from "react";
-import { CheckCircle2, Copy, Download, FolderInput, RotateCcw, Save, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronUp, Copy, Download, FolderInput, RotateCcw, Save, Trash2 } from "lucide-react";
 import type { GenerationJob, ImageAsset } from "../shared/types";
 import type { UiCopy } from "./i18n";
+
+type HistoryViewMode = "grid" | "list";
+
+interface HistoryScrollState {
+  top: number;
+  clientHeight: number;
+  scrollHeight: number;
+}
+
+interface HistoryListShellProps {
+  copy: UiCopy;
+  listRef: React.RefObject<HTMLDivElement | null>;
+  viewMode: HistoryViewMode;
+  batchMode: boolean;
+  empty: boolean;
+  pager: React.ReactNode;
+  children: React.ReactNode;
+  onScrollStateChange: (state: HistoryScrollState) => void;
+}
+
+interface HistoryFloatingPagerProps {
+  copy: UiCopy;
+  visible: boolean;
+  pageSizeMenuOpen: boolean;
+  pageSizeOptions: readonly number[];
+  pageSize: number;
+  expanded: boolean;
+  showAllLabel: string;
+  previousLabel: string;
+  nextLabel: string;
+  previousDisabled: boolean;
+  nextDisabled: boolean;
+  onTogglePageSizeMenu: () => void;
+  onSelectPageSize: (size: number) => void;
+  onToggleExpanded: () => void;
+  onPreviousPage: () => void;
+  onNextPage: () => void;
+  onMoveToolbarTowardPointer: (event: React.MouseEvent<HTMLElement>) => void;
+  onResetToolbarDrift: (event: React.MouseEvent<HTMLElement>) => void;
+}
 
 interface HistoryItemCardProps {
   copy: UiCopy;
@@ -49,6 +89,120 @@ interface HistoryItemCardProps {
   onDownload: () => void;
   onToggleGalleryMenu: () => void;
   onDelete: () => void;
+}
+
+export function HistoryListShell({
+  copy,
+  listRef,
+  viewMode,
+  batchMode,
+  empty,
+  pager,
+  children,
+  onScrollStateChange
+}: HistoryListShellProps) {
+  return (
+    <div className="history-list-shell">
+      <div
+        ref={listRef}
+        className={`history-list ${viewMode} ${batchMode ? "batch-select" : ""}`}
+        onScroll={(event) => {
+          onScrollStateChange({
+            top: event.currentTarget.scrollTop,
+            clientHeight: event.currentTarget.clientHeight,
+            scrollHeight: event.currentTarget.scrollHeight
+          });
+        }}
+      >
+        {empty ? (
+          <div className="history-empty">{copy.noJobsYet}</div>
+        ) : (
+          children
+        )}
+      </div>
+      {pager}
+    </div>
+  );
+}
+
+export function HistoryFloatingPager({
+  copy,
+  visible,
+  pageSizeMenuOpen,
+  pageSizeOptions,
+  pageSize,
+  expanded,
+  showAllLabel,
+  previousLabel,
+  nextLabel,
+  previousDisabled,
+  nextDisabled,
+  onTogglePageSizeMenu,
+  onSelectPageSize,
+  onToggleExpanded,
+  onPreviousPage,
+  onNextPage,
+  onMoveToolbarTowardPointer,
+  onResetToolbarDrift
+}: HistoryFloatingPagerProps) {
+  return (
+    <div
+      className={`history-floating-pager ${visible ? "visible" : ""}`}
+      data-drift="subtle"
+      onMouseMove={onMoveToolbarTowardPointer}
+      onMouseLeave={onResetToolbarDrift}
+    >
+      <div className="history-page-size-control">
+        <button
+          type="button"
+          className="history-pager-arrow"
+          onClick={onTogglePageSizeMenu}
+          aria-label={copy.historyPageSizeMenu}
+          data-tooltip={copy.historyPageSizeMenu}
+        >
+          <ChevronUp size={14} />
+        </button>
+        {pageSizeMenuOpen && (
+          <div className="history-page-size-menu" role="menu" aria-label={copy.historyPageSizeMenu}>
+            {pageSizeOptions.map((size) => (
+              <button
+                key={size}
+                type="button"
+                className={pageSize === size ? "active" : undefined}
+                onClick={() => onSelectPageSize(size)}
+                role="menuitem"
+              >
+                {copy.historyPageSizeOption(size)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <button type="button" className="history-expand-button" onClick={onToggleExpanded}>
+        <span>{expanded ? copy.collapseHistory : showAllLabel}</span>
+      </button>
+      <button
+        type="button"
+        className="history-page-nav"
+        onClick={onPreviousPage}
+        disabled={previousDisabled}
+        aria-label={previousLabel}
+        data-tooltip={previousLabel}
+      >
+        <span aria-hidden="true">&lt;</span>
+      </button>
+      <button
+        type="button"
+        className="history-page-nav"
+        onClick={onNextPage}
+        disabled={nextDisabled}
+        aria-label={nextLabel}
+        data-tooltip={nextLabel}
+      >
+        <span aria-hidden="true">&gt;</span>
+      </button>
+    </div>
+  );
 }
 
 export function HistoryItemCard({

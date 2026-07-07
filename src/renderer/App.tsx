@@ -108,7 +108,7 @@ import {
 } from "../shared/modelCatalog";
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
-import { HistoryItemCard } from "./HistoryPanel";
+import { HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -5629,22 +5629,42 @@ export function App() {
               </div>
             )}
 
-            <div className="history-list-shell">
-              <div
-                ref={historyListRef}
-                className={`history-list ${historyViewMode} ${isHistoryBatchMode ? "batch-select" : ""}`}
-                onScroll={(event) => {
-                  setHistoryListScrollState({
-                    top: event.currentTarget.scrollTop,
-                    clientHeight: event.currentTarget.clientHeight,
-                    scrollHeight: event.currentTarget.scrollHeight
-                  });
-                }}
-              >
-                {filteredHistory.length === 0 ? (
-                  <div className="history-empty">{copy.noJobsYet}</div>
-                ) : (
-                  visibleHistory.map((job) => {
+            <HistoryListShell
+              copy={copy}
+              listRef={historyListRef}
+              viewMode={historyViewMode}
+              batchMode={isHistoryBatchMode}
+              empty={filteredHistory.length === 0}
+              onScrollStateChange={setHistoryListScrollState}
+              pager={hasHistoryOverflow ? (
+                <HistoryFloatingPager
+                  copy={copy}
+                  visible={historyPagerVisible}
+                  pageSizeMenuOpen={isHistoryPageSizeMenuOpen}
+                  pageSizeOptions={HISTORY_PAGE_SIZE_OPTIONS}
+                  pageSize={historyPageSize}
+                  expanded={isHistoryExpanded}
+                  showAllLabel={copy.showAllHistory(filteredHistory.length)}
+                  previousLabel={language === "zh" ? "上一页" : "Previous page"}
+                  nextLabel={language === "zh" ? "下一页" : "Next page"}
+                  previousDisabled={isHistoryExpanded || normalizedHistoryPageIndex === 0}
+                  nextDisabled={isHistoryExpanded || normalizedHistoryPageIndex >= historyPageCount - 1}
+                  onTogglePageSizeMenu={() => setIsHistoryPageSizeMenuOpen((current) => !current)}
+                  onSelectPageSize={(size) => {
+                    setHistoryPageSize(size);
+                    setIsHistoryExpanded(false);
+                    setHistoryPageIndex(0);
+                    setIsHistoryPageSizeMenuOpen(false);
+                  }}
+                  onToggleExpanded={() => setIsHistoryExpanded((current) => !current)}
+                  onPreviousPage={() => setHistoryPageIndex((current) => Math.max(0, current - 1))}
+                  onNextPage={() => setHistoryPageIndex((current) => Math.min(historyPageCount - 1, current + 1))}
+                  onMoveToolbarTowardPointer={movePreviewToolbarTowardPointer}
+                  onResetToolbarDrift={resetPreviewToolbarDrift}
+                />
+              ) : null}
+            >
+              {visibleHistory.map((job) => {
                     const result = getBestResult(job);
                     const jobError = getJobError(job);
                     const modelDetails = getHistoryModelDetails(job);
@@ -5705,73 +5725,8 @@ export function App() {
                         onDelete={() => deleteJob(job.id)}
                       />
                     );
-                  })
-                )}
-              </div>
-              {hasHistoryOverflow && (
-                <div
-                  className={`history-floating-pager ${historyPagerVisible ? "visible" : ""}`}
-                  data-drift="subtle"
-                  onMouseMove={movePreviewToolbarTowardPointer}
-                  onMouseLeave={resetPreviewToolbarDrift}
-                >
-                  <div className="history-page-size-control">
-                    <button
-                      type="button"
-                      className="history-pager-arrow"
-                      onClick={() => setIsHistoryPageSizeMenuOpen((current) => !current)}
-                      aria-label={copy.historyPageSizeMenu}
-                      data-tooltip={copy.historyPageSizeMenu}
-                    >
-                      <ChevronUp size={14} />
-                    </button>
-                    {isHistoryPageSizeMenuOpen && (
-                      <div className="history-page-size-menu" role="menu" aria-label={copy.historyPageSizeMenu}>
-                        {HISTORY_PAGE_SIZE_OPTIONS.map((size) => (
-                          <button
-                            key={size}
-                            type="button"
-                            className={historyPageSize === size ? "active" : undefined}
-                            onClick={() => {
-                              setHistoryPageSize(size);
-                              setIsHistoryExpanded(false);
-                              setHistoryPageIndex(0);
-                              setIsHistoryPageSizeMenuOpen(false);
-                            }}
-                            role="menuitem"
-                          >
-                            {copy.historyPageSizeOption(size)}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button type="button" className="history-expand-button" onClick={() => setIsHistoryExpanded((current) => !current)}>
-                    <span>{isHistoryExpanded ? copy.collapseHistory : copy.showAllHistory(filteredHistory.length)}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="history-page-nav"
-                    onClick={() => setHistoryPageIndex((current) => Math.max(0, current - 1))}
-                    disabled={isHistoryExpanded || normalizedHistoryPageIndex === 0}
-                    aria-label={language === "zh" ? "上一页" : "Previous page"}
-                    data-tooltip={language === "zh" ? "上一页" : "Previous page"}
-                  >
-                    <span aria-hidden="true">&lt;</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="history-page-nav"
-                    onClick={() => setHistoryPageIndex((current) => Math.min(historyPageCount - 1, current + 1))}
-                    disabled={isHistoryExpanded || normalizedHistoryPageIndex >= historyPageCount - 1}
-                    aria-label={language === "zh" ? "下一页" : "Next page"}
-                    data-tooltip={language === "zh" ? "下一页" : "Next page"}
-                  >
-                    <span aria-hidden="true">&gt;</span>
-                  </button>
-                </div>
-              )}
-            </div>
+              })}
+            </HistoryListShell>
           </div>
         ) : (
           <div className="right-rail-panel gallery-panel gallery-explorer-panel" role="tabpanel">
