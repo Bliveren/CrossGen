@@ -24,3 +24,9 @@ output/
 
 # product landing page lives in GitLab, not GitHub
 docs/products/
+
+# planning docs stay local; unreleased plans should not be public
+# already-released plans are kept tracked via the exceptions below
+docs/plans/
+!docs/plans/v0.2.1-plan.md
+!docs/plans/v0.2.3-plan.md
