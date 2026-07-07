@@ -2494,7 +2494,7 @@
   }
 
   .right-rail.collapsed {
-    --right-rail-collapsed-thumb-size: calc(var(--history-width, 304px) - 32px);
+    --right-rail-collapsed-thumb-size: calc(var(--history-width, 352px) - 32px);
     gap: 8px;
     padding-right: 16px;
     padding-left: 16px;
@@ -2521,6 +2521,7 @@
     min-height: max(51px, calc(100vh - var(--rail-collapse-button-y, calc(100vh - 86px)) - var(--right-rail-padding-bottom, 22px)));
     border-top: 1px solid var(--border-subtle);
     background: transparent;
+    background-image: none;
     padding-top: 14px;
     padding-bottom: 0;
     border-radius: 0;
