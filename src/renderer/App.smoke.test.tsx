@@ -1569,6 +1569,35 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).not.toContain("Clear all history?");
   });
 
+  it("traps focus inside shared dialogs and returns focus to the opener", async () => {
+    await renderApp(snapshot({ history: [geminiJob(0), geminiJob(1)] }));
+    const clearAllButton = document.querySelector<HTMLButtonElement>('button[aria-label="Clear all history records"]')!;
+
+    clearAllButton.focus();
+    expect(document.activeElement).toBe(clearAllButton);
+    await click(clearAllButton);
+    await flushAsync();
+
+    const dialog = document.querySelector<HTMLElement>(".confirm-dialog")!;
+    const cancelButton = buttonByText("Cancel", ".confirm-dialog button");
+    const confirmButton = buttonByText("Clear all", ".confirm-dialog button");
+
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(document.activeElement).toBe(cancelButton);
+
+    await keyDown(dialog, "Tab", { shiftKey: true });
+    expect(document.activeElement).toBe(confirmButton);
+
+    await keyDown(dialog, "Tab");
+    expect(document.activeElement).toBe(cancelButton);
+
+    await keyDown(dialog, "Escape");
+    await flushAsync();
+
+    expect(document.querySelector(".confirm-dialog")).toBeNull();
+    expect(document.activeElement).toBe(clearAllButton);
+  });
+
   it("can set History and Gallery storage to the same local path", async () => {
     const bridge = await renderApp(snapshot());
     const storageConfigButton = document.querySelector<HTMLButtonElement>('button[aria-label="Library path settings"]')!;

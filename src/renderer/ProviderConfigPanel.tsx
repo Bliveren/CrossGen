@@ -1,6 +1,7 @@
 import type React from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, KeyRound, LibraryBig, Loader2, Plus, Radar, Rocket, Save, Trash2, Wrench, X } from "lucide-react";
 import type { FocusedLaunchId, ProviderConfig, ProviderKind } from "../shared/types";
+import { DialogShell } from "./DialogShell";
 import type { UiCopy } from "./i18n";
 
 type DiscoveredProviderModel = ProviderConfig["discoveredModels"][number];
@@ -385,14 +386,7 @@ export function ApiConfigDialog({
   );
 
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section className="api-config-dialog" role="dialog" aria-modal="true" aria-labelledby="api-config-dialog-title">
+    <DialogShell className="api-config-dialog" labelledBy="api-config-dialog-title" onClose={onClose}>
         <header className="history-header">
           <div>
             <h2 id="api-config-dialog-title">{copy.provider}</h2>
@@ -460,8 +454,7 @@ export function ApiConfigDialog({
             onDelete={() => onDeleteConfig(selectedConfig)}
           />
         </div>
-      </section>
-    </div>
+    </DialogShell>
   );
 }
 
