@@ -985,7 +985,7 @@ export function App() {
   const [previewPanelRatio, setPreviewPanelRatio] = useState(() => readStoredWidth("image2tools.previewPanelRatio", DEFAULT_PREVIEW_PANEL_RATIO, MIN_PREVIEW_PANEL_RATIO, MAX_PREVIEW_PANEL_RATIO));
   const [resizingColumn, setResizingColumn] = useState<"sidebar" | "history" | "preview" | null>(null);
   const [contextMenu, setContextMenu] = useState<ImageContextMenuState | null>(null);
-  const [railCollapseButtonY, setRailCollapseButtonY] = useState(86);
+  const [railCollapseButtonY, setRailCollapseButtonY] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight - 86));
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const annotationCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -1475,9 +1475,8 @@ export function App() {
   const visibleHistory = isHistoryExpanded ? filteredHistory : filteredHistory.slice(historyPageStartIndex, historyPageStartIndex + historyPageSize);
   const isSearchingHistory = historySearch.trim().length > 0;
   const historyPagerVisible = hasHistoryOverflow && (
-    historyListScrollState.scrollHeight === 0 ||
-    historyListScrollState.clientHeight === 0 ||
-    historyListScrollState.top + historyListScrollState.clientHeight >= historyListScrollState.scrollHeight - 120
+    historyListScrollState.scrollHeight > historyListScrollState.clientHeight &&
+    historyListScrollState.top + historyListScrollState.clientHeight >= historyListScrollState.scrollHeight - 80
   );
 
   const modeError = useMemo(() => {
@@ -1684,7 +1683,7 @@ export function App() {
       if (!node) return;
       const rect = node.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) return;
-      const next = Math.round(Math.max(48, window.innerHeight - rect.top));
+      const next = Math.round(Math.max(48, rect.top));
       setRailCollapseButtonY((current) => (Math.abs(current - next) > 1 ? next : current));
     };
     const scheduleMeasure = () => {
@@ -3094,7 +3093,7 @@ export function App() {
 
   function movePreviewToolbarTowardPointer(event: React.MouseEvent<HTMLElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
-    const drift = event.currentTarget.dataset.drift === "subtle" ? { x: 2, y: 1.2 } : { x: 3.5, y: 2.2 };
+    const drift = event.currentTarget.dataset.drift === "subtle" ? { x: 0.8, y: 0.5 } : { x: 2.2, y: 1.3 };
     const x = ((event.clientX - rect.left) / Math.max(1, rect.width) - 0.5) * drift.x;
     const y = ((event.clientY - rect.top) / Math.max(1, rect.height) - 0.5) * drift.y;
     event.currentTarget.style.setProperty("--toolbar-drift-x", `${x.toFixed(2)}px`);
@@ -5235,7 +5234,8 @@ export function App() {
         aria-valuemin={MIN_SIDEBAR_WIDTH}
         aria-valuemax={maxSidebarWidth}
         aria-valuenow={sidebarWidth}
-        tabIndex={0}
+        aria-disabled={isSidebarCompact}
+        tabIndex={isSidebarCompact ? -1 : 0}
         onPointerDown={(event) => {
           if (isSidebarCompact) return;
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -5850,7 +5850,8 @@ export function App() {
         aria-valuemin={MIN_HISTORY_WIDTH}
         aria-valuemax={maxHistoryWidth}
         aria-valuenow={historyWidth}
-        tabIndex={0}
+        aria-disabled={isRightRailCollapsed}
+        tabIndex={isRightRailCollapsed ? -1 : 0}
         onPointerDown={(event) => {
           if (isRightRailCollapsed) return;
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -6209,11 +6210,11 @@ export function App() {
             <div className="gallery-compact-controls">
               <select value={activeGalleryFolderId} onChange={(event) => navigateGalleryFolder(event.target.value as GalleryFolderFilter)} aria-label={copy.galleryFolders}>
                 {galleryFolderSelectOptions.map((folder) => (
-                  <option key={folder.id} value={folder.id}>{folder.id === GALLERY_ALL_FILTER ? copy.galleryFolders : folder.name}</option>
+                  <option key={folder.id} value={folder.id}>{folder.id === GALLERY_ALL_FILTER ? copy.galleryFolderCompactLabel : folder.name}</option>
                 ))}
               </select>
               <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)} aria-label={copy.galleryTagFilter}>
-                <option value="">{copy.galleryTagFilter}</option>
+                <option value="">{copy.galleryTagCompactLabel}</option>
                 {globalTagOptions.map((tag) => (
                   <option key={tag} value={tag}>{tag}</option>
                 ))}

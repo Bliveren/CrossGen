@@ -169,10 +169,12 @@ export interface UiCopy {
   gallery: string;
   galleryDescription: string;
   galleryFolders: string;
+  galleryFolderCompactLabel: string;
   galleryAllFolders: string;
   galleryUncategorized: string;
   galleryFolderFilter: string;
   galleryTagFilter: string;
+  galleryTagCompactLabel: string;
   galleryFolderNew: string;
   galleryFolderName: string;
   galleryFolderCreate: string;
@@ -518,10 +520,12 @@ export const translations: Record<Language, UiCopy> = {
     gallery: "Gallery",
     galleryDescription: "Reference images ready for reuse.",
     galleryFolders: "Gallery folders",
+    galleryFolderCompactLabel: "Folders",
     galleryAllFolders: "All",
     galleryUncategorized: "Unsorted",
     galleryFolderFilter: "Gallery folder filter",
     galleryTagFilter: "Gallery tag filter",
+    galleryTagCompactLabel: "Tags",
     galleryFolderNew: "New folder",
     galleryFolderName: "Folder name",
     galleryFolderCreate: "Create folder",
@@ -930,10 +934,12 @@ export const translations: Record<Language, UiCopy> = {
     gallery: "图库",
     galleryDescription: "方便随时调用的参考图库。",
     galleryFolders: "图库文件夹",
+    galleryFolderCompactLabel: "文件夹",
     galleryAllFolders: "全部",
     galleryUncategorized: "未整理",
     galleryFolderFilter: "图库文件夹筛选",
     galleryTagFilter: "图库标签筛选",
+    galleryTagCompactLabel: "标签",
     galleryFolderNew: "新建文件夹",
     galleryFolderName: "文件夹名称",
     galleryFolderCreate: "创建文件夹",

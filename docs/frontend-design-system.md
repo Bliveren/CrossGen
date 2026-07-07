@@ -26,6 +26,7 @@ This document defines the global UI standards for CrossGen. Renderer changes sho
 - Panel background: `var(--surface-panel)`.
 - Floating surfaces: `var(--surface-floating)`, `var(--shadow-popover)`, blur backdrop, and `var(--radius-md)`.
 - Floating surfaces must not use pill/999px radius unless the control itself is a chip or circular icon button.
+- Editor top controls, editor zoom controls, compact drawers, tag popovers, menus, and pagers all use `var(--surface-floating-radius)`, which resolves to the same 6px radius as buttons.
 - Cards use `var(--radius-lg)` / 8px and must not be nested inside decorative cards.
 
 ## Chips And Tags
@@ -37,6 +38,7 @@ This document defines the global UI standards for CrossGen. Renderer changes sho
   - 999px radius.
   - Single-line ellipsis.
 - Add-tag prompts may use a dashed border, but not a different size, font, or shape.
+- Tags and add-tag prompts use a fixed 20px border-box height. Do not rely only on `min-height` for tag buttons because global button styles can make the prompt look larger than existing tags.
 
 ## Floating Motion
 
@@ -48,5 +50,6 @@ This document defines the global UI standards for CrossGen. Renderer changes sho
 ## Layout
 
 - Resizers remain visible as region dividers, but collapsed regions must not be draggable.
-- Collapsed right rail thumbnails use compact spacing and keep 12px right padding.
+- Collapsed region dividers must not be pointer targets or keyboard-focusable resize handles.
+- Collapsed right rail thumbnails use compact spacing and keep 18px side padding so thumbnails and bottom actions do not hug the app edge.
 - Low-height viewports must compress secondary copy, metadata, prompts, reference grids, and mask canvases before creating app-level vertical scrolling.
