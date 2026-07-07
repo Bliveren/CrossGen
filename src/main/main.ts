@@ -65,7 +65,7 @@ import {
   normalizeModelId
 } from "../shared/modelCatalog.js";
 import { compareVersions, isAllowedUpdateUrl, parseUpdateManifest, safeUpdateFileName, selectUpdateAsset } from "../shared/updateManifest.js";
-import { fetchWithTimeout } from "./services/openaiImage.js";
+import { fetchWithTimeout } from "./services/openaiImageAdapter.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
@@ -1038,6 +1038,16 @@ function sendGalleryEvent(state: AppStateFile, reason: "disk" | "mutation"): voi
   }
 }
 
+async function readGalleryMutationState(): Promise<AppStateFile> {
+  return syncGalleryWithDisk(await readState());
+}
+
+async function commitGalleryMutationState<TResult>(state: AppStateFile, result: TResult): Promise<TResult> {
+  await writeState(state);
+  sendGalleryEvent(state, "mutation");
+  return result;
+}
+
 async function handleGetSnapshot(): Promise<AppSnapshot> {
   const state = await syncGalleryForRead(await readState());
   return snapshotFromState(state);
@@ -1677,7 +1687,7 @@ function normalizeGalleryFolderParentId(state: AppStateFile, parentId?: unknown,
 }
 
 async function handleCreateGalleryFolder(_event: IpcMainInvokeEvent, input: GalleryFolderInput): Promise<GalleryFolder> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await readGalleryMutationState();
   const { name, color } = normalizeGalleryFolderInput(input);
   const parentId = normalizeGalleryFolderParentId(state, input?.parentId);
   if (state.galleryFolders.some((folder) => (folder.parentId ?? null) === parentId && folder.name.toLowerCase() === name.toLowerCase())) {
@@ -1694,13 +1704,11 @@ async function handleCreateGalleryFolder(_event: IpcMainInvokeEvent, input: Gall
   };
   const nextState = { ...state, galleryFolders: [folder, ...state.galleryFolders] };
   await ensureDir(galleryFolderAbsolutePath(nextState, folder));
-  await writeState(nextState);
-  sendGalleryEvent(nextState, "mutation");
-  return folder;
+  return commitGalleryMutationState(nextState, folder);
 }
 
 async function handleRenameGalleryFolder(_event: IpcMainInvokeEvent, id: string, input: GalleryFolderInput): Promise<GalleryFolder> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await readGalleryMutationState();
   const folder = state.galleryFolders.find((item) => item.id === id);
   if (!folder) throw new Error("Gallery 文件夹不存在。");
   const { name, color, hasColor } = normalizeGalleryFolderInput(input);
@@ -1743,20 +1751,18 @@ async function handleRenameGalleryFolder(_event: IpcMainInvokeEvent, id: string,
     galleryFolders: nextState.galleryFolders,
     galleryAssets
   };
-  await writeState(writtenState);
-  sendGalleryEvent(writtenState, "mutation");
-  return updated;
+  return commitGalleryMutationState(writtenState, updated);
 }
 
 async function handleMoveGalleryFolder(_event: IpcMainInvokeEvent, id: string, parentId: string | null): Promise<GalleryFolder> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await readGalleryMutationState();
   const folder = state.galleryFolders.find((item) => item.id === id);
   if (!folder) throw new Error("Gallery 文件夹不存在。");
   return handleRenameGalleryFolder(_event, id, { name: folder.name, color: folder.color, parentId });
 }
 
 async function handleDeleteGalleryFolder(_event: IpcMainInvokeEvent, id: string): Promise<GalleryFolderDeleteResult> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await readGalleryMutationState();
   const folder = state.galleryFolders.find((item) => item.id === id);
   if (!folder) {
     throw new Error("Gallery 文件夹不存在。");
@@ -1772,17 +1778,16 @@ async function handleDeleteGalleryFolder(_event: IpcMainInvokeEvent, id: string)
     galleryFolders: state.galleryFolders.filter((folder) => !subtreeIds.has(folder.id)),
     galleryAssets: movedAssets.map((asset) => asset.folderId && subtreeIds.has(asset.folderId) ? { ...asset, folderId: null, updatedAt: now } : asset)
   };
-  await writeState(nextState);
-  sendGalleryEvent(nextState, "mutation");
-  await fs.rm(galleryFolderAbsolutePath(state, folder), { recursive: true, force: true }).catch(() => undefined);
-  return {
+  const result = await commitGalleryMutationState(nextState, {
     folders: nextState.galleryFolders,
     assets: nextState.galleryAssets
-  };
+  });
+  await fs.rm(galleryFolderAbsolutePath(state, folder), { recursive: true, force: true }).catch(() => undefined);
+  return result;
 }
 
 async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[], folderId?: string | null): Promise<GalleryAsset[]> {
-  let state = await syncGalleryWithDisk(await readState());
+  let state = await readGalleryMutationState();
   const targetFolderId = normalizeGalleryFolderId(state, folderId);
   let sourcePaths = Array.isArray(paths) ? paths : [];
   if (sourcePaths.length === 0) {
@@ -1806,32 +1811,26 @@ async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[
   }
   if (imported.length === 0) return [];
   const nextState = state;
-  await writeState(nextState);
-  sendGalleryEvent(nextState, "mutation");
-  return imported;
+  return commitGalleryMutationState(nextState, imported);
 }
 
 async function handleAddHistoryAssetToGallery(_event: IpcMainInvokeEvent, assetPath: string, folderId?: string | null, tags?: string[]): Promise<GalleryAsset | null> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await readGalleryMutationState();
   const targetFolderId = normalizeGalleryFolderId(state, folderId);
   const sourcePath = await assertKnownHistoryRegularAsset(state, assetPath);
   const result = await createGalleryAssetFromFile(state, sourcePath, "result", new Date().toISOString(), targetFolderId, historySourceMetadata(state, sourcePath, tags));
   if (!result.asset) return null;
   const nextState = applyGalleryAssetCreateResult(state, result);
-  await writeState(nextState);
-  sendGalleryEvent(nextState, "mutation");
-  return result.asset;
+  return commitGalleryMutationState(nextState, result.asset);
 }
 
 async function handleAddEditedImageToGallery(_event: IpcMainInvokeEvent, input: EditedGalleryImageInput): Promise<GalleryAsset | null> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await readGalleryMutationState();
   const targetFolderId = normalizeGalleryFolderId(state, input?.folderId);
   const result = await createGalleryAssetFromDataUrl(state, input, "result", new Date().toISOString(), targetFolderId);
   if (!result.asset) return null;
   const nextState = applyGalleryAssetCreateResult(state, result);
-  await writeState(nextState);
-  sendGalleryEvent(nextState, "mutation");
-  return result.asset;
+  return commitGalleryMutationState(nextState, result.asset);
 }
 
 async function handleReplaceGalleryAssetImage(_event: IpcMainInvokeEvent, id: string, input: EditedGalleryImageInput): Promise<GalleryAsset> {
@@ -1843,7 +1842,7 @@ async function handleReplaceGalleryAssetImage(_event: IpcMainInvokeEvent, id: st
   const buffer = Buffer.from(dataUrlToBase64(input.dataUrl), "base64");
   if (buffer.length === 0) throw new Error("Gallery 图片内容为空。");
 
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await readGalleryMutationState();
   const asset = state.galleryAssets.find((item) => item.id === id);
   if (!asset) throw new Error("Gallery 资源不存在。");
   const galleryDir = getGalleryDir(state);
@@ -1864,14 +1863,12 @@ async function handleReplaceGalleryAssetImage(_event: IpcMainInvokeEvent, id: st
     sourceAssetId: undefined
   };
   const nextState = { ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) };
-  await writeState(nextState);
-  sendGalleryEvent(nextState, "mutation");
-  return updated;
+  return commitGalleryMutationState(nextState, updated);
 }
 
 async function handleUpdateGalleryAsset(_event: IpcMainInvokeEvent, id: string, patch: GalleryAssetPatch = {}): Promise<GalleryAsset> {
   const normalizedPatch = patch && typeof patch === "object" ? patch : {};
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await readGalleryMutationState();
   const asset = state.galleryAssets.find((item) => item.id === id);
   if (!asset) throw new Error("Gallery 资源不存在。");
   const hasTagsPatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "tags");
@@ -1889,9 +1886,7 @@ async function handleUpdateGalleryAsset(_event: IpcMainInvokeEvent, id: string, 
     updatedAt: new Date().toISOString()
   };
   const nextState = { ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) };
-  await writeState(nextState);
-  sendGalleryEvent(nextState, "mutation");
-  return updated;
+  return commitGalleryMutationState(nextState, updated);
 }
 
 async function handleMoveGalleryAsset(_event: IpcMainInvokeEvent, id: string, folderId: string | null): Promise<GalleryAsset> {
@@ -1899,17 +1894,16 @@ async function handleMoveGalleryAsset(_event: IpcMainInvokeEvent, id: string, fo
 }
 
 async function handleRemoveGalleryAsset(_event: IpcMainInvokeEvent, id: string): Promise<GalleryAsset[]> {
-  const state = await syncGalleryWithDisk(await readState());
+  const state = await readGalleryMutationState();
   const asset = state.galleryAssets.find((item) => item.id === id);
   const galleryAssets = state.galleryAssets.filter((item) => item.id !== id);
   const nextState = { ...state, galleryAssets };
-  await writeState(nextState);
-  sendGalleryEvent(nextState, "mutation");
+  const result = await commitGalleryMutationState(nextState, galleryAssets);
   if (asset) {
     const filePath = resolveManagedFileName(getGalleryDir(state), asset.fileName);
     await fs.unlink(filePath).catch(() => undefined);
   }
-  return galleryAssets;
+  return result;
 }
 
 async function handlePickGalleryAsset(_event: IpcMainInvokeEvent, id: string): Promise<InputAsset> {
