@@ -1,11 +1,14 @@
 import type React from "react";
-import { ArrowDownUp, ChevronDown, FileUp, FolderOpen, FolderPlus, Pencil, Save, Tags, Trash2 } from "lucide-react";
+import { ArrowDownUp, ChevronDown, FileUp, Folder, FolderOpen, FolderPlus, Pencil, Save, Tags, Trash2 } from "lucide-react";
 import type { GalleryAsset, GalleryFolder } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
 export type GallerySortMode = "newest" | "oldest" | "name" | "size" | "modified";
 export type GalleryViewMode = "grid" | "list";
 export type GalleryFolderFilter = "__all__" | "__uncategorized__" | string;
+export type GalleryExplorerEntry =
+  | { kind: "folder"; id: string; folder: GalleryFolder }
+  | { kind: "asset"; id: string; asset: GalleryAsset };
 
 interface GalleryFolderSelectOption {
   id: GalleryFolderFilter;
@@ -79,6 +82,65 @@ interface GalleryAssetCardProps {
   onResetToolbarDrift: (event: React.MouseEvent<HTMLElement>) => void;
   onRename: () => void;
   onDelete: () => void;
+}
+
+interface GalleryDirectoryTreeProps {
+  copy: UiCopy;
+  activeFolderId: GalleryFolderFilter;
+  allFolderId: GalleryFolderFilter;
+  uncategorizedFolderId: GalleryFolderFilter;
+  batchMode: boolean;
+  allAssetCount: number;
+  uncategorizedAssetCount: number;
+  allDropTarget: boolean;
+  uncategorizedDropTarget: boolean;
+  allDropHandlers: GalleryEntryDropHandlers;
+  uncategorizedDropHandlers: GalleryEntryDropHandlers;
+  children: React.ReactNode;
+  onNavigate: (folderId: GalleryFolderFilter) => void;
+  onContextMenu: (event: React.MouseEvent<HTMLElement>, folderId: GalleryFolderFilter) => void;
+}
+
+interface GalleryContentGridProps {
+  copy: UiCopy;
+  contentRef: React.RefObject<HTMLDivElement | null>;
+  activeFolderId: GalleryFolderFilter;
+  viewMode: GalleryViewMode;
+  batchMode: boolean;
+  dropTarget: boolean;
+  folderDropTargetId: GalleryFolderFilter | null;
+  entries: GalleryExplorerEntry[];
+  virtualEntries: GalleryExplorerEntry[];
+  virtualStartIndex: number;
+  virtualTopSpacer: number;
+  virtualBottomSpacer: number;
+  isGalleryEmpty: boolean;
+  editingGalleryId: string | null;
+  tagsInput: string;
+  folderSubtreeAssetCounts: ReadonlyMap<string, number>;
+  dropHandlersForFolder: (folderId: GalleryFolderFilter) => GalleryEntryDropHandlers;
+  formatBytes: (bytes: number) => string;
+  formatDate: (value: string) => string;
+  folderDisplayPath: (folder: GalleryFolder) => string;
+  assetThumbnailPath: (asset: GalleryAsset) => string;
+  isEntrySelected: (entry: GalleryExplorerEntry) => boolean;
+  onScrollTopChange: (scrollTop: number) => void;
+  onFolderContextMenu: (event: React.MouseEvent<HTMLElement>, folderId: GalleryFolderFilter) => void;
+  onPrepareEntryDrag: (event: React.DragEvent<HTMLElement>, entry: GalleryExplorerEntry) => void;
+  onToggleSelection: (entry: GalleryExplorerEntry, index: number, event: React.MouseEvent<HTMLInputElement>) => void;
+  onOpenFolder: (folderId: GalleryFolderFilter) => void;
+  onRenameFolder: (folder: GalleryFolder) => void;
+  onPreviewAsset: (asset: GalleryAsset) => void;
+  onAssetContextMenu: (event: React.MouseEvent<HTMLElement>, asset: GalleryAsset) => void;
+  onEditAssetTags: (asset: GalleryAsset) => void;
+  onTagsInputChange: (value: string) => void;
+  onSaveAssetTags: (asset: GalleryAsset) => void;
+  onCancelAssetTags: () => void;
+  onMoveTagPopoverPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
+  onMoveToolbarTowardPointer: (event: React.MouseEvent<HTMLElement>) => void;
+  onResetToolbarDrift: (event: React.MouseEvent<HTMLElement>) => void;
+  onRenameAsset: (asset: GalleryAsset) => void;
+  onDeleteAsset: (asset: GalleryAsset) => void;
 }
 
 export function GalleryCompactControls({
@@ -158,6 +220,53 @@ export function GallerySortToolbar({
         </button>
       </div>
     </div>
+  );
+}
+
+export function GalleryDirectoryTree({
+  copy,
+  activeFolderId,
+  allFolderId,
+  uncategorizedFolderId,
+  batchMode,
+  allAssetCount,
+  uncategorizedAssetCount,
+  allDropTarget,
+  uncategorizedDropTarget,
+  allDropHandlers,
+  uncategorizedDropHandlers,
+  children,
+  onNavigate,
+  onContextMenu
+}: GalleryDirectoryTreeProps) {
+  return (
+    <aside className={`gallery-directory-tree ${batchMode ? "batch-select" : ""}`} aria-label={copy.galleryFolders}>
+      <button
+        type="button"
+        className={`gallery-tree-root ${activeFolderId === allFolderId ? "active" : ""} ${allDropTarget ? "drop-target" : ""}`}
+        onClick={() => onNavigate(allFolderId)}
+        onContextMenu={(event) => onContextMenu(event, allFolderId)}
+        {...allDropHandlers}
+      >
+        <FolderOpen size={14} />
+        <span>{copy.galleryAllFolders}</span>
+        <small>{allAssetCount}</small>
+      </button>
+      <button
+        type="button"
+        className={`gallery-tree-root ${activeFolderId === uncategorizedFolderId ? "active" : ""} ${uncategorizedDropTarget ? "drop-target" : ""}`}
+        onClick={() => onNavigate(uncategorizedFolderId)}
+        onContextMenu={(event) => onContextMenu(event, uncategorizedFolderId)}
+        {...uncategorizedDropHandlers}
+      >
+        <Folder size={14} />
+        <span>{copy.galleryUncategorized}</span>
+        <small>{uncategorizedAssetCount}</small>
+      </button>
+      <div className="gallery-tree-children">
+        {children}
+      </div>
+    </aside>
   );
 }
 
@@ -323,5 +432,123 @@ export function GalleryAssetCard({
         </button>
       </div>
     </article>
+  );
+}
+
+export function GalleryContentGrid({
+  copy,
+  contentRef,
+  activeFolderId,
+  viewMode,
+  batchMode,
+  dropTarget,
+  folderDropTargetId,
+  entries,
+  virtualEntries,
+  virtualStartIndex,
+  virtualTopSpacer,
+  virtualBottomSpacer,
+  isGalleryEmpty,
+  editingGalleryId,
+  tagsInput,
+  folderSubtreeAssetCounts,
+  dropHandlersForFolder,
+  formatBytes,
+  formatDate,
+  folderDisplayPath,
+  assetThumbnailPath,
+  isEntrySelected,
+  onScrollTopChange,
+  onFolderContextMenu,
+  onPrepareEntryDrag,
+  onToggleSelection,
+  onOpenFolder,
+  onRenameFolder,
+  onPreviewAsset,
+  onAssetContextMenu,
+  onEditAssetTags,
+  onTagsInputChange,
+  onSaveAssetTags,
+  onCancelAssetTags,
+  onMoveTagPopoverPointerDown,
+  onMoveToolbarTowardPointer,
+  onResetToolbarDrift,
+  onRenameAsset,
+  onDeleteAsset
+}: GalleryContentGridProps) {
+  return (
+    <section className="gallery-directory-content" aria-label={copy.galleryFolderContents}>
+      <div
+        ref={contentRef}
+        className={`gallery-grid gallery-content-grid ${viewMode} ${batchMode ? "batch-select" : ""} ${dropTarget ? "drop-target" : ""}`}
+        onScroll={(event) => onScrollTopChange(event.currentTarget.scrollTop)}
+        data-total-count={entries.length}
+        data-rendered-count={virtualEntries.length}
+        onContextMenu={(event) => {
+          const target = event.target as HTMLElement;
+          if (
+            event.target === event.currentTarget ||
+            target.closest(".gallery-virtual-spacer, .gallery-empty-state")
+          ) {
+            onFolderContextMenu(event, activeFolderId);
+          }
+        }}
+        {...dropHandlersForFolder(activeFolderId)}
+      >
+        {entries.length === 0 && (
+          <div className="history-empty gallery-empty-state">
+            <span>{isGalleryEmpty ? copy.galleryEmpty : copy.galleryNoMatch}</span>
+          </div>
+        )}
+        {virtualTopSpacer > 0 && <div className="gallery-virtual-spacer" style={{ height: virtualTopSpacer }} />}
+        {virtualEntries.map((entry, virtualIndex) => {
+          const index = virtualStartIndex + virtualIndex;
+          return entry.kind === "folder" ? (
+            <GalleryFolderCard
+              key={entry.id}
+              copy={copy}
+              folder={entry.folder}
+              selected={isEntrySelected(entry)}
+              dropTarget={folderDropTargetId === entry.id}
+              batchMode={batchMode}
+              displayPath={folderDisplayPath(entry.folder)}
+              meta={copy.galleryFolderItemMeta(folderSubtreeAssetCounts.get(entry.id) ?? 0, formatDate(entry.folder.updatedAt))}
+              dropHandlers={dropHandlersForFolder(entry.id)}
+              onDragStart={(event) => onPrepareEntryDrag(event, entry)}
+              onOpen={() => onOpenFolder(entry.id)}
+              onContextMenu={(event) => onFolderContextMenu(event, entry.id)}
+              onToggleSelection={(event) => onToggleSelection(entry, index, event)}
+              onRename={() => onRenameFolder(entry.folder)}
+            />
+          ) : (
+            <GalleryAssetCard
+              key={entry.id}
+              copy={copy}
+              asset={entry.asset}
+              selected={isEntrySelected(entry)}
+              batchMode={batchMode}
+              thumbnailSrc={assetThumbnailPath(entry.asset)}
+              meta={`${formatBytes(entry.asset.sizeBytes)} · ${formatDate(entry.asset.modifiedAt ?? entry.asset.updatedAt ?? entry.asset.createdAt)}`}
+              editingTags={editingGalleryId === entry.asset.id}
+              tagsInput={tagsInput}
+              onDragStart={(event) => onPrepareEntryDrag(event, entry)}
+              onOpen={() => onPreviewAsset(entry.asset)}
+              onContextMenu={(event) => onAssetContextMenu(event, entry.asset)}
+              onToggleSelection={(event) => onToggleSelection(entry, index, event)}
+              onEditTags={() => onEditAssetTags(entry.asset)}
+              onTagsInputChange={onTagsInputChange}
+              onSaveTags={() => onSaveAssetTags(entry.asset)}
+              onCancelTags={onCancelAssetTags}
+              onMoveTagPopoverPointerDown={onMoveTagPopoverPointerDown}
+              onMoveToolbarTowardPointer={onMoveToolbarTowardPointer}
+              onResetToolbarDrift={onResetToolbarDrift}
+              onRename={() => onRenameAsset(entry.asset)}
+              onDelete={() => onDeleteAsset(entry.asset)}
+            />
+          );
+        })}
+        {virtualBottomSpacer > 0 && <div className="gallery-virtual-spacer" style={{ height: virtualBottomSpacer }} />}
+      </div>
+    </section>
   );
 }
