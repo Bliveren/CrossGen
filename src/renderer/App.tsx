@@ -892,6 +892,7 @@ export function App() {
   const [isHistoryBatchMode, setIsHistoryBatchMode] = useState(false);
   const [selectedHistoryJobIds, setSelectedHistoryJobIds] = useState<Set<string>>(() => new Set());
   const [isHistoryPageSizeMenuOpen, setIsHistoryPageSizeMenuOpen] = useState(false);
+  const [historyListScrollState, setHistoryListScrollState] = useState({ top: 0, clientHeight: 0, scrollHeight: 0 });
   const [editingHistoryNameId, setEditingHistoryNameId] = useState<string | null>(null);
   const [historyNameDraft, setHistoryNameDraft] = useState("");
   const [editingHistoryTagsId, setEditingHistoryTagsId] = useState<string | null>(null);
@@ -1473,6 +1474,11 @@ export function App() {
   const historyPageStartIndex = normalizedHistoryPageIndex * historyPageSize;
   const visibleHistory = isHistoryExpanded ? filteredHistory : filteredHistory.slice(historyPageStartIndex, historyPageStartIndex + historyPageSize);
   const isSearchingHistory = historySearch.trim().length > 0;
+  const historyPagerVisible = hasHistoryOverflow && (
+    historyListScrollState.scrollHeight === 0 ||
+    historyListScrollState.clientHeight === 0 ||
+    historyListScrollState.top + historyListScrollState.clientHeight >= historyListScrollState.scrollHeight - 120
+  );
 
   const modeError = useMemo(() => {
     if (generalParams && !generalFallbackSupportsReferenceImages(generalParams.providerKind) && effectiveInputAssets.length > 0) {
@@ -1671,7 +1677,10 @@ export function App() {
     let frameId: number | null = null;
     const measureRailCollapseButtonY = () => {
       frameId = null;
-      const node = sidebarUtilityBarRef.current;
+      const node =
+        sidebarUtilityBarRef.current?.getBoundingClientRect().height
+          ? sidebarUtilityBarRef.current
+          : document.querySelector<HTMLElement>(".sidebar-mini-utility");
       if (!node) return;
       const rect = node.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) return;
@@ -1704,6 +1713,16 @@ export function App() {
       window.removeEventListener("resize", scheduleMeasure);
     };
   }, [isSidebarCompact, notice.text, showAdvanced, updateCheck?.status]);
+
+  useEffect(() => {
+    const node = historyListRef.current;
+    if (!node) return;
+    setHistoryListScrollState({
+      top: node.scrollTop,
+      clientHeight: node.clientHeight,
+      scrollHeight: node.scrollHeight
+    });
+  }, [filteredHistory.length, historyPageIndex, historyPageSize, historyViewMode, isHistoryExpanded, rightRailView]);
 
   useEffect(() => {
     setHistoryPageIndex(0);
@@ -3075,8 +3094,9 @@ export function App() {
 
   function movePreviewToolbarTowardPointer(event: React.MouseEvent<HTMLElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / Math.max(1, rect.width) - 0.5) * 8;
-    const y = ((event.clientY - rect.top) / Math.max(1, rect.height) - 0.5) * 5;
+    const drift = event.currentTarget.dataset.drift === "subtle" ? { x: 2, y: 1.2 } : { x: 3.5, y: 2.2 };
+    const x = ((event.clientX - rect.left) / Math.max(1, rect.width) - 0.5) * drift.x;
+    const y = ((event.clientY - rect.top) / Math.max(1, rect.height) - 0.5) * drift.y;
     event.currentTarget.style.setProperty("--toolbar-drift-x", `${x.toFixed(2)}px`);
     event.currentTarget.style.setProperty("--toolbar-drift-y", `${y.toFixed(2)}px`);
   }
@@ -4809,6 +4829,7 @@ export function App() {
         className={embedded ? "batch-tag-panel" : "batch-tag-menu"}
         role="menu"
         aria-label={copy.tagManager}
+        data-drift="subtle"
         onMouseMove={embedded ? undefined : movePreviewToolbarTowardPointer}
         onMouseLeave={embedded ? undefined : resetPreviewToolbarDrift}
       >
@@ -5216,10 +5237,13 @@ export function App() {
         aria-valuenow={sidebarWidth}
         tabIndex={0}
         onPointerDown={(event) => {
+          if (isSidebarCompact) return;
           event.currentTarget.setPointerCapture(event.pointerId);
           setResizingColumn("sidebar");
         }}
-        onKeyDown={(event) => resizeHandleKeyDown("sidebar", event)}
+        onKeyDown={(event) => {
+          if (!isSidebarCompact) resizeHandleKeyDown("sidebar", event);
+        }}
       />
 
       <section className="workspace">
@@ -5412,7 +5436,7 @@ export function App() {
                       </button>
                     </div>
                     {isEditingPreview && (
-                      <div className="annotation-tools preview-secondary-actions">
+                      <div className="annotation-tools preview-secondary-actions" data-drift="subtle">
                         <button type="button" className={annotationTool === "draw" ? "icon-button active" : "icon-button"} onClick={() => {
                           discardEmptyAnnotationTextBoxes();
                           setAnnotationTool("draw");
@@ -5497,7 +5521,7 @@ export function App() {
                       </div>
                     )}
                     {isCroppingPreview && (
-                      <div className="annotation-tools crop-tools preview-secondary-actions">
+                      <div className="annotation-tools crop-tools preview-secondary-actions" data-drift="subtle">
                         <button type="button" className={cropShape === "rect" ? "icon-button active" : "icon-button"} onClick={() => setCropShape("rect")} aria-label={copy.cropRectangle} data-tooltip={copy.cropRectangle}>
                           <RectangleHorizontal size={15} />
                         </button>
@@ -5828,10 +5852,13 @@ export function App() {
         aria-valuenow={historyWidth}
         tabIndex={0}
         onPointerDown={(event) => {
+          if (isRightRailCollapsed) return;
           event.currentTarget.setPointerCapture(event.pointerId);
           setResizingColumn("history");
         }}
-        onKeyDown={(event) => resizeHandleKeyDown("history", event)}
+        onKeyDown={(event) => {
+          if (!isRightRailCollapsed) resizeHandleKeyDown("history", event);
+        }}
       />
 
       <aside className={isRightRailCollapsed ? "history right-rail collapsed" : "history right-rail"}>
@@ -5919,6 +5946,13 @@ export function App() {
               <div
                 ref={historyListRef}
                 className={`history-list ${historyViewMode} ${isHistoryBatchMode ? "batch-select" : ""}`}
+                onScroll={(event) => {
+                  setHistoryListScrollState({
+                    top: event.currentTarget.scrollTop,
+                    clientHeight: event.currentTarget.clientHeight,
+                    scrollHeight: event.currentTarget.scrollHeight
+                  });
+                }}
               >
                 {filteredHistory.length === 0 ? (
                   <div className="history-empty">{copy.noJobsYet}</div>
@@ -6019,6 +6053,7 @@ export function App() {
                               {editingHistoryTagsId === job.id && (
                                 <div
                                   className="history-tag-popover"
+                                  data-drift="subtle"
                                   onPointerDown={(event) => event.stopPropagation()}
                                   onMouseMove={movePreviewToolbarTowardPointer}
                                   onMouseLeave={resetPreviewToolbarDrift}
@@ -6106,7 +6141,8 @@ export function App() {
               </div>
               {hasHistoryOverflow && (
                 <div
-                  className="history-floating-pager visible"
+                  className={`history-floating-pager ${historyPagerVisible ? "visible" : ""}`}
+                  data-drift="subtle"
                   onMouseMove={movePreviewToolbarTowardPointer}
                   onMouseLeave={resetPreviewToolbarDrift}
                 >
@@ -6173,11 +6209,11 @@ export function App() {
             <div className="gallery-compact-controls">
               <select value={activeGalleryFolderId} onChange={(event) => navigateGalleryFolder(event.target.value as GalleryFolderFilter)} aria-label={copy.galleryFolders}>
                 {galleryFolderSelectOptions.map((folder) => (
-                  <option key={folder.id} value={folder.id}>{folder.name}</option>
+                  <option key={folder.id} value={folder.id}>{folder.id === GALLERY_ALL_FILTER ? copy.galleryFolders : folder.name}</option>
                 ))}
               </select>
               <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)} aria-label={copy.galleryTagFilter}>
-                <option value="">{copy.galleryAllTags}</option>
+                <option value="">{copy.galleryTagFilter}</option>
                 {globalTagOptions.map((tag) => (
                   <option key={tag} value={tag}>{tag}</option>
                 ))}
@@ -6374,6 +6410,7 @@ export function App() {
                         {editingGalleryId === entry.asset.id && (
                           <div
                             className="history-tag-popover gallery-tag-popover"
+                            data-drift="subtle"
                             onPointerDown={(event) => event.stopPropagation()}
                             onMouseMove={movePreviewToolbarTowardPointer}
                             onMouseLeave={resetPreviewToolbarDrift}
@@ -6434,6 +6471,7 @@ export function App() {
           <button
             type="button"
             className={`icon-button secondary right-rail-drawer-toggle ${isRightRailActionDrawerOpen ? "active" : ""}`}
+            data-drift="subtle"
             onClick={() => setIsRightRailActionDrawerOpen((current) => !current)}
             onMouseMove={movePreviewToolbarTowardPointer}
             onMouseLeave={resetPreviewToolbarDrift}
@@ -6443,7 +6481,7 @@ export function App() {
           >
             <SlidersHorizontal size={15} />
           </button>
-          <div className="right-rail-action-group" onMouseMove={movePreviewToolbarTowardPointer} onMouseLeave={resetPreviewToolbarDrift}>
+          <div className="right-rail-action-group" data-drift="subtle" onMouseMove={movePreviewToolbarTowardPointer} onMouseLeave={resetPreviewToolbarDrift}>
             <button
               type="button"
               className="icon-button secondary right-rail-view-toggle"
