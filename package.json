@@ -37,7 +37,9 @@
     "verify:real-api": "node scripts/verify-real-api.mjs",
     "verify:real-gemini-api": "node scripts/verify-real-gemini-api.mjs",
     "verify:signing-ready": "node scripts/verify-signing-readiness.mjs",
-    "update:manifest-asset": "node scripts/update-manifest-asset.mjs"
+    "update:manifest-asset": "node scripts/update-manifest-asset.mjs",
+    "perf:fixture": "node scripts/create-large-gallery-fixture.mjs",
+    "perf:gallery": "node scripts/measure-gallery-performance.mjs"
   },
   "build": {
     "appId": "com.bliveren.crossgen",
@@ -100,6 +102,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "axe-core": "^4.12.1",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^39.2.6",
