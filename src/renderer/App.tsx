@@ -105,6 +105,7 @@ import {
 } from "../shared/modelCatalog";
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
+import { DialogShell } from "./DialogShell";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
 import { ApiConfigDialog, LaunchSection, ProviderSummarySection } from "./ProviderConfigPanel";
 import { ParameterSection } from "./ParameterConfigPanel";
@@ -5840,14 +5841,7 @@ export function App() {
         />
       )}
       {isTemplatesOpen && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setIsTemplatesOpen(false);
-          }}
-        >
-          <section className="template-dialog" role="dialog" aria-modal="true" aria-labelledby="prompt-template-dialog-title">
+        <DialogShell className="template-dialog" labelledBy="prompt-template-dialog-title" onClose={() => setIsTemplatesOpen(false)}>
             <header className="history-header">
               <div>
                 <h2 id="prompt-template-dialog-title">{copy.promptTemplates}</h2>
@@ -5933,18 +5927,10 @@ export function App() {
                 </div>
               </div>
             </div>
-          </section>
-        </div>
+        </DialogShell>
       )}
       {galleryFolderDialog && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeGalleryFolderDialog();
-          }}
-        >
-          <section className="confirm-dialog gallery-folder-dialog" role="dialog" aria-modal="true" aria-labelledby="gallery-folder-dialog-title">
+        <DialogShell className="confirm-dialog gallery-folder-dialog" labelledBy="gallery-folder-dialog-title" onClose={closeGalleryFolderDialog}>
             <div>
               <h2 id="gallery-folder-dialog-title">
                 {galleryFolderDialog.mode === "create" ? copy.galleryFolderCreate : copy.galleryFolderRename}
@@ -5980,18 +5966,10 @@ export function App() {
                 {galleryFolderDialog.mode === "create" ? copy.galleryFolderCreate : copy.galleryFolderRename}
               </button>
             </div>
-          </section>
-        </div>
+        </DialogShell>
       )}
       {galleryAssetDialog && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeGalleryAssetDialog();
-          }}
-        >
-          <section className="confirm-dialog gallery-asset-dialog" role="dialog" aria-modal="true" aria-labelledby="gallery-asset-dialog-title">
+        <DialogShell className="confirm-dialog gallery-asset-dialog" labelledBy="gallery-asset-dialog-title" onClose={closeGalleryAssetDialog}>
             <div>
               <h2 id="gallery-asset-dialog-title">{copy.galleryAssetRename}</h2>
               <p>{copy.galleryAssetDialogDescription}</p>
@@ -6025,18 +6003,10 @@ export function App() {
                 {copy.galleryAssetRename}
               </button>
             </div>
-          </section>
-        </div>
+        </DialogShell>
       )}
       {storageDialogKind && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setStorageDialogKind(null);
-          }}
-        >
-          <section className="confirm-dialog storage-dialog" role="dialog" aria-modal="true" aria-labelledby="storage-dialog-title">
+        <DialogShell className="confirm-dialog storage-dialog" labelledBy="storage-dialog-title" onClose={() => setStorageDialogKind(null)}>
             <div>
               <h2 id="storage-dialog-title">{copy.libraryConfig}</h2>
               <p>{copy.storageFolderDialogDescription}</p>
@@ -6093,18 +6063,10 @@ export function App() {
                 {copy.cancel}
               </button>
             </div>
-          </section>
-        </div>
+        </DialogShell>
       )}
       {confirmDialog && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setConfirmDialog(null);
-          }}
-        >
-          <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
+        <DialogShell className="confirm-dialog" labelledBy="confirm-dialog-title" onClose={() => setConfirmDialog(null)}>
             <div>
               <h2 id="confirm-dialog-title">{confirmDialog.title}</h2>
               <p>{confirmDialog.body}</p>
@@ -6118,18 +6080,10 @@ export function App() {
                 {confirmDialog.confirmLabel}
               </button>
             </div>
-          </section>
-        </div>
+        </DialogShell>
       )}
       {gallerySaveChoiceDialog && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setGallerySaveChoiceDialog(null);
-          }}
-        >
-          <section className="confirm-dialog gallery-save-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="gallery-save-choice-title">
+        <DialogShell className="confirm-dialog gallery-save-choice-dialog" labelledBy="gallery-save-choice-title" onClose={() => setGallerySaveChoiceDialog(null)}>
             <div>
               <h2 id="gallery-save-choice-title">{copy.gallerySaveEditedTitle}</h2>
               <p>{copy.gallerySaveEditedBody(gallerySaveChoiceDialog.asset.originalName)}</p>
@@ -6147,8 +6101,7 @@ export function App() {
                 {copy.galleryOverwrite}
               </button>
             </div>
-          </section>
-        </div>
+        </DialogShell>
       )}
       {isPreviewOpen && activePreviewSource && (
         <div
