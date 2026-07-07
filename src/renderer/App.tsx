@@ -122,6 +122,13 @@ import {
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 import { useImageEditor } from "./useImageEditor";
 import {
+  GALLERY_ALL_FILTER,
+  GALLERY_CONTENT_DEFAULT_HEIGHT,
+  GALLERY_CONTENT_DEFAULT_WIDTH,
+  GALLERY_UNCATEGORIZED_FILTER,
+  useGalleryExplorerModel
+} from "./useGalleryExplorerModel";
+import {
   MIN_TEXT_BOX_SIZE,
   type AnnotationTextBox,
   type CanvasPoint,
@@ -200,17 +207,7 @@ const HISTORY_PAGE_SIZE_OPTIONS = [6, 12, 24, 48];
 const DEFAULT_HISTORY_MODEL_DISPLAY = "GPT Image 2";
 const PROMPT_ACTION_ICON_BUTTON_WIDTH = 40;
 const PROMPT_ACTION_EDGE_GUARD = 4;
-const GALLERY_VIRTUAL_GRID_MIN_COLUMN_WIDTH = 132;
-const GALLERY_VIRTUAL_GRID_ROW_HEIGHT = 190;
-const GALLERY_VIRTUAL_LIST_ROW_HEIGHT = 86;
-const GALLERY_VIRTUAL_OVERSCAN_ROWS = 3;
-const GALLERY_CONTENT_DEFAULT_HEIGHT = 380;
-const GALLERY_CONTENT_DEFAULT_WIDTH = 320;
-
 type TabMode = "text2img" | "img2img";
-
-const GALLERY_ALL_FILTER = "__all__";
-const GALLERY_UNCATEGORIZED_FILTER = "__uncategorized__";
 
 function getReferenceImageLimit(params: ImageParams): number {
   if (isOpenAIImageParams(params)) {
@@ -1118,11 +1115,31 @@ export function App() {
       return haystack.includes(query);
     });
   }, [snapshot.promptTemplates, templateSearch, templateTagFilter]);
-  const galleryTagsAvailable = useMemo(() => {
-    const tags = new Set<string>();
-    snapshot.galleryAssets.forEach((asset) => asset.tags.forEach((tag) => tags.add(tag)));
-    return [...tags].sort((a, b) => a.localeCompare(b));
-  }, [snapshot.galleryAssets]);
+  const {
+    tagsAvailable: galleryTagsAvailable,
+    folderById: galleryFolderById,
+    foldersByParent: galleryFoldersByParent,
+    folderAssetCounts: galleryFolderAssetCounts,
+    folderSubtreeAssetCounts: galleryFolderSubtreeAssetCounts,
+    currentImportFolderId,
+    currentCreateParentId: currentGalleryCreateParentId,
+    filteredAssets: filteredGalleryAssets,
+    explorerEntries: galleryExplorerEntries,
+    virtualStartIndex: galleryVirtualStartIndex,
+    virtualEntries: galleryVirtualEntries,
+    virtualTopSpacer: galleryVirtualTopSpacer,
+    virtualBottomSpacer: galleryVirtualBottomSpacer
+  } = useGalleryExplorerModel({
+    galleryAssets: snapshot.galleryAssets,
+    galleryFolders: snapshot.galleryFolders,
+    activeFolderId: activeGalleryFolderId,
+    search: gallerySearch,
+    tagFilter: galleryTagFilter,
+    sort: gallerySort,
+    viewMode: galleryViewMode,
+    scrollTop: galleryContentScrollTop,
+    viewport: galleryContentViewport
+  });
   const globalTagOptions = useMemo(() => {
     const tags = new Set<string>();
     [...historyTagsAvailable, ...historySystemTagsAvailable, ...galleryTagsAvailable].forEach((tag) => tags.add(tag));
@@ -1133,105 +1150,12 @@ export function App() {
     [...historyTagsAvailable, ...galleryTagsAvailable].forEach((tag) => tags.add(tag));
     return [...tags].sort((a, b) => a.localeCompare(b));
   }, [galleryTagsAvailable, historyTagsAvailable]);
-  const galleryFolderById = useMemo(() => new Map(snapshot.galleryFolders.map((folder) => [folder.id, folder])), [snapshot.galleryFolders]);
-  const galleryFoldersByParent = useMemo(() => {
-    const foldersByParent = new Map<string | null, GalleryFolder[]>();
-    for (const folder of snapshot.galleryFolders) {
-      const parentId = galleryFolderById.has(folder.parentId ?? "") ? folder.parentId ?? null : null;
-      const siblings = foldersByParent.get(parentId) ?? [];
-      siblings.push(folder);
-      foldersByParent.set(parentId, siblings);
-    }
-    for (const siblings of foldersByParent.values()) {
-      siblings.sort((a, b) => a.name.localeCompare(b.name));
-    }
-    return foldersByParent;
-  }, [galleryFolderById, snapshot.galleryFolders]);
-  const galleryFolderAssetCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    snapshot.galleryAssets.forEach((asset) => {
-      counts.set(asset.folderId ?? GALLERY_UNCATEGORIZED_FILTER, (counts.get(asset.folderId ?? GALLERY_UNCATEGORIZED_FILTER) ?? 0) + 1);
-    });
-    return counts;
-  }, [snapshot.galleryAssets]);
-  const galleryFolderSubtreeAssetCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const asset of snapshot.galleryAssets) {
-      let currentId = asset.folderId ?? null;
-      const seen = new Set<string>();
-      while (currentId && !seen.has(currentId)) {
-        seen.add(currentId);
-        counts.set(currentId, (counts.get(currentId) ?? 0) + 1);
-        currentId = galleryFolderById.get(currentId)?.parentId ?? null;
-      }
-    }
-    return counts;
-  }, [galleryFolderById, snapshot.galleryAssets]);
-  const currentImportFolderId = activeGalleryFolderId === GALLERY_ALL_FILTER || activeGalleryFolderId === GALLERY_UNCATEGORIZED_FILTER ? null : activeGalleryFolderId;
-  const currentGalleryCreateParentId = galleryFolderById.has(activeGalleryFolderId) ? activeGalleryFolderId : null;
   const galleryFolderSelectOptions = useMemo(() => [
     { id: GALLERY_ALL_FILTER, name: copy.galleryAllFolders },
     { id: GALLERY_UNCATEGORIZED_FILTER, name: copy.galleryUncategorized },
     ...snapshot.galleryFolders.map((folder) => ({ id: folder.id, name: galleryFolderDisplayPath(folder) }))
   ], [copy.galleryAllFolders, copy.galleryUncategorized, snapshot.galleryFolders, galleryFolderById]);
-  const activeGalleryChildFolders = useMemo(() => {
-    if (activeGalleryFolderId === GALLERY_UNCATEGORIZED_FILTER) return [];
-    const parentId = galleryFolderById.has(activeGalleryFolderId) ? activeGalleryFolderId : null;
-    const query = gallerySearch.trim().toLowerCase();
-    const folders = [...(galleryFoldersByParent.get(parentId) ?? [])].filter((folder) => !query || folder.name.toLowerCase().includes(query));
-    if (gallerySort === "modified" || gallerySort === "newest") {
-      folders.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-    } else if (gallerySort === "oldest") {
-      folders.sort((a, b) => Date.parse(a.updatedAt) - Date.parse(b.updatedAt));
-    } else if (gallerySort === "size") {
-      folders.sort((a, b) => (galleryFolderSubtreeAssetCounts.get(b.id) ?? 0) - (galleryFolderSubtreeAssetCounts.get(a.id) ?? 0) || a.name.localeCompare(b.name));
-    } else {
-      folders.sort((a, b) => a.name.localeCompare(b.name));
-    }
-    return folders;
-  }, [activeGalleryFolderId, galleryFolderById, galleryFolderSubtreeAssetCounts, galleryFoldersByParent, gallerySearch, gallerySort]);
   const historyGalleryTargetFolderId = historyGalleryFolderId || null;
-  const filteredGalleryAssets = useMemo(() => {
-    const query = gallerySearch.trim().toLowerCase();
-    const matched = snapshot.galleryAssets.filter((asset) => {
-      if (activeGalleryFolderId === GALLERY_UNCATEGORIZED_FILTER && asset.folderId) return false;
-      if (activeGalleryFolderId !== GALLERY_ALL_FILTER && activeGalleryFolderId !== GALLERY_UNCATEGORIZED_FILTER && asset.folderId !== activeGalleryFolderId) return false;
-      if (galleryTagFilter && !asset.tags.includes(galleryTagFilter)) return false;
-      if (!query) return true;
-      const haystack = `${asset.originalName} ${asset.fileName} ${asset.tags.join(" ")}`.toLowerCase();
-      return haystack.includes(query);
-    });
-    const sorted = [...matched];
-    if (gallerySort === "name") {
-      sorted.sort((a, b) => a.originalName.localeCompare(b.originalName));
-    } else if (gallerySort === "size") {
-      sorted.sort((a, b) => b.sizeBytes - a.sizeBytes || a.originalName.localeCompare(b.originalName));
-    } else if (gallerySort === "modified") {
-      sorted.sort((a, b) => Date.parse(b.modifiedAt ?? b.updatedAt ?? b.createdAt) - Date.parse(a.modifiedAt ?? a.updatedAt ?? a.createdAt));
-    } else if (gallerySort === "oldest") {
-      sorted.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
-    } else {
-      sorted.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-    }
-    return sorted;
-  }, [activeGalleryFolderId, gallerySearch, gallerySort, galleryTagFilter, snapshot.galleryAssets]);
-  const galleryExplorerEntries = useMemo<GalleryExplorerEntry[]>(() => [
-    ...activeGalleryChildFolders.map((folder) => ({ kind: "folder" as const, id: folder.id, folder })),
-    ...filteredGalleryAssets.map((asset) => ({ kind: "asset" as const, id: asset.id, asset }))
-  ], [activeGalleryChildFolders, filteredGalleryAssets]);
-  const galleryVirtualColumns = galleryViewMode === "grid"
-    ? Math.max(1, Math.floor((galleryContentViewport.width + 8) / (GALLERY_VIRTUAL_GRID_MIN_COLUMN_WIDTH + 8)))
-    : 1;
-  const galleryVirtualRowHeight = galleryViewMode === "grid" ? GALLERY_VIRTUAL_GRID_ROW_HEIGHT : GALLERY_VIRTUAL_LIST_ROW_HEIGHT;
-  const galleryVirtualTotalRows = Math.ceil(galleryExplorerEntries.length / galleryVirtualColumns);
-  const galleryVirtualStartRow = Math.max(0, Math.floor(galleryContentScrollTop / galleryVirtualRowHeight) - GALLERY_VIRTUAL_OVERSCAN_ROWS);
-  const galleryVirtualVisibleRows = Math.ceil(galleryContentViewport.height / galleryVirtualRowHeight) + GALLERY_VIRTUAL_OVERSCAN_ROWS * 2;
-  const galleryVirtualEndRow = Math.min(galleryVirtualTotalRows, galleryVirtualStartRow + galleryVirtualVisibleRows);
-  const galleryVirtualStartIndex = galleryVirtualStartRow * galleryVirtualColumns;
-  const galleryVirtualEndIndex = Math.min(galleryExplorerEntries.length, galleryVirtualEndRow * galleryVirtualColumns);
-  const galleryVirtualEntries = galleryExplorerEntries.slice(galleryVirtualStartIndex, galleryVirtualEndIndex);
-  const galleryVirtualTopSpacer = galleryVirtualStartRow * galleryVirtualRowHeight;
-  const galleryVirtualBottomSpacer = Math.max(0, galleryVirtualTotalRows - galleryVirtualEndRow) * galleryVirtualRowHeight;
   const selectedGalleryItemCount = selectedGalleryAssetIds.size + selectedGalleryFolderIds.size;
   const selectedHistoryItemCount = selectedHistoryJobIds.size;
   const canTagSelectedHistory = isHistoryBatchMode && selectedHistoryJobIds.size > 0;
