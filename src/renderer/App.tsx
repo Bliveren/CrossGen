@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Profiler, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   BookOpen,
@@ -180,6 +180,44 @@ interface GallerySaveChoiceDialogState {
 }
 type BatchTagTarget = "history" | "gallery";
 type ImageContextMenuState = { x: number; y: number; asset: ImageAsset; jobPrompt: string };
+type CrossgenProfilerEvent = {
+  id: string;
+  phase: "mount" | "update" | "nested-update";
+  actualDuration: number;
+  baseDuration: number;
+  startTime: number;
+  commitTime: number;
+};
+
+declare global {
+  interface Window {
+    __crossgenProfilerEvents?: CrossgenProfilerEvent[];
+  }
+}
+
+function PerfProfiler({ id, children }: { id: string; children: ReactNode }) {
+  if (typeof window === "undefined" || !window.__crossgenProfilerEvents) {
+    return <>{children}</>;
+  }
+
+  return (
+    <Profiler
+      id={id}
+      onRender={(profilerId, phase, actualDuration, baseDuration, startTime, commitTime) => {
+        window.__crossgenProfilerEvents?.push({
+          id: profilerId,
+          phase,
+          actualDuration,
+          baseDuration,
+          startTime,
+          commitTime
+        });
+      }}
+    >
+      {children}
+    </Profiler>
+  );
+}
 
 const sizePresets = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x1152", "2048x2048", "3840x2160", "2160x3840"];
 const qualityOptions: ImageQuality[] = ["auto", "low", "medium", "high"];
@@ -4885,6 +4923,7 @@ export function App() {
         } as React.CSSProperties
       }
     >
+      <PerfProfiler id="Sidebar">
       <aside className={isSidebarCompact ? "sidebar collapsed" : "sidebar"}>
         <header className="brand-block">
           <img className="brand-icon" src="./brand-logo.png" alt="" />
@@ -5008,6 +5047,7 @@ export function App() {
         </section>
         </div>
       </aside>
+      </PerfProfiler>
 
       <div
         className="column-resizer sidebar-resizer"
@@ -5029,6 +5069,7 @@ export function App() {
         }}
       />
 
+      <PerfProfiler id="Workspace">
       <section className="workspace">
         <div className="preview-layout" ref={previewLayoutRef}>
           <ImageEditor
@@ -5351,6 +5392,7 @@ export function App() {
           </section>
         </div>
       </section>
+      </PerfProfiler>
 
       <div
         className="column-resizer history-resizer"
@@ -5372,6 +5414,7 @@ export function App() {
         }}
       />
 
+      <PerfProfiler id="RightRail">
       <aside className={isRightRailCollapsed ? "history right-rail collapsed" : "history right-rail"}>
         <button
           type="button"
@@ -5731,6 +5774,7 @@ export function App() {
           </div>
         </div>
       </aside>
+      </PerfProfiler>
       {isActiveApiConfigOpen && (
         <ApiConfigDialog
           copy={copy}

@@ -2749,10 +2749,39 @@ async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: 
     await sleep(120);
   }
   const profilerEvents = await window.webContents.executeJavaScript(`(window.__crossgenProfilerEvents ?? []).slice(${Number(profilerStartIndex) || 0})`);
+  const profilerEventsById = Array.isArray(profilerEvents)
+    ? profilerEvents.reduce<Record<string, {
+      eventCount: number;
+      totalActualDuration: number;
+      maxActualDuration: number;
+      totalBaseDuration: number;
+      phases: Record<string, number>;
+    }>>((summary, event) => {
+      const id = typeof event.id === "string" ? event.id : "unknown";
+      const actualDuration = typeof event.actualDuration === "number" ? event.actualDuration : 0;
+      const baseDuration = typeof event.baseDuration === "number" ? event.baseDuration : 0;
+      const phase = typeof event.phase === "string" ? event.phase : "unknown";
+      const current = summary[id] ?? {
+        eventCount: 0,
+        totalActualDuration: 0,
+        maxActualDuration: 0,
+        totalBaseDuration: 0,
+        phases: {}
+      };
+      current.eventCount += 1;
+      current.totalActualDuration += actualDuration;
+      current.maxActualDuration = Math.max(current.maxActualDuration, actualDuration);
+      current.totalBaseDuration += baseDuration;
+      current.phases[phase] = (current.phases[phase] ?? 0) + 1;
+      summary[id] = current;
+      return summary;
+    }, {})
+    : {};
   (rendererResult as Record<string, unknown>).reactProfilerPartialImageTrace = {
     status: Array.isArray(profilerEvents) ? "ok" : "unavailable",
     simulatedPartialEventCount: sampleGalleryAsset ? 3 : 0,
     profilerEventCount: Array.isArray(profilerEvents) ? profilerEvents.length : 0,
+    eventsById: profilerEventsById,
     events: Array.isArray(profilerEvents) ? profilerEvents : []
   };
   (rendererResult as Record<string, unknown>).assetProtocol = assetProtocolPerfMetrics;
