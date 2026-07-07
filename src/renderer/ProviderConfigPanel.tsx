@@ -78,6 +78,219 @@ interface AddApiConfigFormProps {
   onCancel: () => void;
 }
 
+interface ApiConfigDialogProps {
+  copy: UiCopy;
+  savedApiConfigCount: number;
+  activeConfig: ProviderConfig;
+  selectedConfig: ProviderConfig;
+  inactiveConfigs: ProviderConfig[];
+  promotedApiConfigId: string | null;
+  canDeleteActiveApiAccess: boolean;
+  canDeleteSelectedApiAccess: boolean;
+  saving: boolean;
+  bridgeAvailable: boolean;
+  discoveringProviderId: string | null;
+  discoveringAny: boolean;
+  connectionErrorText: string | null;
+  name: string;
+  apiKey: string;
+  baseURL: string;
+  apiKeyPlaceholder: string;
+  selectedDiscoveryText: string;
+  selectedModelSummary: string;
+  selectedModelSummaryKind: "error" | "info";
+  selectedConfigSaved: boolean;
+  addFormOpen: boolean;
+  newApiAccessKind: ProviderKind;
+  newApiAccessName: string;
+  newApiAccessBaseURL: string;
+  newApiAccessKey: string;
+  displayNameForConfig: (config: ProviderConfig) => string;
+  providerLabelForKind: (kind: ProviderKind) => string;
+  baseUrlSummaryForConfig: (config: ProviderConfig) => string;
+  discoverySummaryForConfig: (config: ProviderConfig) => string;
+  discoveryTooltipForConfig: (config: ProviderConfig) => string;
+  modelLabel: (model: DiscoveredProviderModel) => string;
+  connectionBadgeForConfig: (config: ProviderConfig) => React.ReactNode;
+  onClose: () => void;
+  onUseConfig: (config: ProviderConfig) => void;
+  onSelectConfig: (config: ProviderConfig) => void;
+  onDeleteConfig: (config: ProviderConfig) => void;
+  onDiscoverConfig: (config: ProviderConfig) => void;
+  onToggleAddForm: () => void;
+  onNewApiAccessKindChange: (kind: ProviderKind) => void;
+  onNewApiAccessNameChange: (value: string) => void;
+  onNewApiAccessBaseURLChange: (value: string) => void;
+  onNewApiAccessKeyChange: (value: string) => void;
+  onAddApiAccess: () => void;
+  onCancelAddApiAccess: () => void;
+  onNameChange: (value: string) => void;
+  onApiKeyChange: (value: string) => void;
+  onBaseURLChange: (value: string) => void;
+  onSubmit: () => void;
+}
+
+export function ApiConfigDialog({
+  copy,
+  savedApiConfigCount,
+  activeConfig,
+  selectedConfig,
+  inactiveConfigs,
+  promotedApiConfigId,
+  canDeleteActiveApiAccess,
+  canDeleteSelectedApiAccess,
+  saving,
+  bridgeAvailable,
+  discoveringProviderId,
+  discoveringAny,
+  connectionErrorText,
+  name,
+  apiKey,
+  baseURL,
+  apiKeyPlaceholder,
+  selectedDiscoveryText,
+  selectedModelSummary,
+  selectedModelSummaryKind,
+  selectedConfigSaved,
+  addFormOpen,
+  newApiAccessKind,
+  newApiAccessName,
+  newApiAccessBaseURL,
+  newApiAccessKey,
+  displayNameForConfig,
+  providerLabelForKind,
+  baseUrlSummaryForConfig,
+  discoverySummaryForConfig,
+  discoveryTooltipForConfig,
+  modelLabel,
+  connectionBadgeForConfig,
+  onClose,
+  onUseConfig,
+  onSelectConfig,
+  onDeleteConfig,
+  onDiscoverConfig,
+  onToggleAddForm,
+  onNewApiAccessKindChange,
+  onNewApiAccessNameChange,
+  onNewApiAccessBaseURLChange,
+  onNewApiAccessKeyChange,
+  onAddApiAccess,
+  onCancelAddApiAccess,
+  onNameChange,
+  onApiKeyChange,
+  onBaseURLChange,
+  onSubmit
+}: ApiConfigDialogProps) {
+  const renderCard = (config: ProviderConfig, active: boolean) => (
+    <ApiConfigCard
+      key={config.id}
+      copy={copy}
+      config={config}
+      active={active}
+      selected={config.id === selectedConfig.id}
+      promoted={promotedApiConfigId === config.id}
+      canUse={!active}
+      canDelete={active ? canDeleteActiveApiAccess : canDeleteSelectedApiAccess}
+      saving={saving}
+      bridgeAvailable={bridgeAvailable}
+      discovering={discoveringProviderId === config.id}
+      discoveringAny={discoveringAny}
+      tooltip={discoveryTooltipForConfig(config)}
+      displayName={displayNameForConfig(config)}
+      providerLabel={providerLabelForKind(config.kind)}
+      baseUrlSummary={baseUrlSummaryForConfig(config)}
+      connectionBadge={connectionBadgeForConfig(config)}
+      keyLabel={config.apiKeySaved ? config.apiKeyPreview ?? copy.keySaved : copy.noKeySaved}
+      modelSummary={discoverySummaryForConfig(config)}
+      modelSummaryKind={config.lastModelDiscoveryError ? "error" : "info"}
+      onUse={() => onUseConfig(config)}
+      onSelect={() => onSelectConfig(config)}
+      onDelete={() => onDeleteConfig(config)}
+      onDiscover={() => onDiscoverConfig(config)}
+    />
+  );
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section className="api-config-dialog" role="dialog" aria-modal="true" aria-labelledby="api-config-dialog-title">
+        <header className="history-header">
+          <div>
+            <h2 id="api-config-dialog-title">{copy.provider}</h2>
+            <p>{copy.apiAccessDialogSummary(savedApiConfigCount)}</p>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label={copy.cancel} data-tooltip={copy.cancel}>
+            <X size={16} />
+          </button>
+        </header>
+        <div className="api-config-dialog-body">
+          <aside className="api-config-list-pane">
+            <div className="api-config-pane-heading">
+              <span>{copy.apiAccessCurrentSlot}</span>
+              <small>{copy.apiAccessEditHint}</small>
+            </div>
+            {renderCard(activeConfig, true)}
+            <div className="api-config-card-list" aria-label={copy.apiAccessList}>
+              {inactiveConfigs.map((config) => renderCard(config, false))}
+            </div>
+            <AddApiConfigForm
+              copy={copy}
+              open={addFormOpen}
+              saving={saving}
+              kind={newApiAccessKind}
+              name={newApiAccessName}
+              baseURL={newApiAccessBaseURL}
+              apiKey={newApiAccessKey}
+              namePlaceholder={providerLabelForKind(newApiAccessKind)}
+              onToggle={onToggleAddForm}
+              onKindChange={onNewApiAccessKindChange}
+              onNameChange={onNewApiAccessNameChange}
+              onBaseURLChange={onNewApiAccessBaseURLChange}
+              onApiKeyChange={onNewApiAccessKeyChange}
+              onAdd={onAddApiAccess}
+              onCancel={onCancelAddApiAccess}
+            />
+          </aside>
+
+          <ApiConfigDetail
+            copy={copy}
+            selectedConfig={selectedConfig}
+            active={selectedConfig.id === activeConfig.id}
+            bridgeAvailable={bridgeAvailable}
+            saving={saving}
+            saved={selectedConfigSaved}
+            discovering={discoveringProviderId === selectedConfig.id}
+            discoveringAny={discoveringAny}
+            canDelete={canDeleteSelectedApiAccess}
+            connectionErrorText={connectionErrorText}
+            name={name}
+            apiKey={apiKey}
+            baseURL={baseURL}
+            namePlaceholder={providerLabelForKind(selectedConfig.kind)}
+            apiKeyPlaceholder={apiKeyPlaceholder}
+            discoveryTooltip={selectedDiscoveryText}
+            modelSummary={selectedModelSummary}
+            modelSummaryKind={selectedModelSummaryKind}
+            modelTooltip={discoveryTooltipForConfig(selectedConfig)}
+            modelLabel={modelLabel}
+            onNameChange={onNameChange}
+            onApiKeyChange={onApiKeyChange}
+            onBaseURLChange={onBaseURLChange}
+            onSubmit={onSubmit}
+            onDiscover={() => onDiscoverConfig(selectedConfig)}
+            onDelete={() => onDeleteConfig(selectedConfig)}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function AddApiConfigForm({
   copy,
   open,

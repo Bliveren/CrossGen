@@ -108,7 +108,7 @@ import {
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
-import { AddApiConfigForm, ApiConfigCard, ApiConfigDetail } from "./ProviderConfigPanel";
+import { ApiConfigDialog } from "./ProviderConfigPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -5908,148 +5908,68 @@ export function App() {
         </div>
       </aside>
       {isActiveApiConfigOpen && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setIsActiveApiConfigOpen(false);
+        <ApiConfigDialog
+          copy={copy}
+          savedApiConfigCount={savedApiConfigs.length}
+          activeConfig={activeConfig}
+          selectedConfig={selectedApiConfig}
+          inactiveConfigs={inactiveApiConfigs}
+          promotedApiConfigId={promotedApiConfigId}
+          canDeleteActiveApiAccess={canDeleteActiveApiAccess}
+          canDeleteSelectedApiAccess={canDeleteSelectedApiAccess}
+          saving={isSavingConfig}
+          bridgeAvailable={Boolean(bridge)}
+          discoveringProviderId={discoveringProviderId}
+          discoveringAny={isDiscoveringModels}
+          connectionErrorText={connectionErrorText}
+          name={apiAccessName}
+          apiKey={apiKey}
+          baseURL={baseURL}
+          apiKeyPlaceholder={apiKeyPlaceholder}
+          selectedDiscoveryText={selectedDiscoveryText}
+          selectedModelSummary={selectedModelSummary}
+          selectedModelSummaryKind={selectedApiConfig.lastModelDiscoveryError ? "error" : "info"}
+          selectedConfigSaved={isSelectedConfigSaved}
+          addFormOpen={isAddingApiAccess}
+          newApiAccessKind={newApiAccessKind}
+          newApiAccessName={newApiAccessName}
+          newApiAccessBaseURL={newApiAccessBaseURL}
+          newApiAccessKey={newApiAccessKey}
+          displayNameForConfig={(config) => apiAccessDisplayName(config, copy.apiAccessUntitled)}
+          providerLabelForKind={providerLabelFromKind}
+          baseUrlSummaryForConfig={(config) => summarizeBaseURL(config.baseURL)}
+          discoverySummaryForConfig={(config) => discoverySummary(config, copy)}
+          discoveryTooltipForConfig={(config) => discoveredModelTooltip(config, copy)}
+          modelLabel={discoveredModelLabel}
+          connectionBadgeForConfig={renderApiConfigConnectionBadge}
+          onClose={() => setIsActiveApiConfigOpen(false)}
+          onUseConfig={(config) => void switchApiAccess(config.id)}
+          onSelectConfig={selectApiConfigForEditing}
+          onDeleteConfig={(config) => void deleteApiAccess(config)}
+          onDiscoverConfig={(config) => void discoverModels(config)}
+          onToggleAddForm={() => setIsAddingApiAccess((current) => !current)}
+          onNewApiAccessKindChange={changeNewApiAccessKind}
+          onNewApiAccessNameChange={setNewApiAccessName}
+          onNewApiAccessBaseURLChange={setNewApiAccessBaseURL}
+          onNewApiAccessKeyChange={setNewApiAccessKey}
+          onAddApiAccess={() => void addApiAccess()}
+          onCancelAddApiAccess={() => setIsAddingApiAccess(false)}
+          onNameChange={(value) => {
+            setSavedApiConfigId(null);
+            setApiAccessName(value);
           }}
-        >
-          <section className="api-config-dialog" role="dialog" aria-modal="true" aria-labelledby="api-config-dialog-title">
-            <header className="history-header">
-              <div>
-                <h2 id="api-config-dialog-title">{copy.provider}</h2>
-                <p>{copy.apiAccessDialogSummary(savedApiConfigs.length)}</p>
-              </div>
-              <button type="button" className="icon-button" onClick={() => setIsActiveApiConfigOpen(false)} aria-label={copy.cancel} data-tooltip={copy.cancel}>
-                <X size={16} />
-              </button>
-            </header>
-            <div className="api-config-dialog-body">
-              <aside className="api-config-list-pane">
-                <div className="api-config-pane-heading">
-                  <span>{copy.apiAccessCurrentSlot}</span>
-                  <small>{copy.apiAccessEditHint}</small>
-                </div>
-                <ApiConfigCard
-                  copy={copy}
-                  config={activeConfig}
-                  active
-                  selected={activeConfig.id === selectedApiConfig.id}
-                  promoted={promotedApiConfigId === activeConfig.id}
-                  canUse={false}
-                  canDelete={canDeleteActiveApiAccess}
-                  saving={isSavingConfig}
-                  bridgeAvailable={Boolean(bridge)}
-                  discovering={discoveringProviderId === activeConfig.id}
-                  discoveringAny={isDiscoveringModels}
-                  tooltip={discoveredModelTooltip(activeConfig, copy)}
-                  displayName={apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}
-                  providerLabel={providerLabelFromKind(activeConfig.kind)}
-                  baseUrlSummary={summarizeBaseURL(activeConfig.baseURL)}
-                  connectionBadge={renderApiConfigConnectionBadge(activeConfig)}
-                  keyLabel={activeConfig.apiKeySaved ? activeConfig.apiKeyPreview ?? copy.keySaved : copy.noKeySaved}
-                  modelSummary={discoverySummary(activeConfig, copy)}
-                  modelSummaryKind={activeConfig.lastModelDiscoveryError ? "error" : "info"}
-                  onUse={() => undefined}
-                  onSelect={() => selectApiConfigForEditing(activeConfig)}
-                  onDelete={() => void deleteApiAccess(activeConfig)}
-                  onDiscover={() => void discoverModels(activeConfig)}
-                />
-                <div className="api-config-card-list" aria-label={copy.apiAccessList}>
-                  {inactiveApiConfigs.map((config) => {
-                    const isSelectedConfig = config.id === selectedApiConfig.id;
-                    return (
-                      <ApiConfigCard
-                        key={config.id}
-                        copy={copy}
-                        config={config}
-                        active={false}
-                        selected={isSelectedConfig}
-                        promoted={false}
-                        canUse
-                        canDelete={canDeleteSelectedApiAccess}
-                        saving={isSavingConfig}
-                        bridgeAvailable={Boolean(bridge)}
-                        discovering={discoveringProviderId === config.id}
-                        discoveringAny={isDiscoveringModels}
-                        tooltip={discoveredModelTooltip(config, copy)}
-                        displayName={apiAccessDisplayName(config, copy.apiAccessUntitled)}
-                        providerLabel={providerLabelFromKind(config.kind)}
-                        baseUrlSummary={summarizeBaseURL(config.baseURL)}
-                        connectionBadge={renderApiConfigConnectionBadge(config)}
-                        keyLabel={config.apiKeySaved ? config.apiKeyPreview ?? copy.keySaved : copy.noKeySaved}
-                        modelSummary={discoverySummary(config, copy)}
-                        modelSummaryKind={config.lastModelDiscoveryError ? "error" : "info"}
-                        onUse={() => void switchApiAccess(config.id)}
-                        onSelect={() => selectApiConfigForEditing(config)}
-                        onDelete={() => void deleteApiAccess(config)}
-                        onDiscover={() => void discoverModels(config)}
-                      />
-                    );
-                  })}
-                </div>
-                <AddApiConfigForm
-                  copy={copy}
-                  open={isAddingApiAccess}
-                  saving={isSavingConfig}
-                  kind={newApiAccessKind}
-                  name={newApiAccessName}
-                  baseURL={newApiAccessBaseURL}
-                  apiKey={newApiAccessKey}
-                  namePlaceholder={providerLabelFromKind(newApiAccessKind)}
-                  onToggle={() => setIsAddingApiAccess((current) => !current)}
-                  onKindChange={changeNewApiAccessKind}
-                  onNameChange={setNewApiAccessName}
-                  onBaseURLChange={setNewApiAccessBaseURL}
-                  onApiKeyChange={setNewApiAccessKey}
-                  onAdd={() => void addApiAccess()}
-                  onCancel={() => setIsAddingApiAccess(false)}
-                />
-              </aside>
-
-              <ApiConfigDetail
-                copy={copy}
-                selectedConfig={selectedApiConfig}
-                active={selectedApiConfig.id === activeConfig.id}
-                bridgeAvailable={Boolean(bridge)}
-                saving={isSavingConfig}
-                saved={isSelectedConfigSaved}
-                discovering={discoveringProviderId === selectedApiConfig.id}
-                discoveringAny={isDiscoveringModels}
-                canDelete={canDeleteSelectedApiAccess}
-                connectionErrorText={connectionErrorText}
-                name={apiAccessName}
-                apiKey={apiKey}
-                baseURL={baseURL}
-                namePlaceholder={providerLabelFromKind(selectedApiConfig.kind)}
-                apiKeyPlaceholder={apiKeyPlaceholder}
-                discoveryTooltip={selectedDiscoveryText}
-                modelSummary={selectedModelSummary}
-                modelSummaryKind={selectedApiConfig.lastModelDiscoveryError ? "error" : "info"}
-                modelTooltip={discoveredModelTooltip(selectedApiConfig, copy)}
-                modelLabel={discoveredModelLabel}
-                onNameChange={(value) => {
-                  setSavedApiConfigId(null);
-                  setApiAccessName(value);
-                }}
-                onApiKeyChange={(value) => {
-                  setSavedApiConfigId(null);
-                  resetConnectionCheckForConfigEdit();
-                  setApiKey(value);
-                }}
-                onBaseURLChange={(value) => {
-                  setSavedApiConfigId(null);
-                  resetConnectionCheckForConfigEdit();
-                  setBaseURL(value);
-                }}
-                onSubmit={() => void saveConfig()}
-                onDiscover={() => void discoverModels(selectedApiConfig)}
-                onDelete={() => void deleteApiAccess(selectedApiConfig)}
-              />
-            </div>
-          </section>
-        </div>
+          onApiKeyChange={(value) => {
+            setSavedApiConfigId(null);
+            resetConnectionCheckForConfigEdit();
+            setApiKey(value);
+          }}
+          onBaseURLChange={(value) => {
+            setSavedApiConfigId(null);
+            resetConnectionCheckForConfigEdit();
+            setBaseURL(value);
+          }}
+          onSubmit={() => void saveConfig()}
+        />
       )}
       {isTemplatesOpen && (
         <div
