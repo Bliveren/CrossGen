@@ -1,7 +1,9 @@
 import type React from "react";
-import { ChevronUp, Loader2, Radar, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronUp, KeyRound, LibraryBig, Loader2, Radar, Save, Trash2 } from "lucide-react";
 import type { ProviderConfig } from "../shared/types";
 import type { UiCopy } from "./i18n";
+
+type DiscoveredProviderModel = ProviderConfig["discoveredModels"][number];
 
 interface ApiConfigCardProps {
   copy: UiCopy;
@@ -27,6 +29,153 @@ interface ApiConfigCardProps {
   onSelect: () => void;
   onDelete: () => void;
   onDiscover: () => void;
+}
+
+interface ApiConfigDetailProps {
+  copy: UiCopy;
+  selectedConfig: ProviderConfig;
+  active: boolean;
+  bridgeAvailable: boolean;
+  saving: boolean;
+  saved: boolean;
+  discovering: boolean;
+  discoveringAny: boolean;
+  canDelete: boolean;
+  connectionErrorText: string | null;
+  name: string;
+  apiKey: string;
+  baseURL: string;
+  namePlaceholder: string;
+  apiKeyPlaceholder: string;
+  discoveryTooltip: string;
+  modelSummary: string;
+  modelSummaryKind: "error" | "info";
+  modelTooltip: string;
+  modelLabel: (model: DiscoveredProviderModel) => string;
+  onNameChange: (value: string) => void;
+  onApiKeyChange: (value: string) => void;
+  onBaseURLChange: (value: string) => void;
+  onSubmit: () => void;
+  onDiscover: () => void;
+  onDelete: () => void;
+}
+
+export function ApiConfigDetail({
+  copy,
+  selectedConfig,
+  active,
+  bridgeAvailable,
+  saving,
+  saved,
+  discovering,
+  discoveringAny,
+  canDelete,
+  connectionErrorText,
+  name,
+  apiKey,
+  baseURL,
+  namePlaceholder,
+  apiKeyPlaceholder,
+  discoveryTooltip,
+  modelSummary,
+  modelSummaryKind,
+  modelTooltip,
+  modelLabel,
+  onNameChange,
+  onApiKeyChange,
+  onBaseURLChange,
+  onSubmit,
+  onDiscover,
+  onDelete
+}: ApiConfigDetailProps) {
+  return (
+    <form
+      className="api-config-detail"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
+      <div className="api-config-detail-header">
+        <div className="section-title">
+          <KeyRound size={16} />
+          <h3>{copy.apiAccessSelectedDetail}</h3>
+        </div>
+        {active && <span className="provider-chip-inline">{copy.currentApiAccess}</span>}
+      </div>
+      <label>
+        {copy.apiAccessName}
+        <input
+          value={name}
+          onChange={(event) => onNameChange(event.target.value)}
+          placeholder={namePlaceholder}
+        />
+      </label>
+      <label>
+        {copy.apiKey}
+        <input
+          type="text"
+          autoComplete="off"
+          value={apiKey}
+          onChange={(event) => onApiKeyChange(event.target.value)}
+          placeholder={apiKeyPlaceholder}
+        />
+      </label>
+      <label>
+        {copy.baseURL}
+        <input
+          value={baseURL}
+          onChange={(event) => onBaseURLChange(event.target.value)}
+        />
+      </label>
+      <div className="button-row">
+        <button type="submit" className={saved ? "saved-action" : undefined} disabled={saving}>
+          {saving ? <Loader2 className="spin" size={16} /> : saved ? <CheckCircle2 size={16} /> : <Save size={16} />}
+          {saved ? copy.apiAccessSaved : copy.save}
+        </button>
+        <button
+          type="button"
+          className="secondary discover-button"
+          onClick={onDiscover}
+          disabled={!bridgeAvailable || discoveringAny || !selectedConfig.apiKeySaved}
+          title={discoveryTooltip}
+          data-tooltip={copy.discoverModels}
+        >
+          {discovering ? <Loader2 className="spin" size={16} /> : <Radar size={16} />}
+          {discovering ? copy.discoveringModels : copy.discoverModels}
+        </button>
+        <button
+          type="button"
+          className="ghost danger"
+          onClick={onDelete}
+          disabled={!canDelete || saving}
+          title={canDelete ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
+        >
+          <Trash2 size={16} />
+          {copy.deleteApiAccess}
+        </button>
+      </div>
+      {active && connectionErrorText && <p className="inline-check error config-error-detail">{connectionErrorText}</p>}
+      <section className="api-model-section" aria-label={copy.apiAccessModels}>
+        <div className="section-title">
+          <LibraryBig size={16} />
+          <h3>{copy.apiAccessModels}</h3>
+        </div>
+        <p className="api-model-summary" data-kind={modelSummaryKind} title={modelTooltip}>
+          {modelSummary}
+        </p>
+        {selectedConfig.discoveredModels.length > 0 ? (
+          <div className="api-model-list">
+            {selectedConfig.discoveredModels.map((model) => (
+              <span key={`${model.providerKind}:${model.id}`} title={modelLabel(model)}>
+                {modelLabel(model)}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </section>
+    </form>
+  );
 }
 
 export function ApiConfigCard({

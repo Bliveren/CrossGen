@@ -108,7 +108,7 @@ import {
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
-import { ApiConfigCard } from "./ProviderConfigPanel";
+import { ApiConfigCard, ApiConfigDetail } from "./ProviderConfigPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -6029,103 +6029,45 @@ export function App() {
                 )}
               </aside>
 
-              <form
-                className="api-config-detail"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void saveConfig();
+              <ApiConfigDetail
+                copy={copy}
+                selectedConfig={selectedApiConfig}
+                active={selectedApiConfig.id === activeConfig.id}
+                bridgeAvailable={Boolean(bridge)}
+                saving={isSavingConfig}
+                saved={isSelectedConfigSaved}
+                discovering={discoveringProviderId === selectedApiConfig.id}
+                discoveringAny={isDiscoveringModels}
+                canDelete={canDeleteSelectedApiAccess}
+                connectionErrorText={connectionErrorText}
+                name={apiAccessName}
+                apiKey={apiKey}
+                baseURL={baseURL}
+                namePlaceholder={providerLabelFromKind(selectedApiConfig.kind)}
+                apiKeyPlaceholder={apiKeyPlaceholder}
+                discoveryTooltip={selectedDiscoveryText}
+                modelSummary={selectedModelSummary}
+                modelSummaryKind={selectedApiConfig.lastModelDiscoveryError ? "error" : "info"}
+                modelTooltip={discoveredModelTooltip(selectedApiConfig, copy)}
+                modelLabel={discoveredModelLabel}
+                onNameChange={(value) => {
+                  setSavedApiConfigId(null);
+                  setApiAccessName(value);
                 }}
-              >
-                <div className="api-config-detail-header">
-                  <div className="section-title">
-                    <KeyRound size={16} />
-                    <h3>{copy.apiAccessSelectedDetail}</h3>
-                  </div>
-                  {selectedApiConfig.id === activeConfig.id && <span className="provider-chip-inline">{copy.currentApiAccess}</span>}
-                </div>
-                <label>
-                  {copy.apiAccessName}
-                  <input
-                    value={apiAccessName}
-                    onChange={(event) => {
-                      setSavedApiConfigId(null);
-                      setApiAccessName(event.target.value);
-                    }}
-                    placeholder={providerLabelFromKind(selectedApiConfig.kind)}
-                  />
-                </label>
-                <label>
-                  {copy.apiKey}
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    value={apiKey}
-                    onChange={(event) => {
-                      setSavedApiConfigId(null);
-                      resetConnectionCheckForConfigEdit();
-                      setApiKey(event.target.value);
-                    }}
-                    placeholder={apiKeyPlaceholder}
-                  />
-                </label>
-                <label>
-                  {copy.baseURL}
-                  <input
-                    value={baseURL}
-                    onChange={(event) => {
-                      setSavedApiConfigId(null);
-                      resetConnectionCheckForConfigEdit();
-                      setBaseURL(event.target.value);
-                    }}
-                  />
-                </label>
-                <div className="button-row">
-                  <button type="submit" className={isSelectedConfigSaved ? "saved-action" : undefined} disabled={isSavingConfig}>
-                    {isSavingConfig ? <Loader2 className="spin" size={16} /> : isSelectedConfigSaved ? <CheckCircle2 size={16} /> : <Save size={16} />}
-                    {isSelectedConfigSaved ? copy.apiAccessSaved : copy.save}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary discover-button"
-                    onClick={() => void discoverModels(selectedApiConfig)}
-                    disabled={!bridge || isDiscoveringModels || !selectedApiConfig.apiKeySaved}
-                    title={selectedDiscoveryText}
-                    data-tooltip={copy.discoverModels}
-                  >
-                    {discoveringProviderId === selectedApiConfig.id ? <Loader2 className="spin" size={16} /> : <Radar size={16} />}
-                    {discoveringProviderId === selectedApiConfig.id ? copy.discoveringModels : copy.discoverModels}
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost danger"
-                    onClick={() => void deleteApiAccess(selectedApiConfig)}
-                    disabled={!canDeleteSelectedApiAccess || isSavingConfig}
-                    title={canDeleteSelectedApiAccess ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
-                  >
-                    <Trash2 size={16} />
-                    {copy.deleteApiAccess}
-                  </button>
-                </div>
-                {selectedApiConfig.id === activeConfig.id && connectionErrorText && <p className="inline-check error config-error-detail">{connectionErrorText}</p>}
-                <section className="api-model-section" aria-label={copy.apiAccessModels}>
-                  <div className="section-title">
-                    <LibraryBig size={16} />
-                    <h3>{copy.apiAccessModels}</h3>
-                  </div>
-                  <p className="api-model-summary" data-kind={selectedApiConfig.lastModelDiscoveryError ? "error" : "info"} title={discoveredModelTooltip(selectedApiConfig, copy)}>
-                    {selectedModelSummary}
-                  </p>
-                  {selectedApiConfig.discoveredModels.length > 0 ? (
-                    <div className="api-model-list">
-                      {selectedApiConfig.discoveredModels.map((model) => (
-                        <span key={`${model.providerKind}:${model.id}`} title={discoveredModelLabel(model)}>
-                          {discoveredModelLabel(model)}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </section>
-              </form>
+                onApiKeyChange={(value) => {
+                  setSavedApiConfigId(null);
+                  resetConnectionCheckForConfigEdit();
+                  setApiKey(value);
+                }}
+                onBaseURLChange={(value) => {
+                  setSavedApiConfigId(null);
+                  resetConnectionCheckForConfigEdit();
+                  setBaseURL(value);
+                }}
+                onSubmit={() => void saveConfig()}
+                onDiscover={() => void discoverModels(selectedApiConfig)}
+                onDelete={() => void deleteApiAccess(selectedApiConfig)}
+              />
             </div>
           </section>
         </div>
