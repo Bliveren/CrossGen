@@ -189,7 +189,15 @@ export function ImageEditor({
             <div
               ref={zoomSurfaceRef}
               className={isPanning ? "zoom-surface panning" : previewZoom > 1 ? "zoom-surface pannable" : "zoom-surface"}
+              role="button"
+              tabIndex={0}
+              aria-label={copy.resultViewer}
               onDoubleClick={onOpenPreview}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                onOpenPreview();
+              }}
               onPointerDown={onPreviewPanStart}
               onPointerMove={onPreviewPanMove}
               onPointerUp={onPreviewPanEnd}

@@ -6104,13 +6104,8 @@ export function App() {
         </DialogShell>
       )}
       {isPreviewOpen && activePreviewSource && (
-        <div
-          className="preview-modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setIsPreviewOpen(false);
-          }}
-        >
+        <DialogShell className="preview-modal-dialog" backdropClassName="preview-modal-backdrop" labelledBy="preview-modal-title" onClose={() => setIsPreviewOpen(false)}>
+          <h2 id="preview-modal-title" className="visually-hidden">{copy.resultViewer}</h2>
           <button type="button" className="preview-modal-close icon-button tooltip-below" onClick={() => setIsPreviewOpen(false)} aria-label={copy.cancel} data-tooltip={copy.cancel}>
             <X size={18} />
           </button>
@@ -6120,7 +6115,7 @@ export function App() {
             className="preview-modal-image"
             onContextMenu={(e) => handleImageContextMenu(e, activeImage, activeJob?.prompt ?? '')}
           />
-        </div>
+        </DialogShell>
       )}
       {contextMenu && (
         <div
