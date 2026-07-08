@@ -1,7 +1,6 @@
 import type React from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
   Bold,
   Brush,
   CheckCircle2,
@@ -17,14 +16,21 @@ import {
   RotateCcw,
   Save,
   Sparkles,
-  Trash2,
   Type,
+  X,
   ZoomIn,
   ZoomOut
 } from "lucide-react";
 import type { ImageAsset } from "../shared/types";
 import type { Language, UiCopy } from "./i18n";
 import { ANNOTATION_COLOR_SWATCHES, type AnnotationDrawingLayer, type AnnotationTextBox, type AnnotationTool, type CanvasRect, type CropSelection, type CropShape } from "./imageEditorTypes";
+
+const PRIMARY_TOOL_ACTIVE_STYLE: React.CSSProperties = {
+  borderColor: "var(--accent)",
+  background: "var(--accent)",
+  color: "var(--text-on-accent)",
+  boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 8px 18px rgba(var(--accent-rgb), 0.24)"
+};
 
 interface ImageEditorProps {
   copy: UiCopy;
@@ -328,20 +334,24 @@ export function ImageEditor({
                   className={isEditingPreview ? "icon-button active" : "icon-button"}
                   disabled={!activePreviewSource}
                   onClick={onToggleEditMode}
-                  aria-label={isEditingPreview ? copy.back : copy.editImage}
-                  data-tooltip={isEditingPreview ? copy.back : copy.editImage}
+                  aria-label={copy.editImage}
+                  data-tooltip={copy.editImage}
+                  aria-pressed={isEditingPreview}
+                  style={isEditingPreview ? PRIMARY_TOOL_ACTIVE_STYLE : undefined}
                 >
-                  {isEditingPreview ? <ArrowLeft size={16} /> : <Pencil size={16} />}
+                  <Pencil size={16} />
                 </button>
                 <button
                   type="button"
                   className={isCroppingPreview ? "icon-button active" : "icon-button"}
                   disabled={!activePreviewSource}
                   onClick={onToggleCropMode}
-                  aria-label={isCroppingPreview ? copy.back : copy.cropImage}
-                  data-tooltip={isCroppingPreview ? copy.back : copy.cropImage}
+                  aria-label={copy.cropImage}
+                  data-tooltip={copy.cropImage}
+                  aria-pressed={isCroppingPreview}
+                  style={isCroppingPreview ? PRIMARY_TOOL_ACTIVE_STYLE : undefined}
                 >
-                  {isCroppingPreview ? <ArrowLeft size={16} /> : <Crop size={16} />}
+                  <Crop size={16} />
                 </button>
                 <button
                   type="button"
@@ -459,7 +469,7 @@ export function ImageEditor({
                     <RotateCcw size={15} />
                   </button>
                   <button type="button" className="icon-button" onClick={onClearAnnotations} aria-label={copy.clearAnnotations} data-tooltip={copy.clearAnnotations}>
-                    <Trash2 size={15} />
+                    <X size={15} />
                   </button>
                 </div>
               )}

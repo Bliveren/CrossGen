@@ -1,5 +1,7 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
-import { ArrowDownUp, ChevronDown, ChevronRight, FileUp, Folder, FolderOpen, FolderPlus, Pencil, Save, Tags, Trash2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowDownUp, ChevronDown, ChevronRight, FileUp, Folder, FolderOpen, FolderPlus, Pencil, Save, X } from "lucide-react";
 import type { GalleryAsset, GalleryFolder } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
@@ -67,12 +69,18 @@ interface GalleryAssetCardProps {
   batchMode: boolean;
   thumbnailSrc: string;
   meta: string;
+  editingName: boolean;
+  nameDraft: string;
   editingTags: boolean;
   tagsInput: string;
   onDragStart: (event: React.DragEvent<HTMLElement>) => void;
   onOpen: () => void;
   onContextMenu: (event: React.MouseEvent<HTMLElement>) => void;
   onToggleSelection: (event: React.MouseEvent<HTMLInputElement>) => void;
+  onStartEditName: () => void;
+  onNameDraftChange: (value: string) => void;
+  onSaveName: () => void;
+  onCancelName: () => void;
   onEditTags: () => void;
   onTagsInputChange: (value: string) => void;
   onSaveTags: () => void;
@@ -80,7 +88,6 @@ interface GalleryAssetCardProps {
   onMoveTagPopoverPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
   onMoveToolbarTowardPointer: (event: React.MouseEvent<HTMLElement>) => void;
   onResetToolbarDrift: (event: React.MouseEvent<HTMLElement>) => void;
-  onRename: () => void;
   onDelete: () => void;
 }
 
@@ -135,6 +142,8 @@ interface GalleryContentGridProps {
   virtualTopSpacer: number;
   virtualBottomSpacer: number;
   isGalleryEmpty: boolean;
+  editingGalleryNameId: string | null;
+  galleryNameDraft: string;
   editingGalleryId: string | null;
   tagsInput: string;
   folderSubtreeAssetCounts: ReadonlyMap<string, number>;
@@ -152,6 +161,10 @@ interface GalleryContentGridProps {
   onRenameFolder: (folder: GalleryFolder) => void;
   onPreviewAsset: (asset: GalleryAsset) => void;
   onAssetContextMenu: (event: React.MouseEvent<HTMLElement>, asset: GalleryAsset) => void;
+  onStartEditAssetName: (asset: GalleryAsset) => void;
+  onAssetNameDraftChange: (value: string) => void;
+  onSaveAssetName: (asset: GalleryAsset) => void;
+  onCancelAssetName: () => void;
   onEditAssetTags: (asset: GalleryAsset) => void;
   onTagsInputChange: (value: string) => void;
   onSaveAssetTags: (asset: GalleryAsset) => void;
@@ -159,8 +172,112 @@ interface GalleryContentGridProps {
   onMoveTagPopoverPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
   onMoveToolbarTowardPointer: (event: React.MouseEvent<HTMLElement>) => void;
   onResetToolbarDrift: (event: React.MouseEvent<HTMLElement>) => void;
-  onRenameAsset: (asset: GalleryAsset) => void;
   onDeleteAsset: (asset: GalleryAsset) => void;
+}
+
+const POPOVER_MARGIN = 12;
+
+function clampPosition(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function GalleryTagPopover({
+  anchorRef,
+  copy,
+  tagsInput,
+  onTagsInputChange,
+  onSaveTags,
+  onCancelTags,
+  onMoveTagPopoverPointerDown,
+  onMoveToolbarTowardPointer,
+  onResetToolbarDrift
+}: {
+  anchorRef: React.RefObject<HTMLElement | null>;
+  copy: UiCopy;
+  tagsInput: string;
+  onTagsInputChange: (value: string) => void;
+  onSaveTags: () => void;
+  onCancelTags: () => void;
+  onMoveTagPopoverPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
+  onMoveToolbarTowardPointer: (event: React.MouseEvent<HTMLElement>) => void;
+  onResetToolbarDrift: (event: React.MouseEvent<HTMLElement>) => void;
+}) {
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({ visibility: "hidden" });
+
+  useLayoutEffect(() => {
+    const updatePosition = () => {
+      const anchor = anchorRef.current;
+      const popover = popoverRef.current;
+      if (!anchor || !popover) return;
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const popoverRect = popover.getBoundingClientRect();
+      const appRect = document.querySelector(".app-shell")?.getBoundingClientRect();
+      const bounds = appRect && appRect.width > 0 && appRect.height > 0
+        ? appRect
+        : ({ left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight } as DOMRect);
+      const width = Math.min(popoverRect.width || 222, Math.max(180, bounds.width - POPOVER_MARGIN * 2));
+      const height = popoverRect.height || 42;
+      const minLeft = bounds.left + POPOVER_MARGIN;
+      const maxLeft = bounds.right - width - POPOVER_MARGIN;
+      const minTop = bounds.top + POPOVER_MARGIN;
+      const maxTop = bounds.bottom - height - POPOVER_MARGIN;
+      const preferredTop = anchorRect.bottom + 6 + height <= bounds.bottom - POPOVER_MARGIN
+        ? anchorRect.bottom + 6
+        : anchorRect.top - height - 6;
+
+      setStyle({
+        position: "fixed",
+        left: `${clampPosition(anchorRect.left + anchorRect.width / 2 - width / 2, minLeft, Math.max(minLeft, maxLeft))}px`,
+        top: `${clampPosition(preferredTop, minTop, Math.max(minTop, maxTop))}px`,
+        width: `${width}px`,
+        visibility: "visible"
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchorRef]);
+
+  return createPortal(
+    <div
+      ref={popoverRef}
+      className="history-tag-popover gallery-tag-popover"
+      data-drift="subtle"
+      style={style}
+      onPointerDown={onMoveTagPopoverPointerDown}
+      onMouseMove={onMoveToolbarTowardPointer}
+      onMouseLeave={onResetToolbarDrift}
+    >
+      <input
+        value={tagsInput}
+        onChange={(event) => onTagsInputChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            onSaveTags();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onCancelTags();
+          }
+        }}
+        placeholder={copy.templateTags}
+        aria-label={copy.addTag}
+        autoFocus
+      />
+      <button type="button" className="icon-button" disabled={!tagsInput.trim()} onClick={onSaveTags} aria-label={copy.gallerySaveTags} data-tooltip={copy.gallerySaveTags}>
+        <Save size={14} />
+      </button>
+    </div>,
+    document.body
+  );
 }
 
 export function GalleryCompactControls({
@@ -449,12 +566,18 @@ export function GalleryAssetCard({
   batchMode,
   thumbnailSrc,
   meta,
+  editingName,
+  nameDraft,
   editingTags,
   tagsInput,
   onDragStart,
   onOpen,
   onContextMenu,
   onToggleSelection,
+  onStartEditName,
+  onNameDraftChange,
+  onSaveName,
+  onCancelName,
   onEditTags,
   onTagsInputChange,
   onSaveTags,
@@ -462,9 +585,10 @@ export function GalleryAssetCard({
   onMoveTagPopoverPointerDown,
   onMoveToolbarTowardPointer,
   onResetToolbarDrift,
-  onRename,
   onDelete
 }: GalleryAssetCardProps) {
+  const tagAnchorRef = useRef<HTMLSpanElement | null>(null);
+
   return (
     <article
       className={`gallery-item ${selected ? "selected" : ""}`}
@@ -492,10 +616,35 @@ export function GalleryAssetCard({
         <img src={thumbnailSrc} alt={asset.originalName} draggable={false} loading="lazy" decoding="async" />
       </button>
       <div className="gallery-meta">
-        <strong title={asset.originalName}>{asset.originalName}</strong>
+        <div className="gallery-name-wrap">
+          {editingName ? (
+            <input
+              className="gallery-name-input"
+              value={nameDraft}
+              onChange={(event) => onNameDraftChange(event.target.value)}
+              onBlur={onSaveName}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onSaveName();
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onCancelName();
+                }
+              }}
+              aria-label={copy.galleryAssetRename}
+              autoFocus
+            />
+          ) : (
+            <button type="button" className="gallery-name-button" onClick={onStartEditName} aria-label={copy.galleryAssetRename} data-tooltip={copy.galleryAssetRename} title={asset.originalName}>
+              {asset.originalName}
+            </button>
+          )}
+        </div>
         <div className="template-tags gallery-tag-row">
           {asset.tags.map((tag) => <span key={tag}>{tag}</span>)}
-          <span className="history-add-tag-anchor gallery-add-tag-anchor">
+          <span ref={tagAnchorRef} className="history-add-tag-anchor gallery-add-tag-anchor">
             <button
               type="button"
               className="history-chip history-add-tag-button gallery-add-tag-button"
@@ -506,48 +655,25 @@ export function GalleryAssetCard({
               {copy.addTag}
             </button>
             {editingTags && (
-              <div
-                className="history-tag-popover gallery-tag-popover"
-                data-drift="subtle"
-                onPointerDown={onMoveTagPopoverPointerDown}
-                onMouseMove={onMoveToolbarTowardPointer}
-                onMouseLeave={onResetToolbarDrift}
-              >
-                <input
-                  value={tagsInput}
-                  onChange={(event) => onTagsInputChange(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      onSaveTags();
-                    }
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      onCancelTags();
-                    }
-                  }}
-                  placeholder={copy.templateTags}
-                  aria-label={copy.addTag}
-                  autoFocus
-                />
-                <button type="button" className="icon-button" disabled={!tagsInput.trim()} onClick={onSaveTags} aria-label={copy.gallerySaveTags} data-tooltip={copy.gallerySaveTags}>
-                  <Save size={14} />
-                </button>
-              </div>
+              <GalleryTagPopover
+                anchorRef={tagAnchorRef}
+                copy={copy}
+                tagsInput={tagsInput}
+                onTagsInputChange={onTagsInputChange}
+                onSaveTags={onSaveTags}
+                onCancelTags={onCancelTags}
+                onMoveTagPopoverPointerDown={onMoveTagPopoverPointerDown}
+                onMoveToolbarTowardPointer={onMoveToolbarTowardPointer}
+                onResetToolbarDrift={onResetToolbarDrift}
+              />
             )}
           </span>
         </div>
         <small>{meta}</small>
       </div>
       <div className="gallery-actions">
-        <button type="button" className="icon-button" onClick={onRename} aria-label={copy.galleryAssetRename} data-tooltip={copy.galleryAssetRename}>
-          <Pencil size={15} />
-        </button>
-        <button type="button" className="icon-button" onClick={onEditTags} aria-label={copy.galleryEditTags} data-tooltip={copy.galleryEditTags}>
-          <Tags size={15} />
-        </button>
         <button type="button" className="icon-button ghost danger" onClick={onDelete} aria-label={copy.delete} data-tooltip={copy.delete}>
-          <Trash2 size={15} />
+          <X size={15} />
         </button>
       </div>
     </article>
@@ -568,6 +694,8 @@ export function GalleryContentGrid({
   virtualTopSpacer,
   virtualBottomSpacer,
   isGalleryEmpty,
+  editingGalleryNameId,
+  galleryNameDraft,
   editingGalleryId,
   tagsInput,
   folderSubtreeAssetCounts,
@@ -585,6 +713,10 @@ export function GalleryContentGrid({
   onRenameFolder,
   onPreviewAsset,
   onAssetContextMenu,
+  onStartEditAssetName,
+  onAssetNameDraftChange,
+  onSaveAssetName,
+  onCancelAssetName,
   onEditAssetTags,
   onTagsInputChange,
   onSaveAssetTags,
@@ -592,7 +724,6 @@ export function GalleryContentGrid({
   onMoveTagPopoverPointerDown,
   onMoveToolbarTowardPointer,
   onResetToolbarDrift,
-  onRenameAsset,
   onDeleteAsset
 }: GalleryContentGridProps) {
   return (
@@ -600,10 +731,6 @@ export function GalleryContentGrid({
       <div
         ref={contentRef}
         className={`gallery-grid gallery-content-grid ${viewMode} ${batchMode ? "batch-select" : ""} ${dropTarget ? "drop-target" : ""}`}
-        style={{
-          "--gallery-virtual-padding-top": `${virtualTopSpacer}px`,
-          "--gallery-virtual-padding-bottom": `${virtualBottomSpacer}px`
-        } as React.CSSProperties}
         onScroll={(event) => onScrollTopChange(event.currentTarget.scrollTop)}
         onWheel={(event) => {
           const element = event.currentTarget;
@@ -635,52 +762,65 @@ export function GalleryContentGrid({
             <span>{isGalleryEmpty ? copy.galleryEmpty : copy.galleryNoMatch}</span>
           </div>
         )}
-        {virtualEntries.map((entry, virtualIndex) => {
-          const index = virtualStartIndex + virtualIndex;
-          return entry.kind === "folder" ? (
-            <GalleryFolderCard
-              key={entry.id}
-              copy={copy}
-              folder={entry.folder}
-              selected={isEntrySelected(entry)}
-              dropTarget={folderDropTargetId === entry.id}
-              batchMode={batchMode}
-              displayPath={folderDisplayPath(entry.folder)}
-              meta={copy.galleryFolderItemMeta(folderSubtreeAssetCounts.get(entry.id) ?? 0, formatDate(entry.folder.updatedAt))}
-              dropHandlers={dropHandlersForFolder(entry.id)}
-              onDragStart={(event) => onPrepareEntryDrag(event, entry)}
-              onOpen={() => onOpenFolder(entry.id)}
-              onContextMenu={(event) => onFolderContextMenu(event, entry.id)}
-              onToggleSelection={(event) => onToggleSelection(entry, index, event)}
-              onRename={() => onRenameFolder(entry.folder)}
-            />
-          ) : (
-            <GalleryAssetCard
-              key={entry.id}
-              copy={copy}
-              asset={entry.asset}
-              selected={isEntrySelected(entry)}
-              batchMode={batchMode}
-              thumbnailSrc={assetThumbnailPath(entry.asset)}
-              meta={`${formatBytes(entry.asset.sizeBytes)} · ${formatDate(entry.asset.modifiedAt ?? entry.asset.updatedAt ?? entry.asset.createdAt)}`}
-              editingTags={editingGalleryId === entry.asset.id}
-              tagsInput={tagsInput}
-              onDragStart={(event) => onPrepareEntryDrag(event, entry)}
-              onOpen={() => onPreviewAsset(entry.asset)}
-              onContextMenu={(event) => onAssetContextMenu(event, entry.asset)}
-              onToggleSelection={(event) => onToggleSelection(entry, index, event)}
-              onEditTags={() => onEditAssetTags(entry.asset)}
-              onTagsInputChange={onTagsInputChange}
-              onSaveTags={() => onSaveAssetTags(entry.asset)}
-              onCancelTags={onCancelAssetTags}
-              onMoveTagPopoverPointerDown={onMoveTagPopoverPointerDown}
-              onMoveToolbarTowardPointer={onMoveToolbarTowardPointer}
-              onResetToolbarDrift={onResetToolbarDrift}
-              onRename={() => onRenameAsset(entry.asset)}
-              onDelete={() => onDeleteAsset(entry.asset)}
-            />
-          );
-        })}
+        {entries.length > 0 && (
+          <>
+            <div className="gallery-virtual-spacer" style={{ height: virtualTopSpacer }} aria-hidden="true" />
+            <div className={`gallery-content-grid-inner ${viewMode}`}>
+              {virtualEntries.map((entry, virtualIndex) => {
+                const index = virtualStartIndex + virtualIndex;
+                return entry.kind === "folder" ? (
+                  <GalleryFolderCard
+                    key={entry.id}
+                    copy={copy}
+                    folder={entry.folder}
+                    selected={isEntrySelected(entry)}
+                    dropTarget={folderDropTargetId === entry.id}
+                    batchMode={batchMode}
+                    displayPath={folderDisplayPath(entry.folder)}
+                    meta={copy.galleryFolderItemMeta(folderSubtreeAssetCounts.get(entry.id) ?? 0, formatDate(entry.folder.updatedAt))}
+                    dropHandlers={dropHandlersForFolder(entry.id)}
+                    onDragStart={(event) => onPrepareEntryDrag(event, entry)}
+                    onOpen={() => onOpenFolder(entry.id)}
+                    onContextMenu={(event) => onFolderContextMenu(event, entry.id)}
+                    onToggleSelection={(event) => onToggleSelection(entry, index, event)}
+                    onRename={() => onRenameFolder(entry.folder)}
+                  />
+                ) : (
+                  <GalleryAssetCard
+                    key={entry.id}
+                    copy={copy}
+                    asset={entry.asset}
+                    selected={isEntrySelected(entry)}
+                    batchMode={batchMode}
+                    thumbnailSrc={assetThumbnailPath(entry.asset)}
+                    meta={`${formatBytes(entry.asset.sizeBytes)} · ${formatDate(entry.asset.modifiedAt ?? entry.asset.updatedAt ?? entry.asset.createdAt)}`}
+                    editingName={editingGalleryNameId === entry.asset.id}
+                    nameDraft={editingGalleryNameId === entry.asset.id ? galleryNameDraft : entry.asset.originalName}
+                    editingTags={editingGalleryId === entry.asset.id}
+                    tagsInput={tagsInput}
+                    onDragStart={(event) => onPrepareEntryDrag(event, entry)}
+                    onOpen={() => onPreviewAsset(entry.asset)}
+                    onContextMenu={(event) => onAssetContextMenu(event, entry.asset)}
+                    onToggleSelection={(event) => onToggleSelection(entry, index, event)}
+                    onStartEditName={() => onStartEditAssetName(entry.asset)}
+                    onNameDraftChange={onAssetNameDraftChange}
+                    onSaveName={() => onSaveAssetName(entry.asset)}
+                    onCancelName={onCancelAssetName}
+                    onEditTags={() => onEditAssetTags(entry.asset)}
+                    onTagsInputChange={onTagsInputChange}
+                    onSaveTags={() => onSaveAssetTags(entry.asset)}
+                    onCancelTags={onCancelAssetTags}
+                    onMoveTagPopoverPointerDown={onMoveTagPopoverPointerDown}
+                    onMoveToolbarTowardPointer={onMoveToolbarTowardPointer}
+                    onResetToolbarDrift={onResetToolbarDrift}
+                    onDelete={() => onDeleteAsset(entry.asset)}
+                  />
+                );
+              })}
+            </div>
+            <div className="gallery-virtual-spacer" style={{ height: virtualBottomSpacer }} aria-hidden="true" />
+          </>
+        )}
       </div>
     </section>
   );

@@ -219,7 +219,6 @@ export interface UiCopy {
   galleryChoose: string;
   galleryAssetRename: string;
   galleryAssetName: string;
-  galleryAssetDialogDescription: string;
   galleryAssetRenamed: string;
   galleryAddHistory: string;
   galleryAddTargetFolder: string;
@@ -587,7 +586,6 @@ export const translations: Record<Language, UiCopy> = {
     galleryChoose: "Choose from Gallery",
     galleryAssetRename: "Rename image",
     galleryAssetName: "Image name",
-    galleryAssetDialogDescription: "Renames the image file in the current Gallery folder.",
     galleryAssetRenamed: "Gallery image renamed.",
     galleryAddHistory: "Add to Gallery",
     galleryAddTargetFolder: "Gallery target folder",
@@ -1018,7 +1016,6 @@ export const translations: Record<Language, UiCopy> = {
     galleryChoose: "从图库选择",
     galleryAssetRename: "重命名图片",
     galleryAssetName: "图片名称",
-    galleryAssetDialogDescription: "会同步重命名当前图库文件夹中的真实图片文件。",
     galleryAssetRenamed: "图库图片已重命名。",
     galleryAddHistory: "加入图库",
     galleryAddTargetFolder: "加入图库目标文件夹",

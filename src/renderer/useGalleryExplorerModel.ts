@@ -139,8 +139,10 @@ export function useGalleryExplorerModel({
     : 1;
   const virtualRowHeight = viewMode === "grid" ? GALLERY_VIRTUAL_GRID_ROW_HEIGHT : GALLERY_VIRTUAL_LIST_ROW_HEIGHT;
   const virtualTotalRows = Math.ceil(explorerEntries.length / virtualColumns);
-  const virtualStartRow = Math.max(0, Math.floor(scrollTop / virtualRowHeight) - GALLERY_VIRTUAL_OVERSCAN_ROWS);
   const virtualVisibleRows = Math.ceil(viewport.height / virtualRowHeight) + GALLERY_VIRTUAL_OVERSCAN_ROWS * 2;
+  const rawVirtualStartRow = Math.max(0, Math.floor(scrollTop / virtualRowHeight) - GALLERY_VIRTUAL_OVERSCAN_ROWS);
+  const maxVirtualStartRow = Math.max(0, virtualTotalRows - virtualVisibleRows);
+  const virtualStartRow = Math.min(rawVirtualStartRow, maxVirtualStartRow);
   const virtualEndRow = Math.min(virtualTotalRows, virtualStartRow + virtualVisibleRows);
   const virtualStartIndex = virtualStartRow * virtualColumns;
   const virtualEndIndex = Math.min(explorerEntries.length, virtualEndRow * virtualColumns);

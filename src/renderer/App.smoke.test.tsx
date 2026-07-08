@@ -469,28 +469,26 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("GPT Image 2").disabled).toBe(false);
   });
 
-  it("creates, searches, filters, applies, and deletes prompt templates", async () => {
+  it("creates, searches, applies, and deletes prompt templates", async () => {
     const bridge = await renderApp(snapshot());
 
     await openTemplateDialog();
     await changeInput(inputByLabel("Title"), "Product shot");
     await changeTextArea(textAreaByLabel("Template prompt"), "A crisp product shot on a steel table");
-    await changeInput(inputByLabel("Tags"), "product, studio");
     await click(buttonByText("Save template"));
 
     expect(bridge.saveTemplate).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Product shot",
         body: "A crisp product shot on a steel table",
-        tags: ["product", "studio"]
+        tags: []
       }),
       undefined
     );
     expect(document.body.textContent).toContain("Product shot");
+    expect(document.querySelector(".template-toolbar select")).toBeNull();
 
     await changeInput(inputByPlaceholder("Search templates"), "steel");
-    expect(document.body.textContent).toContain("Product shot");
-    await changeSelect(document.querySelector<HTMLSelectElement>(".template-toolbar select")!, "studio");
     expect(document.body.textContent).toContain("Product shot");
 
     await click(document.querySelector<HTMLButtonElement>('.template-actions button[aria-label="Use template"]')!);
@@ -1174,8 +1172,9 @@ describe("renderer multi-model smoke", () => {
     await openGalleryRail();
     await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
     await click(elementByText("Rename image", ".context-menu-item"));
-    await changeInput(inputByLabel("Image name", document.querySelector<HTMLElement>(".gallery-asset-dialog")!), "renamed-file.png");
-    await click(buttonByText("Rename image", ".gallery-asset-dialog button"));
+    const nameInput = document.querySelector<HTMLInputElement>(".gallery-name-input")!;
+    await changeInput(nameInput, "renamed-file.png");
+    await keyDown(nameInput, "Enter");
 
     expect(bridge.updateGalleryAsset).toHaveBeenCalledWith(asset.id, { originalName: "renamed-file.png" });
     expect(document.body.textContent).toContain("Gallery image renamed.");
@@ -1349,7 +1348,7 @@ describe("renderer multi-model smoke", () => {
     const reminder = document.querySelector<HTMLElement>(".reference-rights-reminder");
     expect(reminder?.textContent).toContain("Only upload images you have permission to use");
     expect(referenceGrid && reminder ? Boolean(referenceGrid.compareDocumentPosition(reminder) & Node.DOCUMENT_POSITION_FOLLOWING) : false).toBe(true);
-    expect(buttonByText("Add as mask").disabled).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('button[aria-label="Add as mask"]')?.disabled).toBe(true);
     expect(document.body.textContent).toContain("Drag local images, History results, or Gallery images here.");
     expect(document.querySelector<HTMLButtonElement>('.input-panel button[aria-label="Clear"]')).toBeNull();
   });
@@ -1574,10 +1573,34 @@ describe("renderer multi-model smoke", () => {
     expect(window.localStorage.getItem("image2tools.historyWidth")).toBe("350");
   });
 
+  it("auto-collapses side rails when dividers are dragged past their thresholds", async () => {
+    await renderApp(snapshot());
+    const shell = document.querySelector<HTMLElement>(".app-shell")!;
+    const sidebarResizer = separatorByLabel("Resize sidebar");
+    const historyResizer = separatorByLabel("Resize history");
+    sidebarResizer.setPointerCapture = vi.fn();
+    historyResizer.setPointerCapture = vi.fn();
+
+    await pointer(sidebarResizer, "pointerdown", { clientX: 310 });
+    await windowPointer("pointermove", { clientX: 240 });
+
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(true);
+    expect(shell.style.getPropertyValue("--sidebar-width")).toBe("76px");
+
+    await pointer(historyResizer, "pointerdown", { clientX: 1130 });
+    await windowPointer("pointermove", { clientX: 1160 });
+
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
+    expect(shell.style.getPropertyValue("--history-width")).toBe("256px");
+  });
+
   it("keeps the workspace in the main grid when the sidebar is collapsed", async () => {
     await renderApp(snapshot());
 
     const shell = document.querySelector<HTMLElement>(".app-shell")!;
+    expect(shell.style.getPropertyValue("--sidebar-collapse-button-y")).toBeTruthy();
+    expect(shell.style.getPropertyValue("--right-rail-collapse-button-y")).toBeTruthy();
+    expect(shell.style.getPropertyValue("--rail-collapse-button-y")).toBe("");
     expect(document.querySelector(".sidebar-resizer")).toBeTruthy();
     expect(document.querySelector(".history-resizer")).toBeTruthy();
     expect(document.querySelector(".workspace")).toBeTruthy();
@@ -1600,6 +1623,41 @@ describe("renderer multi-model smoke", () => {
     expect(shell.style.getPropertyValue("--history-width")).toBe("256px");
     expect(document.querySelector(".right-rail.collapsed")).toBeTruthy();
     expect(document.querySelector(".right-rail-drawer-toggle")).toBeTruthy();
+  });
+
+  it("keeps Gallery thumbnails rendered when the right rail is collapsed", async () => {
+    const asset = galleryAsset("collapsed-gallery.png");
+    await renderApp(snapshot({ galleryAssets: [asset] }));
+
+    await openGalleryRail();
+    await click(document.querySelector<HTMLButtonElement>(".right-rail-collapse-button")!);
+
+    const shell = document.querySelector<HTMLElement>(".app-shell")!;
+    const grid = document.querySelector<HTMLElement>(".gallery-content-grid")!;
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
+    expect(grid.dataset.totalCount).toBe("1");
+    expect(grid.dataset.renderedCount).toBe("1");
+    expect(document.querySelector(".right-rail.collapsed .gallery-thumb img")).toBeTruthy();
+    expect(document.querySelector(".right-rail.collapsed .gallery-compact-controls")).toBeTruthy();
+  });
+
+  it("keeps Gallery thumbnails rendered after collapsing from a deep Gallery scroll position", async () => {
+    const assets = Array.from({ length: 80 }, (_, index) => galleryAsset(`collapsed-scrolled-${String(index).padStart(2, "0")}.png`));
+    await renderApp(snapshot({ galleryAssets: assets }));
+
+    await openGalleryRail();
+    const grid = document.querySelector<HTMLElement>(".gallery-content-grid")!;
+    grid.scrollTop = 100000;
+    grid.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await flushAsync();
+    await click(document.querySelector<HTMLButtonElement>(".right-rail-collapse-button")!);
+    await flushAsync();
+
+    const shell = document.querySelector<HTMLElement>(".app-shell")!;
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
+    expect(Number(grid.dataset.renderedCount)).toBeGreaterThan(0);
+    expect(grid.scrollTop).toBe(0);
+    expect(document.querySelector(".right-rail.collapsed .gallery-thumb img")).toBeTruthy();
   });
 
   it("keeps compact controls and history from overflowing their layout contracts", async () => {
@@ -1722,7 +1780,7 @@ describe("renderer multi-model smoke", () => {
     });
   });
 
-  it("switches preview edit and crop controls into returnable toolbars", async () => {
+  it("switches preview edit and crop controls with active toggle buttons", async () => {
     const job = geminiJob(0, { outputs: [imageAsset("result_gemini.png")] });
     await renderApp(snapshot({ history: [job] }));
 
@@ -1736,7 +1794,7 @@ describe("renderer multi-model smoke", () => {
 
     const primaryActions = previewControls.querySelector<HTMLElement>(".preview-primary-actions")!;
     const secondaryActions = previewControls.querySelector<HTMLElement>(".preview-secondary-actions")!;
-    expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Back"]')).toBeTruthy();
+    expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Edit"]')?.classList.contains("active")).toBe(true);
     expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Download"]')).toBeTruthy();
     expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Save to Gallery"]')).toBeTruthy();
     expect(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Pick color from image"]')).toBeTruthy();
@@ -1749,10 +1807,11 @@ describe("renderer multi-model smoke", () => {
     await click(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Pick color from image"]')!);
     expect(document.querySelector(".annotation-canvas")?.classList.contains("eyedropper-mode")).toBe(true);
 
-    await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!);
+    await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Edit"]')!);
     await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Crop"]')!);
 
     const cropSecondaryActions = previewControls.querySelector<HTMLElement>(".preview-secondary-actions")!;
+    expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Crop"]')?.classList.contains("active")).toBe(true);
     expect(cropSecondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Rectangle crop"]')).toBeTruthy();
     expect(cropSecondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Apply crop"]')).toBeTruthy();
     expect(cropSecondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Save selected area to Gallery"]')).toBeTruthy();
@@ -1895,7 +1954,7 @@ describe("renderer multi-model smoke", () => {
       await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
       await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Edit"]')!);
       await createPreviewTextAnnotation("Pinned label");
-      await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Back"]')!);
+      await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Edit"]')!);
       await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Download edited image"]')!);
       await flushAsync();
 
@@ -2486,6 +2545,17 @@ async function pointer(element: HTMLElement, type: string, init: MouseEventInit 
     Object.defineProperty(event, "pointerType", { value: "mouse" });
     Object.defineProperty(event, "pressure", { value: 0 });
     element.dispatchEvent(event);
+    await Promise.resolve();
+  });
+}
+
+async function windowPointer(type: string, init: MouseEventInit = {}) {
+  await act(async () => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+    Object.defineProperty(event, "pointerId", { value: 1 });
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    Object.defineProperty(event, "pressure", { value: 0 });
+    window.dispatchEvent(event);
     await Promise.resolve();
   });
 }
