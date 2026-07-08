@@ -523,6 +523,25 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("gallery-preview.png opened in the editor.");
     expect(document.querySelector(".notice-area")?.getAttribute("aria-live")).toBe("polite");
     expect(document.querySelector(".notice-area")?.getAttribute("aria-atomic")).toBe("true");
+
+    const previewOpener = document.querySelector<HTMLElement>(".zoom-surface")!;
+    previewOpener.focus();
+    expect(document.activeElement).toBe(previewOpener);
+    await keyDown(previewOpener, "Enter");
+    await flushAsync();
+
+    const previewDialog = document.querySelector<HTMLElement>(".preview-modal-dialog")!;
+    const previewClose = document.querySelector<HTMLButtonElement>(".preview-modal-close")!;
+    expect(previewDialog.getAttribute("aria-modal")).toBe("true");
+    expect(previewDialog.getAttribute("aria-labelledby")).toBe("preview-modal-title");
+    expect(document.querySelector("#preview-modal-title")?.textContent).toBe("Image preview");
+    expect(document.activeElement).toBe(previewClose);
+
+    await keyDown(previewDialog, "Escape");
+    await flushAsync();
+
+    expect(document.querySelector(".preview-modal-dialog")).toBeNull();
+    expect(document.activeElement).toBe(previewOpener);
   });
 
   it("picks a Gallery image as a reference asset from the context menu", async () => {
