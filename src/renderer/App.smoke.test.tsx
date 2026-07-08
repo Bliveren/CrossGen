@@ -53,6 +53,7 @@ afterEach(() => {
   root = null;
   container?.remove();
   container = null;
+  document.documentElement.removeAttribute("data-theme");
   delete window.crossgen;
   delete window.image2tools;
 });
@@ -1466,6 +1467,33 @@ describe("renderer multi-model smoke", () => {
     expect(configSection.compareDocumentPosition(launchSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(launchSection.compareDocumentPosition(parameterSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(parameterSection.compareDocumentPosition(updatePanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("offers a persistent theme mode toggle in the left rail", async () => {
+    await renderApp(snapshot());
+    const themeButton = document.querySelector<HTMLButtonElement>(".theme-mode-button")!;
+
+    expect(themeButton.getAttribute("aria-label")).toBe("Theme: System");
+    expect(themeButton.textContent).toContain("System");
+    expect(document.documentElement.getAttribute("data-theme")).toBeNull();
+
+    await click(themeButton);
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(window.localStorage.getItem("image2tools.theme")).toBe("light");
+    expect(themeButton.getAttribute("aria-label")).toBe("Theme: Light");
+
+    await click(themeButton);
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(window.localStorage.getItem("image2tools.theme")).toBe("dark");
+    expect(themeButton.getAttribute("aria-label")).toBe("Theme: Dark");
+
+    await click(themeButton);
+    expect(document.documentElement.getAttribute("data-theme")).toBeNull();
+    expect(window.localStorage.getItem("image2tools.theme")).toBe("system");
+    expect(themeButton.getAttribute("aria-label")).toBe("Theme: System");
+
+    await click(document.querySelector<HTMLButtonElement>(".sidebar-collapse-button")!);
+    expect(document.querySelector<HTMLButtonElement>('.sidebar-mini-utility button[aria-label="Theme: System"]')).toBeTruthy();
   });
 
   it("uses a clear Chinese update failure label instead of an exception shorthand", async () => {

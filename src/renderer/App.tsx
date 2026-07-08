@@ -26,6 +26,8 @@ import {
   List,
   Loader2,
   LibraryBig,
+  Monitor,
+  Moon,
   Paintbrush,
   Pencil,
   Radar,
@@ -36,6 +38,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   SquarePen,
+  Sun,
   Tags,
   Trash2,
   Plus,
@@ -248,6 +251,34 @@ const DEFAULT_HISTORY_MODEL_DISPLAY = "GPT Image 2";
 const PROMPT_ACTION_ICON_BUTTON_WIDTH = 40;
 const PROMPT_ACTION_EDGE_GUARD = 4;
 type TabMode = "text2img" | "img2img";
+type ThemeMode = "system" | "light" | "dark";
+
+const THEME_STORAGE_KEY = "image2tools.theme";
+const themeModeOrder: ThemeMode[] = ["system", "light", "dark"];
+
+function getInitialThemeMode(): ThemeMode {
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+}
+
+function applyThemeMode(mode: ThemeMode) {
+  if (mode === "system") {
+    document.documentElement.removeAttribute("data-theme");
+    return;
+  }
+  document.documentElement.dataset.theme = mode;
+}
+
+function nextThemeMode(mode: ThemeMode): ThemeMode {
+  const index = themeModeOrder.indexOf(mode);
+  return themeModeOrder[(index + 1) % themeModeOrder.length] ?? "system";
+}
+
+function themeModeLabel(copy: UiCopy, mode: ThemeMode): string {
+  if (mode === "light") return copy.themeLight;
+  if (mode === "dark") return copy.themeDark;
+  return copy.themeSystem;
+}
 
 function getReferenceImageLimit(params: ImageParams): number {
   if (isOpenAIImageParams(params)) {
@@ -832,6 +863,7 @@ async function inspectMask(
 export function App() {
   const bridge = getBridge();
   const [language, setLanguage] = useState<Language>(() => getInitialLanguage());
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getInitialThemeMode());
   const copy = translations[language];
   const [snapshot, setSnapshot] = useState<AppSnapshot>(fallbackSnapshot);
   const [tabMode, setTabMode] = useState<TabMode>("text2img");
@@ -1430,6 +1462,11 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("image2tools.language", language);
   }, [language]);
+
+  useEffect(() => {
+    applyThemeMode(themeMode);
+    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     if (!editingHistoryTagsId) return undefined;
@@ -3039,6 +3076,16 @@ export function App() {
 
   function toggleLanguage() {
     setLanguage((current) => (current === "en" ? "zh" : "en"));
+  }
+
+  function toggleThemeMode() {
+    setThemeMode((current) => nextThemeMode(current));
+  }
+
+  function renderThemeIcon() {
+    if (themeMode === "light") return <Sun size={15} />;
+    if (themeMode === "dark") return <Moon size={15} />;
+    return <Monitor size={15} />;
   }
 
   function showReferenceLimitHint(max: number) {
@@ -4961,6 +5008,9 @@ export function App() {
           <button type="button" className="icon-button" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
             <span className="language-short">{language === "en" ? "En" : "简"}</span>
           </button>
+          <button type="button" className="icon-button" onClick={toggleThemeMode} aria-label={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`} data-tooltip={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`}>
+            {renderThemeIcon()}
+          </button>
           {updateCheck?.status === "available" ? (
             <button type="button" className="icon-button" onClick={downloadAndInstallUpdate} disabled={!bridge || isInstallingUpdate} aria-label={copy.installUpdate} data-tooltip={copy.installUpdate}>
               {isInstallingUpdate ? <Loader2 className="spin" size={16} /> : <ChevronUp size={17} />}
@@ -5019,6 +5069,10 @@ export function App() {
           <div className="sidebar-utility-left">
             <button type="button" className="language-pill" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
               {language === "en" ? "En" : "简"}
+            </button>
+            <button type="button" className="theme-mode-button" onClick={toggleThemeMode} aria-label={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`} data-tooltip={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`}>
+              {renderThemeIcon()}
+              <span>{themeModeLabel(copy, themeMode)}</span>
             </button>
             {updateCheck?.status === "available" ? (
               <button type="button" className="icon-button utility-check-button" onClick={downloadAndInstallUpdate} disabled={!bridge || isCheckingUpdate || isInstallingUpdate} aria-label={copy.installUpdate} data-tooltip={copy.installUpdate}>

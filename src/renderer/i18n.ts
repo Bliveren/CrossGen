@@ -71,6 +71,10 @@ interface ValidationCopy {
 
 export interface UiCopy {
   language: string;
+  theme: string;
+  themeSystem: string;
+  themeLight: string;
+  themeDark: string;
   english: string;
   chinese: string;
   tagline: string;
@@ -422,6 +426,10 @@ export interface UiCopy {
 export const translations: Record<Language, UiCopy> = {
   en: {
     language: "Language",
+    theme: "Theme",
+    themeSystem: "System",
+    themeLight: "Light",
+    themeDark: "Dark",
     english: "English",
     chinese: "中文",
     tagline: "An easy-to-use, all-in-one AI image generation management tool.",
@@ -836,6 +844,10 @@ export const translations: Record<Language, UiCopy> = {
   },
   zh: {
     language: "语言",
+    theme: "外观",
+    themeSystem: "跟随系统",
+    themeLight: "浅色",
+    themeDark: "深色",
     english: "English",
     chinese: "中文",
     tagline: "方便易用的一站式AI生图管理工具。",
