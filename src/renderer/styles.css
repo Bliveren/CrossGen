@@ -2494,7 +2494,7 @@
   }
 
   .right-rail.collapsed {
-    --right-rail-collapsed-thumb-size: calc(var(--history-width, 352px) - 32px);
+    --right-rail-collapsed-thumb-size: calc(var(--history-width, 384px) - 32px);
     gap: 8px;
     padding-right: 16px;
     padding-left: 16px;
@@ -2520,10 +2520,12 @@
     margin-top: auto;
     min-height: max(51px, calc(100vh - var(--rail-collapse-button-y, calc(100vh - 86px)) - var(--right-rail-padding-bottom, 22px)));
     border-top: 1px solid var(--border-subtle);
-    background: transparent;
+    background: none;
     background-image: none;
     padding-top: 14px;
     padding-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
     border-radius: 0;
     box-shadow: none;
     backdrop-filter: none;
@@ -2663,9 +2665,11 @@
     z-index: 5000;
     justify-content: flex-end;
     border-top: 1px solid var(--border-subtle);
-    background: transparent;
+    background: none;
     padding-top: 14px;
     padding-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
     border-radius: 0;
     box-shadow: none;
     backdrop-filter: none;
@@ -4826,7 +4830,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(560px, 1fr) 10px var(--history-width, 272px);
+      grid-template-columns: 76px 10px minmax(560px, 1fr) 10px var(--history-width, 384px);
     }
 
     .sidebar {
@@ -4874,7 +4878,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(360px, 1fr) 0 var(--history-width, 272px);
+      grid-template-columns: 76px 10px minmax(360px, 1fr) 0 var(--history-width, 384px);
     }
 
     .history {
@@ -4916,7 +4920,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(0, 1fr) 0 var(--history-width, 272px);
+      grid-template-columns: 76px 10px minmax(0, 1fr) 0 var(--history-width, 384px);
     }
 
     .right-rail-tabs span,

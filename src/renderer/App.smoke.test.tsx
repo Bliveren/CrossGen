@@ -1512,7 +1512,7 @@ describe("renderer multi-model smoke", () => {
     await click(document.querySelector<HTMLButtonElement>(".right-rail-collapse-button")!);
 
     expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
-    expect(shell.style.getPropertyValue("--history-width")).toBe("352px");
+    expect(shell.style.getPropertyValue("--history-width")).toBe("384px");
     expect(document.querySelector(".right-rail.collapsed")).toBeTruthy();
     expect(document.querySelector(".right-rail-drawer-toggle")).toBeTruthy();
   });
