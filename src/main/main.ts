@@ -3,6 +3,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  nativeTheme,
   nativeImage,
   protocol,
   safeStorage,
@@ -131,6 +132,8 @@ const USER_DATA_DIR_ENV = "CROSSGEN_USER_DATA_DIR";
 const LEGACY_USER_DATA_DIR_ENV = "IMAGE2TOOLS_USER_DATA_DIR";
 const PERF_RESULT_PATH_ENV = "CROSSGEN_PERF_RESULT_PATH";
 const RENDERER_PERF_RESULT_PATH_ENV = "CROSSGEN_RENDERER_PERF_RESULT_PATH";
+const THEME_SOURCE_ENV = "CROSSGEN_THEME_SOURCE";
+const RENDERER_SCREENSHOT_DIR_ENV = "CROSSGEN_RENDERER_SCREENSHOT_DIR";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -222,13 +225,14 @@ function galleryIpc<TArgs extends unknown[], TResult>(
 }
 
 function createWindow(): BrowserWindow {
+  const windowBackground = nativeTheme.shouldUseDarkColors ? "#101720" : "#f6f4ef";
   const window = new BrowserWindow({
     width: 1440,
     height: 940,
     minWidth: 1120,
     minHeight: 760,
     title: BRAND_NAME,
-    backgroundColor: "#f6f4ef",
+    backgroundColor: windowBackground,
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
@@ -2786,6 +2790,18 @@ async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: 
       };
     })();
   `);
+  const screenshotDir = process.env[RENDERER_SCREENSHOT_DIR_ENV];
+  if (screenshotDir) {
+    await ensureDir(screenshotDir);
+    const themeName = nativeTheme.shouldUseDarkColors ? "dark" : "light";
+    const screenshotPath = path.join(screenshotDir, `renderer-${themeName}.png`);
+    const image = await window.webContents.capturePage();
+    await fs.writeFile(screenshotPath, image.toPNG());
+    (rendererResult as Record<string, unknown>).screenshot = {
+      theme: themeName,
+      path: screenshotPath
+    };
+  }
 
   const profilerStartIndex = await window.webContents.executeJavaScript("window.__crossgenProfilerEvents?.length ?? 0");
   if (sampleGalleryAsset && samplePartialPath) {
@@ -2944,6 +2960,10 @@ function registerIpcHandlers(): void {
 
 app.whenReady().then(async () => {
   app.setName(BRAND_NAME);
+  const themeSource = process.env[THEME_SOURCE_ENV];
+  if (themeSource === "light" || themeSource === "dark" || themeSource === "system") {
+    nativeTheme.themeSource = themeSource;
+  }
   preserveLegacyUserDataPath();
   registerIpcHandlers();
   registerAssetProtocol();
