@@ -583,23 +583,13 @@
   }
 
   .theme-mode-button {
-    width: auto;
-    min-width: 0;
+    width: 36px;
+    min-width: 36px;
     min-height: 36px;
-    gap: 6px;
     border-color: var(--border-subtle);
     background: var(--surface-panel);
     color: var(--text-secondary);
-    padding: 0 9px;
-  }
-
-  .theme-mode-button span {
-    max-width: 66px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 12px;
-    font-weight: 750;
-    white-space: nowrap;
+    padding: 0;
   }
 
   .theme-mode-button:hover:not(:disabled) {
@@ -1296,6 +1286,27 @@
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
   }
 
+  .annotation-color-readout {
+    display: inline-flex;
+    align-items: center;
+    height: 30px;
+    min-width: 86px;
+    gap: 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: var(--surface-panel-muted);
+    color: var(--text-secondary);
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .annotation-color-readout code {
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+    letter-spacing: 0;
+  }
+
   .annotation-color-popover {
     position: absolute;
     top: calc(100% + 8px);
@@ -1984,8 +1995,11 @@
   }
 
   .gallery-panel {
-    display: grid;
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
     gap: 9px;
+    min-height: 0;
   }
 
   .gallery-folder-panel {
@@ -1995,9 +2009,11 @@
 
   .resource-explorer {
     display: grid;
+    flex: 1 1 0;
     grid-template-columns: minmax(104px, 0.45fr) minmax(0, 1fr);
     gap: 8px;
     min-height: 0;
+    overflow: hidden;
     border: 0;
     background: transparent;
     padding: 0;
@@ -2216,9 +2232,12 @@
   }
 
   .gallery-directory-content {
-    display: grid;
-    grid-template-rows: minmax(0, 1fr);
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
     gap: 7px;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .gallery-folder-header {
@@ -2443,26 +2462,38 @@
     align-content: start;
     gap: 8px;
     max-height: 360px;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .gallery-content-grid {
+    flex: 1 1 0;
     max-height: 380px;
     min-height: 220px;
+    min-width: 0;
     padding: 1px;
+    padding-block-start: calc(1px + var(--gallery-virtual-padding-top, 0px));
+    padding-block-end: calc(1px + var(--gallery-virtual-padding-bottom, 0px));
   }
 
   .gallery-content-grid.list {
     grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: 86px;
   }
 
   .gallery-content-grid.grid {
     grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    grid-auto-rows: 190px;
   }
 
-  .gallery-virtual-spacer {
-    grid-column: 1 / -1;
-    pointer-events: none;
+  .gallery-content-grid .gallery-item {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .gallery-content-grid.list .gallery-meta,
+  .gallery-content-grid.grid .gallery-meta {
+    overflow: hidden;
   }
 
   .gallery-grid.drop-target {
@@ -2616,11 +2647,12 @@
   }
 
   .right-rail.collapsed {
-    --right-rail-collapsed-thumb-size: calc(var(--history-width, 384px) - 32px);
+    --right-rail-collapsed-thumb-size: min(180px, calc(var(--history-width, 256px) - 48px));
     gap: 8px;
     padding-right: 16px;
     padding-left: 16px;
-    overflow: visible;
+    overflow-x: hidden;
+    overflow-y: hidden;
   }
 
   .right-rail-panel {
@@ -2640,7 +2672,8 @@
     justify-content: space-between;
     gap: 10px;
     margin-top: auto;
-    min-height: max(51px, calc(100vh - var(--rail-collapse-button-y, calc(100vh - 86px)) - var(--right-rail-padding-bottom, 22px)));
+    flex: 0 0 auto;
+    min-height: 51px;
     border-top: 1px solid var(--border-subtle);
     background: none;
     background-image: none;
@@ -2668,7 +2701,7 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     background: var(--surface-panel);
-    overflow: visible;
+    overflow: hidden;
   }
 
   .right-rail.collapsed .right-rail-tabs button {
@@ -2681,8 +2714,13 @@
     padding: 0;
   }
 
+  .right-rail.collapsed .right-rail-tabs button:first-child {
+    border-radius: calc(var(--radius-lg) - 1px) 0 0 calc(var(--radius-lg) - 1px);
+  }
+
   .right-rail.collapsed .right-rail-tabs button:last-child {
     border-right: 0;
+    border-radius: 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0;
   }
 
   .right-rail.collapsed .right-rail-tabs span,
@@ -2699,6 +2737,7 @@
 
   .right-rail.collapsed .right-rail-panel {
     gap: 6px;
+    overflow: hidden;
   }
 
   .right-rail.collapsed .history-list-shell {
@@ -2712,6 +2751,7 @@
     justify-items: center;
     gap: 8px;
     padding-right: 0;
+    overflow-x: hidden;
   }
 
   .right-rail.collapsed .history-item {
@@ -2746,8 +2786,8 @@
   .right-rail.collapsed .history-preview,
   .right-rail.collapsed .gallery-thumb,
   .right-rail.collapsed .gallery-folder-thumb {
-    width: var(--right-rail-collapsed-thumb-size);
-    height: var(--right-rail-collapsed-thumb-size);
+    width: min(100%, var(--right-rail-collapsed-thumb-size));
+    height: min(100%, var(--right-rail-collapsed-thumb-size));
     min-height: 0;
     border-radius: var(--radius-lg);
   }
@@ -2767,7 +2807,10 @@
     justify-items: center;
     gap: 8px;
     min-height: 0;
-    padding-right: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 8px;
+    padding-left: 8px;
   }
 
   .right-rail.collapsed .gallery-item {
@@ -3011,7 +3054,9 @@
   .right-rail .gallery-grid {
     flex: 1 1 0;
     max-height: none;
-    min-height: 240px;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .gallery-tag-editor {
@@ -3367,7 +3412,9 @@
 
   .input-panel {
     padding-left: 9px;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .input-panel > .workspace-topbar,
@@ -3448,6 +3495,29 @@
       10px -10px,
       -10px 0;
     background-size: 20px 20px;
+  }
+
+  .generation-status-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1400;
+    display: grid;
+    grid-auto-flow: column;
+    place-content: center;
+    align-items: center;
+    gap: 10px;
+    background: color-mix(in srgb, var(--surface-app) 72%, transparent);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 750;
+    text-align: center;
+    pointer-events: none;
+    backdrop-filter: blur(6px);
+  }
+
+  .generation-status-overlay span {
+    max-width: min(320px, calc(100vw - 96px));
+    overflow-wrap: anywhere;
   }
 
   .zoom-surface {
@@ -3621,6 +3691,10 @@
 
   .annotation-canvas.crop-mode {
     cursor: crosshair;
+  }
+
+  .annotation-canvas.eyedropper-mode {
+    cursor: url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M15.3 3.3a2.4 2.4 0 0 1 3.4 0l2 2a2.4 2.4 0 0 1 0 3.4l-1.5 1.5-2.9-2.9 1.1-1.1-1.5-1.5-3.7 3.7 3.9 3.9 1.1-1.1 2.9 2.9-1.5 1.5a2.4 2.4 0 0 1-3.4 0l-.7-.7-7.6 7.6H2.5v-4.4l7.6-7.6-.7-.7a2.4 2.4 0 0 1 0-3.4l5.9-5.9Z' fill='%23111827'/%3E%3Cpath d='M5 18.7V20h1.3l6.8-6.8-1.3-1.3L5 18.7Z' fill='%23ffffff'/%3E%3C/svg%3E") 4 20, crosshair;
   }
 
   .annotation-text-draft,
@@ -3853,6 +3927,41 @@
 
   .gallery-save-choice-dialog .dialog-actions button {
     min-width: 96px;
+  }
+
+  .release-guide-dialog {
+    width: min(480px, 100%);
+  }
+
+  .release-guide-heading {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+
+  .release-guide-icon {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius-lg);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .release-guide-list {
+    display: grid;
+    gap: 9px;
+    margin: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-panel-muted);
+    padding: 12px 14px 12px 28px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.45;
   }
 
   .result-strip,
@@ -4227,7 +4336,9 @@
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 10px;
     min-height: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     border-top: 1px solid var(--border-subtle);
     padding-top: 12px;
   }
@@ -4268,7 +4379,7 @@
     place-items: center;
     min-height: clamp(132px, 24vh, 220px);
     max-height: 100%;
-    overflow: hidden;
+    overflow: auto;
     border: 1px dashed var(--border-strong);
     border-radius: var(--radius-lg);
     background: var(--glass-surface);
@@ -4960,7 +5071,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(560px, 1fr) 10px var(--history-width, 384px);
+      grid-template-columns: 76px 10px minmax(560px, 1fr) 10px var(--history-width, 256px);
     }
 
     .sidebar {
@@ -5008,7 +5119,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(360px, 1fr) 0 var(--history-width, 384px);
+      grid-template-columns: 76px 10px minmax(360px, 1fr) 0 var(--history-width, 256px);
     }
 
     .history {
@@ -5050,7 +5161,7 @@
 
     .app-shell.right-rail-collapsed,
     .app-shell.sidebar-collapsed.right-rail-collapsed {
-      grid-template-columns: 76px 10px minmax(0, 1fr) 0 var(--history-width, 384px);
+      grid-template-columns: 76px 10px minmax(0, 1fr) 0 var(--history-width, 256px);
     }
 
     .right-rail-tabs span,
@@ -5072,14 +5183,20 @@
     }
 
     .workspace {
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     .preview-layout,
-    .result-stage,
-    .input-panel {
+    .result-stage {
       min-height: 0;
       overflow: hidden;
+    }
+
+    .input-panel {
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     .sidebar-full-stack,
@@ -5249,9 +5366,14 @@
   }
 
   @media (max-height: 620px) {
-    .workspace,
+    .workspace {
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
     .input-panel {
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     .model-config-section .api-access-current,

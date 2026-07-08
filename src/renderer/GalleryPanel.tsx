@@ -600,14 +600,30 @@ export function GalleryContentGrid({
       <div
         ref={contentRef}
         className={`gallery-grid gallery-content-grid ${viewMode} ${batchMode ? "batch-select" : ""} ${dropTarget ? "drop-target" : ""}`}
+        style={{
+          "--gallery-virtual-padding-top": `${virtualTopSpacer}px`,
+          "--gallery-virtual-padding-bottom": `${virtualBottomSpacer}px`
+        } as React.CSSProperties}
         onScroll={(event) => onScrollTopChange(event.currentTarget.scrollTop)}
+        onWheel={(event) => {
+          const element = event.currentTarget;
+          const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+          if (maxScrollTop <= 0) return;
+          const delta = event.deltaY || event.deltaX;
+          if (!delta) return;
+          const nextScrollTop = Math.min(maxScrollTop, Math.max(0, element.scrollTop + delta));
+          if (nextScrollTop === element.scrollTop) return;
+          event.preventDefault();
+          element.scrollTop = nextScrollTop;
+          onScrollTopChange(nextScrollTop);
+        }}
         data-total-count={entries.length}
         data-rendered-count={virtualEntries.length}
         onContextMenu={(event) => {
           const target = event.target as HTMLElement;
           if (
             event.target === event.currentTarget ||
-            target.closest(".gallery-virtual-spacer, .gallery-empty-state")
+            target.closest(".gallery-empty-state")
           ) {
             onFolderContextMenu(event, activeFolderId);
           }
@@ -619,7 +635,6 @@ export function GalleryContentGrid({
             <span>{isGalleryEmpty ? copy.galleryEmpty : copy.galleryNoMatch}</span>
           </div>
         )}
-        {virtualTopSpacer > 0 && <div className="gallery-virtual-spacer" style={{ height: virtualTopSpacer }} />}
         {virtualEntries.map((entry, virtualIndex) => {
           const index = virtualStartIndex + virtualIndex;
           return entry.kind === "folder" ? (
@@ -666,7 +681,6 @@ export function GalleryContentGrid({
             />
           );
         })}
-        {virtualBottomSpacer > 0 && <div className="gallery-virtual-spacer" style={{ height: virtualBottomSpacer }} />}
       </div>
     </section>
   );

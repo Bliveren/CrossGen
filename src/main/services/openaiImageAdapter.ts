@@ -60,6 +60,7 @@ interface JsonImagesResult {
   outputs: ImageAsset[];
   usage?: UsageDetails;
   emptyReason?: string;
+  retryableEmpty?: boolean;
 }
 
 export type OpenAIImageRuntime = ImageJobRuntime;
@@ -123,6 +124,26 @@ export function baseRequestBody(params: OpenAIImageParams, prompt: string): Reco
   }
 
   return body;
+}
+
+export function openAIEditPrompt(job: OpenAIImageJob): string {
+  const referenceCount = job.inputAssets.length;
+  const referenceLabel = referenceCount === 1 ? "reference image" : "reference images";
+  const lines = [
+    job.prompt.trim(),
+    "",
+    "Attached reference guidance:",
+    `- The request includes ${referenceCount} attached ${referenceLabel}. Use the attached image content as visual input; do not ignore it.`,
+    "- Reflect the visible subjects, style, colors, layout, and salient details from the reference image content where they are relevant to the user's prompt.",
+    "- If the user's prompt asks for changes, apply those changes while keeping reference-derived details where applicable.",
+    "- If the prompt describes conflict or action, keep it stylized and non-graphic, with no blood, gore, injury detail, or explicit harm."
+  ];
+
+  if (job.maskAsset) {
+    lines.push("- A mask is attached. Use it as guidance for the editable area on the first reference image and keep unmasked regions stable where possible.");
+  }
+
+  return lines.join("\n");
 }
 
 export async function fetchWithTimeout(
@@ -318,13 +339,12 @@ async function fetchEditResponse(
   runtime: OpenAIImageRuntime
 ): Promise<Response> {
   const form = new FormData();
-  for (const [key, value] of Object.entries(baseRequestBody(job.params, job.prompt))) {
+  for (const [key, value] of Object.entries(baseRequestBody(job.params, openAIEditPrompt(job)))) {
     form.append(key, String(value));
   }
 
-  const imageFieldName = job.inputAssets.length === 1 ? "image" : "image[]";
   for (const asset of job.inputAssets) {
-    form.append(imageFieldName, await assetToBlob(asset), asset.name);
+    form.append("image[]", await assetToBlob(asset), asset.name);
   }
 
   if (job.maskAsset) {
@@ -402,9 +422,29 @@ async function handleJsonImagesWithBackfill(
   const firstResult = await readAndSaveJsonImagesResponse(response, job, runtime, 0, requestedCount);
   const outputs = [...firstResult.outputs];
   let usage = firstResult.usage;
+  let emptyReason = firstResult.emptyReason;
+
+  if (outputs.length === 0 && firstResult.retryableEmpty) {
+    const retryJob: OpenAIImageJob = {
+      ...job,
+      params: {
+        ...job.params,
+        n: requestedCount,
+        stream: false,
+        partialImages: 0
+      }
+    };
+    const retryResponse = await fetchAdditional(retryJob);
+    const retryResult = await readAndSaveJsonImagesResponse(retryResponse, job, runtime, 0, requestedCount);
+    outputs.push(...retryResult.outputs);
+    usage = mergeUsageDetails(usage, retryResult.usage);
+    emptyReason = retryResult.emptyReason
+      ? `${retryResult.emptyReason}；已自动重试 1 次，仍未收到图片。`
+      : "已自动重试 1 次，仍未收到图片。";
+  }
 
   if (outputs.length === 0) {
-    throw new Error(noSavableOpenAIImageMessage(firstResult.emptyReason));
+    throw new Error(noSavableOpenAIImageMessage(emptyReason));
   }
 
   while (outputs.length < requestedCount) {
@@ -465,7 +505,12 @@ async function readAndSaveJsonImagesResponse(
   const imageItems = collectImageItemsFromPayload(payload).slice(0, maxResults);
   const outputs = await saveImageItems(job, imageItems, "result", runtime, firstIndex);
 
-  return { outputs, usage: payload.usage, emptyReason: outputs.length === 0 ? describeNoImagePayload(payload) : undefined };
+  return {
+    outputs,
+    usage: payload.usage,
+    emptyReason: outputs.length === 0 ? describeNoImagePayload(payload) : undefined,
+    retryableEmpty: outputs.length === 0 ? isRetryableEmptyImagePayload(payload) : false
+  };
 }
 
 function mergeUsageDetails(current: UsageDetails | undefined, next: UsageDetails | undefined): UsageDetails | undefined {
@@ -501,6 +546,47 @@ function sumOptionalNumbers(current: number | undefined, next: number | undefine
 
 type OpenAIImageItem = { b64_json?: string; url?: string };
 
+const IMAGE_STRING_KEYS = new Set([
+  "b64_json",
+  "b64",
+  "base64",
+  "base64_json",
+  "base64_data",
+  "binary",
+  "data",
+  "image",
+  "image_data",
+  "image_base64",
+  "imageBase64",
+  "result"
+]);
+
+const IMAGE_URL_KEYS = new Set(["url", "uri", "image_url", "imageUrl", "image_uri", "imageUri"]);
+
+const PRIORITY_NESTED_IMAGE_KEYS = new Set([
+  "artifact",
+  "artifacts",
+  "body",
+  "choices",
+  "content",
+  "data",
+  "extra_fields",
+  "extraFields",
+  "generation",
+  "generations",
+  "image",
+  "images",
+  "inline_data",
+  "inlineData",
+  "message",
+  "output",
+  "outputs",
+  "payload",
+  "response",
+  "result",
+  "results"
+]);
+
 function collectImageItemsFromPayload(payload: unknown): OpenAIImageItem[] {
   const items: OpenAIImageItem[] = [];
 
@@ -510,13 +596,32 @@ function collectImageItemsFromPayload(payload: unknown): OpenAIImageItem[] {
   };
 
   const pushBase64OrDataUrl = (value: string) => {
-    const trimmed = value.trim();
+    const trimmed = normalizeImageString(value);
     if (!trimmed) return;
     if (trimmed.startsWith("data:image/")) {
       pushItem({ url: trimmed });
       return;
     }
     pushItem({ b64_json: trimmed });
+  };
+
+  const pushImageLikeString = (value: string, key: string, parentType: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    if (trimmed.startsWith("data:image/")) {
+      pushItem({ url: trimmed });
+      return;
+    }
+
+    if (isLikelyHttpUrl(trimmed) && (IMAGE_URL_KEYS.has(key) || /image/i.test(key) || /image/i.test(parentType))) {
+      pushItem({ url: trimmed });
+      return;
+    }
+
+    if (shouldTreatAsImageBase64(trimmed, key, parentType)) {
+      pushBase64OrDataUrl(trimmed);
+    }
   };
 
   const visit = (value: unknown, key = "", parentType = "", depth = 0) => {
@@ -528,44 +633,131 @@ function collectImageItemsFromPayload(payload: unknown): OpenAIImageItem[] {
     }
 
     if (typeof value === "string") {
-      if ((key === "url" || key === "image_url") && value.trim()) {
+      const parsedJson = parseMaybeJsonImageContainer(value, key, parentType);
+      if (parsedJson !== undefined) {
+        visit(parsedJson, key, parentType, depth + 1);
+      }
+      if ((IMAGE_URL_KEYS.has(key) || (key === "source" && /image/i.test(parentType))) && value.trim()) {
         pushItem({ url: value.trim() });
       }
       if (key === "result" && /image_(?:generation|edit)_call|image/i.test(parentType)) {
         pushBase64OrDataUrl(value);
       }
+      pushImageLikeString(value, key, parentType);
       return;
     }
 
     if (!isRecord(value)) return;
 
     const type = typeof value.type === "string" ? value.type : parentType;
-    if (typeof value.b64_json === "string") pushBase64OrDataUrl(value.b64_json);
-    if (typeof value.image_base64 === "string") pushBase64OrDataUrl(value.image_base64);
-    if (typeof value.base64 === "string") pushBase64OrDataUrl(value.base64);
-    if (typeof value.result === "string" && /image_(?:generation|edit)_call|image/i.test(type)) pushBase64OrDataUrl(value.result);
-    if (typeof value.url === "string" && value.url.trim()) pushItem({ url: value.url.trim() });
+    const handledStringKeys = new Set<string>();
+    const handleStringField = (fieldKey: string, fieldValue: string, forceImage = false) => {
+      handledStringKeys.add(fieldKey);
+      const parsedJson = parseMaybeJsonImageContainer(fieldValue, fieldKey, type);
+      if (parsedJson !== undefined) {
+        visit(parsedJson, fieldKey, type, depth + 1);
+      }
+      if (forceImage) {
+        pushBase64OrDataUrl(fieldValue);
+        return;
+      }
+      pushImageLikeString(fieldValue, fieldKey, type);
+    };
+
+    if (typeof value.b64_json === "string") handleStringField("b64_json", value.b64_json, true);
+    if (typeof value.image_base64 === "string") handleStringField("image_base64", value.image_base64, true);
+    if (typeof value.base64 === "string") handleStringField("base64", value.base64, true);
+    if (typeof value.result === "string") {
+      if (/image_(?:generation|edit)_call|image/i.test(type)) {
+        handleStringField("result", value.result, true);
+      } else {
+        handleStringField("result", value.result);
+      }
+    }
+    if (typeof value.url === "string" && value.url.trim()) {
+      handledStringKeys.add("url");
+      pushItem({ url: value.url.trim() });
+    }
+    if (typeof value.uri === "string" && value.uri.trim()) handleStringField("uri", value.uri);
+    if (typeof value.image === "string") handleStringField("image", value.image);
+    if (typeof value.image_data === "string") handleStringField("image_data", value.image_data);
+    if (typeof value.imageData === "string") handleStringField("imageData", value.imageData);
+    if (typeof value.b64 === "string") handleStringField("b64", value.b64);
+    if (typeof value.base64_data === "string") handleStringField("base64_data", value.base64_data);
+    if (typeof value.base64Data === "string") handleStringField("base64Data", value.base64Data);
 
     if (typeof value.image_url === "string" && value.image_url.trim()) {
+      handledStringKeys.add("image_url");
       pushItem({ url: value.image_url.trim() });
     } else if (isRecord(value.image_url) && typeof value.image_url.url === "string" && value.image_url.url.trim()) {
       pushItem({ url: value.image_url.url.trim() });
     }
 
     const mimeType = typeof value.mimeType === "string" ? value.mimeType : typeof value.mime_type === "string" ? value.mime_type : "";
-    if (typeof value.data === "string" && (/^image\//i.test(mimeType) || key === "inlineData" || /inlineData|image/i.test(type))) {
-      pushBase64OrDataUrl(value.data);
+    if (typeof value.data === "string") {
+      handleStringField("data", value.data, /^image\//i.test(mimeType) || key === "inlineData" || /inlineData|image/i.test(type));
     }
 
-    for (const nestedKey of ["data", "output", "content", "images", "image", "result", "inlineData", "inline_data"]) {
+    for (const nestedKey of PRIORITY_NESTED_IMAGE_KEYS) {
       if (nestedKey in value && typeof value[nestedKey] !== "string") {
         visit(value[nestedKey], nestedKey, type, depth + 1);
       }
+    }
+
+    for (const [childKey, childValue] of Object.entries(value)) {
+      if (PRIORITY_NESTED_IMAGE_KEYS.has(childKey) && typeof childValue !== "string") continue;
+      if (typeof childValue === "string" && handledStringKeys.has(childKey)) continue;
+      visit(childValue, childKey, type, depth + 1);
     }
   };
 
   visit(payload);
   return items;
+}
+
+function parseMaybeJsonImageContainer(value: string, key: string, parentType: string): unknown {
+  if (!shouldInspectStringContainer(key, parentType)) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return undefined;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function shouldInspectStringContainer(key: string, parentType: string): boolean {
+  return PRIORITY_NESTED_IMAGE_KEYS.has(key) || /image|result|output|response|payload|extra/i.test(key) || /image|result|output|response|payload|extra/i.test(parentType);
+}
+
+function normalizeImageString(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("data:image/")) return trimmed;
+  return trimmed.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+}
+
+function shouldTreatAsImageBase64(value: string, key: string, parentType: string): boolean {
+  if (!IMAGE_STRING_KEYS.has(key) && !/image/i.test(key) && !/image/i.test(parentType)) return false;
+  return isLikelyImageBase64(value);
+}
+
+function isLikelyImageBase64(value: string): boolean {
+  const normalized = normalizeImageString(value);
+  if (normalized.length < 64) return false;
+  if (!/^[A-Za-z0-9+/]+=*$/.test(normalized)) return false;
+  return (
+    normalized.startsWith("iVBORw0KGgo") ||
+    normalized.startsWith("/9j/") ||
+    normalized.startsWith("UklGR") ||
+    normalized.startsWith("R0lGOD") ||
+    normalized.startsWith("Qk") ||
+    normalized.startsWith("SUkq") ||
+    normalized.startsWith("TU0AK")
+  );
+}
+
+function isLikelyHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
 }
 
 function noSavableOpenAIImageMessage(reason?: string): string {
@@ -577,6 +769,12 @@ function noSavableOpenAIImageMessage(reason?: string): string {
 function describeNoImagePayload(payload: unknown): string | undefined {
   if (!isRecord(payload)) return undefined;
   const details: string[] = [];
+  const rootKeys = Object.keys(payload).slice(0, 10);
+  if (rootKeys.length === 0) {
+    details.push("空 JSON 对象");
+  } else {
+    details.push(`顶层字段：${rootKeys.join(",")}`);
+  }
 
   if (Array.isArray(payload.data)) {
     const firstKeys = payload.data
@@ -585,6 +783,10 @@ function describeNoImagePayload(payload: unknown): string | undefined {
       .map((item) => Object.keys(item).slice(0, 6).join(","))
       .filter(Boolean);
     details.push(`data ${payload.data.length} 项${firstKeys.length ? `，字段：${firstKeys.join(" / ")}` : ""}`);
+  } else if (isRecord(payload.data)) {
+    details.push(`data 字段：${Object.keys(payload.data).slice(0, 8).join(",")}`);
+  } else if ("data" in payload) {
+    details.push(`data 类型：${describePrimitiveValue(payload.data)}`);
   }
 
   if (Array.isArray(payload.output)) {
@@ -595,6 +797,32 @@ function describeNoImagePayload(payload: unknown): string | undefined {
     details.push(`output ${payload.output.length} 项${outputTypes ? `，类型：${outputTypes}` : ""}`);
   }
 
+  for (const key of ["images", "artifacts", "generations", "results"]) {
+    const value = payload[key];
+    if (Array.isArray(value)) {
+      const firstKeys = value
+        .slice(0, 3)
+        .filter(isRecord)
+        .map((item) => Object.keys(item).slice(0, 6).join(","))
+        .filter(Boolean);
+      details.push(`${key} ${value.length} 项${firstKeys.length ? `，字段：${firstKeys.join(" / ")}` : ""}`);
+    }
+  }
+
+  if (isRecord(payload.usage)) {
+    const usageKeys = Object.keys(payload.usage).slice(0, 8);
+    if (usageKeys.length > 0) details.push(`usage 字段：${usageKeys.join(",")}`);
+  }
+
+  if (isRecord(payload.extra_fields)) {
+    const extraKeys = Object.keys(payload.extra_fields).slice(0, 10);
+    details.push(`extra_fields 字段：${extraKeys.length ? extraKeys.join(",") : "空对象"}`);
+    const extraSummary = summarizeExtraFields(payload.extra_fields);
+    if (extraSummary) details.push(`extra_fields 摘要：${extraSummary}`);
+  } else if ("extra_fields" in payload) {
+    details.push(`extra_fields 类型：${describePrimitiveValue(payload.extra_fields)}`);
+  }
+
   const textDetails = collectOpenAITextDiagnostics(payload);
   if (textDetails.length > 0) {
     details.push(`文本信息：${textDetails.slice(0, 2).join(" / ")}`);
@@ -603,10 +831,102 @@ function describeNoImagePayload(payload: unknown): string | undefined {
   return details.length > 0 ? `响应摘要：${details.join("；")}` : undefined;
 }
 
+function isRetryableEmptyImagePayload(payload: unknown): boolean {
+  if (!isRecord(payload)) return false;
+  if (collectOpenAITextDiagnostics(payload).length > 0) return false;
+  if (!("data" in payload) || !(payload.data == null || (Array.isArray(payload.data) && payload.data.length === 0))) return false;
+  if (!isRecord(payload.extra_fields)) return false;
+  return (
+    "provider" in payload.extra_fields ||
+    "routing_info" in payload.extra_fields ||
+    "provider_response_headers" in payload.extra_fields ||
+    "resolved_model_used" in payload.extra_fields
+  );
+}
+
+function summarizeExtraFields(extraFields: Record<string, unknown>): string {
+  const details: string[] = [];
+  for (const key of ["request_type", "provider", "original_model_requested", "resolved_model_used", "latency", "chunk_index"]) {
+    const value = extraFields[key];
+    if (isSimpleDiagnosticValue(value)) {
+      details.push(`${key}=${describePrimitiveValue(value)}`);
+    }
+  }
+
+  const dropped = extraFields.dropped_compat_plugin_params;
+  if (Array.isArray(dropped)) {
+    const values = dropped.map((item) => describePrimitiveValue(item)).filter(Boolean).slice(0, 8);
+    if (values.length > 0) details.push(`dropped=${values.join(",")}`);
+  } else if (isRecord(dropped)) {
+    const keys = Object.keys(dropped).slice(0, 8);
+    if (keys.length > 0) details.push(`dropped字段=${keys.join(",")}`);
+  } else if (isSimpleDiagnosticValue(dropped)) {
+    details.push(`dropped=${describePrimitiveValue(dropped)}`);
+  }
+
+  if (isRecord(extraFields.provider_response_headers)) {
+    const headerDetails = summarizeProviderResponseHeaders(extraFields.provider_response_headers);
+    if (headerDetails) details.push(`headers=${headerDetails}`);
+  }
+
+  return details.join("，");
+}
+
+function summarizeProviderResponseHeaders(headers: Record<string, unknown>): string {
+  const preferredKeys = [
+    "content-type",
+    "x-request-id",
+    "openai-processing-ms",
+    "cf-ray",
+    "x-ratelimit-remaining-requests",
+    "x-ratelimit-reset-requests"
+  ];
+  const details: string[] = [];
+  for (const key of preferredKeys) {
+    const value = headers[key] ?? headers[key.toLowerCase()] ?? headers[key.toUpperCase()];
+    if (isSimpleDiagnosticValue(value)) {
+      details.push(`${key}:${describePrimitiveValue(value)}`);
+    }
+  }
+  if (details.length > 0) return details.join(",");
+  return Object.keys(headers).slice(0, 8).join(",");
+}
+
+function isSimpleDiagnosticValue(value: unknown): value is string | number | boolean | null {
+  return value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+function describePrimitiveValue(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return `array(${value.length})`;
+  if (typeof value === "string") {
+    const trimmed = redactLikelySecrets(value.trim()).replace(/\s+/g, " ");
+    return trimmed ? `string(${trimmed.slice(0, 80)})` : "空字符串";
+  }
+  return typeof value;
+}
+
 function collectOpenAITextDiagnostics(payload: unknown): string[] {
   const values: string[] = [];
   const seen = new Set<string>();
-  const interestingKeys = new Set(["message", "refusal", "reason", "status", "code", "finish_reason", "text"]);
+  const interestingKeys = new Set([
+    "blocked_reason",
+    "category",
+    "code",
+    "detail",
+    "details",
+    "error",
+    "finish_reason",
+    "finishReason",
+    "message",
+    "reason",
+    "refusal",
+    "safety",
+    "safety_reason",
+    "status",
+    "text",
+    "warning"
+  ]);
 
   const push = (value: string) => {
     const text = redactLikelySecrets(value.trim()).replace(/\s+/g, " ").slice(0, 180);

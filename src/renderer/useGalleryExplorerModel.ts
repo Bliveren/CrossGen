@@ -3,8 +3,8 @@ import type { GalleryAsset, GalleryFolder } from "../shared/types";
 import type { GalleryExplorerEntry, GalleryFolderFilter, GallerySortMode, GalleryViewMode } from "./GalleryPanel";
 
 export const GALLERY_VIRTUAL_GRID_MIN_COLUMN_WIDTH = 132;
-export const GALLERY_VIRTUAL_GRID_ROW_HEIGHT = 190;
-export const GALLERY_VIRTUAL_LIST_ROW_HEIGHT = 86;
+export const GALLERY_VIRTUAL_GRID_ROW_HEIGHT = 198;
+export const GALLERY_VIRTUAL_LIST_ROW_HEIGHT = 94;
 export const GALLERY_VIRTUAL_OVERSCAN_ROWS = 3;
 export const GALLERY_CONTENT_DEFAULT_HEIGHT = 380;
 export const GALLERY_CONTENT_DEFAULT_WIDTH = 320;

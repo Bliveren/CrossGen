@@ -129,9 +129,11 @@ describe("General image adapter", () => {
     expect(requestUrl).toBe("https://api.test/v1beta/models/gemini-3-pro-image:generateContent");
     expect(requestBody).toMatchObject({
       generationConfig: {
-        imageConfig: {
-          aspectRatio: DEFAULT_GEMINI_IMAGE_PARAMS.aspectRatio,
-          imageSize: "1K"
+        responseFormat: {
+          image: {
+            aspectRatio: DEFAULT_GEMINI_IMAGE_PARAMS.aspectRatio,
+            imageSize: "1K"
+          }
         }
       }
     });

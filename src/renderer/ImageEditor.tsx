@@ -9,8 +9,10 @@ import {
   Crop,
   Download,
   FolderInput,
+  Loader2,
   Maximize2,
   Pencil,
+  Pipette,
   RectangleHorizontal,
   RotateCcw,
   Save,
@@ -34,6 +36,8 @@ interface ImageEditorProps {
   annotationCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   activePreviewSource?: string;
   activeJobError: string | null;
+  isGenerating: boolean;
+  generationElapsedSeconds: number;
   activeImage?: ImageAsset;
   activeResults: ImageAsset[];
   partialImages: ImageAsset[];
@@ -56,6 +60,8 @@ interface ImageEditorProps {
   annotationSize: number;
   annotationTextSize: number;
   isAnnotationTextBold: boolean;
+  isAnnotationColorSampling: boolean;
+  sampledAnnotationColor: string | null;
   isAnnotationColorPickerOpen: boolean;
   editorUndoStackLength: number;
   cropShape: CropShape;
@@ -85,6 +91,7 @@ interface ImageEditorProps {
   onSaveCurrentPreviewToGallery: () => void;
   onSelectDrawTool: () => void;
   onSelectTextTool: () => void;
+  onToggleAnnotationColorSampling: () => void;
   onToggleAnnotationColorPicker: () => void;
   onApplyAnnotationColor: (color: string) => void;
   onCloseAnnotationColorPicker: () => void;
@@ -113,6 +120,8 @@ export function ImageEditor({
   annotationCanvasRef,
   activePreviewSource,
   activeJobError,
+  isGenerating,
+  generationElapsedSeconds,
   activeImage,
   activeResults,
   partialImages,
@@ -135,6 +144,8 @@ export function ImageEditor({
   annotationSize,
   annotationTextSize,
   isAnnotationTextBold,
+  isAnnotationColorSampling,
+  sampledAnnotationColor,
   isAnnotationColorPickerOpen,
   editorUndoStackLength,
   cropShape,
@@ -164,6 +175,7 @@ export function ImageEditor({
   onSaveCurrentPreviewToGallery,
   onSelectDrawTool,
   onSelectTextTool,
+  onToggleAnnotationColorSampling,
   onToggleAnnotationColorPicker,
   onApplyAnnotationColor,
   onCloseAnnotationColorPicker,
@@ -232,10 +244,10 @@ export function ImageEditor({
                   className={[
                     "annotation-canvas",
                     isPreviewCanvasInteractive ? "active" : hasEditorOverlay ? "visible" : "",
-                    isCroppingPreview ? "crop-mode" : annotationTool === "text" ? "text-mode" : ""
+                    isAnnotationColorSampling ? "eyedropper-mode" : isCroppingPreview ? "crop-mode" : annotationTool === "text" ? "text-mode" : ""
                   ].filter(Boolean).join(" ")}
                   style={{
-                    zIndex: isCroppingPreview || (isEditingPreview && annotationTool === "draw") ? 1000 : 10
+                    zIndex: isCroppingPreview || (isEditingPreview && (annotationTool === "draw" || isAnnotationColorSampling)) ? 1000 : 10
                   }}
                   onPointerDown={onStartAnnotation}
                   onPointerMove={onContinueAnnotation}
@@ -360,6 +372,15 @@ export function ImageEditor({
                   <button type="button" className={annotationTool === "text" ? "icon-button active" : "icon-button"} onClick={onSelectTextTool} aria-label={copy.textTool} data-tooltip={copy.textTool}>
                     <Type size={15} />
                   </button>
+                  <button
+                    type="button"
+                    className={isAnnotationColorSampling ? "icon-button active" : "icon-button"}
+                    onClick={onToggleAnnotationColorSampling}
+                    aria-label={isAnnotationColorSampling ? copy.eyedropperActive : copy.eyedropperTool}
+                    data-tooltip={isAnnotationColorSampling ? copy.eyedropperActive : copy.eyedropperTool}
+                  >
+                    <Pipette size={15} />
+                  </button>
                   <div className="annotation-color-picker">
                     <button
                       type="button"
@@ -398,6 +419,14 @@ export function ImageEditor({
                       </div>
                     )}
                   </div>
+                  <span
+                    className="annotation-color-readout"
+                    aria-label={sampledAnnotationColor ? copy.annotationColorPicked(sampledAnnotationColor) : copy.currentAnnotationColor(annotationColor)}
+                    data-tooltip={sampledAnnotationColor ? copy.annotationColorPicked(sampledAnnotationColor) : copy.currentAnnotationColor(annotationColor)}
+                  >
+                    <span className="annotation-current-color" style={{ background: sampledAnnotationColor ?? annotationColor }} />
+                    <code>{(sampledAnnotationColor ?? annotationColor).toUpperCase()}</code>
+                  </span>
                   {annotationTool === "draw" ? (
                     <span className="range-tooltip" data-tooltip={`${copy.strokeWidth}: ${annotationSize}px`}>
                       <input
@@ -481,6 +510,12 @@ export function ImageEditor({
           <div className="empty-state">
             <Sparkles size={30} />
             <span>{copy.outputEmpty}</span>
+          </div>
+        )}
+        {isGenerating && (
+          <div className="generation-status-overlay" role="status" aria-live="polite" aria-atomic="true">
+            <Loader2 className="spin" size={20} />
+            <span>{copy.generatingElapsed(generationElapsedSeconds)}</span>
           </div>
         )}
       </div>

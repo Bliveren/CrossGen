@@ -240,7 +240,7 @@ const MAX_HISTORY_WIDTH = 460;
 const MIN_WORKSPACE_WIDTH = 620;
 const COMPACT_SIDEBAR_WIDTH = 76;
 const COMPACT_HISTORY_WIDTH = 260;
-const RIGHT_RAIL_COLLAPSED_WIDTH = 384;
+const RIGHT_RAIL_COLLAPSED_WIDTH = 256;
 const DEFAULT_PREVIEW_PANEL_RATIO = 0.618;
 const MIN_PREVIEW_PANEL_RATIO = 0.48;
 const MAX_PREVIEW_PANEL_RATIO = 0.74;
@@ -254,6 +254,7 @@ type TabMode = "text2img" | "img2img";
 type ThemeMode = "system" | "light" | "dark";
 
 const THEME_STORAGE_KEY = "image2tools.theme";
+const RELEASE_GUIDE_STORAGE_KEY = "image2tools.releaseGuide.seenVersion";
 const themeModeOrder: ThemeMode[] = ["system", "light", "dark"];
 
 function getInitialThemeMode(): ThemeMode {
@@ -789,6 +790,11 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function rgbToHex(red: number, green: number, blue: number): string {
+  const channel = (value: number) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, "0").toUpperCase();
+  return `#${channel(red)}${channel(green)}${channel(blue)}`;
+}
+
 function readStoredWidth(key: string, fallback: number, min: number, max: number): number {
   const stored = window.localStorage.getItem(key);
   const parsed = stored ? Number(stored) : fallback;
@@ -905,6 +911,8 @@ export function App() {
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck>({ status: "idle" });
   const [isRunning, setIsRunning] = useState(false);
+  const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
+  const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
   const [arePromptSecondaryActionsIconOnly, setArePromptSecondaryActionsIconOnly] = useState(false);
   const [isPrimaryRunIconOnly, setIsPrimaryRunIconOnly] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -982,6 +990,7 @@ export function App() {
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const [isReleaseGuideOpen, setIsReleaseGuideOpen] = useState(false);
   const {
     previewZoom,
     setPreviewZoom,
@@ -1001,6 +1010,10 @@ export function App() {
     setAnnotationTextSize,
     isAnnotationTextBold,
     setIsAnnotationTextBold,
+    isAnnotationColorSampling,
+    setIsAnnotationColorSampling,
+    sampledAnnotationColor,
+    setSampledAnnotationColor,
     annotationDrawingLayers,
     setAnnotationDrawingLayers,
     annotationTextBoxes,
@@ -1469,6 +1482,13 @@ export function App() {
   }, [themeMode]);
 
   useEffect(() => {
+    const version = snapshot.appVersion;
+    if (!version || version === fallbackSnapshot.appVersion) return;
+    if (window.localStorage.getItem(RELEASE_GUIDE_STORAGE_KEY) === version) return;
+    setIsReleaseGuideOpen(true);
+  }, [snapshot.appVersion]);
+
+  useEffect(() => {
     if (!editingHistoryTagsId) return undefined;
 
     const closeHistoryTagPopover = (event: Event) => {
@@ -1634,6 +1654,18 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("image2tools.previewPanelRatio", String(previewPanelRatio));
   }, [previewPanelRatio]);
+
+  useEffect(() => {
+    if (!isRunning || generationStartedAt === null) return;
+
+    const updateElapsed = () => {
+      setGenerationElapsedSeconds(Math.max(0, Math.floor((Date.now() - generationStartedAt) / 1000)));
+    };
+
+    updateElapsed();
+    const timerId = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timerId);
+  }, [generationStartedAt, isRunning]);
 
   useEffect(() => {
     let frameId: number | null = null;
@@ -1830,6 +1862,8 @@ export function App() {
   useEffect(() => {
     setPreviewZoom(1);
     setPreviewPan({ x: 0, y: 0 });
+    setIsAnnotationColorSampling(false);
+    setSampledAnnotationColor(null);
   }, [activePreviewSource]);
 
   useEffect(() => {
@@ -3082,6 +3116,13 @@ export function App() {
     setThemeMode((current) => nextThemeMode(current));
   }
 
+  function dismissReleaseGuide() {
+    if (snapshot.appVersion && snapshot.appVersion !== fallbackSnapshot.appVersion) {
+      window.localStorage.setItem(RELEASE_GUIDE_STORAGE_KEY, snapshot.appVersion);
+    }
+    setIsReleaseGuideOpen(false);
+  }
+
   function renderThemeIcon() {
     if (themeMode === "light") return <Sun size={15} />;
     if (themeMode === "dark") return <Moon size={15} />;
@@ -3189,6 +3230,8 @@ export function App() {
     }
 
     setIsRunning(true);
+    setGenerationStartedAt(Date.now());
+    setGenerationElapsedSeconds(0);
     setPartialImages([]);
     setActiveJob(null);
     setActiveGalleryAssetId(null);
@@ -3221,6 +3264,7 @@ export function App() {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
       setIsRunning(false);
+      setGenerationStartedAt(null);
     }
   }
 
@@ -3604,6 +3648,39 @@ export function App() {
     return annotationPointFromClient(event.clientX, event.clientY, normalizePointerPressure(event.nativeEvent), event.currentTarget);
   }
 
+  function sampleAnnotationColor(point: CanvasPoint) {
+    const image = annotationImageRef.current;
+    const canvas = annotationCanvasRef.current;
+    const width = Math.max(1, Math.round(image?.naturalWidth || canvas?.width || 0));
+    const height = Math.max(1, Math.round(image?.naturalHeight || canvas?.height || 0));
+    if (!image || !canvas || width <= 0 || height <= 0) {
+      setNotice({ kind: "error", text: copy.annotationColorPickFailed });
+      setIsAnnotationColorSampling(false);
+      return;
+    }
+
+    try {
+      const sampler = document.createElement("canvas");
+      sampler.width = width;
+      sampler.height = height;
+      const context = sampler.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error(copy.annotationColorPickFailed);
+      context.drawImage(image, 0, 0, width, height);
+      const x = clamp(Math.floor(point.x), 0, width - 1);
+      const y = clamp(Math.floor(point.y), 0, height - 1);
+      const [red, green, blue] = context.getImageData(x, y, 1, 1).data;
+      const hex = rgbToHex(red, green, blue);
+      applyAnnotationColor(hex, "sample");
+      setSampledAnnotationColor(hex);
+      setIsAnnotationColorSampling(false);
+      setIsAnnotationColorPickerOpen(false);
+      setNotice({ kind: "success", text: copy.annotationColorPicked(hex) });
+    } catch {
+      setIsAnnotationColorSampling(false);
+      setNotice({ kind: "error", text: copy.annotationColorPickFailed });
+    }
+  }
+
   function canvasUnitsForCssPixels(cssPixels: number, axis: "x" | "y" = "x"): number {
     const canvas = annotationCanvasRef.current;
     const host = annotationFrameRef.current;
@@ -3678,10 +3755,15 @@ export function App() {
   function startAnnotation(event: React.PointerEvent<HTMLCanvasElement>) {
     if (!isPreviewCanvasInteractive || !activePreviewSource) return;
     resizeAnnotationCanvas();
+    const point = annotationPoint(event);
+    if (isAnnotationColorSampling && isEditingPreview) {
+      event.preventDefault();
+      sampleAnnotationColor(point);
+      return;
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
     isAnnotationPointerActiveRef.current = true;
     setIsDrawingAnnotation(true);
-    const point = annotationPoint(event);
     if (isCroppingPreview) {
       cropDragStartRef.current = point;
       setCropSelection({ ...normalizeCanvasRect(point, point, 0, 0), shape: cropShape });
@@ -3827,8 +3909,9 @@ export function App() {
     setAnnotationTextBoxes((current) => current.map((box) => (box.id === id ? { ...box, ...patch } : box)));
   }
 
-  function applyAnnotationColor(color: string) {
+  function applyAnnotationColor(color: string, source: "manual" | "sample" = "manual") {
     setAnnotationColor(color);
+    if (source === "manual") setSampledAnnotationColor(null);
     if (activeAnnotationTextBoxId) updateAnnotationTextBox(activeAnnotationTextBoxId, { color });
   }
 
@@ -3848,6 +3931,7 @@ export function App() {
   function focusAnnotationTextBox(box: AnnotationTextBox) {
     setActiveAnnotationTextBoxId(box.id);
     setAnnotationColor(box.color);
+    setSampledAnnotationColor(null);
     setAnnotationTextSize(Math.round(textBoxDisplayFontSize(box)));
     setIsAnnotationTextBold(box.bold);
   }
@@ -3855,11 +3939,13 @@ export function App() {
   function togglePreviewEditMode() {
     if (isEditingPreview) {
       discardEmptyAnnotationTextBoxes();
+      setIsAnnotationColorSampling(false);
       setPreviewMode("idle");
       setDraftTextRect(null);
       return;
     }
     setPreviewMode("edit");
+    setIsAnnotationColorSampling(false);
     setCropSelection(null);
     resizeAnnotationCanvas();
   }
@@ -3871,6 +3957,7 @@ export function App() {
       return;
     }
     discardEmptyAnnotationTextBoxes();
+    setIsAnnotationColorSampling(false);
     setPreviewMode("crop");
     setDraftTextRect(null);
     resizeAnnotationCanvas();
@@ -5070,9 +5157,8 @@ export function App() {
             <button type="button" className="language-pill" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
               {language === "en" ? "En" : "简"}
             </button>
-            <button type="button" className="theme-mode-button" onClick={toggleThemeMode} aria-label={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`} data-tooltip={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`}>
+            <button type="button" className="icon-button theme-mode-button" onClick={toggleThemeMode} aria-label={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`} data-tooltip={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`}>
               {renderThemeIcon()}
-              <span>{themeModeLabel(copy, themeMode)}</span>
             </button>
             {updateCheck?.status === "available" ? (
               <button type="button" className="icon-button utility-check-button" onClick={downloadAndInstallUpdate} disabled={!bridge || isCheckingUpdate || isInstallingUpdate} aria-label={copy.installUpdate} data-tooltip={copy.installUpdate}>
@@ -5137,6 +5223,8 @@ export function App() {
             annotationCanvasRef={annotationCanvasRef}
             activePreviewSource={activePreviewSource}
             activeJobError={activeJobError}
+            isGenerating={isRunning}
+            generationElapsedSeconds={generationElapsedSeconds}
             activeImage={activeImage}
             activeResults={activeResults}
             partialImages={partialImages}
@@ -5159,6 +5247,8 @@ export function App() {
             annotationSize={annotationSize}
             annotationTextSize={annotationTextSize}
             isAnnotationTextBold={isAnnotationTextBold}
+            isAnnotationColorSampling={isAnnotationColorSampling}
+            sampledAnnotationColor={sampledAnnotationColor}
             isAnnotationColorPickerOpen={isAnnotationColorPickerOpen}
             editorUndoStackLength={editorUndoStack.length}
             cropShape={cropShape}
@@ -5188,10 +5278,22 @@ export function App() {
             onSaveCurrentPreviewToGallery={() => void saveCurrentPreviewToGallery()}
             onSelectDrawTool={() => {
               discardEmptyAnnotationTextBoxes();
+              setIsAnnotationColorSampling(false);
               setAnnotationTool("draw");
             }}
-            onSelectTextTool={() => setAnnotationTool("text")}
-            onToggleAnnotationColorPicker={() => setIsAnnotationColorPickerOpen((current) => !current)}
+            onSelectTextTool={() => {
+              setIsAnnotationColorSampling(false);
+              setAnnotationTool("text");
+            }}
+            onToggleAnnotationColorSampling={() => {
+              discardEmptyAnnotationTextBoxes();
+              setIsAnnotationColorPickerOpen(false);
+              setIsAnnotationColorSampling((current) => !current);
+            }}
+            onToggleAnnotationColorPicker={() => {
+              setIsAnnotationColorSampling(false);
+              setIsAnnotationColorPickerOpen((current) => !current);
+            }}
             onApplyAnnotationColor={applyAnnotationColor}
             onCloseAnnotationColorPicker={() => setIsAnnotationColorPickerOpen(false)}
             onAnnotationSizeChange={setAnnotationSize}
@@ -5893,6 +5995,33 @@ export function App() {
           }}
           onSubmit={() => void saveConfig()}
         />
+      )}
+      {isReleaseGuideOpen && (
+        <DialogShell className="confirm-dialog release-guide-dialog" labelledBy="release-guide-title" onClose={dismissReleaseGuide}>
+          <div className="release-guide-heading">
+            <span className="release-guide-icon" aria-hidden="true">
+              <Sparkles size={18} />
+            </span>
+            <div>
+              <h2 id="release-guide-title">{copy.releaseGuideTitle(snapshot.appVersion)}</h2>
+              <p>{copy.releaseGuideBody}</p>
+            </div>
+          </div>
+          <ul className="release-guide-list">
+            <li>{copy.releaseGuideEyedropper}</li>
+            <li>{copy.releaseGuideTheme}</li>
+            <li>{copy.releaseGuideGallery}</li>
+          </ul>
+          <div className="dialog-actions">
+            <button type="button" className="ghost" onClick={dismissReleaseGuide}>
+              {copy.releaseGuideSkip}
+            </button>
+            <button type="button" onClick={dismissReleaseGuide}>
+              <CheckCircle2 size={16} />
+              {copy.releaseGuideStart}
+            </button>
+          </div>
+        </DialogShell>
       )}
       {isTemplatesOpen && (
         <DialogShell className="template-dialog" labelledBy="prompt-template-dialog-title" onClose={() => setIsTemplatesOpen(false)}>

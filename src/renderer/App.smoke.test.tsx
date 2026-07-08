@@ -35,6 +35,7 @@ let container: HTMLDivElement | null = null;
 beforeEach(() => {
   vi.restoreAllMocks();
   installLocalStorageMock();
+  window.localStorage.setItem("image2tools.releaseGuide.seenVersion", "0.1.0");
   Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -150,6 +151,28 @@ describe("renderer multi-model smoke", () => {
         })
       })
     );
+  });
+
+  it("shows generation elapsed status in the editor while a job is pending", async () => {
+    const bridge = await renderApp(snapshot());
+    let resolveJob: ((job: GenerationJob) => void) | null = null;
+    vi.mocked(bridge.runJob).mockImplementationOnce((request) => new Promise<GenerationJob>((resolve) => {
+      resolveJob = (job) => {
+        resolve(job);
+      };
+    }));
+
+    await click(buttonByText("Generate", ".primary-run"));
+
+    expect(document.querySelector(".generation-status-overlay")?.textContent).toContain("Generating image, elapsed 0 seconds");
+    const request = vi.mocked(bridge.runJob).mock.calls[0]?.[0];
+    expect(request).toBeTruthy();
+
+    await act(async () => {
+      resolveJob?.(jobFromRequest(request!, providerConfig()));
+      await Promise.resolve();
+    });
+    await flushAsync();
   });
 
   it("enables OpenAI General prompt-only fallback for non-focused image models", async () => {
@@ -1474,7 +1497,7 @@ describe("renderer multi-model smoke", () => {
     const themeButton = document.querySelector<HTMLButtonElement>(".theme-mode-button")!;
 
     expect(themeButton.getAttribute("aria-label")).toBe("Theme: System");
-    expect(themeButton.textContent).toContain("System");
+    expect(themeButton.querySelector("span")).toBeNull();
     expect(document.documentElement.getAttribute("data-theme")).toBeNull();
 
     await click(themeButton);
@@ -1494,6 +1517,21 @@ describe("renderer multi-model smoke", () => {
 
     await click(document.querySelector<HTMLButtonElement>(".sidebar-collapse-button")!);
     expect(document.querySelector<HTMLButtonElement>('.sidebar-mini-utility button[aria-label="Theme: System"]')).toBeTruthy();
+  });
+
+  it("shows the release guide once per installed version", async () => {
+    window.localStorage.removeItem("image2tools.releaseGuide.seenVersion");
+
+    await renderApp(snapshot());
+    await flushAsync();
+
+    expect(document.body.textContent).toContain("What's new in 0.1.0");
+    expect(document.body.textContent).toContain("pipette");
+
+    await click(buttonByText("Skip"));
+
+    expect(window.localStorage.getItem("image2tools.releaseGuide.seenVersion")).toBe("0.1.0");
+    expect(document.body.textContent).not.toContain("What's new in 0.1.0");
   });
 
   it("uses a clear Chinese update failure label instead of an exception shorthand", async () => {
@@ -1559,7 +1597,7 @@ describe("renderer multi-model smoke", () => {
     await click(document.querySelector<HTMLButtonElement>(".right-rail-collapse-button")!);
 
     expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
-    expect(shell.style.getPropertyValue("--history-width")).toBe("384px");
+    expect(shell.style.getPropertyValue("--history-width")).toBe("256px");
     expect(document.querySelector(".right-rail.collapsed")).toBeTruthy();
     expect(document.querySelector(".right-rail-drawer-toggle")).toBeTruthy();
   });
@@ -1701,10 +1739,15 @@ describe("renderer multi-model smoke", () => {
     expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Back"]')).toBeTruthy();
     expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Download"]')).toBeTruthy();
     expect(primaryActions.querySelector<HTMLButtonElement>('button[aria-label="Save to Gallery"]')).toBeTruthy();
+    expect(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Pick color from image"]')).toBeTruthy();
+    expect(secondaryActions.querySelector<HTMLElement>(".annotation-color-readout")?.textContent).toContain("#FF3B30");
     expect(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Text box"]')).toBeTruthy();
     expect(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Clear annotations"]')?.dataset.tooltip).toBe("Clear annotations");
     expect(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Download"]')).toBeNull();
     expect(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Save to Gallery"]')).toBeNull();
+
+    await click(secondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Pick color from image"]')!);
+    expect(document.querySelector(".annotation-canvas")?.classList.contains("eyedropper-mode")).toBe(true);
 
     await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!);
     await click(previewControls.querySelector<HTMLButtonElement>('button[aria-label="Crop"]')!);
@@ -1715,6 +1758,37 @@ describe("renderer multi-model smoke", () => {
     expect(cropSecondaryActions.querySelector<HTMLButtonElement>('button[aria-label="Save selected area to Gallery"]')).toBeTruthy();
     const cropActionLabels = [...cropSecondaryActions.querySelectorAll<HTMLButtonElement>("button")].map((button) => button.getAttribute("aria-label"));
     expect(cropActionLabels.indexOf("Save selected area to Gallery")).toBeLessThan(cropActionLabels.indexOf("Apply crop"));
+  });
+
+  it("samples an annotation color from the active preview", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(mockCanvasContext({
+      getImageData: vi.fn(() => ({
+        data: new Uint8ClampedArray([18, 52, 86, 255]),
+        colorSpace: "srgb",
+        height: 1,
+        width: 1
+      } as ImageData))
+    }) as unknown as CanvasRenderingContext2D);
+    const job = geminiJob(0, { outputs: [imageAsset("result_gemini.png")] });
+    await renderApp(snapshot({ history: [job] }));
+
+    await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
+    await click(document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Edit"]')!);
+
+    const previewImage = document.querySelector<HTMLImageElement>(".preview-image-frame > img, .zoom-surface img")!;
+    Object.defineProperty(previewImage, "naturalWidth", { configurable: true, value: 100 });
+    Object.defineProperty(previewImage, "naturalHeight", { configurable: true, value: 100 });
+    const canvas = document.querySelector<HTMLCanvasElement>(".annotation-canvas")!;
+    const frame = document.querySelector<HTMLElement>(".preview-image-frame")!;
+    const rect = { left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100, x: 0, y: 0, toJSON: () => undefined };
+    Object.defineProperty(frame, "getBoundingClientRect", { configurable: true, value: () => rect });
+    Object.defineProperty(canvas, "getBoundingClientRect", { configurable: true, value: () => rect });
+
+    await click(document.querySelector<HTMLButtonElement>('.preview-secondary-actions button[aria-label="Pick color from image"]')!);
+    await pointer(canvas, "pointerdown", { clientX: 10, clientY: 10 });
+
+    expect(document.querySelector<HTMLElement>(".annotation-color-readout")?.textContent).toContain("#123456");
+    expect(document.body.textContent).toContain("Picked #123456.");
   });
 
   it("saves the edited preview to Gallery through the bridge", async () => {
@@ -2262,7 +2336,7 @@ function galleryAsset(fileName: string, patch: Partial<GalleryAsset> = {}): Gall
   };
 }
 
-function mockCanvasContext(): Partial<CanvasRenderingContext2D> {
+function mockCanvasContext(patch: Partial<CanvasRenderingContext2D> = {}): Partial<CanvasRenderingContext2D> {
   return {
     beginPath: vi.fn(),
     clearRect: vi.fn(),
@@ -2276,7 +2350,8 @@ function mockCanvasContext(): Partial<CanvasRenderingContext2D> {
     moveTo: vi.fn(),
     restore: vi.fn(),
     save: vi.fn(),
-    stroke: vi.fn()
+    stroke: vi.fn(),
+    ...patch
   };
 }
 

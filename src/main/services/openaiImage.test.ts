@@ -270,7 +270,7 @@ describe("OpenAI image service", () => {
     ]);
   });
 
-  it("calls image edits with image and mask multipart fields", async () => {
+  it("calls image edits with image[] and mask multipart fields", async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
     const sourcePath = path.join(tmpDir, "source.png");
     const maskPath = path.join(tmpDir, "mask.png");
@@ -298,9 +298,11 @@ describe("OpenAI image service", () => {
     );
 
     expect(form?.get("model")).toBe("gpt-image-2");
-    expect(form?.get("prompt")).toBe("Make a clean product render");
-    expect(form?.getAll("image")).toHaveLength(1);
-    expect(form?.getAll("image[]")).toHaveLength(0);
+    expect(String(form?.get("prompt"))).toContain("Make a clean product render");
+    expect(String(form?.get("prompt"))).toContain("The request includes 1 attached reference image.");
+    expect(String(form?.get("prompt"))).toContain("A mask is attached.");
+    expect(form?.getAll("image")).toHaveLength(0);
+    expect(form?.getAll("image[]")).toHaveLength(1);
     expect(form?.get("mask")).toBeInstanceOf(File);
   });
 
@@ -332,6 +334,8 @@ describe("OpenAI image service", () => {
 
     expect(form?.getAll("image")).toHaveLength(0);
     expect(form?.getAll("image[]")).toHaveLength(2);
+    expect(String(form?.get("prompt"))).toContain("The request includes 2 attached reference images.");
+    expect(String(form?.get("prompt"))).toContain("Use the attached image content as visual input; do not ignore it.");
   });
 
   it("passes advanced gpt-image-2 parameters through multipart edit requests", async () => {
@@ -472,6 +476,110 @@ describe("OpenAI image service", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("saves compatible image payloads with nested image strings", async () => {
+    const fetchImpl = (async () => Response.json({
+      data: [
+        {
+          image: tinyPngBase64
+        }
+      ],
+      usage: { total_tokens: 3 }
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(result.status).toBe("succeeded");
+    expect(result.usage?.total_tokens).toBe(3);
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("saves compatible image payloads with raw images arrays", async () => {
+    const fetchImpl = (async () => Response.json({
+      images: [tinyPngBase64]
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("saves compatible image payloads with untyped result fields", async () => {
+    const fetchImpl = (async () => Response.json({
+      data: [
+        {
+          result: tinyPngBase64
+        }
+      ]
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("saves compatible image payloads nested under extra_fields", async () => {
+    const fetchImpl = (async () => Response.json({
+      model: "gpt-image-2",
+      data: null,
+      usage: { num_input_images: 2 },
+      extra_fields: {
+        response: {
+          images: [{ b64_json: tinyPngBase64 }]
+        }
+      }
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("saves compatible image payloads inside JSON string containers", async () => {
+    const fetchImpl = (async () => Response.json({
+      data: JSON.stringify({ images: [tinyPngBase64] })
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("retries compatible metadata-only empty responses once", async () => {
+    let requestCount = 0;
+    const fetchImpl = (async () => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        return Response.json({
+          model: "gpt-image-2",
+          data: null,
+          usage: { num_input_images: 2 },
+          extra_fields: {
+            provider: "compatible-router",
+            resolved_model_used: "gpt-image-2",
+            provider_response_headers: { "x-request-id": "req_test" }
+          }
+        });
+      }
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(requestCount).toBe(2);
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
   it("includes response diagnostics when no savable image is present", async () => {
     const fetchImpl = (async () => Response.json({
       output: [
@@ -481,7 +589,59 @@ describe("OpenAI image service", () => {
     const { runtime } = await createRuntime(fetchImpl);
 
     await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime)).rejects.toThrow(
-      "响应摘要：output 1 项，类型：output_text；文本信息：The request was blocked by the safety system."
+      "响应摘要：顶层字段：output；output 1 项，类型：output_text；文本信息：The request was blocked by the safety system."
+    );
+  });
+
+  it("includes structural diagnostics for empty compatible image responses", async () => {
+    const fetchImpl = (async () => Response.json({
+      created: 123,
+      data: [{ revised_prompt: "clean render", content_filter_results: { filtered: true } }],
+      usage: { num_input_images: 2 }
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime)).rejects.toThrow(
+      "响应摘要：顶层字段：created,data,usage；data 1 项，字段：revised_prompt,content_filter_results；usage 字段：num_input_images"
+    );
+  });
+
+  it("includes data and extra_fields details for primitive empty responses", async () => {
+    const fetchImpl = (async () => Response.json({
+      model: "gpt-image-2",
+      data: null,
+      quality: "auto",
+      size: "auto",
+      usage: { num_input_images: 2 },
+      extra_fields: {}
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime)).rejects.toThrow(
+      "响应摘要：顶层字段：model,data,quality,size,usage,extra_fields；data 类型：null；usage 字段：num_input_images；extra_fields 字段：空对象"
+    );
+  });
+
+  it("includes compatible router metadata after an empty retry stays empty", async () => {
+    const fetchImpl = (async () => Response.json({
+      model: "gpt-image-2",
+      data: null,
+      usage: { num_input_images: 2 },
+      extra_fields: {
+        request_type: "image_edit",
+        provider: "compatible-router",
+        original_model_requested: "gpt-image-2",
+        resolved_model_used: "gpt-image-2",
+        latency: 103.5,
+        chunk_index: 0,
+        dropped_compat_plugin_params: ["stream", "moderation"],
+        provider_response_headers: { "x-request-id": "req_test" }
+      }
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime)).rejects.toThrow(
+      "extra_fields 摘要：request_type=string(image_edit)，provider=string(compatible-router)，original_model_requested=string(gpt-image-2)，resolved_model_used=string(gpt-image-2)，latency=number，chunk_index=number，dropped=string(stream),string(moderation)，headers=x-request-id:string(req_test)；已自动重试 1 次"
     );
   });
 
