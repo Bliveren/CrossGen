@@ -524,7 +524,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector(".notice-area")?.getAttribute("aria-live")).toBe("polite");
     expect(document.querySelector(".notice-area")?.getAttribute("aria-atomic")).toBe("true");
 
-    const previewOpener = document.querySelector<HTMLElement>(".zoom-surface")!;
+    const previewOpener = document.querySelector<HTMLElement>(".preview-image-frame img")!;
     previewOpener.focus();
     expect(document.activeElement).toBe(previewOpener);
     await keyDown(previewOpener, "Enter");
