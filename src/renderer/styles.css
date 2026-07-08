@@ -98,7 +98,7 @@
   }
 
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --surface-app: #101720;
       --surface-panel: #17212c;
       --surface-panel-muted: #202c38;
@@ -135,6 +135,44 @@
       --modal-backdrop-surface: rgba(2, 7, 13, 0.86);
       color-scheme: dark;
     }
+  }
+
+  :root[data-theme="dark"] {
+    --surface-app: #101720;
+    --surface-panel: #17212c;
+    --surface-panel-muted: #202c38;
+    --surface-raised: #223040;
+    --surface-selected: #2a2b31;
+    --surface-hover: #233241;
+    --text-primary: #f4f7fb;
+    --text-secondary: #c3cbd6;
+    --text-muted: #9ba7b5;
+    --text-inverse: #fffaf4;
+    --text-on-accent: #17120e;
+    --border-subtle: #2e3d4d;
+    --border-strong: #4b5d70;
+    --accent: #ff9857;
+    --accent-strong: #ffb172;
+    --accent-soft: #33251d;
+    --accent-border: rgba(255, 152, 87, 0.36);
+    --accent-rgb: 255, 152, 87;
+    --success: #63d6b4;
+    --success-strong: #8be5cc;
+    --success-soft: #12372f;
+    --success-border: rgba(99, 214, 180, 0.34);
+    --danger: #ff8585;
+    --danger-strong: #ffaaaa;
+    --danger-soft: #3a2026;
+    --warning: #f2c066;
+    --warning-soft: #372b18;
+    --shadow-soft: 0 14px 30px rgba(0, 0, 0, 0.24);
+    --shadow-popover: 0 20px 54px rgba(0, 0, 0, 0.42);
+    --surface-floating: color-mix(in srgb, var(--surface-panel) 82%, transparent);
+    --checker-mark: rgba(231, 238, 246, 0.045);
+    --glass-surface: rgba(23, 33, 44, 0.66);
+    --crop-overlay: rgba(2, 7, 13, 0.46);
+    --modal-backdrop-surface: rgba(2, 7, 13, 0.86);
+    color-scheme: dark;
   }
 
   * {
@@ -539,6 +577,32 @@
   }
 
   .language-pill:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .theme-mode-button {
+    width: auto;
+    min-width: 0;
+    min-height: 36px;
+    gap: 6px;
+    border-color: var(--border-subtle);
+    background: var(--surface-panel);
+    color: var(--text-secondary);
+    padding: 0 9px;
+  }
+
+  .theme-mode-button span {
+    max-width: 66px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: 750;
+    white-space: nowrap;
+  }
+
+  .theme-mode-button:hover:not(:disabled) {
     border-color: var(--border-strong);
     background: var(--surface-hover);
     color: var(--text-primary);
