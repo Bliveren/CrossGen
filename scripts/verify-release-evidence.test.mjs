@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 const scriptPath = path.resolve("scripts/verify-release-evidence.mjs");
 const execFileAsync = promisify(execFile);
-const checklistFiles = ["TODO.md", "CHECKLIST.md", "MULTI_MODEL_CHECKLIST.md"];
+const checklistFiles = ["CHECKLIST.md", "MULTI_MODEL_CHECKLIST.md", "docs/release/v0.3.0-preflight.md"];
 
 async function run(args, options = {}) {
   try {
@@ -50,7 +50,7 @@ function completeLedger() {
   ];
   return {
     schemaVersion: 1,
-    releaseVersion: "0.2.4",
+    releaseVersion: "0.3.0",
     lastUpdated: "2026-06-09T12:00:00.000Z",
     gates: gateIds.map((id) => ({
       id,
@@ -68,14 +68,19 @@ describe("release evidence verifier", () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated: 0/5 required gate(s) passed.");
+    expect(result.stdout).toContain(
+      "Pending required gate(s): real-openai-api, real-gemini-api, windows-native-release, linux-native-release, update-manifest-assets"
+    );
   });
 
-  it("passes --require-complete because all gates are passed", async () => {
+  it("fails --require-complete for the staged release candidate", async () => {
     const result = await run(["--require-complete"]);
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Required release evidence gates are not passed");
+    expect(result.stderr).toContain("real-openai-api");
+    expect(result.stderr).toContain("update-manifest-assets");
   });
 
   it("fails --require-complete when a required gate is still pending", async () => {
@@ -165,20 +170,20 @@ describe("release evidence verifier", () => {
       };
       await writeFile(path.join(docsReleaseDir, "evidence.json"), JSON.stringify(ledger, null, 2));
 
-      const checklistPath = path.join(tempRoot, "TODO.md");
+      const checklistPath = path.join(tempRoot, "docs", "release", "v0.3.0-preflight.md");
       const checklist = await readFile(checklistPath, "utf8");
       await writeFile(
         checklistPath,
         checklist.replace(
-          "- [ ] 完成签名、公证并补充正式分发资产 URL / hash / size 证据",
-          "- [x] 完成签名、公证并补充正式分发资产 URL / hash / size 证据"
+          "- [ ] Record Apple notarization status from actual notarization output.",
+          "- [x] Record Apple notarization status from actual notarization output."
         )
       );
 
       const result = await run([], { cwd: tempRoot });
 
       expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain("完成签名、公证并补充正式分发资产 URL / hash / size 证据");
+      expect(result.stderr).toContain("Record Apple notarization status from actual notarization output.");
       expect(result.stderr).toContain("macos-notarized");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
@@ -188,6 +193,7 @@ describe("release evidence verifier", () => {
 
 async function copyChecklistFixture(tempRoot) {
   for (const file of checklistFiles) {
+    await mkdir(path.dirname(path.join(tempRoot, file)), { recursive: true });
     await copyFile(path.resolve(file), path.join(tempRoot, file));
   }
 }

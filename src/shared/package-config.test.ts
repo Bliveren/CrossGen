@@ -3,9 +3,9 @@ import packageJson from "../../package.json";
 import updateManifest from "../../docs/updates/latest.json";
 
 describe("package release configuration", () => {
-  it("stages the v0.2.4 bugfix release metadata", () => {
+  it("stages the v0.3.0 release metadata", () => {
     expect(packageJson.name).toBe("crossgen");
-    expect(packageJson.version).toBe("0.2.4");
+    expect(packageJson.version).toBe("0.3.0");
     expect(packageJson.description).toContain("multi-model desktop image workspace");
     expect(packageJson.description).toContain("GPT Image 2");
     expect(packageJson.description).toContain("Nano Banana 3");
@@ -17,9 +17,8 @@ describe("package release configuration", () => {
   });
 
   it("keeps a published update manifest with verifiable size and sha256", () => {
-    // During 0.2.2 development the manifest still describes the last published
-    // release (0.2.0 preview); it is regenerated from signed/validated release
-    // artifacts at release time. Validate shape, not version equality.
+    // The manifest describes the latest published assets until the 0.3.0
+    // artifacts are uploaded and verified. Validate shape, not version equality.
     expect(typeof updateManifest.version).toBe("string");
     expect(updateManifest.version.length).toBeGreaterThan(0);
     expect(updateManifest.assets.length).toBeGreaterThan(0);

@@ -19,60 +19,68 @@ const knownGateIds = [
 ];
 const checklistGuards = [
   {
-    file: "TODO.md",
-    text: "用真实 API Key 做一次实际生成、编辑、局部重绘手工验收",
-    gateIds: ["real-openai-api"]
+    file: "docs/release/v0.3.0-preflight.md",
+    text: "Build signed macOS assets.",
+    gateIds: ["macos-signed"]
   },
   {
-    file: "TODO.md",
-    text: "用真实 Gemini Key 完成 Nano Banana 3 生成、参考图编辑、局部引导编辑和下载/历史验收",
-    gateIds: ["real-gemini-api"]
+    file: "docs/release/v0.3.0-preflight.md",
+    text: "Record Apple notarization status from actual notarization output.",
+    gateIds: ["macos-notarized"]
   },
   {
-    file: "TODO.md",
-    text: "完成签名、公证并补充正式分发资产 URL / hash / size 证据",
-    gateIds: ["macos-signed", "macos-notarized", "update-manifest-assets"]
-  },
-  {
-    file: "TODO.md",
-    text: "非 macOS 平台安装验证；Windows 已完成，原生 Linux 桌面 shell 行为仍待验证",
-
-    gateIds: ["windows-native-release", "linux-native-release"]
-  },
-  {
-    file: "CHECKLIST.md",
-    text: "文本提示可成功出图（需真实 API Key 手工验收）",
-    gateIds: ["real-openai-api"]
-  },
-  {
-    file: "CHECKLIST.md",
-    text: "单图编辑可用（需真实 API Key 手工验收）",
-    gateIds: ["real-openai-api"]
-  },
-  {
-    file: "CHECKLIST.md",
-    text: "多图参考编辑可用（需真实 API Key 手工验收）",
-    gateIds: ["real-openai-api"]
-  },
-  {
-    file: "CHECKLIST.md",
-    text: "局部重绘可用（需真实 API Key 手工验收）",
-    gateIds: ["real-openai-api"]
-  },
-  {
-    file: "CHECKLIST.md",
-    text: "Windows 原生安装与启动验证完成",
+    file: "docs/release/v0.3.0-preflight.md",
+    text: "Produce and validate Windows assets on native Windows.",
     gateIds: ["windows-native-release"]
   },
   {
-    file: "CHECKLIST.md",
-    text: "Linux 原生桌面 AppImage 直接运行、下载、打开文件夹行为验证完成",
-    gateIds: ["linux-native-release"]
+    file: "docs/release/v0.3.0-preflight.md",
+    text: "Update `docs/updates/latest.json` using uploaded asset hash and size.",
+    gateIds: ["update-manifest-assets"]
   },
   {
-    file: "CHECKLIST.md",
-    text: "Gemini / Nano Banana 3 真实 API 验收完成（已有受成本保护 verifier，仍需真实 Key 跑通并记录证据）",
-    gateIds: ["real-gemini-api"]
+    file: "docs/release/v0.3.0-preflight.md",
+    text: "Update `docs/release/evidence.json` using actual release evidence.",
+    gateIds: [
+      "real-openai-api",
+      "real-gemini-api",
+      "windows-native-release",
+      "linux-native-release",
+      "update-manifest-assets"
+    ]
+  },
+  {
+    file: "docs/release/v0.3.0-preflight.md",
+    text: "Run all required verifiers, including release evidence with",
+    gateIds: [
+      "real-openai-api",
+      "real-gemini-api",
+      "windows-native-release",
+      "linux-native-release",
+      "update-manifest-assets"
+    ]
+  },
+  {
+    file: "docs/release/v0.3.0-preflight.md",
+    text: "Create and push `v0.3.0` tag.",
+    gateIds: [
+      "real-openai-api",
+      "real-gemini-api",
+      "windows-native-release",
+      "linux-native-release",
+      "update-manifest-assets"
+    ]
+  },
+  {
+    file: "docs/release/v0.3.0-preflight.md",
+    text: "Create GitHub Release with assets matching the update manifest.",
+    gateIds: [
+      "real-openai-api",
+      "real-gemini-api",
+      "windows-native-release",
+      "linux-native-release",
+      "update-manifest-assets"
+    ]
   },
   {
     file: "CHECKLIST.md",
@@ -98,21 +106,6 @@ const checklistGuards = [
     file: "CHECKLIST.md",
     text: "用 mask 对图局部重绘（需真实 API Key）",
     gateIds: ["real-openai-api"]
-  },
-  {
-    file: "CHECKLIST.md",
-    text: "真实 OpenAI / Gemini 外部验收完成",
-    gateIds: ["real-openai-api", "real-gemini-api"]
-  },
-  {
-    file: "CHECKLIST.md",
-    text: "正式更新 manifest 已补充分发资产 URL、hash 和 size",
-    gateIds: ["update-manifest-assets"]
-  },
-  {
-    file: "MULTI_MODEL_CHECKLIST.md",
-    text: "`v0.2.0` 发布前完成至少一轮真实 OpenAI / Gemini API 外部验收",
-    gateIds: ["real-openai-api", "real-gemini-api"]
   },
   {
     file: "MULTI_MODEL_CHECKLIST.md",

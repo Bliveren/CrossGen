@@ -1,126 +1,110 @@
 {
   "schemaVersion": 1,
-  "releaseVersion": "0.2.4",
-  "lastUpdated": "2026-07-01T01:50:25.000Z",
+  "releaseVersion": "0.3.0",
+  "lastUpdated": "2026-07-09T12:13:15.013Z",
   "gates": [
     {
       "id": "real-openai-api",
       "title": "Real OpenAI GPT Image 2 API acceptance",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
-        "Model discovery confirms gpt-image-2 is available to the tested key.",
+        "Model discovery confirms gpt-image-2 is available to the tested key on the v0.3.0 release branch.",
         "Text-to-image generation succeeds with real OpenAI Image API output.",
         "Reference-image editing succeeds with real OpenAI Image API output.",
         "Mask-based inpaint succeeds with real OpenAI Image API output.",
+        "Per-config streaming preview behavior is accepted or explicitly disabled for the tested endpoint.",
         "App history and download behavior are checked with the real task outputs."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-16T08:34:43.000Z",
-        "commit": "220707ec7f24e9564a903c154dc6cbd95eee35da",
-        "environment": "macOS 26.5.1 arm64; package version 0.2.2; OpenAI-compatible image aggregator endpoint (not the official OpenAI API); model gpt-image-2.",
-        "commands": [
-          "IMAGE2TOOLS_API_KEY=[REDACTED] IMAGE2TOOLS_BASE_URL=[REDACTED_AGGREGATOR] IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 pnpm verify:real-api"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Real OpenAI GPT Image 2 external acceptance tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/1"
+          },
+          {
+            "label": "v0.3.0 closeout evidence",
+            "url": "https://github.com/Bliveren/image2tools/tree/main/docs/release"
           }
         ],
         "artifacts": [
           {
-            "kind": "verifier-output",
-            "path": "real-api-artifacts/2026-06-16T08-34-43-365Z",
-            "public": false,
-            "description": "Redacted-local generation, single-edit, multi-edit, and mask inpaint outputs from the real-api verifier (gpt-image-2). Git-ignored; not distributed."
+            "kind": "evidence-note",
+            "path": "docs/release/v0.3.0-closeout.md",
+            "public": true,
+            "description": "Local v0.3.0 closeout report with mock OpenAI validation and streaming compatibility notes."
           }
         ],
-        "summary": "Re-verified for 0.2.2 against a cost-approved OpenAI-compatible image aggregator endpoint: gpt-image-2 model discovery, text-to-image generation, single and multi reference editing, and mask-based inpaint all succeeded. Edit and inpaint requests run non-streaming (the 0.2.1 fix) and no longer hit the non-SSE streaming error. The verifier accepts both b64_json and image-url responses."
+        "summary": "Pending v0.3.0 real GPT Image 2 acceptance. Mock OpenAI verification and final closeout performance gates passed, but real-provider acceptance must be rerun with cost approval before publishing."
       }
     },
     {
       "id": "real-gemini-api",
       "title": "Real Gemini / Nano Banana 3 API acceptance",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
-        "Model discovery confirms gemini-3.1-flash-image is available to the tested key.",
+        "Model discovery confirms a Nano Banana 3-compatible Gemini image model is available to the tested key on the v0.3.0 release branch.",
         "Nano Banana 3 text-to-image generation succeeds with real Gemini output.",
         "Reference-image editing succeeds with real Gemini output.",
         "Guided-region editing succeeds and is not described as exact-mask inpainting.",
         "App history, provider/model display, parameter restore, and download behavior are checked with the real task outputs."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-16T08:50:29.000Z",
-        "commit": "220707ec7f24e9564a903c154dc6cbd95eee35da",
-        "environment": "macOS 26.5.1 arm64; package version 0.2.2; OpenAI-compatible image aggregator endpoint (not the official Google Generative Language API); model gemini-3.1-flash-image; bearer auth mode.",
-        "commands": [
-          "IMAGE2TOOLS_GEMINI_API_KEY=[REDACTED] IMAGE2TOOLS_GEMINI_BASE_URL=[REDACTED_AGGREGATOR] IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 IMAGE2TOOLS_GEMINI_MODEL=gemini-3.1-flash-image IMAGE2TOOLS_GEMINI_AUTH_MODE=bearer pnpm verify:real-gemini-api"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Real Gemini / Nano Banana 3 external acceptance tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/102"
+          },
+          {
+            "label": "v0.3.0 closeout evidence",
+            "url": "https://github.com/Bliveren/image2tools/tree/main/docs/release"
           }
         ],
         "artifacts": [
           {
-            "kind": "verifier-output",
-            "path": "real-api-artifacts/gemini/2026-06-16T08-50-29-112Z",
-            "public": false,
-            "description": "Redacted-local Nano Banana 3 generation, reference-edit, and guided-region-edit outputs from the real-gemini-api verifier (gemini-3.1-flash-image). Git-ignored; not distributed."
+            "kind": "evidence-note",
+            "path": "docs/release/v0.3.0-closeout.md",
+            "public": true,
+            "description": "Local v0.3.0 closeout report with mock Gemini validation and residual-risk notes."
           }
         ],
-        "summary": "Re-verified for 0.2.2 against the same cost-approved OpenAI-compatible image aggregator endpoint (bearer auth): gemini-3.1-flash-image model discovery, Nano Banana 3 text-to-image generation, reference-image editing, and guided-region editing all succeeded. Guided-region editing is recorded as guided-region, not exact-mask inpainting. The aggregator exposes the Gemini image model over an OpenAI-compatible base URL rather than the native Google Generative Language API."
+        "summary": "Pending v0.3.0 real Gemini/Nano Banana acceptance. Mock Gemini verification passed during closeout, but real-provider acceptance must be rerun with cost approval before publishing."
       }
     },
     {
       "id": "macos-signed",
       "title": "Developer ID signed macOS release package",
       "required": false,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "Developer ID signing is performed without exposing secret values.",
-        "macOS artifacts are built from the v0.2.4 application-code release commit.",
+        "macOS artifacts are built from the v0.3.0 release commit.",
         "codesign verification passes against the signed app extracted from the release ZIP artifact.",
         "macOS release verification passes against the signed artifact.",
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T17:27:11.000Z",
-        "commit": "8c05309273f73e5bae1dce893c47a4b049c7356e",
-        "environment": "macOS 26.5.1 arm64; package version 0.2.4; Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7); Apple notarization credentials unset.",
-        "commands": [
-          "gh release download v0.2.4 --pattern Image2Tools-0.2.4-mac-arm64.zip --dir /tmp/image2tools-v024-mac-check --clobber",
-          "shasum -a 256 /tmp/image2tools-v024-mac-check/Image2Tools-0.2.4-mac-arm64.zip",
-          "wc -c /tmp/image2tools-v024-mac-check/Image2Tools-0.2.4-mac-arm64.zip",
-          "ditto -x -k /tmp/image2tools-v024-mac-check/Image2Tools-0.2.4-mac-arm64.zip /tmp/image2tools-v024-mac-check/unzip",
-          "codesign --display --verbose=4 /tmp/image2tools-v024-mac-check/unzip/Image2Tools.app",
-          "codesign --verify --deep --strict --verbose=2 /tmp/image2tools-v024-mac-check/unzip/Image2Tools.app",
-          "spctl -a -vv /tmp/image2tools-v024-mac-check/unzip/Image2Tools.app"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Developer ID signed macOS distribution tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/3"
           }
         ],
-        "artifacts": [
-          {
-            "kind": "release-artifact",
-            "path": "release/Image2Tools-0.2.4-mac-arm64.dmg",
-            "public": false,
-            "description": "Developer ID signed, unnotarized DMG uploaded to the v0.2.4 release. SHA256 4931076a2cd8d6d69c0afcdd7c17d20286d0bd1906fcde501be7bdfe9b1dad34; 103470128 bytes."
-          },
-          {
-            "kind": "release-artifact",
-            "path": "release/Image2Tools-0.2.4-mac-arm64.zip",
-            "public": false,
-            "description": "Developer ID signed, unnotarized ZIP uploaded to the v0.2.4 release and verified locally after download. SHA256 bc404095e9ca39dbd91b01009a3043fd336032d92333ff78e44c88352f03c008; 99182264 bytes."
-          }
-        ],
-        "summary": "v0.2.4 macOS DMG and ZIP were rebuilt from application-code release commit 8c05309 and uploaded to the v0.2.4 release. GitHub records the DMG as SHA256 4931076a2cd8d6d69c0afcdd7c17d20286d0bd1906fcde501be7bdfe9b1dad34 with size 103470128 bytes and the ZIP as SHA256 bc404095e9ca39dbd91b01009a3043fd336032d92333ff78e44c88352f03c008 with size 99182264 bytes. The downloaded ZIP was extracted and codesign verified the app as Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7). spctl reports rejected, source=Unnotarized Developer ID, so the asset is signed but not Apple-notarized."
+        "artifacts": [],
+        "summary": "Pending v0.3.0 Developer ID signed macOS artifacts. Local signing readiness found a valid code signing identity, but CSC_NAME and Apple notarization environment variables were not configured in the release shell, so no Developer ID signing has been attempted for v0.3.0 yet."
       }
     },
     {
@@ -135,156 +119,92 @@
         "spctl verification reports an accepted notarized Developer ID source."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-30T17:27:11.000Z",
-        "commit": "8c05309273f73e5bae1dce893c47a4b049c7356e",
-        "environment": "macOS 26.5.1 arm64; package version 0.2.4; Apple notarization credentials unset.",
-        "commands": [
-          "spctl -a -vv /tmp/image2tools-v024-mac-check/unzip/Image2Tools.app"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Apple notarized macOS distribution tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/3"
           }
         ],
-        "artifacts": [
-          {
-            "kind": "release-artifact",
-            "path": "release/Image2Tools-0.2.4-mac-arm64.dmg",
-            "public": false,
-            "description": "Developer ID signed DMG uploaded to the v0.2.4 release, but not Apple-notarized."
-          },
-          {
-            "kind": "release-artifact",
-            "path": "release/Image2Tools-0.2.4-mac-arm64.zip",
-            "public": false,
-            "description": "Developer ID signed ZIP uploaded to the v0.2.4 release, but not Apple-notarized."
-          }
-        ],
-        "summary": "Apple notarization has not been completed for v0.2.4 because APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID were not configured in the release environment. The downloaded app verifies as Developer ID signed, while spctl reports rejected, source=Unnotarized Developer ID. This gate is separate from macos-signed so signed artifacts are not misreported as notarized."
+        "artifacts": [],
+        "summary": "Blocked for v0.3.0 until APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID are configured in the release environment. No notarization attempt has been made for v0.3.0."
       }
     },
     {
       "id": "windows-native-release",
       "title": "Native Windows release package validation",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
-        "Windows package verifier runs in full native install mode.",
+        "Windows package verifier runs in full native install mode on the v0.3.0 artifact.",
         "NSIS silent install, installed app launch, main-window detection, and silent uninstall pass.",
         "Packaged app can configure mock OpenAI and Gemini endpoints.",
         "Download and open-folder behavior are checked on native Windows."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-01T01:50:25.000Z",
-        "commit": "7ef40a2647114b3e512fff13cfd28ea8fee3e497",
-        "environment": "Native Windows 11 Pro 10.0.26100 x64 shell on VMware; package version 0.2.4; release asset Image2Tools-Setup.exe.",
-        "commands": [
-          "git pull --ff-only origin main",
-          "pnpm package:win",
-          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; $env:IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS='/S /currentuser /D=C:\\work\\image2tools-release-check-v024-windows'; pnpm verify:release:windows",
-          "gh release upload v0.2.4 release/Image2Tools-Setup-v024-windows-20260701.exe --repo Bliveren/image2tools",
-          "gh api repos/Bliveren/image2tools/releases/assets/462390446 -X DELETE",
-          "gh api repos/Bliveren/image2tools/releases/assets/462719666 -X PATCH -f name=Image2Tools-Setup.exe",
-          "gh release download v0.2.4 --repo Bliveren/image2tools --pattern Image2Tools-Setup.exe --dir C:\\work\\image2tools-release-download-v024-windows --clobber",
-          "Get-FileHash -Algorithm SHA256 -LiteralPath C:\\work\\image2tools-release-download-v024-windows\\Image2Tools-Setup.exe",
-          "Prior native Windows packaged-app bridge acceptance remains applicable for unchanged download/open-folder IPC: configure loopback mock OpenAI and Gemini endpoints, generate managed outputs, invoke downloadAsset through the native Save dialog, and invoke openAssetFolder with Explorer directory verification."
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Native Windows release validation tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/4"
           }
         ],
-        "artifacts": [
-          {
-            "kind": "release-artifact",
-            "path": "release/Image2Tools-Setup.exe",
-            "public": false,
-            "description": "Native Windows installer rebuilt locally for v0.2.4 and verified in full-install mode before upload. SHA256 cf0e5514a17155d298181ba401537d1296cbb0531021491019126fc222f6350a; 98680474 bytes; Authenticode status NotSigned."
-          },
-          {
-            "kind": "release-asset",
-            "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.4/Image2Tools-Setup.exe",
-            "public": true,
-            "description": "GitHub Release Windows installer asset replaced with the locally verified v0.2.4 build. GitHub asset id 462719666; SHA256 cf0e5514a17155d298181ba401537d1296cbb0531021491019126fc222f6350a; 98680474 bytes."
-          },
-          {
-            "kind": "evidence-note",
-            "path": "docs/release/windows-native-download-open-folder-2026-06-10.md",
-            "public": true,
-            "description": "Prior native Windows packaged-app download and open-folder acceptance evidence for unchanged platform IPC behavior."
-          }
-        ],
-        "summary": "0.2.4 Windows packaging was rerun from the latest main commit 7ef40a2647114b3e512fff13cfd28ea8fee3e497 on native Windows. pnpm package:win completed successfully, including the project test suite, and pnpm verify:release:windows passed in full-install mode with silent install, app launch detection, mock endpoint configuration, and uninstall verification. The v0.2.4 GitHub Release Windows installer asset was replaced and downloaded back from the formal release URL as SHA256 cf0e5514a17155d298181ba401537d1296cbb0531021491019126fc222f6350a with size 98680474 bytes. Native download/open-folder behavior remains covered by the prior Windows native evidence because 0.2.4 only changes saved configuration UI, Gemini imageConfig sizing, and Windows workflow packaging metadata."
+        "artifacts": [],
+        "summary": "Pending native Windows v0.3.0 package build and full-install verification. Prior v0.2.4 Windows evidence cannot be reused for the v0.3.0 release package."
       }
     },
     {
       "id": "linux-native-release",
       "title": "Native Linux desktop AppImage validation",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
-        "Linux release verifier runs on a native desktop shell.",
+        "Linux release verifier runs on a native desktop shell against the v0.3.0 artifact.",
         "Direct AppImage execution is mandatory with IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1.",
         "Packaged app can configure mock OpenAI and Gemini endpoints.",
-        "Download and open-folder behavior are checked on native Linux."
+        "Download and open-folder behavior are checked on native Linux or explicitly justified by shared IPC evidence."
       ],
       "evidence": {
-        "verifiedAt": "2026-06-11T03:12:00.000Z",
-        "commit": "c4eed447fcbfd14a19c4f58ff9eab5dbd125d33c",
-        "environment": "Ubuntu 24.04.4 LTS (Noble Numbat) on WSL2, kernel 6.6.87.2-microsoft-standard-WSL2, x86_64; package version 0.2.0; artifact release/Image2Tools-0.2.0-linux-x86_64.AppImage.",
-        "commands": [
-          "IMAGE2TOOLS_LINUX_REQUIRE_DIRECT_APPIMAGE=1 IMAGE2TOOLS_LINUX_SMOKE_TIMEOUT_MS=15000 node scripts/verify-linux-release.mjs"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Native Linux desktop AppImage validation tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/4"
           }
         ],
-        "artifacts": [
-          {
-            "kind": "evidence-note",
-            "path": "docs/release/linux-native-release-2026-06-11.md",
-            "public": true,
-            "description": "Linux native release verification evidence including verifier result and download/open-folder platform rationale."
-          }
-        ],
-        "summary": "Linux native release verification passed: ELF assertions, unpacked app Xvfb launch, direct AppImage execution (FUSE mandatory), and extracted AppImage launch all stable for 15s. Download/open-folder relies on shared Electron IPC verified on Windows; native dialog cannot be exercised headlessly."
+        "artifacts": [],
+        "summary": "Pending native Linux v0.3.0 package build and AppImage verification. Prior v0.2.0 Linux evidence cannot be reused for the v0.3.0 release package."
       }
     },
     {
       "id": "update-manifest-assets",
       "title": "Formal update manifest distribution assets",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
-        "Distribution artifacts are uploaded to a public HTTPS release URL.",
-        "docs/updates/latest.json contains matching asset URL, fileName, sha256, and sizeBytes metadata.",
+        "Distribution artifacts are uploaded to a public HTTPS v0.3.0 release URL.",
+        "docs/updates/latest.json contains matching asset URL, fileName, sha256, and sizeBytes metadata for v0.3.0.",
         "Manifest asset metadata is generated from the exact signed or platform-validated artifact.",
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-01T01:50:25.000Z",
-        "commit": "7ef40a2647114b3e512fff13cfd28ea8fee3e497",
-        "environment": "macOS 26.5.1 arm64 prior signed package evidence plus Native Windows 11 Pro 10.0.26100 x64 shell; package version 0.2.4; darwin/arm64 DMG and win32/x64 installer published to the v0.2.4 GitHub release.",
-        "commands": [
-          "gh release view v0.2.4 --json assets,url,publishedAt,tagName,targetCommitish",
-          "gh api repos/Bliveren/image2tools/releases/tags/v0.2.4",
-          "gh release download v0.2.4 --repo Bliveren/image2tools --pattern Image2Tools-Setup.exe --dir C:\\work\\image2tools-release-download-v024-windows --clobber",
-          "Get-FileHash -Algorithm SHA256 -LiteralPath C:\\work\\image2tools-release-download-v024-windows\\Image2Tools-Setup.exe",
-          "Get-Item -LiteralPath C:\\work\\image2tools-release-download-v024-windows\\Image2Tools-Setup.exe | Select-Object Length",
-          "pnpm verify:release-evidence -- --require-complete"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Formal update manifest distribution asset tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/103"
-          },
-          {
-            "label": "Image2Tools v0.2.4 GitHub release",
-            "url": "https://github.com/Bliveren/image2tools/releases/tag/v0.2.4"
           }
         ],
         "artifacts": [
@@ -292,10 +212,10 @@
             "kind": "update-manifest",
             "path": "docs/updates/latest.json",
             "public": true,
-            "description": "Update manifest with darwin/arm64 DMG and win32/x64 installer asset URLs, SHA256, and sizeBytes for v0.2.4."
+            "description": "Current published update manifest remains on v0.2.4 until v0.3.0 assets exist."
           }
         ],
-        "summary": "Update manifest assets populated for v0.2.4 from the current release artifacts. Darwin DMG: SHA256 4931076a2cd8d6d69c0afcdd7c17d20286d0bd1906fcde501be7bdfe9b1dad34, 103470128 bytes. Windows installer: SHA256 cf0e5514a17155d298181ba401537d1296cbb0531021491019126fc222f6350a, 98680474 bytes. Both entries point at HTTPS GitHub release download URLs and the app updater verifies downloaded size and SHA-256 before opening."
+        "summary": "Pending v0.3.0 public release assets. docs/updates/latest.json intentionally remains on the current published v0.2.4 assets until v0.3.0 artifacts are uploaded and their hashes and byte sizes are verified."
       }
     }
   ]

@@ -101,12 +101,12 @@ The screenshots below show the published `0.2.x` workspace. Updated `v0.3.0` scr
 
 ## Download and Install
 
-Download the latest published installer from the [GitHub Releases page](https://github.com/Bliveren/image2tools/releases/latest). The `v0.3.0` features above are on `main` and will be packaged after release approval.
+Download the latest published installer from the [GitHub Releases page](https://github.com/Bliveren/image2tools/releases/latest). The `v0.3.0` release candidate is being prepared from `main`; public installers remain on the latest published release until the v0.3.0 assets are built, validated, uploaded, and written into the update manifest.
 
 | Platform | Artifact | Status |
 | --- | --- | --- |
-| macOS Apple Silicon | `CrossGen-0.2.4-mac-arm64.dmg` | Developer ID signed when the local signing identity is available. Notarization depends on Apple notary credentials. |
-| Windows x64 | `CrossGen-Setup.exe` | NSIS installer. Native Windows validation is tracked in release evidence. |
+| macOS Apple Silicon | `CrossGen-0.2.4-mac-arm64.dmg` | Current published asset. The v0.3.0 macOS package is pending fresh signing or local package validation. |
+| Windows x64 | `CrossGen-Setup.exe` | Current published asset. The v0.3.0 Windows installer still requires native Windows validation before manifest publication. |
 | Linux x64 | AppImage | Packaging support exists; not published in the current `0.2.4` update manifest. |
 
 The update manifest should be regenerated from the exact CrossGen-branded artifacts when they are uploaded for release. Existing manifest entries are kept until those files exist.

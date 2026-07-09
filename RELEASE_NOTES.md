@@ -1,8 +1,8 @@
 # CrossGen Release Notes
 
-## v0.3.0 (pending release)
+## v0.3.0 (release candidate)
 
-Development notes for the next release. Package version, signed assets, update manifest, release evidence, tag, and GitHub Release will be updated only after release approval.
+Release candidate notes for the 0.3.0 workspace release. The package version is staged at `0.3.0`; public update manifest assets, final release evidence, tag, and GitHub Release still require the platform-specific gates recorded in `docs/release/evidence.json`.
 
 ### Features
 
@@ -12,6 +12,10 @@ Development notes for the next release. Package version, signed assets, update m
 - **Gallery filtering**: folder, tag, and search filters compose together, with counts visible in the Gallery folder list.
 - **Prompt chips**: prompt input supports `@` Gallery assets, `#` hex colors, and `~` templates. Chips serialize into model-ready prompt text plus reference inputs before `runJob`.
 - **Folder-aware Gallery chips**: `@` Gallery chip suggestions inherit the current Gallery folder, tag, and search filters.
+- **Per-config OpenAI streaming previews**: direct OpenAI generation can stream partial previews by default, while OpenAI-compatible gateways keep streaming opt-in for compatibility.
+- **Generation hot path cleanup**: generation persistence now avoids duplicate pre-run writes, skips the post-success full snapshot refresh, and can show transient previews without persisting generated base64 into state.
+- **Gallery and renderer performance closeout**: large-gallery reads, thumbnail serving, partial-image updates, and RightRail rendering were tightened for the 0.3.0 release gate.
+- **Accessibility and theme closeout**: light and dark renderer captures report zero axe violations in the final local release gate, with clearer landmark semantics and contrast tokens.
 
 ### Validation
 
@@ -19,6 +23,16 @@ Development notes for the next release. Package version, signed assets, update m
 - `pnpm verify:mock-api`
 - `pnpm verify:mock-gemini-api`
 - `pnpm verify:mock-model-discovery`
+- `pnpm verify:release-evidence`
+- `pnpm package:mac` and `pnpm verify:release:mac` for a local ad-hoc macOS arm64 release-candidate package
+
+### Pending Release Gates
+
+- Real GPT Image 2 acceptance on the 0.3.0 release branch.
+- Real Gemini / Nano Banana acceptance on the 0.3.0 release branch.
+- Native Windows and Linux package validation for 0.3.0 artifacts.
+- Public v0.3.0 update manifest assets generated from uploaded artifact hashes and byte sizes.
+- Developer ID signing and Apple notarization remain environment-dependent; notarization is blocked until Apple credentials are configured.
 
 ---
 
