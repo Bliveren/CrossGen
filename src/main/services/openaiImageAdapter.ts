@@ -22,6 +22,7 @@ import {
   validateOpenAIRunJobRequest
 } from "../../shared/validation.js";
 import type { ImageJobRuntime, ImageProviderAdapter, ImageProviderRuntime } from "./imageProviderAdapter.js";
+import { firstString, isRecord, readProviderApiError, readProviderJsonResponse, redactLikelySecrets } from "./providerHttp.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 
 export interface ImagesResponse {
@@ -41,14 +42,6 @@ export interface ImageStreamEvent {
   data?: Array<{ b64_json?: string; url?: string }>;
   partial_image_index?: number;
   usage?: UsageDetails;
-  error?: {
-    message?: string;
-    type?: string;
-    code?: string;
-  };
-}
-
-interface ApiErrorPayload {
   error?: {
     message?: string;
     type?: string;
@@ -637,17 +630,11 @@ function collectOpenAITextDiagnostics(payload: unknown): string[] {
 }
 
 async function readModelsResponse(response: Response): Promise<DiscoveredModel[]> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (contentType && !contentType.includes("application/json")) {
-    throw new Error(await readUnexpectedOpenAIResponse(response, "JSON 模型列表"));
-  }
-
-  let payload: ModelsResponse;
-  try {
-    payload = (await response.json()) as ModelsResponse;
-  } catch {
-    throw new Error("OpenAI API 返回的模型列表不是有效 JSON。请检查 Base URL 是否指向 OpenAI 兼容的 /v1 接口。");
-  }
+  const payload = await readProviderJsonResponse<ModelsResponse>(response, {
+    responseLabel: "OpenAI API",
+    expected: "JSON 模型列表",
+    invalidJsonMessage: "OpenAI API 返回的模型列表不是有效 JSON。请检查 Base URL 是否指向 OpenAI 兼容的 /v1 接口。"
+  });
 
   const data = Array.isArray(payload.data) ? payload.data : [];
   return data.flatMap((item): DiscoveredModel[] => {
@@ -664,23 +651,14 @@ async function readModelsResponse(response: Response): Promise<DiscoveredModel[]
 }
 
 async function readApiError(response: Response): Promise<string> {
-  const requestId = response.headers.get("x-request-id");
-  const requestSuffix = requestId ? ` Request ID: ${requestId}` : "";
-  const fallback = `OpenAI API 请求失败：HTTP ${response.status}.${requestSuffix}`;
-
-  try {
-    const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json")) {
-      const payload = (await response.json()) as ApiErrorPayload;
-      const message = payload.error?.message ?? payload.error?.code ?? payload.error?.type;
-      return message ? `OpenAI API 请求失败：${redactLikelySecrets(message)}${requestSuffix}` : fallback;
+  return readProviderApiError(response, {
+    fallbackMessage: (status, requestSuffix) => `OpenAI API 请求失败：HTTP ${status}.${requestSuffix}`,
+    formatMessage: (message, requestSuffix) => `OpenAI API 请求失败：${message}${requestSuffix}`,
+    extractJsonMessage(payload) {
+      if (!isRecord(payload) || !isRecord(payload.error)) return undefined;
+      return firstString(payload.error.message, payload.error.code, payload.error.type);
     }
-
-    const text = await response.text();
-    return text.trim() ? `OpenAI API 请求失败：${redactLikelySecrets(text.trim())}${requestSuffix}` : fallback;
-  } catch {
-    return fallback;
-  }
+  });
 }
 
 async function readUnexpectedOpenAIResponse(response: Response, expected: string): Promise<string> {
@@ -693,14 +671,6 @@ async function readUnexpectedOpenAIResponse(response: Response, expected: string
 function normalizeAdapterError(error: unknown): string {
   if (error instanceof Error) return redactLikelySecrets(error.message);
   return redactLikelySecrets(String(error));
-}
-
-function redactLikelySecrets(value: string): string {
-  return value.replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-...redacted");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 async function handleStreamResponse(

@@ -2,6 +2,15 @@ import type { DiscoveredModel, ProviderKind } from "../../shared/types.js";
 import { getProviderKindForFocusedModelId } from "../../shared/modelCatalog.js";
 import { DEFAULT_GEMINI_BASE_URL, normalizeBaseURL } from "../../shared/validation.js";
 import { buildEndpoint, fetchWithTimeout } from "./openaiImageAdapter.js";
+import {
+  firstString,
+  isRecord,
+  optionalString,
+  readProviderApiError,
+  redactLikelySecrets,
+  requestIdFromHeaders,
+  type SecretRedactionOptions
+} from "./providerHttp.js";
 
 interface OpenAIModelsResponse {
   data?: unknown;
@@ -9,15 +18,6 @@ interface OpenAIModelsResponse {
 
 interface GeminiModelsResponse {
   models?: unknown;
-}
-
-interface ApiErrorPayload {
-  error?: {
-    message?: unknown;
-    type?: unknown;
-    code?: unknown;
-    status?: unknown;
-  };
 }
 
 export interface ModelDiscoveryResult {
@@ -83,7 +83,7 @@ export async function discoverModelsAcrossProviders(
 
 export function sanitizeModelDiscoveryError(error: unknown, apiKey?: string): string {
   const raw = error instanceof Error ? error.message : String(error);
-  return redactLikelySecrets(raw, apiKey).replace(/\s+/g, " ").trim();
+  return redactLikelySecrets(raw, modelDiscoveryRedaction(apiKey)).replace(/\s+/g, " ").trim();
 }
 
 export function discoveryProviderOrder(providerKind: ProviderKind): ProviderKind[] {
@@ -129,7 +129,7 @@ async function discoverOpenAICompatibleModels(
   return {
     models: uniqueModels(parseOpenAIModels(payload, providerKind)),
     status: response.status,
-    requestId: response.headers.get("x-request-id") ?? undefined
+    requestId: requestIdFromHeaders(response.headers)
   };
 }
 
@@ -161,7 +161,7 @@ async function discoverGeminiModels(
   return {
     models: uniqueModels(parseGeminiModels(payload)),
     status: response.status,
-    requestId: response.headers.get("x-request-id") ?? undefined
+    requestId: requestIdFromHeaders(response.headers)
   };
 }
 
@@ -220,45 +220,22 @@ function uniqueModels(models: DiscoveredModel[]): DiscoveredModel[] {
 }
 
 async function readApiError(response: Response, label: string, apiKey?: string): Promise<string> {
-  const requestId = response.headers.get("x-request-id");
-  const requestSuffix = requestId ? ` Request ID: ${requestId}` : "";
-  const fallback = `${label} failed: HTTP ${response.status}.${requestSuffix}`;
-
-  try {
-    const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json")) {
-      const payload = (await response.json()) as ApiErrorPayload;
-      const message = firstString(payload.error?.message, payload.error?.code, payload.error?.type, payload.error?.status);
-      return message ? `${label} failed: ${redactLikelySecrets(message, apiKey)}${requestSuffix}` : fallback;
+  return readProviderApiError(response, {
+    redaction: modelDiscoveryRedaction(apiKey),
+    fallbackMessage: (status, requestSuffix) => `${label} failed: HTTP ${status}.${requestSuffix}`,
+    formatMessage: (message, requestSuffix) => `${label} failed: ${message}${requestSuffix}`,
+    extractJsonMessage(payload) {
+      if (!isRecord(payload) || !isRecord(payload.error)) return undefined;
+      return firstString(payload.error.message, payload.error.code, payload.error.type, payload.error.status);
     }
-
-    const text = (await response.text()).trim();
-    return text ? `${label} failed: ${redactLikelySecrets(text, apiKey)}${requestSuffix}` : fallback;
-  } catch {
-    return fallback;
-  }
+  });
 }
 
-function firstString(...values: unknown[]): string | undefined {
-  return values.find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim();
-}
-
-function optionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function redactLikelySecrets(value: string, apiKey?: string): string {
-  let result = value;
-  if (apiKey) {
-    result = result.split(apiKey).join("[redacted-api-key]");
-  }
-  return result
-    .replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-...redacted")
-    .replace(/AIza[A-Za-z0-9_-]{8,}/g, "AIza...redacted")
-    .replace(/([?&]key=)[^&\s]+/gi, "$1[redacted-api-key]")
-    .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi, "$1[redacted-api-key]");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+function modelDiscoveryRedaction(apiKey?: string): SecretRedactionOptions {
+  return {
+    apiKey,
+    redactGoogleKeys: true,
+    redactUrlApiKeys: true,
+    redactBearerTokens: true
+  };
 }

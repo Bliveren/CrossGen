@@ -350,6 +350,18 @@ describe("Gemini image adapter", () => {
     ]);
   });
 
+  it("keeps Gemini error prefixes and Google request ids through the provider adapter", async () => {
+    const fetchImpl = (async () =>
+      Response.json({ error: { status: "PERMISSION_DENIED" } }, { status: 403, headers: { "x-goog-request-id": "mock_google_req" } })) as typeof fetch;
+
+    await expect(geminiImageAdapter.testConnection(config({ baseURL: "https://api.test/v1beta" }), "mock-gemini-key", { fetch: fetchImpl })).resolves.toEqual({
+      ok: false,
+      message: "Gemini API 请求失败：PERMISSION_DENIED Request ID: mock_google_req",
+      status: 403,
+      requestId: "mock_google_req"
+    });
+  });
+
   it("redacts OpenAI-style and Google API key-like strings from errors", async () => {
     const googleKey = ["AIza", "SyD", "-mock-redaction-key-should-not-leak-0000"].join("");
     const fetchImpl = (async () =>

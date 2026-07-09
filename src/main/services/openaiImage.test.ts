@@ -183,6 +183,20 @@ describe("OpenAI image service", () => {
     });
   });
 
+  it("keeps OpenAI error prefixes and request ids through the provider adapter", async () => {
+    const fetchImpl = (async () =>
+      Response.json({ error: { message: "invalid key" } }, { status: 401, headers: { "x-request-id": "req_bad" } })) as typeof fetch;
+
+    const result = await openaiImageAdapter.testConnection(config(), "sk-test-key", { fetch: fetchImpl });
+
+    expect(result).toEqual({
+      ok: false,
+      message: "OpenAI API 请求失败：invalid key Request ID: req_bad",
+      status: 401,
+      requestId: "req_bad"
+    });
+  });
+
   it("discovers OpenAI models through the provider adapter", async () => {
     const fetchImpl = (async () => Response.json({ data: [{ id: "gpt-image-2" }, { id: "text-only" }, { object: "missing-id" }] })) as typeof fetch;
 
