@@ -2,9 +2,10 @@ import { useMemo } from "react";
 import type { GalleryAsset, GalleryFolder } from "../shared/types";
 import type { GalleryExplorerEntry, GalleryFolderFilter, GallerySortMode, GalleryViewMode } from "./GalleryPanel";
 
-export const GALLERY_VIRTUAL_GRID_MIN_COLUMN_WIDTH = 132;
-export const GALLERY_VIRTUAL_GRID_ROW_HEIGHT = 190;
-export const GALLERY_VIRTUAL_LIST_ROW_HEIGHT = 86;
+export const GALLERY_VIRTUAL_GRID_MIN_COLUMN_WIDTH = 154;
+export const GALLERY_VIRTUAL_GRID_ROW_HEIGHT = 232;
+export const GALLERY_VIRTUAL_LIST_ROW_HEIGHT = 104;
+export const GALLERY_VIRTUAL_COMPACT_GAP = 8;
 export const GALLERY_VIRTUAL_OVERSCAN_ROWS = 3;
 export const GALLERY_CONTENT_DEFAULT_HEIGHT = 380;
 export const GALLERY_CONTENT_DEFAULT_WIDTH = 320;
@@ -27,6 +28,8 @@ interface UseGalleryExplorerModelArgs {
   viewMode: GalleryViewMode;
   scrollTop: number;
   viewport: GalleryViewport;
+  compact?: boolean;
+  compactItemSize?: number;
 }
 
 export function useGalleryExplorerModel({
@@ -38,7 +41,9 @@ export function useGalleryExplorerModel({
   sort,
   viewMode,
   scrollTop,
-  viewport
+  viewport,
+  compact = false,
+  compactItemSize = GALLERY_VIRTUAL_GRID_MIN_COLUMN_WIDTH
 }: UseGalleryExplorerModelArgs) {
   const tagsAvailable = useMemo(() => {
     const tags = new Set<string>();
@@ -134,13 +139,18 @@ export function useGalleryExplorerModel({
     ...filteredAssets.map((asset) => ({ kind: "asset" as const, id: asset.id, asset }))
   ], [activeChildFolders, filteredAssets]);
 
-  const virtualColumns = viewMode === "grid"
+  const compactRowHeight = compactItemSize + GALLERY_VIRTUAL_COMPACT_GAP;
+  const virtualColumns = compact
+    ? 1
+    : viewMode === "grid"
     ? Math.max(1, Math.floor((viewport.width + 8) / (GALLERY_VIRTUAL_GRID_MIN_COLUMN_WIDTH + 8)))
     : 1;
-  const virtualRowHeight = viewMode === "grid" ? GALLERY_VIRTUAL_GRID_ROW_HEIGHT : GALLERY_VIRTUAL_LIST_ROW_HEIGHT;
+  const virtualRowHeight = compact ? compactRowHeight : viewMode === "grid" ? GALLERY_VIRTUAL_GRID_ROW_HEIGHT : GALLERY_VIRTUAL_LIST_ROW_HEIGHT;
   const virtualTotalRows = Math.ceil(explorerEntries.length / virtualColumns);
-  const virtualStartRow = Math.max(0, Math.floor(scrollTop / virtualRowHeight) - GALLERY_VIRTUAL_OVERSCAN_ROWS);
   const virtualVisibleRows = Math.ceil(viewport.height / virtualRowHeight) + GALLERY_VIRTUAL_OVERSCAN_ROWS * 2;
+  const rawVirtualStartRow = Math.max(0, Math.floor(scrollTop / virtualRowHeight) - GALLERY_VIRTUAL_OVERSCAN_ROWS);
+  const maxVirtualStartRow = Math.max(0, virtualTotalRows - virtualVisibleRows);
+  const virtualStartRow = Math.min(rawVirtualStartRow, maxVirtualStartRow);
   const virtualEndRow = Math.min(virtualTotalRows, virtualStartRow + virtualVisibleRows);
   const virtualStartIndex = virtualStartRow * virtualColumns;
   const virtualEndIndex = Math.min(explorerEntries.length, virtualEndRow * virtualColumns);

@@ -219,7 +219,6 @@ export interface UiCopy {
   galleryChoose: string;
   galleryAssetRename: string;
   galleryAssetName: string;
-  galleryAssetDialogDescription: string;
   galleryAssetRenamed: string;
   galleryAddHistory: string;
   galleryAddTargetFolder: string;
@@ -293,6 +292,7 @@ export interface UiCopy {
   generatedResult: string;
   jobFailed: string;
   outputEmpty: string;
+  generatingElapsed: (seconds: number) => string;
   prompt: string;
   running: string;
   copy: string;
@@ -405,6 +405,11 @@ export interface UiCopy {
   quickColors: string;
   chooseColor: (color: string) => string;
   annotationColor: string;
+  currentAnnotationColor: (color: string) => string;
+  eyedropperTool: string;
+  eyedropperActive: string;
+  annotationColorPicked: (color: string) => string;
+  annotationColorPickFailed: string;
   strokeWidth: string;
   textSize: string;
   boldText: string;
@@ -419,6 +424,13 @@ export interface UiCopy {
   cropEllipse: string;
   applyCrop: string;
   cropApplied: string;
+  releaseGuideTitle: (version: string) => string;
+  releaseGuideBody: string;
+  releaseGuideEyedropper: string;
+  releaseGuideTheme: string;
+  releaseGuideGallery: string;
+  releaseGuideSkip: string;
+  releaseGuideStart: string;
   modes: Record<WorkMode, ModeCopy>;
   guidedRegionMode: ModeCopy;
   tabs: { text2img: { title: string; hint: string }; img2img: { title: string; hint: string } };
@@ -578,7 +590,6 @@ export const translations: Record<Language, UiCopy> = {
     galleryChoose: "Choose from Gallery",
     galleryAssetRename: "Rename image",
     galleryAssetName: "Image name",
-    galleryAssetDialogDescription: "Renames the image file in the current Gallery folder.",
     galleryAssetRenamed: "Gallery image renamed.",
     galleryAddHistory: "Add to Gallery",
     galleryAddTargetFolder: "Gallery target folder",
@@ -653,6 +664,7 @@ export const translations: Record<Language, UiCopy> = {
     generatedResult: "Generated result",
     jobFailed: "Job failed",
     outputEmpty: "Generated images and partial previews appear here.",
+    generatingElapsed: (seconds: number) => `Generating image, elapsed ${seconds} seconds`,
     prompt: "Prompt",
     running: "Running",
     copy: "Copy",
@@ -764,6 +776,11 @@ export const translations: Record<Language, UiCopy> = {
     quickColors: "Quick colors",
     chooseColor: (color: string) => `Use ${color}`,
     annotationColor: "Edit color",
+    currentAnnotationColor: (color: string) => `Current color ${color.toUpperCase()}`,
+    eyedropperTool: "Pick color from image",
+    eyedropperActive: "Click the image to pick a color",
+    annotationColorPicked: (color: string) => `Picked ${color.toUpperCase()}.`,
+    annotationColorPickFailed: "Cannot pick a color from this image.",
     strokeWidth: "Stroke width",
     textSize: "Text size",
     boldText: "Bold",
@@ -778,6 +795,13 @@ export const translations: Record<Language, UiCopy> = {
     cropEllipse: "Ellipse crop",
     applyCrop: "Apply crop",
     cropApplied: "Crop applied.",
+    releaseGuideTitle: (version: string) => `What's new in ${version}`,
+    releaseGuideBody: "A few important entry points changed in this release.",
+    releaseGuideEyedropper: "Edit toolbar: use the pipette to sample a color directly from the image.",
+    releaseGuideTheme: "Left bottom: the theme switch is now the icon-only skin button.",
+    releaseGuideGallery: "Gallery: collapsed library width and mouse-wheel paging were refined.",
+    releaseGuideSkip: "Skip",
+    releaseGuideStart: "Start using",
     modes: {
       generate: { title: "Generate", action: "Generate", hint: "Prompt only" },
       edit: { title: "Edit", action: "Edit", hint: "Use references" },
@@ -1000,7 +1024,6 @@ export const translations: Record<Language, UiCopy> = {
     galleryChoose: "从图库选择",
     galleryAssetRename: "重命名图片",
     galleryAssetName: "图片名称",
-    galleryAssetDialogDescription: "会同步重命名当前图库文件夹中的真实图片文件。",
     galleryAssetRenamed: "图库图片已重命名。",
     galleryAddHistory: "加入图库",
     galleryAddTargetFolder: "加入图库目标文件夹",
@@ -1075,6 +1098,7 @@ export const translations: Record<Language, UiCopy> = {
     generatedResult: "生成结果",
     jobFailed: "任务失败",
     outputEmpty: "生成图片和局部预览会显示在这里。",
+    generatingElapsed: (seconds: number) => `正在生图，已耗时 ${seconds} 秒`,
     prompt: "提示词",
     running: "运行中",
     copy: "复制",
@@ -1186,6 +1210,11 @@ export const translations: Record<Language, UiCopy> = {
     quickColors: "常用色块",
     chooseColor: (color: string) => `选择 ${color}`,
     annotationColor: "编辑颜色",
+    currentAnnotationColor: (color: string) => `当前颜色 ${color.toUpperCase()}`,
+    eyedropperTool: "从图片取色",
+    eyedropperActive: "点击图片取色",
+    annotationColorPicked: (color: string) => `已取色 ${color.toUpperCase()}。`,
+    annotationColorPickFailed: "无法从这张图片取色。",
     strokeWidth: "笔触粗细",
     textSize: "字号大小",
     boldText: "加粗",
@@ -1200,6 +1229,13 @@ export const translations: Record<Language, UiCopy> = {
     cropEllipse: "椭圆裁剪",
     applyCrop: "应用裁剪",
     cropApplied: "裁剪已应用。",
+    releaseGuideTitle: (version: string) => `${version} 新功能提示`,
+    releaseGuideBody: "本次版本有几个重要入口调整。",
+    releaseGuideEyedropper: "编辑工具栏：新增吸管，可直接从图片任意位置取色。",
+    releaseGuideTheme: "左下角：皮肤切换改为仅显示图标，悬浮可查看当前模式。",
+    releaseGuideGallery: "图库：优化折叠宽度，并修复图库滚轮翻页。",
+    releaseGuideSkip: "跳过引导",
+    releaseGuideStart: "开始使用",
     modes: {
       generate: { title: "生成", action: "生成", hint: "仅提示词" },
       edit: { title: "编辑", action: "编辑", hint: "使用参考图" },

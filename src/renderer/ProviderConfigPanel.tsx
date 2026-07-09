@@ -1,5 +1,5 @@
 import type React from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, KeyRound, LibraryBig, Loader2, Plus, Radar, Rocket, Save, Trash2, Wrench, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, KeyRound, LibraryBig, Loader2, Plus, Radar, Rocket, Save, Wrench, X } from "lucide-react";
 import type { FocusedLaunchId, ProviderConfig, ProviderKind } from "../shared/types";
 import { DialogShell } from "./DialogShell";
 import type { UiCopy } from "./i18n";
@@ -630,7 +630,7 @@ export function ApiConfigDetail({
           disabled={!canDelete || saving}
           title={canDelete ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
         >
-          <Trash2 size={16} />
+          <X size={16} />
           {copy.deleteApiAccess}
         </button>
       </div>
@@ -736,7 +736,7 @@ export function ApiConfigCard({
           aria-label={canDelete ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
           data-tooltip={canDelete ? copy.deleteApiAccess : copy.deleteLastApiAccessDisabled}
         >
-          <Trash2 size={15} />
+          <X size={15} />
         </button>
         <button
           type="button"

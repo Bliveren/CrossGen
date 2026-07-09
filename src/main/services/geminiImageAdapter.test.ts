@@ -113,22 +113,27 @@ describe("Gemini image adapter", () => {
     );
     expect(geminiImageSizeForResolution("0.5K")).toBe("512");
 
-    expect(
-      buildGeminiGenerateContentBody(params({ aspectRatio: "16:9", resolution: "2K", thinking: false, searchGrounding: true }), "prompt", [
-        { mimeType: "image/png", data: "abc" }
-      ])
-    ).toEqual({
+    const body = buildGeminiGenerateContentBody(params({ aspectRatio: "16:9", resolution: "2K", thinking: false, searchGrounding: true }), "prompt", [
+      { mimeType: "image/png", data: "abc" }
+    ]);
+
+    expect(body).toMatchObject({
       contents: [
         {
           role: "user",
-          parts: [{ text: "prompt" }, { inlineData: { mimeType: "image/png", data: "abc" } }]
+          parts: [
+            { text: expect.stringContaining("Final image aspect ratio: 16:9.") },
+            { inlineData: { mimeType: "image/png", data: "abc" } }
+          ]
         }
       ],
       generationConfig: {
         responseModalities: ["TEXT", "IMAGE"],
-        imageConfig: {
-          aspectRatio: "16:9",
-          imageSize: "2K"
+        responseFormat: {
+          image: {
+            aspectRatio: "16:9",
+            imageSize: "2K"
+          }
         },
         thinkingConfig: {
           thinkingBudget: 0
@@ -136,6 +141,7 @@ describe("Gemini image adapter", () => {
       },
       tools: [{ googleSearch: {} }]
     });
+    expect(body.contents[0]?.parts[0]?.text).toContain("prompt");
   });
 
   it("calls Gemini generateContent and saves inline image results with text metadata", async () => {
@@ -174,12 +180,16 @@ describe("Gemini image adapter", () => {
     expect(requestUrl).not.toContain("mock-gemini-key");
     expect(requestHeaders.get("x-goog-api-key")).toBe("mock-gemini-key");
     expect(requestBody).toMatchObject({
-      contents: [{ role: "user", parts: [{ text: "Make a clean product render" }] }],
+      contents: [{ role: "user", parts: [{ text: expect.stringContaining("Make a clean product render") }] }],
       generationConfig: {
         responseModalities: ["TEXT", "IMAGE"],
-        imageConfig: { aspectRatio: "1:1", imageSize: "1K" }
+        responseFormat: {
+          image: { aspectRatio: "1:1", imageSize: "1K" }
+        }
       }
     });
+    const requestParts = (requestBody.contents as Array<{ parts: Array<{ text?: string }> }>)[0]?.parts ?? [];
+    expect(requestParts[0]?.text).toContain("Final image aspect ratio: 1:1.");
     expect(result.status).toBe("succeeded");
     expect(result.outputs[0].fileName).toBe("job_gemini_test-result-0.png");
     expect(result.outputs[0].transientPreview?.dataUrl).toBe(`data:image/png;base64,${tinyPngBase64}`);
@@ -301,7 +311,8 @@ describe("Gemini image adapter", () => {
     );
 
     expect(parts).toHaveLength(3);
-    expect(parts[0]).toEqual({ text: "Make a clean product render" });
+    expect(parts[0]?.text).toContain("Make a clean product render");
+    expect(parts[0]?.text).toContain("Final image aspect ratio: 1:1.");
     expect(parts[1]).toEqual({ inlineData: { mimeType: "image/png", data: tinyPngBase64 } });
     expect(parts[2]).toEqual({ inlineData: { mimeType: "image/png", data: tinyMaskBase64 } });
   });

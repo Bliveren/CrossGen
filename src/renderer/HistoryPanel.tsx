@@ -1,5 +1,5 @@
 import type React from "react";
-import { ArrowDownUp, CheckCircle2, ChevronUp, Copy, Download, FolderInput, RotateCcw, Save, Search, Trash2 } from "lucide-react";
+import { ArrowDownUp, CheckCircle2, ChevronUp, Copy, Download, FolderInput, RotateCcw, Save, Search, X } from "lucide-react";
 import type { GenerationJob, ImageAsset } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
@@ -480,7 +480,7 @@ export function HistoryItemCard({
         </button>
         {galleryTargetMenu}
         <button type="button" className="history-action-button danger" onClick={onDelete} aria-label={copy.delete} data-tooltip={copy.delete}>
-          <Trash2 size={15} />
+          <X size={15} />
           <span>{copy.delete}</span>
         </button>
       </div>

@@ -36,6 +36,8 @@ export function useImageEditor() {
   const [annotationSize, setAnnotationSize] = useState(6);
   const [annotationTextSize, setAnnotationTextSize] = useState(24);
   const [isAnnotationTextBold, setIsAnnotationTextBold] = useState(false);
+  const [isAnnotationColorSampling, setIsAnnotationColorSampling] = useState(false);
+  const [sampledAnnotationColor, setSampledAnnotationColor] = useState<string | null>(null);
   const [annotationDrawingLayers, setAnnotationDrawingLayers] = useState<AnnotationDrawingLayer[]>([]);
   const [annotationTextBoxes, setAnnotationTextBoxes] = useState<AnnotationTextBox[]>([]);
   const [activeAnnotationTextBoxId, setActiveAnnotationTextBoxId] = useState<string | null>(null);
@@ -88,6 +90,10 @@ export function useImageEditor() {
     setAnnotationTextSize,
     isAnnotationTextBold,
     setIsAnnotationTextBold,
+    isAnnotationColorSampling,
+    setIsAnnotationColorSampling,
+    sampledAnnotationColor,
+    setSampledAnnotationColor,
     annotationDrawingLayers,
     setAnnotationDrawingLayers,
     annotationTextBoxes,

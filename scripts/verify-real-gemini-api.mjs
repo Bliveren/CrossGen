@@ -200,7 +200,7 @@ async function saveGeminiOutputs(label, payload, outputDir) {
   return outputs;
 }
 
-async function generateContent(label, prompt, inlineImages, outputDir) {
+async function generateContent(label, prompt, inlineImages, outputDir, aspectRatio = "1:1", imageSize = "1K") {
   const response = await fetch(endpoint(`/models/${encodeURIComponent(model)}:generateContent`), {
     method: "POST",
     headers: authHeaders({ "content-type": "application/json" }),
@@ -220,7 +220,13 @@ async function generateContent(label, prompt, inlineImages, outputDir) {
         }
       ],
       generationConfig: {
-        responseModalities: ["TEXT", "IMAGE"]
+        responseModalities: ["TEXT", "IMAGE"],
+        responseFormat: {
+          image: {
+            aspectRatio,
+            imageSize
+          }
+        }
       }
     })
   });
@@ -243,13 +249,15 @@ async function main() {
   const sourceImage = { mimeType: "image/png", buffer: source };
   const maskImage = { mimeType: "image/png", buffer: mask };
   const outputs = [
-    ...(await generateContent("generation", "Create a clean product-style icon for a desktop image editing tool on a neutral background.", [], outputDir)),
-    ...(await generateContent("reference-edit", "Edit this reference into a cleaner product shot while preserving the square composition.", [sourceImage], outputDir)),
+    ...(await generateContent("generation", "Create a clean product-style icon for a desktop image editing tool on a neutral background.", [], outputDir, "1:1", "1K")),
+    ...(await generateContent("reference-edit", "Edit this reference into a cleaner product shot while preserving the square composition.", [sourceImage], outputDir, "1:1", "1K")),
     ...(await generateContent(
       "guided-region-edit",
       "Use the transparent area in the second image as a guided region. Change only that area into a bright green circle and keep the rest stable.",
       [sourceImage, maskImage],
-      outputDir
+      outputDir,
+      "1:1",
+      "1K"
     ))
   ];
 

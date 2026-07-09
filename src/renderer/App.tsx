@@ -178,7 +178,6 @@ interface ConfirmDialogState {
 type GalleryFolderDialogState =
   | { mode: "create"; parentId?: string | null }
   | { mode: "rename"; folder: GalleryFolder };
-type GalleryAssetDialogState = { asset: GalleryAsset };
 interface GallerySaveChoiceDialogState {
   asset: GalleryAsset;
   dataUrl: string;
@@ -246,12 +245,19 @@ const DEFAULT_SIDEBAR_WIDTH = 310;
 const DEFAULT_HISTORY_WIDTH = 310;
 const MIN_SIDEBAR_WIDTH = 260;
 const MAX_SIDEBAR_WIDTH = 430;
-const MIN_HISTORY_WIDTH = 240;
+const MIN_HISTORY_WIDTH = 300;
 const MAX_HISTORY_WIDTH = 460;
 const MIN_WORKSPACE_WIDTH = 620;
 const COMPACT_SIDEBAR_WIDTH = 76;
-const COMPACT_HISTORY_WIDTH = 260;
-const RIGHT_RAIL_COLLAPSED_WIDTH = 384;
+const RIGHT_RAIL_COLLAPSED_WIDTH = 256;
+const MIN_RIGHT_RAIL_WIDTH = 176;
+const RIGHT_RAIL_STACKED_WIDTH = 330;
+const RIGHT_RAIL_DENSE_WIDTH = 292;
+const RIGHT_RAIL_THUMB_MAX_SIZE = 180;
+const RIGHT_RAIL_THUMB_MIN_SIZE = 128;
+const RIGHT_RAIL_THUMB_HORIZONTAL_CHROME = 48;
+const LEFT_RAIL_AUTO_COLLAPSE_WIDTH = MIN_SIDEBAR_WIDTH;
+const RIGHT_RAIL_AUTO_COLLAPSE_WIDTH = MIN_HISTORY_WIDTH;
 const DEFAULT_PREVIEW_PANEL_RATIO = 0.618;
 const MIN_PREVIEW_PANEL_RATIO = 0.48;
 const MAX_PREVIEW_PANEL_RATIO = 0.74;
@@ -265,6 +271,7 @@ type TabMode = "text2img" | "img2img";
 type ThemeMode = "system" | "light" | "dark";
 
 const THEME_STORAGE_KEY = "image2tools.theme";
+const RELEASE_GUIDE_STORAGE_KEY = "image2tools.releaseGuide.seenVersion";
 const themeModeOrder: ThemeMode[] = ["system", "light", "dark"];
 
 function getInitialThemeMode(): ThemeMode {
@@ -813,6 +820,11 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function rgbToHex(red: number, green: number, blue: number): string {
+  const channel = (value: number) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, "0").toUpperCase();
+  return `#${channel(red)}${channel(green)}${channel(blue)}`;
+}
+
 function readStoredWidth(key: string, fallback: number, min: number, max: number): number {
   const stored = window.localStorage.getItem(key);
   const parsed = stored ? Number(stored) : fallback;
@@ -930,6 +942,8 @@ export function App() {
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck>({ status: "idle" });
   const [isRunning, setIsRunning] = useState(false);
+  const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
+  const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
   const [arePromptSecondaryActionsIconOnly, setArePromptSecondaryActionsIconOnly] = useState(false);
   const [isPrimaryRunIconOnly, setIsPrimaryRunIconOnly] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -952,12 +966,9 @@ export function App() {
   const [historyGalleryMenuJobId, setHistoryGalleryMenuJobId] = useState<string | null>(null);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
-  const [templateTagFilter, setTemplateTagFilter] = useState("");
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateTitle, setTemplateTitle] = useState("");
   const [templateBody, setTemplateBody] = useState("");
-  const [templateTags, setTemplateTags] = useState("");
-  const [templateCategory, setTemplateCategory] = useState("");
   const [rightRailView, setRightRailView] = useState<"history" | "gallery">("history");
   const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(false);
   const [isRightRailActionDrawerOpen, setIsRightRailActionDrawerOpen] = useState(false);
@@ -983,13 +994,12 @@ export function App() {
   const [galleryFolderDialog, setGalleryFolderDialog] = useState<GalleryFolderDialogState | null>(null);
   const [galleryFolderDialogName, setGalleryFolderDialogName] = useState("");
   const [galleryFolderDialogError, setGalleryFolderDialogError] = useState("");
-  const [galleryAssetDialog, setGalleryAssetDialog] = useState<GalleryAssetDialogState | null>(null);
-  const [galleryAssetDialogName, setGalleryAssetDialogName] = useState("");
-  const [galleryAssetDialogError, setGalleryAssetDialogError] = useState("");
   const [activeGalleryAssetId, setActiveGalleryAssetId] = useState<string | null>(null);
   const [gallerySaveChoiceDialog, setGallerySaveChoiceDialog] = useState<GallerySaveChoiceDialogState | null>(null);
   const [editingGalleryFolderId, setEditingGalleryFolderId] = useState<string | null>(null);
   const [editingGalleryFolderName, setEditingGalleryFolderName] = useState("");
+  const [editingGalleryNameId, setEditingGalleryNameId] = useState<string | null>(null);
+  const [galleryNameDraft, setGalleryNameDraft] = useState("");
   const [editingGalleryId, setEditingGalleryId] = useState<string | null>(null);
   const [galleryTagsInput, setGalleryTagsInput] = useState("");
   const [batchTagMenuTarget, setBatchTagMenuTarget] = useState<BatchTagTarget | null>(null);
@@ -1007,6 +1017,7 @@ export function App() {
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const [isReleaseGuideOpen, setIsReleaseGuideOpen] = useState(false);
   const {
     previewZoom,
     setPreviewZoom,
@@ -1026,6 +1037,10 @@ export function App() {
     setAnnotationTextSize,
     isAnnotationTextBold,
     setIsAnnotationTextBold,
+    isAnnotationColorSampling,
+    setIsAnnotationColorSampling,
+    sampledAnnotationColor,
+    setSampledAnnotationColor,
     annotationDrawingLayers,
     setAnnotationDrawingLayers,
     annotationTextBoxes,
@@ -1074,11 +1089,12 @@ export function App() {
   const [buttonFeedback, setButtonFeedback] = useState<Record<string, number>>({});
   const [globalTooltip, setGlobalTooltip] = useState<GlobalTooltip | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredWidth("image2tools.sidebarWidth", DEFAULT_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH));
-  const [historyWidth, setHistoryWidth] = useState(() => readStoredWidth("image2tools.historyWidth", DEFAULT_HISTORY_WIDTH, MIN_HISTORY_WIDTH, MAX_HISTORY_WIDTH));
+  const [historyWidth, setHistoryWidth] = useState(() => readStoredWidth("image2tools.historyWidth", DEFAULT_HISTORY_WIDTH, MIN_RIGHT_RAIL_WIDTH, MAX_HISTORY_WIDTH));
   const [previewPanelRatio, setPreviewPanelRatio] = useState(() => readStoredWidth("image2tools.previewPanelRatio", DEFAULT_PREVIEW_PANEL_RATIO, MIN_PREVIEW_PANEL_RATIO, MAX_PREVIEW_PANEL_RATIO));
   const [resizingColumn, setResizingColumn] = useState<"sidebar" | "history" | "preview" | null>(null);
   const [contextMenu, setContextMenu] = useState<ImageContextMenuState | null>(null);
-  const [railCollapseButtonY, setRailCollapseButtonY] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight - 86));
+  const [sidebarCollapseButtonY, setSidebarCollapseButtonY] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight - 86));
+  const [rightRailCollapseButtonY, setRightRailCollapseButtonY] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight - 86));
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const galleryContentRef = useRef<HTMLDivElement | null>(null);
@@ -1094,6 +1110,11 @@ export function App() {
   const promptTemplateButtonRef = useRef<HTMLButtonElement | null>(null);
   const promptCopyButtonRef = useRef<HTMLButtonElement | null>(null);
   const sidebarUtilityBarRef = useRef<HTMLElement | null>(null);
+  const rightRailActionsRef = useRef<HTMLDivElement | null>(null);
+  const appShellRef = useRef<HTMLElement | null>(null);
+  const sidebarWidthRef = useRef(sidebarWidth);
+  const historyWidthRef = useRef(historyWidth);
+  const expandedHistoryWidthRef = useRef(Math.max(historyWidth, MIN_HISTORY_WIDTH));
 
   const activeConfig = snapshot.providers.find(p => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
   const isSidebarCompact = isSidebarCollapsed || isAutoSidebarCollapsed;
@@ -1167,7 +1188,66 @@ export function App() {
   const isSelectedConfigSaved = savedApiConfigId === selectedApiConfig.id && selectedApiConfig.apiKeySaved && !apiKey.trim();
   const inactiveApiConfigs = snapshot.providers.filter((config) => config.id !== activeConfig.id);
   const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
-  const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+  const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_RIGHT_RAIL_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+  const isRightRailStacked = historyWidth <= RIGHT_RAIL_STACKED_WIDTH;
+  const isRightRailDense = historyWidth <= RIGHT_RAIL_DENSE_WIDTH;
+  const isRightRailCompact = isRightRailCollapsed || historyWidth <= RIGHT_RAIL_COLLAPSED_WIDTH;
+  const rightRailLayoutMode = isRightRailCompact ? "compact" : isRightRailDense ? "dense" : isRightRailStacked ? "stacked" : "full";
+  const rightRailThumbSize = clamp(
+    historyWidth - RIGHT_RAIL_THUMB_HORIZONTAL_CHROME,
+    RIGHT_RAIL_THUMB_MIN_SIZE,
+    RIGHT_RAIL_THUMB_MAX_SIZE
+  );
+
+  const setShellWidthVariable = (name: "--sidebar-width" | "--history-width", value: number) => {
+    appShellRef.current?.style.setProperty(name, `${Math.round(value)}px`);
+  };
+
+  const applyRightRailWidth = (nextWidth: number, options: { forceCollapsed?: boolean } = {}) => {
+    const clampedWidth = clamp(nextWidth, MIN_RIGHT_RAIL_WIDTH, maxHistoryWidth);
+    historyWidthRef.current = clampedWidth;
+    setShellWidthVariable("--history-width", clampedWidth);
+    setHistoryWidth(clampedWidth);
+    if (clampedWidth >= MIN_HISTORY_WIDTH) {
+      expandedHistoryWidthRef.current = clampedWidth;
+    }
+    setIsRightRailCollapsed(options.forceCollapsed ?? clampedWidth <= RIGHT_RAIL_COLLAPSED_WIDTH);
+  };
+
+  const getRightRailAutoCollapseWidth = () => {
+    const actionsNode = rightRailActionsRef.current;
+    if (!actionsNode) return RIGHT_RAIL_AUTO_COLLAPSE_WIDTH;
+    const summaryNode = actionsNode.querySelector<HTMLElement>(".right-rail-summary");
+    const actionGroupNode = actionsNode.querySelector<HTMLElement>(".right-rail-action-group");
+    if (!summaryNode || !actionGroupNode) return RIGHT_RAIL_AUTO_COLLAPSE_WIDTH;
+
+    const actionsStyle = window.getComputedStyle(actionsNode);
+    const gap = cssPixelValue(actionsStyle.columnGap) || cssPixelValue(actionsStyle.gap) || 10;
+    const horizontalPadding =
+      cssPixelValue(actionsStyle.paddingLeft) +
+      cssPixelValue(actionsStyle.paddingRight) +
+      cssPixelValue(actionsStyle.borderLeftWidth) +
+      cssPixelValue(actionsStyle.borderRightWidth);
+    const requiredWidth =
+      summaryNode.scrollWidth +
+      actionGroupNode.getBoundingClientRect().width +
+      gap +
+      horizontalPadding +
+      2;
+    return Math.max(RIGHT_RAIL_AUTO_COLLAPSE_WIDTH, Math.ceil(requiredWidth));
+  };
+
+  function toggleRightRailCollapsed() {
+    if (isRightRailCompact) {
+      const preferredWidth = Math.max(expandedHistoryWidthRef.current, MIN_HISTORY_WIDTH);
+      const targetWidth = clamp(preferredWidth, MIN_RIGHT_RAIL_WIDTH, maxHistoryWidth);
+      applyRightRailWidth(targetWidth, { forceCollapsed: false });
+      return;
+    }
+
+    expandedHistoryWidthRef.current = Math.max(historyWidthRef.current, MIN_HISTORY_WIDTH);
+    applyRightRailWidth(RIGHT_RAIL_COLLAPSED_WIDTH, { forceCollapsed: true });
+  }
 
   const {
     filteredHistory,
@@ -1193,21 +1273,14 @@ export function App() {
     systemTagLabelForMode: historySystemTagLabel,
     modelDetailsForJob: getHistoryModelDetails
   });
-  const templateTagsAvailable = useMemo(() => {
-    const tags = new Set<string>();
-    snapshot.promptTemplates.forEach((template) => template.tags.forEach((tag) => tags.add(tag)));
-    return [...tags].sort((a, b) => a.localeCompare(b));
-  }, [snapshot.promptTemplates]);
   const filteredTemplates = useMemo(() => {
     const query = templateSearch.trim().toLowerCase();
     return snapshot.promptTemplates.filter((template) => {
-      const matchesTag = !templateTagFilter || template.tags.includes(templateTagFilter);
-      if (!matchesTag) return false;
       if (!query) return true;
-      const haystack = `${template.title} ${template.body} ${template.tags.join(" ")} ${template.category ?? ""}`.toLowerCase();
+      const haystack = `${template.title} ${template.body}`.toLowerCase();
       return haystack.includes(query);
     });
-  }, [snapshot.promptTemplates, templateSearch, templateTagFilter]);
+  }, [snapshot.promptTemplates, templateSearch]);
   const {
     tagsAvailable: galleryTagsAvailable,
     folderById: galleryFolderById,
@@ -1231,7 +1304,9 @@ export function App() {
     sort: gallerySort,
     viewMode: galleryViewMode,
     scrollTop: galleryContentScrollTop,
-    viewport: galleryContentViewport
+    viewport: galleryContentViewport,
+    compact: isRightRailCompact,
+    compactItemSize: rightRailThumbSize
   });
   const globalTagOptions = useMemo(() => {
     const tags = new Set<string>();
@@ -1497,6 +1572,13 @@ export function App() {
   }, [themeMode]);
 
   useEffect(() => {
+    const version = snapshot.appVersion;
+    if (!version || version === fallbackSnapshot.appVersion) return;
+    if (window.localStorage.getItem(RELEASE_GUIDE_STORAGE_KEY) === version) return;
+    setIsReleaseGuideOpen(true);
+  }, [snapshot.appVersion]);
+
+  useEffect(() => {
     if (!editingHistoryTagsId) return undefined;
 
     const closeHistoryTagPopover = (event: Event) => {
@@ -1652,10 +1734,12 @@ export function App() {
   }, [copy.promptTemplates, primaryRunActionLabel, promptCopyActionLabel, snapshot.promptTemplates.length]);
 
   useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth;
     window.localStorage.setItem("image2tools.sidebarWidth", String(sidebarWidth));
   }, [sidebarWidth]);
 
   useEffect(() => {
+    historyWidthRef.current = historyWidth;
     window.localStorage.setItem("image2tools.historyWidth", String(historyWidth));
   }, [historyWidth]);
 
@@ -1664,36 +1748,66 @@ export function App() {
   }, [previewPanelRatio]);
 
   useEffect(() => {
+    if (!isRunning || generationStartedAt === null) return;
+
+    const updateElapsed = () => {
+      setGenerationElapsedSeconds(Math.max(0, Math.floor((Date.now() - generationStartedAt) / 1000)));
+    };
+
+    updateElapsed();
+    const timerId = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timerId);
+  }, [generationStartedAt, isRunning]);
+
+  useEffect(() => {
     let frameId: number | null = null;
-    const measureRailCollapseButtonY = () => {
+    const measureCollapseButtons = () => {
       frameId = null;
-      const node =
+
+      const sidebarNode =
         sidebarUtilityBarRef.current?.getBoundingClientRect().height
           ? sidebarUtilityBarRef.current
           : document.querySelector<HTMLElement>(".sidebar-mini-utility");
-      if (!node) return;
-      const rect = node.getBoundingClientRect();
-      if (rect.width === 0 && rect.height === 0) return;
-      const next = Math.round(Math.max(48, rect.top));
-      setRailCollapseButtonY((current) => (Math.abs(current - next) > 1 ? next : current));
+      if (sidebarNode) {
+        const sidebarRect = sidebarNode.getBoundingClientRect();
+        if (sidebarRect.width !== 0 || sidebarRect.height !== 0) {
+          const nextSidebarY = Math.round(Math.max(48, sidebarRect.top));
+          setSidebarCollapseButtonY((current) => (Math.abs(current - nextSidebarY) > 1 ? nextSidebarY : current));
+        }
+      }
+
+      const rightActionsNode = rightRailActionsRef.current;
+      if (rightActionsNode) {
+        const rightActionsRect = rightActionsNode.getBoundingClientRect();
+        if (rightActionsRect.width !== 0 || rightActionsRect.height !== 0) {
+          const nextRightRailY = Math.round(Math.max(48, rightActionsRect.top));
+          setRightRailCollapseButtonY((current) => (Math.abs(current - nextRightRailY) > 1 ? nextRightRailY : current));
+        }
+      }
     };
     const scheduleMeasure = () => {
       if (frameId !== null && typeof window.cancelAnimationFrame === "function") {
         window.cancelAnimationFrame(frameId);
       }
       if (typeof window.requestAnimationFrame === "function") {
-        frameId = window.requestAnimationFrame(measureRailCollapseButtonY);
+        frameId = window.requestAnimationFrame(measureCollapseButtons);
       } else {
-        measureRailCollapseButtonY();
+        measureCollapseButtons();
       }
     };
 
     scheduleMeasure();
     const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleMeasure);
-    const node = sidebarUtilityBarRef.current;
-    if (node) resizeObserver?.observe(node);
-    const sidebarNode = node?.closest(".sidebar");
-    if (sidebarNode instanceof HTMLElement) resizeObserver?.observe(sidebarNode);
+    const sidebarNode = sidebarUtilityBarRef.current;
+    if (sidebarNode) resizeObserver?.observe(sidebarNode);
+    const compactSidebarNode = document.querySelector<HTMLElement>(".sidebar-mini-utility");
+    if (compactSidebarNode) resizeObserver?.observe(compactSidebarNode);
+    const sidebarRoot = sidebarNode?.closest(".sidebar");
+    if (sidebarRoot instanceof HTMLElement) resizeObserver?.observe(sidebarRoot);
+    const rightActionsNode = rightRailActionsRef.current;
+    if (rightActionsNode) resizeObserver?.observe(rightActionsNode);
+    const rightRailNode = rightActionsNode?.closest(".right-rail");
+    if (rightRailNode instanceof HTMLElement) resizeObserver?.observe(rightRailNode);
     window.addEventListener("resize", scheduleMeasure);
     return () => {
       if (frameId !== null && typeof window.cancelAnimationFrame === "function") {
@@ -1702,7 +1816,7 @@ export function App() {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleMeasure);
     };
-  }, [isSidebarCompact, notice.text, showAdvanced, updateCheck?.status]);
+  }, [isRightRailCompact, isSidebarCompact, notice.text, rightRailView, rightRailLayoutMode, showAdvanced, updateCheck?.status]);
 
   useEffect(() => {
     const node = historyListRef.current;
@@ -1766,9 +1880,11 @@ export function App() {
     if (!element) return;
     const updateViewport = () => {
       const rect = element.getBoundingClientRect();
+      const measuredWidth = rect.width || element.clientWidth || GALLERY_CONTENT_DEFAULT_WIDTH;
+      const measuredHeight = rect.height || element.clientHeight || GALLERY_CONTENT_DEFAULT_HEIGHT;
       setGalleryContentViewport({
-        width: Math.max(GALLERY_CONTENT_DEFAULT_WIDTH, rect.width || element.clientWidth || GALLERY_CONTENT_DEFAULT_WIDTH),
-        height: Math.max(1, rect.height || element.clientHeight || GALLERY_CONTENT_DEFAULT_HEIGHT)
+        width: Math.max(1, measuredWidth),
+        height: Math.max(1, measuredHeight)
       });
     };
     updateViewport();
@@ -1779,16 +1895,16 @@ export function App() {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", updateViewport);
     };
-  }, [rightRailView, galleryViewMode]);
+  }, [rightRailView, galleryViewMode, rightRailLayoutMode]);
 
   useEffect(() => {
     setGalleryContentScrollTop(0);
     if (galleryContentRef.current) galleryContentRef.current.scrollTop = 0;
-  }, [activeGalleryFolderId, gallerySearch, gallerySort, galleryTagFilter, galleryViewMode]);
+  }, [activeGalleryFolderId, gallerySearch, gallerySort, galleryTagFilter, galleryViewMode, isRightRailCompact]);
 
   useEffect(() => {
     setIsRightRailActionDrawerOpen(false);
-  }, [isRightRailCollapsed, rightRailView]);
+  }, [isRightRailCompact, rightRailView]);
 
   useEffect(() => {
     if (historyGalleryFolderId && !snapshot.galleryFolders.some((folder) => folder.id === historyGalleryFolderId)) {
@@ -1801,11 +1917,23 @@ export function App() {
 
     const handlePointerMove = (event: PointerEvent) => {
       if (resizingColumn === "sidebar") {
-        const nextMax = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
-        setSidebarWidth(clamp(event.clientX, MIN_SIDEBAR_WIDTH, nextMax));
+        const rawWidth = event.clientX;
+        if (rawWidth <= LEFT_RAIL_AUTO_COLLAPSE_WIDTH) {
+          setShellWidthVariable("--sidebar-width", COMPACT_SIDEBAR_WIDTH);
+          setIsSidebarCollapsed(true);
+          setResizingColumn(null);
+          return;
+        }
+        const nextMax = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidthRef.current - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+        const nextWidth = clamp(rawWidth, MIN_SIDEBAR_WIDTH, nextMax);
+        sidebarWidthRef.current = nextWidth;
+        setShellWidthVariable("--sidebar-width", nextWidth);
+        setSidebarWidth(nextWidth);
       } else if (resizingColumn === "history") {
-        const nextMax = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
-        setHistoryWidth(clamp(window.innerWidth - event.clientX, MIN_HISTORY_WIDTH, nextMax));
+        const rawWidth = window.innerWidth - event.clientX;
+        const nextMax = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_RIGHT_RAIL_WIDTH, window.innerWidth - sidebarWidthRef.current - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+        const nextWidth = clamp(rawWidth, MIN_RIGHT_RAIL_WIDTH, nextMax);
+        applyRightRailWidth(nextWidth, { forceCollapsed: rawWidth <= getRightRailAutoCollapseWidth() ? true : undefined });
       } else {
         const layout = previewLayoutRef.current;
         if (!layout) return;
@@ -1827,7 +1955,7 @@ export function App() {
       window.removeEventListener("pointerup", stopResizing);
       window.removeEventListener("pointercancel", stopResizing);
     };
-  }, [historyWidth, resizingColumn, sidebarWidth]);
+  }, [resizingColumn]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -1858,6 +1986,8 @@ export function App() {
   useEffect(() => {
     setPreviewZoom(1);
     setPreviewPan({ x: 0, y: 0 });
+    setIsAnnotationColorSampling(false);
+    setSampledAnnotationColor(null);
   }, [activePreviewSource]);
 
   useEffect(() => {
@@ -2027,8 +2157,6 @@ export function App() {
     setEditingTemplateId(null);
     setTemplateTitle("");
     setTemplateBody("");
-    setTemplateTags("");
-    setTemplateCategory("");
   }
 
   function clearPromptChips() {
@@ -2040,8 +2168,6 @@ export function App() {
     setEditingTemplateId(template.id);
     setTemplateTitle(template.title);
     setTemplateBody(template.body);
-    setTemplateTags(template.tags.join(", "));
-    setTemplateCategory(template.category ?? "");
     setIsTemplatesOpen(true);
   }
 
@@ -2049,8 +2175,7 @@ export function App() {
     return {
       title: templateTitle,
       body: templateBody,
-      tags: templateTags.split(",").map((tag) => tag.trim()).filter(Boolean),
-      category: templateCategory.trim() || undefined
+      tags: []
     };
   }
 
@@ -2585,33 +2710,33 @@ export function App() {
     }
   }
 
-  function openRenameGalleryAssetDialog(asset: GalleryAsset) {
-    setGalleryAssetDialog({ asset });
-    setGalleryAssetDialogName(asset.originalName);
-    setGalleryAssetDialogError("");
+  function beginEditGalleryAssetName(asset: GalleryAsset) {
+    setEditingGalleryNameId(asset.id);
+    setGalleryNameDraft(asset.originalName);
     setGalleryAssetContextMenu(null);
   }
 
-  function closeGalleryAssetDialog() {
-    setGalleryAssetDialog(null);
-    setGalleryAssetDialogError("");
+  function openGalleryAssetNameEditor(asset: GalleryAsset) {
+    beginEditGalleryAssetName(asset);
   }
 
-  async function submitGalleryAssetDialog() {
-    if (!bridge || !galleryAssetDialog) return;
-    const originalName = galleryAssetDialogName.trim();
-    if (!originalName) return;
+  async function saveGalleryAssetName(asset: GalleryAsset) {
+    if (!bridge) return;
+    const originalName = galleryNameDraft.trim() || asset.originalName;
     try {
-      const updated = await bridge.updateGalleryAsset(galleryAssetDialog.asset.id, { originalName });
+      const updated = await bridge.updateGalleryAsset(asset.id, { originalName });
       setSnapshot((current) => ({ ...current, galleryAssets: current.galleryAssets.map((item) => item.id === updated.id ? updated : item) }));
-      closeGalleryAssetDialog();
-      setGalleryAssetDialogName("");
+      setEditingGalleryNameId(null);
+      setGalleryNameDraft("");
       setNotice({ kind: "success", text: copy.galleryAssetRenamed });
     } catch (error) {
-      const message = normalizeNotice(error);
-      setGalleryAssetDialogError(message);
-      setNotice({ kind: "error", text: message });
+      setNotice({ kind: "error", text: normalizeNotice(error) });
     }
+  }
+
+  function cancelGalleryAssetNameEdit() {
+    setEditingGalleryNameId(null);
+    setGalleryNameDraft("");
   }
 
   function removeGalleryAsset(asset: GalleryAsset) {
@@ -3122,6 +3247,13 @@ export function App() {
     setThemeMode((current) => nextThemeMode(current));
   }
 
+  function dismissReleaseGuide() {
+    if (snapshot.appVersion && snapshot.appVersion !== fallbackSnapshot.appVersion) {
+      window.localStorage.setItem(RELEASE_GUIDE_STORAGE_KEY, snapshot.appVersion);
+    }
+    setIsReleaseGuideOpen(false);
+  }
+
   function renderThemeIcon() {
     if (themeMode === "light") return <Sun size={15} />;
     if (themeMode === "dark") return <Moon size={15} />;
@@ -3230,6 +3362,8 @@ export function App() {
 
     setIsRunning(true);
     resetPartialImages();
+    setGenerationStartedAt(Date.now());
+    setGenerationElapsedSeconds(0);
     setActiveJob(null);
     setActiveGalleryAssetId(null);
     setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[requestMode].action) });
@@ -3262,6 +3396,7 @@ export function App() {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
       setIsRunning(false);
+      setGenerationStartedAt(null);
     }
   }
 
@@ -3645,6 +3780,39 @@ export function App() {
     return annotationPointFromClient(event.clientX, event.clientY, normalizePointerPressure(event.nativeEvent), event.currentTarget);
   }
 
+  function sampleAnnotationColor(point: CanvasPoint) {
+    const image = annotationImageRef.current;
+    const canvas = annotationCanvasRef.current;
+    const width = Math.max(1, Math.round(image?.naturalWidth || canvas?.width || 0));
+    const height = Math.max(1, Math.round(image?.naturalHeight || canvas?.height || 0));
+    if (!image || !canvas || width <= 0 || height <= 0) {
+      setNotice({ kind: "error", text: copy.annotationColorPickFailed });
+      setIsAnnotationColorSampling(false);
+      return;
+    }
+
+    try {
+      const sampler = document.createElement("canvas");
+      sampler.width = width;
+      sampler.height = height;
+      const context = sampler.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error(copy.annotationColorPickFailed);
+      context.drawImage(image, 0, 0, width, height);
+      const x = clamp(Math.floor(point.x), 0, width - 1);
+      const y = clamp(Math.floor(point.y), 0, height - 1);
+      const [red, green, blue] = context.getImageData(x, y, 1, 1).data;
+      const hex = rgbToHex(red, green, blue);
+      applyAnnotationColor(hex, "sample");
+      setSampledAnnotationColor(hex);
+      setIsAnnotationColorSampling(false);
+      setIsAnnotationColorPickerOpen(false);
+      setNotice({ kind: "success", text: copy.annotationColorPicked(hex) });
+    } catch {
+      setIsAnnotationColorSampling(false);
+      setNotice({ kind: "error", text: copy.annotationColorPickFailed });
+    }
+  }
+
   function canvasUnitsForCssPixels(cssPixels: number, axis: "x" | "y" = "x"): number {
     const canvas = annotationCanvasRef.current;
     const host = annotationFrameRef.current;
@@ -3719,10 +3887,15 @@ export function App() {
   function startAnnotation(event: React.PointerEvent<HTMLCanvasElement>) {
     if (!isPreviewCanvasInteractive || !activePreviewSource) return;
     resizeAnnotationCanvas();
+    const point = annotationPoint(event);
+    if (isAnnotationColorSampling && isEditingPreview) {
+      event.preventDefault();
+      sampleAnnotationColor(point);
+      return;
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
     isAnnotationPointerActiveRef.current = true;
     setIsDrawingAnnotation(true);
-    const point = annotationPoint(event);
     if (isCroppingPreview) {
       cropDragStartRef.current = point;
       setCropSelection({ ...normalizeCanvasRect(point, point, 0, 0), shape: cropShape });
@@ -3868,8 +4041,9 @@ export function App() {
     setAnnotationTextBoxes((current) => current.map((box) => (box.id === id ? { ...box, ...patch } : box)));
   }
 
-  function applyAnnotationColor(color: string) {
+  function applyAnnotationColor(color: string, source: "manual" | "sample" = "manual") {
     setAnnotationColor(color);
+    if (source === "manual") setSampledAnnotationColor(null);
     if (activeAnnotationTextBoxId) updateAnnotationTextBox(activeAnnotationTextBoxId, { color });
   }
 
@@ -3889,6 +4063,7 @@ export function App() {
   function focusAnnotationTextBox(box: AnnotationTextBox) {
     setActiveAnnotationTextBoxId(box.id);
     setAnnotationColor(box.color);
+    setSampledAnnotationColor(null);
     setAnnotationTextSize(Math.round(textBoxDisplayFontSize(box)));
     setIsAnnotationTextBold(box.bold);
   }
@@ -3896,11 +4071,13 @@ export function App() {
   function togglePreviewEditMode() {
     if (isEditingPreview) {
       discardEmptyAnnotationTextBoxes();
+      setIsAnnotationColorSampling(false);
       setPreviewMode("idle");
       setDraftTextRect(null);
       return;
     }
     setPreviewMode("edit");
+    setIsAnnotationColorSampling(false);
     setCropSelection(null);
     resizeAnnotationCanvas();
   }
@@ -3912,6 +4089,7 @@ export function App() {
       return;
     }
     discardEmptyAnnotationTextBoxes();
+    setIsAnnotationColorSampling(false);
     setPreviewMode("crop");
     setDraftTextRect(null);
     resizeAnnotationCanvas();
@@ -4539,15 +4717,6 @@ export function App() {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [galleryFolderDialog]);
 
-  useEffect(() => {
-    if (!galleryAssetDialog) return;
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeGalleryAssetDialog();
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [galleryAssetDialog]);
-
   function handlePreviewPanStart(event: React.PointerEvent<HTMLDivElement>) {
     if (!activeImage || isPreviewCanvasInteractive || previewZoom <= 1) return;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -4570,9 +4739,19 @@ export function App() {
 
   function nudgeColumn(column: "sidebar" | "history" | "preview", delta: number) {
     if (column === "sidebar") {
-      setSidebarWidth((current) => clamp(current + delta, MIN_SIDEBAR_WIDTH, maxSidebarWidth));
+      const rawWidth = sidebarWidthRef.current + delta;
+      if (rawWidth <= LEFT_RAIL_AUTO_COLLAPSE_WIDTH) {
+        setShellWidthVariable("--sidebar-width", COMPACT_SIDEBAR_WIDTH);
+        setIsSidebarCollapsed(true);
+        return;
+      }
+      const nextWidth = clamp(rawWidth, MIN_SIDEBAR_WIDTH, maxSidebarWidth);
+      sidebarWidthRef.current = nextWidth;
+      setShellWidthVariable("--sidebar-width", nextWidth);
+      setSidebarWidth(nextWidth);
     } else if (column === "history") {
-      setHistoryWidth((current) => clamp(current + delta, MIN_HISTORY_WIDTH, maxHistoryWidth));
+      const rawWidth = historyWidthRef.current + delta;
+      applyRightRailWidth(rawWidth, { forceCollapsed: rawWidth <= getRightRailAutoCollapseWidth() ? true : undefined });
     } else {
       setPreviewPanelRatio((current) => clamp(current + delta / 1000, MIN_PREVIEW_PANEL_RATIO, MAX_PREVIEW_PANEL_RATIO));
     }
@@ -4967,7 +5146,7 @@ export function App() {
                   <Save size={13} />
                 </button>
                 <button type="button" className="icon-button danger" onClick={() => void deleteTagEverywhere(tag)} aria-label={copy.tagDelete} data-tooltip={copy.tagDelete}>
-                  <Trash2 size={13} />
+                  <X size={13} />
                 </button>
               </div>
             );
@@ -5000,6 +5179,7 @@ export function App() {
     copy,
     currentGalleryCreateParentId,
     editingGalleryId,
+    editingGalleryNameId,
     expandedGalleryFolderIds,
     galleryExplorerEntries,
     galleryFolderAssetCounts,
@@ -5008,6 +5188,7 @@ export function App() {
     galleryFolderSubtreeAssetCounts,
     galleryFoldersByParent,
     gallerySearch,
+    galleryNameDraft,
     gallerySort,
     gallerySortLabel,
     gallerySortOptions,
@@ -5120,6 +5301,8 @@ export function App() {
           virtualTopSpacer={galleryVirtualTopSpacer}
           virtualBottomSpacer={galleryVirtualBottomSpacer}
           isGalleryEmpty={snapshot.galleryAssets.length === 0}
+          editingGalleryNameId={editingGalleryNameId}
+          galleryNameDraft={galleryNameDraft}
           editingGalleryId={editingGalleryId}
           tagsInput={galleryTagsInput}
           folderSubtreeAssetCounts={galleryFolderSubtreeAssetCounts}
@@ -5137,6 +5320,10 @@ export function App() {
           onRenameFolder={openRenameGalleryFolderDialog}
           onPreviewAsset={previewGalleryAsset}
           onAssetContextMenu={openGalleryAssetContextMenu}
+          onStartEditAssetName={beginEditGalleryAssetName}
+          onAssetNameDraftChange={setGalleryNameDraft}
+          onSaveAssetName={(asset) => void saveGalleryAssetName(asset)}
+          onCancelAssetName={cancelGalleryAssetNameEdit}
           onEditAssetTags={editGalleryTags}
           onTagsInputChange={setGalleryTagsInput}
           onSaveAssetTags={(asset) => void saveGalleryTags(asset)}
@@ -5147,7 +5334,6 @@ export function App() {
           onMoveTagPopoverPointerDown={(event) => event.stopPropagation()}
           onMoveToolbarTowardPointer={movePreviewToolbarTowardPointer}
           onResetToolbarDrift={resetPreviewToolbarDrift}
-          onRenameAsset={openRenameGalleryAssetDialog}
           onDeleteAsset={(asset) => void removeGalleryAsset(asset)}
         />
       </div>
@@ -5156,18 +5342,22 @@ export function App() {
 
   return (
     <main
+      ref={appShellRef}
       className={[
         "app-shell",
         isSidebarCompact ? "sidebar-collapsed" : "",
-        isRightRailCollapsed ? "right-rail-collapsed" : ""
+        isRightRailStacked ? "right-rail-stacked" : "",
+        isRightRailDense ? "right-rail-dense" : "",
+        isRightRailCompact ? "right-rail-collapsed" : ""
       ].filter(Boolean).join(" ")}
       style={
         {
           "--sidebar-width": `${isSidebarCompact ? COMPACT_SIDEBAR_WIDTH : sidebarWidth}px`,
-          "--history-width": `${isRightRailCollapsed ? RIGHT_RAIL_COLLAPSED_WIDTH : historyWidth}px`,
-          "--compact-history-width": `${Math.min(historyWidth, COMPACT_HISTORY_WIDTH)}px`,
+          "--history-width": `${historyWidth}px`,
+          "--right-rail-thumb-size": `${rightRailThumbSize}px`,
           "--preview-ratio": previewPanelRatio,
-          "--rail-collapse-button-y": `${railCollapseButtonY}px`
+          "--sidebar-collapse-button-y": `${sidebarCollapseButtonY}px`,
+          "--right-rail-collapse-button-y": `${rightRailCollapseButtonY}px`
         } as React.CSSProperties
       }
     >
@@ -5270,9 +5460,8 @@ export function App() {
             <button type="button" className="language-pill" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
               {language === "en" ? "En" : "简"}
             </button>
-            <button type="button" className="theme-mode-button" onClick={toggleThemeMode} aria-label={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`} data-tooltip={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`}>
+            <button type="button" className="icon-button theme-mode-button" onClick={toggleThemeMode} aria-label={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`} data-tooltip={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`}>
               {renderThemeIcon()}
-              <span>{themeModeLabel(copy, themeMode)}</span>
             </button>
             {updateCheck?.status === "available" ? (
               <button type="button" className="icon-button utility-check-button" onClick={downloadAndInstallUpdate} disabled={!bridge || isCheckingUpdate || isInstallingUpdate} aria-label={copy.installUpdate} data-tooltip={copy.installUpdate}>
@@ -5337,6 +5526,8 @@ export function App() {
             annotationCanvasRef={annotationCanvasRef}
             activePreviewSource={activePreviewSource}
             activeJobError={activeJobError}
+            isGenerating={isRunning}
+            generationElapsedSeconds={generationElapsedSeconds}
             activeImage={activeImage}
             activeResults={activeResults}
             partialImages={partialImages}
@@ -5359,6 +5550,8 @@ export function App() {
             annotationSize={annotationSize}
             annotationTextSize={annotationTextSize}
             isAnnotationTextBold={isAnnotationTextBold}
+            isAnnotationColorSampling={isAnnotationColorSampling}
+            sampledAnnotationColor={sampledAnnotationColor}
             isAnnotationColorPickerOpen={isAnnotationColorPickerOpen}
             editorUndoStackLength={editorUndoStack.length}
             cropShape={cropShape}
@@ -5388,10 +5581,22 @@ export function App() {
             onSaveCurrentPreviewToGallery={() => void saveCurrentPreviewToGallery()}
             onSelectDrawTool={() => {
               discardEmptyAnnotationTextBoxes();
+              setIsAnnotationColorSampling(false);
               setAnnotationTool("draw");
             }}
-            onSelectTextTool={() => setAnnotationTool("text")}
-            onToggleAnnotationColorPicker={() => setIsAnnotationColorPickerOpen((current) => !current)}
+            onSelectTextTool={() => {
+              setIsAnnotationColorSampling(false);
+              setAnnotationTool("text");
+            }}
+            onToggleAnnotationColorSampling={() => {
+              discardEmptyAnnotationTextBoxes();
+              setIsAnnotationColorPickerOpen(false);
+              setIsAnnotationColorSampling((current) => !current);
+            }}
+            onToggleAnnotationColorPicker={() => {
+              setIsAnnotationColorSampling(false);
+              setIsAnnotationColorPickerOpen((current) => !current);
+            }}
             onApplyAnnotationColor={applyAnnotationColor}
             onCloseAnnotationColorPicker={() => setIsAnnotationColorPickerOpen(false)}
             onAnnotationSizeChange={setAnnotationSize}
@@ -5603,21 +5808,20 @@ export function App() {
                     </span>
                     <button
                       type="button"
-                      className="secondary compact-mask-button"
+                      className="icon-button secondary compact-mask-button"
                       onClick={addPaintedMask}
                       disabled={!maskDataUrl}
                       aria-label={copy.addPaintedMask}
                       data-tooltip={copy.addPaintedMaskTooltip}
                     >
                       <Paintbrush size={15} />
-                      <span>{copy.addPaintedMask}</span>
                     </button>
                     <button type="button" className="icon-button" onClick={clearPaintedMask} aria-label={copy.clearPaintedMask} data-tooltip={copy.clearPaintedMask}>
-                      <Trash2 size={15} />
+                      <X size={15} />
                     </button>
                   </div>
                 </div>
-                <div className="mask-canvas-wrap">
+                <div className={sourcePreview ? "mask-canvas-wrap has-source" : "mask-canvas-wrap"}>
                   {sourcePreview ? (
                     <>
                       <img ref={sourceImageRef} src={sourcePreview} alt={copy.sourceForMask} onLoad={handleSourceImageLoad} />
@@ -5654,31 +5858,36 @@ export function App() {
         role="separator"
         aria-label="Resize history"
         aria-orientation="vertical"
-        aria-valuemin={MIN_HISTORY_WIDTH}
+        aria-valuemin={MIN_RIGHT_RAIL_WIDTH}
         aria-valuemax={maxHistoryWidth}
         aria-valuenow={historyWidth}
-        aria-disabled={isRightRailCollapsed}
-        tabIndex={isRightRailCollapsed ? -1 : 0}
+        aria-disabled={false}
+        tabIndex={0}
         onPointerDown={(event) => {
-          if (isRightRailCollapsed) return;
           event.currentTarget.setPointerCapture(event.pointerId);
           setResizingColumn("history");
         }}
         onKeyDown={(event) => {
-          if (!isRightRailCollapsed) resizeHandleKeyDown("history", event);
+          resizeHandleKeyDown("history", event);
         }}
       />
 
       <PerfProfiler id="RightRail">
-      <aside className={isRightRailCollapsed ? "history right-rail collapsed" : "history right-rail"} aria-label={copy.library}>
+      <aside className={[
+        "history",
+        "right-rail",
+        isRightRailStacked ? "stacked" : "",
+        isRightRailDense ? "dense" : "",
+        isRightRailCompact ? "collapsed" : ""
+      ].filter(Boolean).join(" ")} aria-label={copy.library}>
         <button
           type="button"
-          className={`icon-button right-rail-collapse-button ${isRightRailCollapsed ? "collapsed" : ""}`}
-          onClick={() => setIsRightRailCollapsed((current) => !current)}
+          className={`icon-button right-rail-collapse-button ${isRightRailCompact ? "collapsed" : ""}`}
+          onClick={toggleRightRailCollapsed}
           onMouseMove={movePreviewToolbarTowardPointer}
           onMouseLeave={resetPreviewToolbarDrift}
-          aria-label={isRightRailCollapsed ? copy.show : copy.hide}
-          data-tooltip={isRightRailCollapsed ? copy.show : copy.hide}
+          aria-label={isRightRailCompact ? copy.show : copy.hide}
+          data-tooltip={isRightRailCompact ? copy.show : copy.hide}
         >
           <ChevronRight size={16} />
         </button>
@@ -5831,7 +6040,7 @@ export function App() {
             {galleryRailPanel}
           </StableGalleryRailPanel>
         )}
-        <div className={`right-rail-actions ${isRightRailActionDrawerOpen ? "drawer-open" : ""}`}>
+        <div ref={rightRailActionsRef} className={`right-rail-actions ${isRightRailActionDrawerOpen ? "drawer-open" : ""}`}>
           <span className="right-rail-summary">
             {rightRailView === "history"
               ? isHistoryBatchMode ? copy.historySelectionCount(selectedHistoryItemCount) : copy.historyStats(snapshot.history.length)
@@ -5978,6 +6187,33 @@ export function App() {
           onSubmit={() => void saveConfig()}
         />
       )}
+      {isReleaseGuideOpen && (
+        <DialogShell className="confirm-dialog release-guide-dialog" labelledBy="release-guide-title" onClose={dismissReleaseGuide}>
+          <div className="release-guide-heading">
+            <span className="release-guide-icon" aria-hidden="true">
+              <Sparkles size={18} />
+            </span>
+            <div>
+              <h2 id="release-guide-title">{copy.releaseGuideTitle(snapshot.appVersion)}</h2>
+              <p>{copy.releaseGuideBody}</p>
+            </div>
+          </div>
+          <ul className="release-guide-list">
+            <li>{copy.releaseGuideEyedropper}</li>
+            <li>{copy.releaseGuideTheme}</li>
+            <li>{copy.releaseGuideGallery}</li>
+          </ul>
+          <div className="dialog-actions">
+            <button type="button" className="ghost" onClick={dismissReleaseGuide}>
+              {copy.releaseGuideSkip}
+            </button>
+            <button type="button" onClick={dismissReleaseGuide}>
+              <CheckCircle2 size={16} />
+              {copy.releaseGuideStart}
+            </button>
+          </div>
+        </DialogShell>
+      )}
       {isTemplatesOpen && (
         <DialogShell className="template-dialog" labelledBy="prompt-template-dialog-title" onClose={() => setIsTemplatesOpen(false)}>
             <header className="history-header">
@@ -5992,12 +6228,6 @@ export function App() {
             <div className="template-panel">
               <div className="template-toolbar">
                 <input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} placeholder={copy.templateSearch} />
-                <select value={templateTagFilter} onChange={(event) => setTemplateTagFilter(event.target.value)}>
-                  <option value="">{copy.templateAllTags}</option>
-                  {templateTagsAvailable.map((tag) => (
-                    <option key={tag} value={tag}>{tag}</option>
-                  ))}
-                </select>
                 <button type="button" className="icon-button" onClick={() => void importTemplates()} aria-label={copy.templateImport} data-tooltip={copy.templateImport}>
                   <FileUp size={15} />
                 </button>
@@ -6014,14 +6244,6 @@ export function App() {
                   <label>
                     {copy.templateBody}
                     <textarea value={templateBody} onChange={(event) => setTemplateBody(event.target.value)} placeholder={copy.prompt} />
-                  </label>
-                  <label>
-                    {copy.templateTags}
-                    <input value={templateTags} onChange={(event) => setTemplateTags(event.target.value)} placeholder="portrait, product, style" />
-                  </label>
-                  <label>
-                    {copy.templateCategory}
-                    <input value={templateCategory} onChange={(event) => setTemplateCategory(event.target.value)} placeholder={copy.templateCategory} />
                   </label>
                   <div className="button-row">
                     <button type="button" onClick={() => void saveTemplateFromForm()} disabled={!templateTitle.trim() || !templateBody.trim()}>
@@ -6043,11 +6265,6 @@ export function App() {
                       <div className="template-item-main">
                         <strong>{template.title}</strong>
                         <p>{template.body}</p>
-                        {template.tags.length > 0 && (
-                          <div className="template-tags">
-                            {template.tags.map((tag) => <span key={tag}>{tag}</span>)}
-                          </div>
-                        )}
                       </div>
                       <div className="template-actions">
                         <button type="button" className="icon-button" onClick={() => void applyTemplate(template)} aria-label={copy.templateUse} data-tooltip={copy.templateUse}>
@@ -6057,7 +6274,7 @@ export function App() {
                           <SquarePen size={15} />
                         </button>
                         <button type="button" className="icon-button ghost danger" onClick={() => void deleteTemplate(template)} aria-label={copy.delete} data-tooltip={copy.delete}>
-                          <Trash2 size={15} />
+                          <X size={15} />
                         </button>
                       </div>
                     </article>
@@ -6102,43 +6319,6 @@ export function App() {
               <button type="button" onClick={() => void submitGalleryFolderDialog()} disabled={!galleryFolderDialogName.trim()}>
                 <FolderPlus size={16} />
                 {galleryFolderDialog.mode === "create" ? copy.galleryFolderCreate : copy.galleryFolderRename}
-              </button>
-            </div>
-        </DialogShell>
-      )}
-      {galleryAssetDialog && (
-        <DialogShell className="confirm-dialog gallery-asset-dialog" labelledBy="gallery-asset-dialog-title" onClose={closeGalleryAssetDialog}>
-            <div>
-              <h2 id="gallery-asset-dialog-title">{copy.galleryAssetRename}</h2>
-              <p>{copy.galleryAssetDialogDescription}</p>
-            </div>
-            <label>
-              {copy.galleryAssetName}
-              <input
-                value={galleryAssetDialogName}
-                onChange={(event) => {
-                  setGalleryAssetDialogName(event.target.value);
-                  if (galleryAssetDialogError) setGalleryAssetDialogError("");
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && galleryAssetDialogName.trim()) {
-                    event.preventDefault();
-                    void submitGalleryAssetDialog();
-                  }
-                }}
-                autoFocus
-              />
-            </label>
-            {galleryAssetDialogError && (
-              <p className="inline-check error gallery-asset-dialog-error" role="alert">{galleryAssetDialogError}</p>
-            )}
-            <div className="dialog-actions">
-              <button type="button" className="ghost" onClick={closeGalleryAssetDialog}>
-                {copy.cancel}
-              </button>
-              <button type="button" onClick={() => void submitGalleryAssetDialog()} disabled={!galleryAssetDialogName.trim()}>
-                <Pencil size={16} />
-                {copy.galleryAssetRename}
               </button>
             </div>
         </DialogShell>
@@ -6214,7 +6394,7 @@ export function App() {
                 {copy.cancel}
               </button>
               <button type="button" className="danger-button" onClick={() => void runConfirmDialogAction()}>
-                <Trash2 size={16} />
+                <X size={16} />
                 {confirmDialog.confirmLabel}
               </button>
             </div>
@@ -6301,7 +6481,7 @@ export function App() {
               className="context-menu-item"
               onClick={() => {
                 setGalleryAssetContextMenu(null);
-                openRenameGalleryAssetDialog(asset);
+                openGalleryAssetNameEditor(asset);
               }}
               role="menuitem"
             >
@@ -6354,7 +6534,7 @@ export function App() {
               }}
               role="menuitem"
             >
-              <Trash2 size={14} />
+              <X size={14} />
               {copy.delete}
             </button>
           </div>
@@ -6405,7 +6585,7 @@ export function App() {
                   }}
                   role="menuitem"
                 >
-                  <Trash2 size={14} />
+                  <X size={14} />
                   {copy.galleryFolderDelete}
                 </button>
                 <div className="context-menu-divider" />

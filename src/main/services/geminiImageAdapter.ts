@@ -48,9 +48,11 @@ export interface GeminiGenerateContentBody {
   }>;
   generationConfig: {
     responseModalities: ["TEXT", "IMAGE"];
-    imageConfig: {
-      aspectRatio: GeminiImageParams["aspectRatio"];
-      imageSize: "512" | "1K" | "2K" | "4K";
+    responseFormat: {
+      image: {
+        aspectRatio: GeminiImageParams["aspectRatio"];
+        imageSize: "512" | "1K" | "2K" | "4K";
+      };
     };
     thinkingConfig?: {
       thinkingBudget: 0;
@@ -113,11 +115,14 @@ export function buildGeminiGenerateContentBody(
   prompt: string,
   inlineDataParts: GeminiInlineData[] = []
 ): GeminiGenerateContentBody {
+  const imageSize = geminiImageSizeForResolution(params.resolution);
   const generationConfig: GeminiGenerateContentBody["generationConfig"] = {
     responseModalities: ["TEXT", "IMAGE"],
-    imageConfig: {
-      aspectRatio: params.aspectRatio,
-      imageSize: geminiImageSizeForResolution(params.resolution)
+    responseFormat: {
+      image: {
+        aspectRatio: params.aspectRatio,
+        imageSize
+      }
     }
   };
 
@@ -129,7 +134,7 @@ export function buildGeminiGenerateContentBody(
     contents: [
       {
         role: "user",
-        parts: [{ text: prompt }, ...inlineDataParts.map((inlineData) => ({ inlineData }))]
+        parts: [{ text: geminiPromptWithOutputConstraints(prompt, params.aspectRatio, imageSize) }, ...inlineDataParts.map((inlineData) => ({ inlineData }))]
       }
     ],
     generationConfig
@@ -140,6 +145,20 @@ export function buildGeminiGenerateContentBody(
   }
 
   return body;
+}
+
+function geminiPromptWithOutputConstraints(
+  prompt: string,
+  aspectRatio: GeminiImageParams["aspectRatio"],
+  imageSize: "512" | "1K" | "2K" | "4K"
+): string {
+  return [
+    prompt.trim(),
+    "Output requirements:",
+    `- Final image aspect ratio: ${aspectRatio}.`,
+    `- Target image size: ${imageSize}.`,
+    "- Keep the final canvas at this aspect ratio even when reference images are provided."
+  ].filter(Boolean).join("\n\n");
 }
 
 export function asGeminiImageJob(job: GenerationJob): GeminiImageJob {
