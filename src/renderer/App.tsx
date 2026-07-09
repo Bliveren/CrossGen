@@ -4909,7 +4909,11 @@ export function App() {
       )}
       <label>
         {copy.compression}
-        <div className="range-field">
+        <div
+          className="range-field range-tooltip"
+          data-tooltip={openAIParams.outputFormat === "png" ? copy.pngIgnoresCompression : undefined}
+          title={openAIParams.outputFormat === "png" ? copy.pngIgnoresCompression : undefined}
+        >
           <input
             type="range"
             min="0"
@@ -4918,7 +4922,7 @@ export function App() {
             disabled={openAIParams.outputFormat === "png"}
             onChange={(event) => updateOpenAIParams({ outputCompression: Number(event.target.value) })}
           />
-          <span className="range-value">{openAIParams.outputFormat === "png" ? copy.pngIgnoresCompression : `${openAIParams.outputCompression}%`}</span>
+          <span className="range-value">{openAIParams.outputCompression}%</span>
         </div>
       </label>
       <label>

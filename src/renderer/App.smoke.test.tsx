@@ -153,6 +153,18 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("keeps the PNG compression note in a tooltip instead of inline text", async () => {
+    await renderApp(snapshot());
+
+    await click(buttonByText("Parameters", ".section-toggle"));
+    await changeSelect(selectByLabel("Format"), "png");
+
+    const compressionField = inputByLabel("Compression").closest<HTMLElement>(".range-field")!;
+    expect(compressionField.dataset.tooltip).toBe("PNG ignores compression");
+    expect(compressionField.querySelector(".range-value")?.textContent).toBe("100%");
+    expect(document.body.textContent).not.toContain("PNG ignores compression");
+  });
+
   it("shows generation elapsed status in the editor while a job is pending", async () => {
     const bridge = await renderApp(snapshot());
     let resolveJob: ((job: GenerationJob) => void) | null = null;
