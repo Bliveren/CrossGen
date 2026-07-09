@@ -14,6 +14,7 @@ import {
   normalizeBaseURL,
   normalizeImageMimeType,
   redactSecret,
+  stripTransientPreviewsFromJob,
   validateApiKey,
   shouldSendCompression,
   validateGptImage2Size,
@@ -29,6 +30,7 @@ import {
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID
 } from "./modelCatalog";
+import type { GenerationJob } from "./types";
 
 describe("gpt-image-2 validation", () => {
   it("accepts auto and supported popular sizes", () => {
@@ -297,6 +299,46 @@ describe("gpt-image-2 validation", () => {
     expect(extensionForFormat("jpeg")).toBe("jpg");
     expect(dataUrlToBase64("data:image/png;base64,abc123")).toBe("abc123");
     expect(dataUrlToBase64("abc123")).toBe("abc123");
+  });
+
+  it("strips transient previews from generated jobs before persistence", () => {
+    const job = {
+      id: "job_test",
+      name: "result.png",
+      tags: [],
+      providerKind: "openai",
+      providerId: "default",
+      launchId: "gpt-image-2",
+      modelId: "gpt-image-2",
+      modelDisplayName: "GPT Image 2",
+      mode: "generate",
+      prompt: "prompt",
+      inputAssets: [],
+      params: DEFAULT_IMAGE_PARAMS,
+      status: "succeeded",
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+      outputs: [
+        {
+          id: "img_result",
+          jobId: "job_test",
+          path: "/tmp/result.png",
+          fileName: "result.png",
+          mimeType: "image/png",
+          sourceType: "result",
+          createdAt: new Date(0).toISOString(),
+          transientPreview: {
+            dataUrl: "data:image/png;base64,abc123"
+          }
+        }
+      ]
+    } satisfies GenerationJob;
+
+    const stripped = stripTransientPreviewsFromJob(job);
+
+    expect(stripped.outputs[0]).not.toHaveProperty("transientPreview");
+    expect(stripped.outputs[0].path).toBe("/tmp/result.png");
+    expect(JSON.stringify(stripped)).not.toContain("data:image/png;base64");
   });
 
   it("validates mask MIME type and source format compatibility", () => {

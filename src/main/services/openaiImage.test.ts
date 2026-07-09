@@ -148,6 +148,7 @@ describe("OpenAI image service", () => {
     expect(requestBody).toMatchObject({ model: "gpt-image-2", prompt: "Make a clean product render" });
     expect(result.status).toBe("succeeded");
     expect(result.outputs[0].fileName).toBe("job_test-result-0.png");
+    expect(result.outputs[0].transientPreview?.dataUrl).toBe(`data:image/png;base64,${tinyPngBase64}`);
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 

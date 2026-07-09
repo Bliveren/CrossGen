@@ -49,6 +49,7 @@ import {
   DEFAULT_IMAGE_PARAMS,
   dataUrlToBase64,
   getValidationError,
+  stripTransientPreviewsFromJob,
   validateApiKey,
   validateProviderConfigInput,
   validateRunJobRequest,
@@ -1016,12 +1017,13 @@ function defaultHistoryJobName(job: GenerationJob): string {
 }
 
 async function upsertJob(job: GenerationJob): Promise<void> {
+  const persistentJob = stripTransientPreviewsFromJob(job);
   const state = await readState();
-  const existingIndex = state.history.findIndex((item) => item.id === job.id);
+  const existingIndex = state.history.findIndex((item) => item.id === persistentJob.id);
   const nextHistory =
     existingIndex === -1
-      ? [job, ...state.history]
-      : state.history.map((item) => (item.id === job.id ? job : item));
+      ? [persistentJob, ...state.history]
+      : state.history.map((item) => (item.id === persistentJob.id ? persistentJob : item));
   await writeState({ ...state, history: nextHistory.slice(0, MAX_HISTORY) });
 }
 
@@ -2107,11 +2109,8 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   const imagesDir = getImagesDir(state);
   const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir);
   const startedAt = Date.now();
-  let job = createJob(normalizedRequest, activeProvider, inputs, mask);
-  await upsertJob(job);
-
-  job = {
-    ...job,
+  let job: GenerationJob = {
+    ...createJob(normalizedRequest, activeProvider, inputs, mask),
     status: "running",
     updatedAt: new Date().toISOString()
   };

@@ -171,6 +171,37 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Partial image 2 received.");
   });
 
+  it("uses transient run previews without refreshing the full snapshot", async () => {
+    const bridge = await renderApp(snapshot());
+    const initialSnapshotReads = vi.mocked(bridge.getSnapshot).mock.calls.length;
+    const transientDataUrl = "data:image/png;base64,ZmFrZQ==";
+    vi.mocked(bridge.runJob).mockImplementationOnce(async (request) => {
+      const result = jobFromRequest(request, providerConfig());
+      return {
+        ...result,
+        outputs: result.outputs.map((asset) => ({
+          ...asset,
+          transientPreview: {
+            dataUrl: transientDataUrl
+          }
+        }))
+      };
+    });
+
+    await click(buttonByText("Generate", ".primary-run"));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(bridge.clearDraft).toHaveBeenCalledTimes(1);
+    expect(bridge.getSnapshot).toHaveBeenCalledTimes(initialSnapshotReads);
+    expect(document.querySelector<HTMLImageElement>(".preview-image-frame img")?.src).toBe(transientDataUrl);
+    const historyImage = document.querySelector<HTMLImageElement>(".history-preview img");
+    expect(historyImage?.src).toContain("image2tools-asset://image?path=");
+    expect(historyImage?.src).not.toContain("data:image");
+  });
+
   it("enables OpenAI General prompt-only fallback for non-focused image models", async () => {
     const defaultConfig = providerConfig({
       apiKeySaved: true,

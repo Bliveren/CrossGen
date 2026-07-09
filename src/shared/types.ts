@@ -144,6 +144,9 @@ export interface ImageAsset {
   height?: number;
   sourceType: "result" | "partial" | "input" | "mask";
   createdAt: string;
+  transientPreview?: {
+    dataUrl: string;
+  };
 }
 
 export interface GalleryAsset {

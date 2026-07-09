@@ -56,6 +56,7 @@ import {
   MAX_GPT_IMAGE_INPUTS,
   maskMimeTypeForSource,
   mimeTypeFromDataUrl,
+  stripTransientPreviewsFromJob,
   validateMaskMimeType,
   validateMaskSourceFormat,
   getValidationError,
@@ -370,6 +371,7 @@ function getBridge() {
 
 function assetSource(asset?: ImageAsset | InputAsset | null): string | undefined {
   if (!asset) return undefined;
+  if ("transientPreview" in asset && asset.transientPreview?.dataUrl) return asset.transientPreview.dataUrl;
   if ("previewUrl" in asset && asset.previewUrl) return asset.previewUrl;
   if ("dataUrl" in asset && asset.dataUrl) return asset.dataUrl;
   if ("fileName" in asset && asset.path) return `image2tools-asset://image?path=${encodeURIComponent(asset.path)}`;
@@ -3221,10 +3223,11 @@ export function App() {
         maskDataUrl: requestMode === "inpaint" && maskDataUrl ? maskDataUrl : undefined,
         params: requestParams
       });
+      const historyJob = stripTransientPreviewsFromJob(job);
       setActiveJob(job);
       setSnapshot((current) => ({
         ...current,
-        history: [job, ...current.history.filter((item) => item.id !== job.id)]
+        history: [historyJob, ...current.history.filter((item) => item.id !== historyJob.id)]
       }));
       setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? copy.notices.actionFinished(modeLabels[requestMode].action) });
       if (job.status === "succeeded") {
@@ -3232,8 +3235,8 @@ export function App() {
         clearPromptChips();
         setDraftUpdatedAt(null);
         setHasUserChangedDraft(false);
+        setSnapshot((current) => ({ ...current, draft: undefined }));
       }
-      await refreshSnapshot();
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {

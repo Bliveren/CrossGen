@@ -182,6 +182,7 @@ describe("Gemini image adapter", () => {
     });
     expect(result.status).toBe("succeeded");
     expect(result.outputs[0].fileName).toBe("job_gemini_test-result-0.png");
+    expect(result.outputs[0].transientPreview?.dataUrl).toBe(`data:image/png;base64,${tinyPngBase64}`);
     expect(result.usage?.total_tokens).toBe(3);
     expect(result.providerMetadata).toMatchObject({
       geminiTextParts: ["Mock Gemini text-to-image response."],

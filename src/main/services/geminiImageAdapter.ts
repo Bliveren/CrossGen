@@ -440,7 +440,8 @@ async function saveBase64Image(
   const mimeType = normalizeSupportedGeminiMimeType(image.mimeType);
   const fileName = `${jobId}-result-${index}.${extensionForMimeType(mimeType)}`;
   const filePath = path.join(runtime.imagesDir, fileName);
-  await fs.writeFile(filePath, Buffer.from(await geminiImageSourceToBase64(image, runtime), "base64"));
+  const b64Json = await geminiImageSourceToBase64(image, runtime);
+  await fs.writeFile(filePath, Buffer.from(b64Json, "base64"));
 
   return {
     id: `img_${randomUUID()}`,
@@ -449,7 +450,10 @@ async function saveBase64Image(
     fileName,
     mimeType,
     sourceType: "result",
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    transientPreview: {
+      dataUrl: `data:${mimeType};base64,${b64Json}`
+    }
   };
 }
 
