@@ -152,6 +152,33 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("lets users enable stream partial previews when they are off by default", async () => {
+    const bridge = await renderApp(snapshot());
+
+    await click(buttonByText("Parameters", ".section-toggle"));
+    const streamPreview = inputByLabel("Stream partial preview");
+    expect(streamPreview.disabled).toBe(false);
+    expect(streamPreview.checked).toBe(false);
+
+    await changeCheckbox(streamPreview, true);
+
+    expect(streamPreview.checked).toBe(true);
+    expect(inputByLabel("Partial images").value).toBe("1");
+
+    await click(buttonByText("Generate", ".primary-run"));
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          providerKind: "openai",
+          launchId: GPT_IMAGE_2_LAUNCH_ID,
+          stream: true,
+          partialImages: 1
+        })
+      })
+    );
+  });
+
   it("keeps the PNG compression note in a tooltip instead of inline text", async () => {
     await renderApp(snapshot());
 
@@ -2400,7 +2427,7 @@ function providerConfig(patch: Partial<ProviderConfig> = {}): ProviderConfig {
     defaultSize: DEFAULT_IMAGE_PARAMS.size,
     defaultQuality: DEFAULT_IMAGE_PARAMS.quality,
     timeoutMs: DEFAULT_IMAGE_PARAMS.timeoutMs,
-    streamingPartialsEnabled: true,
+    streamingPartialsEnabled: false,
     discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }],
     lastModelDiscoveryAt: now,
     activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
@@ -2653,6 +2680,14 @@ async function changeInput(input: HTMLInputElement, value: string) {
     setter?.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+async function changeCheckbox(input: HTMLInputElement, checked: boolean) {
+  await act(async () => {
+    if (input.checked !== checked) {
+      input.click();
+    }
   });
 }
 

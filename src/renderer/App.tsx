@@ -54,7 +54,6 @@ import {
   GEMINI_ASPECT_RATIO_OPTIONS,
   GEMINI_RESOLUTION_OPTIONS,
   MAX_GPT_IMAGE_INPUTS,
-  defaultStreamingPartialsEnabled,
   maskMimeTypeForSource,
   mimeTypeFromDataUrl,
   stripTransientPreviewsFromJob,
@@ -355,7 +354,7 @@ const fallbackConfig: ProviderConfig = {
   discoveredModels: [],
   activeLaunchId: DEFAULT_IMAGE_PARAMS.launchId,
   activeModelId: DEFAULT_IMAGE_PARAMS.model,
-  streamingPartialsEnabled: true,
+  streamingPartialsEnabled: false,
   updatedAt: new Date(0).toISOString()
 };
 
@@ -546,7 +545,7 @@ function normalizeOpenAIParamsForOutputCount(params: OpenAIImageParams): OpenAII
 }
 
 function canUseStreamPartialPreview(config: ProviderConfig, mode: WorkMode): boolean {
-  return config.kind === "openai" && config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID && config.streamingPartialsEnabled && mode === "generate";
+  return config.kind === "openai" && config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID && mode === "generate";
 }
 
 function streamPartialPreviewDisabledReason(params: OpenAIImageParams, config: ProviderConfig, mode: WorkMode, copy: UiCopy): string | undefined {
@@ -910,7 +909,6 @@ export function App() {
   const [apiKey, setApiKey] = useState("");
   const [apiAccessName, setApiAccessName] = useState("OpenAI");
   const [baseURL, setBaseURL] = useState(DEFAULT_BASE_URL);
-  const [streamingPartialsEnabled, setStreamingPartialsEnabled] = useState(true);
   const [isActiveApiConfigOpen, setIsActiveApiConfigOpen] = useState(false);
   const [selectedApiConfigId, setSelectedApiConfigId] = useState<string | null>(null);
   const [promotedApiConfigId, setPromotedApiConfigId] = useState<string | null>(null);
@@ -2783,7 +2781,6 @@ export function App() {
     setSelectedApiConfigId(config.id);
     setApiAccessName(apiAccessDisplayName(config, copy.apiAccessUntitled));
     setBaseURL(config.baseURL);
-    setStreamingPartialsEnabled(config.streamingPartialsEnabled);
     setApiKey("");
     setSavedApiConfigId(null);
   }
@@ -2804,7 +2801,6 @@ export function App() {
     const nextSelectedConfig = next.providers.find(p => p.id === selectedApiConfigId) ?? nextActiveConfig;
     setApiAccessName(apiAccessDisplayName(nextSelectedConfig, copy.apiAccessUntitled));
     setBaseURL(nextSelectedConfig.baseURL);
-    setStreamingPartialsEnabled(nextSelectedConfig.streamingPartialsEnabled);
     setSelectedApiConfigId(nextSelectedConfig.id);
     setApiKey("");
     syncParamsToConfig(nextActiveConfig);
@@ -2819,7 +2815,6 @@ export function App() {
     if (config.id === (selectedApiConfigId ?? activeConfig.id)) {
       setApiAccessName(apiAccessDisplayName(config, copy.apiAccessUntitled));
       setBaseURL(config.baseURL);
-      setStreamingPartialsEnabled(config.streamingPartialsEnabled);
     }
   }
 
@@ -2896,7 +2891,6 @@ export function App() {
         defaultSize: isEditingActiveConfig ? defaultSizeForConfigSave(params, activeConfig) : targetConfig.defaultSize,
         defaultQuality: isEditingActiveConfig ? defaultQualityForConfigSave(params, activeConfig) : targetConfig.defaultQuality,
         timeoutMs: isEditingActiveConfig ? params.timeoutMs : targetConfig.timeoutMs,
-        streamingPartialsEnabled,
         activeLaunchId: targetConfig.activeLaunchId,
         activeModelId: targetConfig.activeModelId
       });
@@ -2969,7 +2963,6 @@ export function App() {
         defaultSize: DEFAULT_IMAGE_PARAMS.size,
         defaultQuality: DEFAULT_IMAGE_PARAMS.quality,
         timeoutMs: params.timeoutMs,
-        streamingPartialsEnabled: defaultStreamingPartialsEnabled(newApiAccessKind, newApiAccessBaseURL),
         activeLaunchId: defaultLaunchForProvider(newApiAccessKind),
         activeModelId: defaultModel
       });
@@ -4970,14 +4963,21 @@ export function App() {
           onChange={(event) => updateOpenAIParams({ n: clamp(Number(event.target.value), 1, 10) })}
         />
       </label>
-      <label className="checkbox-row" title={streamDisabledReason}>
+      <label className="setting-toggle-row stream-preview-row" title={streamDisabledReason}>
+        <span>{copy.streamPartialPreview}</span>
         <input
+          className="toggle-input"
           type="checkbox"
           checked={openAIParams.stream && streamPartialsAllowed}
           disabled={!streamPartialsAllowed}
-          onChange={(event) => updateOpenAIParams({ stream: event.target.checked })}
+          onChange={(event) => {
+            const checked = event.target.checked;
+            updateOpenAIParams({
+              stream: checked,
+              partialImages: checked ? Math.max(1, openAIParams.partialImages) : 0
+            });
+          }}
         />
-        {copy.streamPartialPreview}
       </label>
       <label>
         {copy.partialImages}
@@ -6123,7 +6123,6 @@ export function App() {
           name={apiAccessName}
           apiKey={apiKey}
           baseURL={baseURL}
-          streamingPartialsEnabled={streamingPartialsEnabled}
           apiKeyPlaceholder={apiKeyPlaceholder}
           selectedDiscoveryText={selectedDiscoveryText}
           selectedModelSummary={selectedModelSummary}
@@ -6166,11 +6165,6 @@ export function App() {
             setSavedApiConfigId(null);
             resetConnectionCheckForConfigEdit();
             setBaseURL(value);
-            setStreamingPartialsEnabled(defaultStreamingPartialsEnabled(selectedApiConfig.kind, value));
-          }}
-          onStreamingPartialsEnabledChange={(value) => {
-            setSavedApiConfigId(null);
-            setStreamingPartialsEnabled(value);
           }}
           onSubmit={() => void saveConfig()}
         />

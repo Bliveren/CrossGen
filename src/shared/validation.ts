@@ -109,7 +109,7 @@ export function isDirectOpenAIBaseURL(value: string): boolean {
 }
 
 export function defaultStreamingPartialsEnabled(kind: ProviderKind | undefined, baseURL: string): boolean {
-  return kind === "openai" && isDirectOpenAIBaseURL(baseURL);
+  return false;
 }
 
 export function redactSecret(value: unknown): string {

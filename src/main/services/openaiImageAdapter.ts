@@ -19,8 +19,7 @@ import {
   shouldSendCompression,
   validateMaskMimeType,
   validateMaskSourceFormat,
-  validateOpenAIRunJobRequest,
-  defaultStreamingPartialsEnabled
+  validateOpenAIRunJobRequest
 } from "../../shared/validation.js";
 import type { ImageJobRuntime, ImageProviderAdapter, ImageProviderRuntime } from "./imageProviderAdapter.js";
 import { firstString, isRecord, readProviderApiError, readProviderJsonResponse, redactLikelySecrets } from "./providerHttp.js";
@@ -75,9 +74,7 @@ export const openaiImageAdapter: ImageProviderAdapter = {
     return validateOpenAIRunJobRequest(request);
   },
   runJob(job: GenerationJob, apiKey: string, config: StoredProviderConfig, runtime: ImageJobRuntime) {
-    return runOpenAIImageJob(asOpenAIImageJob(job), apiKey, config.baseURL, runtime, {
-      streamingPartialsEnabled: config.streamingPartialsEnabled ?? defaultStreamingPartialsEnabled(config.kind, config.baseURL)
-    });
+    return runOpenAIImageJob(asOpenAIImageJob(job), apiKey, config.baseURL, runtime);
   }
 };
 
@@ -247,9 +244,7 @@ export async function runOpenAIImageJob(
   runtime: OpenAIImageRuntime,
   options: OpenAIStreamOptions = {}
 ): Promise<GenerationJob> {
-  const requestJob = normalizeOpenAIJobParams(job, {
-    streamingPartialsEnabled: options.streamingPartialsEnabled ?? defaultStreamingPartialsEnabled("openai", baseURL)
-  });
+  const requestJob = normalizeOpenAIJobParams(job, options);
   if (requestJob.mode === "generate") {
     return runGeneration(requestJob, apiKey, baseURL, runtime);
   }
@@ -258,7 +253,7 @@ export async function runOpenAIImageJob(
 
 export function normalizeOpenAIJobParams(job: OpenAIImageJob, options: OpenAIStreamOptions = {}): OpenAIImageJob {
   let params = normalizeOpenAIRequestParams(job.params);
-  const canStream = job.mode === "generate" && options.streamingPartialsEnabled === true;
+  const canStream = job.mode === "generate";
   if (params.stream && !canStream) {
     params = { ...params, stream: false, partialImages: 0 };
   }

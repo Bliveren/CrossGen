@@ -33,7 +33,7 @@ function input(patch: Partial<ProviderConfigInput> = {}): ProviderConfigInput {
 
 describe("main config save builder", () => {
   it("preserves an existing key on same-provider saves without a new key", () => {
-    const next = buildProviderConfigForSave(savedConfig(), input(), "2026-06-09T02:00:00.000Z");
+    const next = buildProviderConfigForSave(savedConfig({ streamingPartialsEnabled: true }), input(), "2026-06-09T02:00:00.000Z");
 
     expect(next.kind).toBe("openai");
     expect(next.encryptedApiKey).toBe("plain:c2stdZXN0LW9wZW5haS1rZXk=");

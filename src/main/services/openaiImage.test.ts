@@ -126,8 +126,8 @@ describe("OpenAI image service", () => {
     const gatewayGenerateJob = normalizeOpenAIJobParams(job({ mode: "generate", params: params({ stream: true, partialImages: 2 }) }), {
       streamingPartialsEnabled: false
     });
-    expect(gatewayGenerateJob.params.stream).toBe(false);
-    expect(gatewayGenerateJob.params.partialImages).toBe(0);
+    expect(gatewayGenerateJob.params.stream).toBe(true);
+    expect(gatewayGenerateJob.params.partialImages).toBe(2);
 
     const editJob = normalizeOpenAIJobParams(job({ mode: "edit", params: params({ stream: true, partialImages: 2 }) }), {
       streamingPartialsEnabled: true
@@ -274,7 +274,7 @@ describe("OpenAI image service", () => {
     ]);
   });
 
-  it("defaults streaming on for direct OpenAI and off for OpenAI-compatible gateways", async () => {
+  it("honors explicit streaming on direct OpenAI and compatible gateways", async () => {
     const directBodies: Array<Record<string, unknown>> = [];
     const directFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
       directBodies.push(JSON.parse(String(init?.body)));
@@ -302,8 +302,7 @@ describe("OpenAI image service", () => {
 
     await runOpenAIImageJob(job({ params: params({ stream: true, partialImages: 1 }) }), "sk-test-key", "https://api.test/v1", gatewayRuntime);
 
-    expect(gatewayBodies[0]).toMatchObject({ stream: false });
-    expect(gatewayBodies[0]).not.toHaveProperty("partial_images");
+    expect(gatewayBodies[0]).toMatchObject({ stream: true, partial_images: 1 });
   });
 
   it("falls back to streaming generation events when compatible right-image JSON generations stay metadata-only", async () => {

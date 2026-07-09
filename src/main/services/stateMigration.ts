@@ -80,7 +80,7 @@ export const defaultStoredConfig: StoredProviderConfig = {
   defaultSize: DEFAULT_IMAGE_PARAMS.size,
   defaultQuality: DEFAULT_IMAGE_PARAMS.quality,
   timeoutMs: DEFAULT_IMAGE_PARAMS.timeoutMs,
-  streamingPartialsEnabled: true,
+  streamingPartialsEnabled: false,
   discoveredModels: [],
   activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
   activeModelId: DEFAULT_IMAGE_PARAMS.model,
