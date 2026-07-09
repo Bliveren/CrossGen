@@ -152,6 +152,18 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("keeps the PNG compression note in a tooltip instead of inline text", async () => {
+    await renderApp(snapshot());
+
+    await click(buttonByText("Parameters", ".section-toggle"));
+    await changeSelect(selectByLabel("Format"), "png");
+
+    const compressionField = inputByLabel("Compression").closest<HTMLElement>(".range-field")!;
+    expect(compressionField.dataset.tooltip).toBe("PNG ignores compression");
+    expect(compressionField.querySelector(".range-value")?.textContent).toBe("100%");
+    expect(document.body.textContent).not.toContain("PNG ignores compression");
+  });
+
   it("keeps the job progress listener stable when partial images arrive", async () => {
     const bridge = await renderApp(snapshot());
     const firstHandler = vi.mocked(bridge.onJobEvent).mock.calls[0]?.[0];
