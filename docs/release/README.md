@@ -35,6 +35,7 @@ External gate trackers:
 Release-specific preparation:
 
 - `v0.3.0`: [v0.3.0-preflight.md](./v0.3.0-preflight.md)
+- `v0.3.0`: [v0.3.0-closeout.md](./v0.3.0-closeout.md)
 
 Rules for updating evidence:
 
