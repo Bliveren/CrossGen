@@ -152,6 +152,25 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("keeps the job progress listener stable when partial images arrive", async () => {
+    const bridge = await renderApp(snapshot());
+    const firstHandler = vi.mocked(bridge.onJobEvent).mock.calls[0]?.[0];
+    expect(firstHandler).toBeTruthy();
+
+    await act(async () => {
+      firstHandler?.({ jobId: "partial-job", type: "partial", image: imageAsset("partial_1.png", "partial-job") });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      firstHandler?.({ jobId: "partial-job", type: "partial", image: imageAsset("partial_2.png", "partial-job") });
+      await Promise.resolve();
+    });
+
+    expect(bridge.onJobEvent).toHaveBeenCalledTimes(1);
+    expect(document.querySelectorAll(".partial-strip button")).toHaveLength(2);
+    expect(document.body.textContent).toContain("Partial image 2 received.");
+  });
+
   it("enables OpenAI General prompt-only fallback for non-focused image models", async () => {
     const defaultConfig = providerConfig({
       apiKeySaved: true,

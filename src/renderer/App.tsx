@@ -1,4 +1,4 @@
-import { Profiler, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, Profiler, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   BookOpen,
@@ -222,6 +222,15 @@ function PerfProfiler({ id, children }: { id: string; children: ReactNode }) {
     </Profiler>
   );
 }
+
+const StableGalleryRailPanel = memo(
+  function StableGalleryRailPanel({ children }: { dependencies: readonly unknown[]; children: ReactNode }) {
+    return <>{children}</>;
+  },
+  (previous, next) =>
+    previous.dependencies.length === next.dependencies.length &&
+    previous.dependencies.every((dependency, index) => Object.is(dependency, next.dependencies[index]))
+);
 
 const sizePresets = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x1152", "2048x2048", "3840x2160", "2160x3840"];
 const qualityOptions: ImageQuality[] = ["auto", "low", "medium", "high"];
@@ -1062,6 +1071,7 @@ export function App() {
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
   const paintedDuringStrokeRef = useRef(false);
   const hasAutoTestedConnectionRef = useRef(false);
+  const partialImageCountRef = useRef(0);
   const previewLayoutRef = useRef<HTMLDivElement | null>(null);
   const promptActionsRef = useRef<HTMLDivElement | null>(null);
   const primaryRunButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -1235,13 +1245,13 @@ export function App() {
   );
   const historyDisplayActionLabel = historyViewMode === "grid" ? copy.historyListView : copy.historyGridView;
   const galleryDisplayActionLabel = galleryViewMode === "grid" ? copy.galleryListView : copy.galleryGridView;
-  const gallerySortOptions: Array<{ value: GallerySortMode; label: string }> = [
+  const gallerySortOptions = useMemo<Array<{ value: GallerySortMode; label: string }>>(() => [
     { value: "newest", label: copy.sortNewest },
     { value: "oldest", label: copy.sortOldest },
     { value: "name", label: copy.sortName },
     { value: "size", label: copy.sortSize },
     { value: "modified", label: copy.sortModified }
-  ];
+  ], [copy]);
   const gallerySortLabel = gallerySortOptions.find((option) => option.value === gallerySort)?.label ?? copy.sortNewest;
   const selectedTagTarget: BatchTagTarget = rightRailView === "history" ? "history" : "gallery";
   const canTagCurrentSelection = selectedTagTarget === "history" ? canTagSelectedHistory : canTagSelectedGallery;
@@ -1884,6 +1894,11 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [bridge, brushSize, effectiveInputAssets, effectivePrompt, hasRestoredDraft, hasUserChangedDraft, maskAsset, maskDataUrl, requestMode, params]);
 
+  function resetPartialImages() {
+    partialImageCountRef.current = 0;
+    setPartialImages([]);
+  }
+
   useEffect(() => {
     if (!bridge) return;
     return bridge.onJobEvent((event) => {
@@ -1891,8 +1906,10 @@ export function App() {
         setNotice({ kind: "info", text: copy.notices.jobStarted });
       }
       if (event.type === "partial" && event.image) {
+        const fallbackLabel = currentPartialLabel(partialImageCountRef.current);
+        partialImageCountRef.current += 1;
         setPartialImages((current) => [...current, event.image as ImageAsset]);
-        setNotice({ kind: "info", text: copy.notices.partialReceived(event.partialIndex ?? currentPartialLabel(partialImages.length)) });
+        setNotice({ kind: "info", text: copy.notices.partialReceived(event.partialIndex ?? fallbackLabel) });
       }
       if (event.type === "completed") {
         setNotice({ kind: "success", text: copy.notices.imageCompleted });
@@ -1901,7 +1918,7 @@ export function App() {
         setNotice({ kind: "error", text: event.error ?? copy.jobFailed });
       }
     });
-  }, [bridge, copy, partialImages.length]);
+  }, [bridge, copy]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -2229,7 +2246,7 @@ export function App() {
     setActiveGalleryAssetId(asset.id);
     setActiveJob(null);
     setSelectedResultId(null);
-    setPartialImages([]);
+    resetPartialImages();
     resetPreviewView();
     setNotice({ kind: "info", text: copy.galleryOpenedForPreview(asset.originalName) });
   }
@@ -3189,7 +3206,7 @@ export function App() {
     }
 
     setIsRunning(true);
-    setPartialImages([]);
+    resetPartialImages();
     setActiveJob(null);
     setActiveGalleryAssetId(null);
     setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[requestMode].action) });
@@ -4954,6 +4971,165 @@ export function App() {
     );
   }
 
+  const galleryRailPanelDependencies = [
+    activeGalleryFolderId,
+    copy,
+    currentGalleryCreateParentId,
+    editingGalleryId,
+    expandedGalleryFolderIds,
+    galleryExplorerEntries,
+    galleryFolderAssetCounts,
+    galleryFolderDragTarget,
+    galleryFolderSelectOptions,
+    galleryFolderSubtreeAssetCounts,
+    galleryFoldersByParent,
+    gallerySearch,
+    gallerySort,
+    gallerySortLabel,
+    gallerySortOptions,
+    galleryTagFilter,
+    galleryTagsInput,
+    galleryViewMode,
+    galleryVirtualBottomSpacer,
+    galleryVirtualEntries,
+    galleryVirtualStartIndex,
+    galleryVirtualTopSpacer,
+    globalTagOptions,
+    isGalleryBatchMode,
+    isGallerySortMenuOpen,
+    selectedGalleryAssetIds,
+    selectedGalleryFolderIds,
+    snapshot.galleryAssets.length
+  ] as const;
+
+  const galleryRailPanel = useMemo(() => (
+    <div className="right-rail-panel gallery-panel gallery-explorer-panel" role="tabpanel">
+      <GalleryCompactControls
+        copy={copy}
+        activeFolderId={activeGalleryFolderId}
+        folderOptions={galleryFolderSelectOptions}
+        tagFilter={galleryTagFilter}
+        tagOptions={globalTagOptions}
+        onFolderChange={navigateGalleryFolder}
+        onTagFilterChange={setGalleryTagFilter}
+      />
+      <div className="rail-filter-row gallery-toolbar">
+        <label className="search-box">
+          <Search size={15} />
+          <input value={gallerySearch} onChange={(event) => setGallerySearch(event.target.value)} placeholder={copy.gallerySearch} />
+        </label>
+        <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)} aria-label={copy.galleryTagFilter}>
+          <option value="">{copy.galleryAllTags}</option>
+          {globalTagOptions.map((tag) => (
+            <option key={tag} value={tag}>{tag}</option>
+          ))}
+        </select>
+      </div>
+
+      <GallerySortToolbar
+        copy={copy}
+        sort={gallerySort}
+        sortLabel={gallerySortLabel}
+        sortOptions={gallerySortOptions}
+        isSortMenuOpen={isGallerySortMenuOpen}
+        onToggleSortMenu={() => setIsGallerySortMenuOpen((current) => !current)}
+        onSortChange={(sort) => {
+          setGallerySort(sort);
+          setIsGallerySortMenuOpen(false);
+        }}
+        onCreateFolder={() => openCreateGalleryFolderDialog(currentGalleryCreateParentId)}
+        onImport={() => void importToGallery()}
+      />
+      <div className="resource-explorer">
+        <GalleryDirectoryTree
+          copy={copy}
+          activeFolderId={activeGalleryFolderId}
+          allFolderId={GALLERY_ALL_FILTER}
+          uncategorizedFolderId={GALLERY_UNCATEGORIZED_FILTER}
+          batchMode={isGalleryBatchMode}
+          allAssetCount={snapshot.galleryAssets.length}
+          uncategorizedAssetCount={galleryFolderAssetCounts.get(GALLERY_UNCATEGORIZED_FILTER) ?? 0}
+          allDropTarget={galleryFolderDragTarget === GALLERY_ALL_FILTER}
+          uncategorizedDropTarget={galleryFolderDragTarget === GALLERY_UNCATEGORIZED_FILTER}
+          allDropHandlers={galleryFolderDropHandlers(GALLERY_ALL_FILTER)}
+          uncategorizedDropHandlers={galleryFolderDropHandlers(GALLERY_UNCATEGORIZED_FILTER)}
+          onNavigate={navigateGalleryFolder}
+          onContextMenu={openGalleryFolderContextMenu}
+        >
+          <GalleryTreeRows
+            copy={copy}
+            parentId={null}
+            foldersByParent={galleryFoldersByParent}
+            activeFolderId={activeGalleryFolderId}
+            batchMode={isGalleryBatchMode}
+            expandedFolderIds={expandedGalleryFolderIds}
+            selectedFolderIds={selectedGalleryFolderIds}
+            dragTargetId={galleryFolderDragTarget}
+            subtreeAssetCounts={galleryFolderSubtreeAssetCounts}
+            dropHandlersForFolder={galleryFolderDropHandlers}
+            folderDisplayPath={galleryFolderDisplayPath}
+            onPrepareEntryDrag={prepareGalleryEntryDrag}
+            onFolderContextMenu={openGalleryFolderContextMenu}
+            onToggleExpanded={toggleGalleryFolderExpanded}
+            onToggleSelectedFolder={(folderId, checked) => {
+              setSelectedGalleryFolderIds((current) => {
+                const next = new Set(current);
+                if (checked) next.add(folderId);
+                else next.delete(folderId);
+                return next;
+              });
+            }}
+            onNavigateFolder={navigateGalleryFolder}
+          />
+        </GalleryDirectoryTree>
+        <GalleryContentGrid
+          copy={copy}
+          contentRef={galleryContentRef}
+          activeFolderId={activeGalleryFolderId}
+          viewMode={galleryViewMode}
+          batchMode={isGalleryBatchMode}
+          dropTarget={galleryFolderDragTarget === activeGalleryFolderId}
+          folderDropTargetId={galleryFolderDragTarget}
+          entries={galleryExplorerEntries}
+          virtualEntries={galleryVirtualEntries}
+          virtualStartIndex={galleryVirtualStartIndex}
+          virtualTopSpacer={galleryVirtualTopSpacer}
+          virtualBottomSpacer={galleryVirtualBottomSpacer}
+          isGalleryEmpty={snapshot.galleryAssets.length === 0}
+          editingGalleryId={editingGalleryId}
+          tagsInput={galleryTagsInput}
+          folderSubtreeAssetCounts={galleryFolderSubtreeAssetCounts}
+          dropHandlersForFolder={galleryFolderDropHandlers}
+          formatBytes={formatBytes}
+          formatDate={formatDate}
+          folderDisplayPath={galleryFolderDisplayPath}
+          assetThumbnailPath={galleryAssetThumbnailPath}
+          isEntrySelected={isGalleryEntrySelected}
+          onScrollTopChange={setGalleryContentScrollTop}
+          onFolderContextMenu={openGalleryFolderContextMenu}
+          onPrepareEntryDrag={prepareGalleryEntryDrag}
+          onToggleSelection={toggleGalleryEntrySelection}
+          onOpenFolder={navigateGalleryFolder}
+          onRenameFolder={openRenameGalleryFolderDialog}
+          onPreviewAsset={previewGalleryAsset}
+          onAssetContextMenu={openGalleryAssetContextMenu}
+          onEditAssetTags={editGalleryTags}
+          onTagsInputChange={setGalleryTagsInput}
+          onSaveAssetTags={(asset) => void saveGalleryTags(asset)}
+          onCancelAssetTags={() => {
+            setEditingGalleryId(null);
+            setGalleryTagsInput("");
+          }}
+          onMoveTagPopoverPointerDown={(event) => event.stopPropagation()}
+          onMoveToolbarTowardPointer={movePreviewToolbarTowardPointer}
+          onResetToolbarDrift={resetPreviewToolbarDrift}
+          onRenameAsset={openRenameGalleryAssetDialog}
+          onDeleteAsset={(asset) => void removeGalleryAsset(asset)}
+        />
+      </div>
+    </div>
+  ), galleryRailPanelDependencies);
+
   return (
     <main
       className={[
@@ -5627,131 +5803,9 @@ export function App() {
             </HistoryListShell>
           </div>
         ) : (
-          <div className="right-rail-panel gallery-panel gallery-explorer-panel" role="tabpanel">
-            <GalleryCompactControls
-              copy={copy}
-              activeFolderId={activeGalleryFolderId}
-              folderOptions={galleryFolderSelectOptions}
-              tagFilter={galleryTagFilter}
-              tagOptions={globalTagOptions}
-              onFolderChange={navigateGalleryFolder}
-              onTagFilterChange={setGalleryTagFilter}
-            />
-            <div className="rail-filter-row gallery-toolbar">
-              <label className="search-box">
-                <Search size={15} />
-                <input value={gallerySearch} onChange={(event) => setGallerySearch(event.target.value)} placeholder={copy.gallerySearch} />
-              </label>
-              <select value={galleryTagFilter} onChange={(event) => setGalleryTagFilter(event.target.value)} aria-label={copy.galleryTagFilter}>
-                <option value="">{copy.galleryAllTags}</option>
-                {globalTagOptions.map((tag) => (
-                  <option key={tag} value={tag}>{tag}</option>
-                ))}
-              </select>
-            </div>
-
-            <GallerySortToolbar
-              copy={copy}
-              sort={gallerySort}
-              sortLabel={gallerySortLabel}
-              sortOptions={gallerySortOptions}
-              isSortMenuOpen={isGallerySortMenuOpen}
-              onToggleSortMenu={() => setIsGallerySortMenuOpen((current) => !current)}
-              onSortChange={(sort) => {
-                setGallerySort(sort);
-                setIsGallerySortMenuOpen(false);
-              }}
-              onCreateFolder={() => openCreateGalleryFolderDialog(currentGalleryCreateParentId)}
-              onImport={() => void importToGallery()}
-            />
-            <div className="resource-explorer">
-              <GalleryDirectoryTree
-                copy={copy}
-                activeFolderId={activeGalleryFolderId}
-                allFolderId={GALLERY_ALL_FILTER}
-                uncategorizedFolderId={GALLERY_UNCATEGORIZED_FILTER}
-                batchMode={isGalleryBatchMode}
-                allAssetCount={snapshot.galleryAssets.length}
-                uncategorizedAssetCount={galleryFolderAssetCounts.get(GALLERY_UNCATEGORIZED_FILTER) ?? 0}
-                allDropTarget={galleryFolderDragTarget === GALLERY_ALL_FILTER}
-                uncategorizedDropTarget={galleryFolderDragTarget === GALLERY_UNCATEGORIZED_FILTER}
-                allDropHandlers={galleryFolderDropHandlers(GALLERY_ALL_FILTER)}
-                uncategorizedDropHandlers={galleryFolderDropHandlers(GALLERY_UNCATEGORIZED_FILTER)}
-                onNavigate={navigateGalleryFolder}
-                onContextMenu={openGalleryFolderContextMenu}
-              >
-                <GalleryTreeRows
-                  copy={copy}
-                  parentId={null}
-                  foldersByParent={galleryFoldersByParent}
-                  activeFolderId={activeGalleryFolderId}
-                  batchMode={isGalleryBatchMode}
-                  expandedFolderIds={expandedGalleryFolderIds}
-                  selectedFolderIds={selectedGalleryFolderIds}
-                  dragTargetId={galleryFolderDragTarget}
-                  subtreeAssetCounts={galleryFolderSubtreeAssetCounts}
-                  dropHandlersForFolder={galleryFolderDropHandlers}
-                  folderDisplayPath={galleryFolderDisplayPath}
-                  onPrepareEntryDrag={prepareGalleryEntryDrag}
-                  onFolderContextMenu={openGalleryFolderContextMenu}
-                  onToggleExpanded={toggleGalleryFolderExpanded}
-                  onToggleSelectedFolder={(folderId, checked) => {
-                    setSelectedGalleryFolderIds((current) => {
-                      const next = new Set(current);
-                      if (checked) next.add(folderId);
-                      else next.delete(folderId);
-                      return next;
-                    });
-                  }}
-                  onNavigateFolder={navigateGalleryFolder}
-                />
-              </GalleryDirectoryTree>
-              <GalleryContentGrid
-                copy={copy}
-                contentRef={galleryContentRef}
-                activeFolderId={activeGalleryFolderId}
-                viewMode={galleryViewMode}
-                batchMode={isGalleryBatchMode}
-                dropTarget={galleryFolderDragTarget === activeGalleryFolderId}
-                folderDropTargetId={galleryFolderDragTarget}
-                entries={galleryExplorerEntries}
-                virtualEntries={galleryVirtualEntries}
-                virtualStartIndex={galleryVirtualStartIndex}
-                virtualTopSpacer={galleryVirtualTopSpacer}
-                virtualBottomSpacer={galleryVirtualBottomSpacer}
-                isGalleryEmpty={snapshot.galleryAssets.length === 0}
-                editingGalleryId={editingGalleryId}
-                tagsInput={galleryTagsInput}
-                folderSubtreeAssetCounts={galleryFolderSubtreeAssetCounts}
-                dropHandlersForFolder={galleryFolderDropHandlers}
-                formatBytes={formatBytes}
-                formatDate={formatDate}
-                folderDisplayPath={galleryFolderDisplayPath}
-                assetThumbnailPath={galleryAssetThumbnailPath}
-                isEntrySelected={isGalleryEntrySelected}
-                onScrollTopChange={setGalleryContentScrollTop}
-                onFolderContextMenu={openGalleryFolderContextMenu}
-                onPrepareEntryDrag={prepareGalleryEntryDrag}
-                onToggleSelection={toggleGalleryEntrySelection}
-                onOpenFolder={navigateGalleryFolder}
-                onRenameFolder={openRenameGalleryFolderDialog}
-                onPreviewAsset={previewGalleryAsset}
-                onAssetContextMenu={openGalleryAssetContextMenu}
-                onEditAssetTags={editGalleryTags}
-                onTagsInputChange={setGalleryTagsInput}
-                onSaveAssetTags={(asset) => void saveGalleryTags(asset)}
-                onCancelAssetTags={() => {
-                  setEditingGalleryId(null);
-                  setGalleryTagsInput("");
-                }}
-                onMoveTagPopoverPointerDown={(event) => event.stopPropagation()}
-                onMoveToolbarTowardPointer={movePreviewToolbarTowardPointer}
-                onResetToolbarDrift={resetPreviewToolbarDrift}
-                onRenameAsset={openRenameGalleryAssetDialog}
-                onDeleteAsset={(asset) => void removeGalleryAsset(asset)}
-              />
-            </div>
-          </div>
+          <StableGalleryRailPanel dependencies={galleryRailPanelDependencies}>
+            {galleryRailPanel}
+          </StableGalleryRailPanel>
         )}
         <div className={`right-rail-actions ${isRightRailActionDrawerOpen ? "drawer-open" : ""}`}>
           <span className="right-rail-summary">

@@ -144,7 +144,10 @@ export function useGalleryExplorerModel({
   const virtualEndRow = Math.min(virtualTotalRows, virtualStartRow + virtualVisibleRows);
   const virtualStartIndex = virtualStartRow * virtualColumns;
   const virtualEndIndex = Math.min(explorerEntries.length, virtualEndRow * virtualColumns);
-  const virtualEntries = explorerEntries.slice(virtualStartIndex, virtualEndIndex);
+  const virtualEntries = useMemo(
+    () => explorerEntries.slice(virtualStartIndex, virtualEndIndex),
+    [explorerEntries, virtualEndIndex, virtualStartIndex]
+  );
   const virtualTopSpacer = virtualStartRow * virtualRowHeight;
   const virtualBottomSpacer = Math.max(0, virtualTotalRows - virtualEndRow) * virtualRowHeight;
 
