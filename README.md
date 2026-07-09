@@ -87,7 +87,7 @@ The screenshots below show the published `0.2.x` workspace. Updated `v0.3.0` scr
 | API configuration management | The active API configuration is presented as a compact card. Open the dialog when you need to edit API Key, Base URL, API type, or discovery settings. |
 | Model discovery | Detects available models from the configured API and shows discovered-model counts and actionable failure messages. |
 | Launch models | GPT Image 2, Nano Banana 3, and General launch entries are enabled or disabled based on provider support, saved key status, and discovery results. |
-| GPT Image 2 | Text-to-image, reference editing, multi-image editing, exact-mask inpainting, and validated OpenAI Image API parameters. OpenAI streaming is currently disabled globally for broad aggregator compatibility. |
+| GPT Image 2 | Text-to-image, reference editing, multi-image editing, exact-mask inpainting, validated OpenAI Image API parameters, and per-config streaming partial previews. Direct OpenAI enables generation streaming by default; compatible gateways keep it opt-in. |
 | Nano Banana 3 | Gemini `generateContent` image generation, reference-image editing, guided-region editing, aspect ratio, resolution, Thinking, and Search grounding controls. |
 | General mode | A minimal fallback for discovered image-capable models. Gemini supports prompt and reference-image flows; OpenAI and Custom use a prompt-only OpenAI-compatible generation contract. |
 | Prompt templates | A focused manager supports saving, searching, tagging, importing, exporting, and applying reusable prompts. |
