@@ -868,7 +868,7 @@ export const translations: Record<Language, UiCopy> = {
     themeDark: "深色",
     english: "English",
     chinese: "中文",
-    tagline: "方便易用的一站式AI生图管理工具。",
+    tagline: "一站式AI生图管理",
     provider: "API 配置",
     providerLabel: "API 类型",
     apiAccess: "API 配置",
