@@ -338,6 +338,45 @@ describe("OpenAI image service", () => {
     expect(String(form?.get("prompt"))).toContain("Use the attached image content as visual input; do not ignore it.");
   });
 
+  it("retries OpenAI-compatible edits with singular image fields after metadata-only empty responses", async () => {
+    const source = await sourceAsset();
+    const imageFieldNames: string[] = [];
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData;
+      imageFieldNames.push(form.getAll("image[]").length > 0 ? "image[]" : form.getAll("image").length > 0 ? "image" : "missing");
+      if (imageFieldNames.length === 1) {
+        return Response.json({
+          model: "gpt-image-2",
+          data: null,
+          usage: { num_input_images: 1 },
+          extra_fields: {
+            request_type: "image_edit",
+            provider: "right-image",
+            resolved_model_used: "gpt-image-2",
+            provider_response_headers: { "cf-ray": "test-ray" }
+          }
+        });
+      }
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ stream: false })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(imageFieldNames).toEqual(["image[]", "image"]);
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
   it("passes advanced gpt-image-2 parameters through multipart edit requests", async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
     const sourcePath = path.join(tmpDir, "source.png");
@@ -618,7 +657,7 @@ describe("OpenAI image service", () => {
     const { runtime } = await createRuntime(fetchImpl);
 
     await expect(runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime)).rejects.toThrow(
-      "响应摘要：顶层字段：model,data,quality,size,usage,extra_fields；data 类型：null；usage 字段：num_input_images；extra_fields 字段：空对象"
+      "响应摘要：顶层字段：model,data,quality,size,usage,extra_fields；data 类型：null；usage 字段：num_input_images；输入图片数：2；extra_fields 字段：空对象"
     );
   });
 
