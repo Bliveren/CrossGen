@@ -20,6 +20,15 @@ import {
 } from "../../shared/validation.js";
 import type { ImageJobRuntime, ImageProviderAdapter, ImageProviderRuntime } from "./imageProviderAdapter.js";
 import { fetchWithTimeout } from "./openaiImageAdapter.js";
+import {
+  firstString,
+  isRecord,
+  readProviderApiError,
+  readProviderJsonResponse,
+  redactLikelySecrets,
+  requestIdFromHeaders,
+  type SecretRedactionOptions
+} from "./providerHttp.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 
 export interface GeminiInlineData {
@@ -67,17 +76,12 @@ interface GeminiGenerateContentResponse {
   modelVersion?: string;
 }
 
-interface GeminiApiErrorPayload {
-  error?: {
-    code?: number;
-    message?: string;
-    status?: string;
-  };
-}
-
 type GeminiImageJob = GenerationJob & { params: GeminiImageParams };
 type GeminiImageRuntime = ImageJobRuntime;
 type GeminiImageSource = GeminiInlineData & { url?: string };
+
+const GEMINI_SECRET_REDACTION: SecretRedactionOptions = { redactGoogleKeys: true };
+const GEMINI_REQUEST_ID_HEADERS = ["x-request-id", "x-goog-request-id"] as const;
 
 export const geminiImageAdapter: ImageProviderAdapter = {
   kind: "gemini",
@@ -183,7 +187,7 @@ export async function testGeminiConnection(
       Math.min(config.timeoutMs, 30000)
     );
 
-    const requestId = requestIdFromHeaders(response.headers);
+    const requestId = requestIdFromHeaders(response.headers, GEMINI_REQUEST_ID_HEADERS);
     if (!response.ok) {
       return {
         ok: false,
@@ -472,17 +476,12 @@ async function geminiImageSourceToBase64(image: GeminiImageSource, runtime: Gemi
 }
 
 async function readGeminiModelsResponse(response: Response): Promise<DiscoveredModel[]> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (contentType && !contentType.includes("application/json")) {
-    throw new Error(await readUnexpectedGeminiResponse(response, "JSON 模型列表"));
-  }
-
-  let payload: GeminiModelsResponse;
-  try {
-    payload = (await response.json()) as GeminiModelsResponse;
-  } catch {
-    throw new Error("Gemini API 返回的模型列表不是有效 JSON。请检查 Base URL 是否指向 Gemini API。");
-  }
+  const payload = await readProviderJsonResponse<GeminiModelsResponse>(response, {
+    responseLabel: "Gemini API",
+    expected: "JSON 模型列表",
+    invalidJsonMessage: "Gemini API 返回的模型列表不是有效 JSON。请检查 Base URL 是否指向 Gemini API。",
+    redaction: GEMINI_SECRET_REDACTION
+  });
 
   const models = Array.isArray(payload.models) ? payload.models : [];
   return models.flatMap((item): DiscoveredModel[] => {
@@ -505,28 +504,22 @@ async function readGeminiModelsResponse(response: Response): Promise<DiscoveredM
 }
 
 async function readGeminiApiError(response: Response): Promise<string> {
-  const requestId = requestIdFromHeaders(response.headers);
-  const requestSuffix = requestId ? ` Request ID: ${requestId}` : "";
-  const fallback = `Gemini API 请求失败：HTTP ${response.status}.${requestSuffix}`;
-
-  try {
-    const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json")) {
-      const payload = (await response.json()) as GeminiApiErrorPayload;
-      const message = payload.error?.message ?? payload.error?.status ?? String(payload.error?.code ?? "");
-      return message ? `Gemini API 请求失败：${redactLikelySecrets(message)}${requestSuffix}` : fallback;
+  return readProviderApiError(response, {
+    requestIdHeaders: GEMINI_REQUEST_ID_HEADERS,
+    redaction: GEMINI_SECRET_REDACTION,
+    fallbackMessage: (status, requestSuffix) => `Gemini API 请求失败：HTTP ${status}.${requestSuffix}`,
+    formatMessage: (message, requestSuffix) => `Gemini API 请求失败：${message}${requestSuffix}`,
+    extractJsonMessage(payload) {
+      if (!isRecord(payload) || !isRecord(payload.error)) return undefined;
+      const code = payload.error.code;
+      return firstString(payload.error.message, payload.error.status, typeof code === "number" ? String(code) : code);
     }
-
-    const text = await response.text();
-    return text.trim() ? `Gemini API 请求失败：${redactLikelySecrets(text.trim())}${requestSuffix}` : fallback;
-  } catch {
-    return fallback;
-  }
+  });
 }
 
 async function readUnexpectedGeminiResponse(response: Response, expected: string): Promise<string> {
   const contentType = response.headers.get("content-type") ?? "unknown";
-  const text = redactLikelySecrets((await response.text()).trim()).slice(0, 240);
+  const text = redactLikelySecrets((await response.text()).trim(), GEMINI_SECRET_REDACTION).slice(0, 240);
   const suffix = text ? ` 响应开头：${text}` : "";
   return `Gemini API 返回了非预期响应，期望 ${expected}，实际 Content-Type: ${contentType}.${suffix}`;
 }
@@ -546,14 +539,6 @@ function geminiJsonHeaders(apiKey: string): HeadersInit {
     "Content-Type": "application/json",
     Accept: "application/json"
   };
-}
-
-function requestIdFromHeaders(headers: Headers): string | undefined {
-  return headers.get("x-request-id") ?? headers.get("x-goog-request-id") ?? undefined;
-}
-
-function firstString(...values: unknown[]): string | undefined {
-  return values.find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim();
 }
 
 function mimeTypeFromUrl(url?: string): string | undefined {
@@ -576,8 +561,8 @@ function geminiNoImageMessage(parsed: { textParts: string[]; finishReasons: stri
 }
 
 function normalizeGeminiAdapterError(error: unknown): string {
-  if (error instanceof Error) return redactLikelySecrets(error.message);
-  return redactLikelySecrets(String(error));
+  if (error instanceof Error) return redactLikelySecrets(error.message, GEMINI_SECRET_REDACTION);
+  return redactLikelySecrets(String(error), GEMINI_SECRET_REDACTION);
 }
 
 function normalizeSupportedGeminiMimeType(mimeType: string): "image/png" | "image/jpeg" | "image/webp" {
@@ -598,12 +583,4 @@ function extensionForMimeType(mimeType: "image/png" | "image/jpeg" | "image/webp
   if (mimeType === "image/jpeg") return "jpg";
   if (mimeType === "image/webp") return "webp";
   return "png";
-}
-
-function redactLikelySecrets(value: string): string {
-  return value.replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-...redacted").replace(/AIza[A-Za-z0-9_-]{8,}/g, "AIza...redacted");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
