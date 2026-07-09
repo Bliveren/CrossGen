@@ -74,3 +74,38 @@ landmark-unique:
 - Fix success/notice color tokens without worsening contrast.
 - Preserve the zero-count checks for unlabeled buttons, missing image alt, and modal `aria-modal`.
 - Reduce or document remaining axe violations after the low-risk UI fixes.
+
+## v0.3.0 Final A11y Closeout
+
+Captured: 2026-07-09
+
+Commands:
+
+```bash
+pnpm build
+node scripts/create-large-gallery-fixture.mjs --profile gallery-small --output output/perf-fixtures/gallery-small --force
+node scripts/measure-gallery-performance.mjs --fixture output/perf-fixtures/gallery-small --output output/perf-baselines/a11y-final-light --iterations 1 --theme light
+node scripts/measure-gallery-performance.mjs --fixture output/perf-fixtures/gallery-small --output output/perf-baselines/a11y-final-dark --iterations 1 --theme dark
+```
+
+Raw local results:
+
+```text
+output/perf-baselines/a11y-final-light/gallery-small-ffa2b11bbcd9.json
+output/perf-baselines/a11y-final-dark/gallery-small-ffa2b11bbcd9.json
+output/perf-baselines/a11y-final-light/electron-renderer-metrics.json
+output/perf-baselines/a11y-final-dark/electron-renderer-metrics.json
+```
+
+Result summary:
+
+| Theme | Renderer status | Accessibility smoke | axe violations | axe incomplete |
+| --- | --- | --- | ---: | ---: |
+| Light | `ok` | `ok` | 0 | 2 |
+| Dark | `ok` | `ok` | 0 | 2 |
+
+Fixed closeout categories:
+
+- `aria-required-children`: the image-mode switch is now a button group instead of an ARIA tablist.
+- `landmark-unique`: the left parameter sidebar and right library rail now have distinct landmark labels.
+- `color-contrast`: light-mode muted text, filled accent controls, and selected Gallery folder text now meet the WCAG AA contrast threshold in the capture path.
