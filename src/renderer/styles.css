@@ -12,7 +12,7 @@
   --color-surface-hover: #f8ece1;
   --color-text-primary: #1f2d3d;
   --color-text-secondary: #586574;
-  --color-text-muted: #7f776c;
+  --color-text-muted: #766d62;
   --color-text-inverse: #ffffff;
   --color-border-subtle: #eadcc9;
   --color-border-strong: #d9bea5;
@@ -44,7 +44,7 @@
     --text-secondary: var(--color-text-secondary);
     --text-muted: var(--color-text-muted);
     --text-inverse: var(--color-text-inverse);
-    --text-on-accent: var(--color-text-inverse);
+    --text-on-accent: var(--color-text-primary);
     --border-subtle: var(--color-border-subtle);
     --border-strong: var(--color-border-strong);
     --accent: var(--color-accent);
@@ -52,6 +52,9 @@
     --accent-soft: var(--color-accent-soft);
     --accent-border: rgba(243, 112, 33, 0.3);
     --accent-rgb: 243, 112, 33;
+    --accent-text: #b64f12;
+    --accent-hover: #b64f12;
+    --text-on-accent-hover: var(--color-text-inverse);
     --success: #16735c;
     --success-strong: #0f604d;
     --success-soft: #e8f4f0;
@@ -117,6 +120,9 @@
       --accent-soft: #33251d;
       --accent-border: rgba(255, 152, 87, 0.36);
       --accent-rgb: 255, 152, 87;
+      --accent-text: var(--accent-strong);
+      --accent-hover: var(--accent-strong);
+      --text-on-accent-hover: var(--text-on-accent);
       --success: #63d6b4;
       --success-strong: #8be5cc;
       --success-soft: #12372f;
@@ -156,6 +162,9 @@
     --accent-soft: #33251d;
     --accent-border: rgba(255, 152, 87, 0.36);
     --accent-rgb: 255, 152, 87;
+    --accent-text: var(--accent-strong);
+    --accent-hover: var(--accent-strong);
+    --text-on-accent-hover: var(--text-on-accent);
     --success: #63d6b4;
     --success-strong: #8be5cc;
     --success-soft: #12372f;
@@ -220,8 +229,9 @@
   }
 
   button:hover:not(:disabled) {
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: var(--text-on-accent-hover);
   }
 
   button:active:not(:disabled) {
@@ -1774,7 +1784,7 @@
   }
 
   .launch-button.active small {
-    color: var(--accent-strong);
+    color: var(--accent-text);
   }
 
   .launch-button:disabled,
@@ -2149,7 +2159,7 @@
   .gallery-tree-row:hover .gallery-tree-folder-button {
     border-color: var(--accent-border);
     background: var(--accent-soft);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .gallery-tree-root.drop-target,

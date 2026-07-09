@@ -52,6 +52,20 @@ output/perf-baselines/phase6-dark-mode-dark/screenshots/renderer-dark.png
 
 The dark screenshot was visually checked for readable text, nonblank image canvas, visible panel boundaries, visible checkerboard background, and active orange controls. The dark axe run removes the light-mode `color-contrast` category from this capture.
 
+## v0.3.0 A11y Final Update
+
+Captured: 2026-07-09
+
+Raw local result:
+
+```text
+output/perf-baselines/a11y-final-dark/gallery-small-ffa2b11bbcd9.json
+output/perf-baselines/a11y-final-dark/electron-renderer-metrics.json
+output/perf-baselines/a11y-final-dark/screenshots/renderer-dark.png
+```
+
+The final dark-mode capture reports `axeAccessibilitySmoke.status = ok` with 0 violations. The previous `aria-required-children` and `landmark-unique` categories are cleared by the v0.3.0 final accessibility pass.
+
 ## Token Audit
 
 Dark mode is scoped through `@media (prefers-color-scheme: dark)` and Electron's `nativeTheme.themeSource` during automated captures. The renderer declares `color-scheme` for native controls and switches shared semantic variables:

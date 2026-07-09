@@ -61,7 +61,20 @@ The renderer smoke opens the Library path settings dialog and verifies the share
 | axe violations | 3 existing violations |
 | axe incomplete | 2 |
 
-Remaining axe categories are unchanged from the known baseline: `aria-required-children`, `color-contrast`, and `landmark-unique`.
+Remaining axe categories at this phase were unchanged from the known baseline: `aria-required-children`, `color-contrast`, and `landmark-unique`.
+
+## v0.3.0 A11y Final Update
+
+Captured: 2026-07-09
+
+The final accessibility pass keeps the dialog keyboard smoke checks passing and clears the remaining axe violations in both light and dark captures:
+
+```text
+output/perf-baselines/a11y-final-light/gallery-small-ffa2b11bbcd9.json
+output/perf-baselines/a11y-final-dark/gallery-small-ffa2b11bbcd9.json
+```
+
+Final axe violation count: 0 in light mode and 0 in dark mode.
 
 ## Scope Notes
 
