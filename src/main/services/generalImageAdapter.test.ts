@@ -167,6 +167,7 @@ describe("General image adapter", () => {
     expect(requestBody).not.toHaveProperty("moderation");
     expect(result.launchId).toBe("general");
     expect(result.params).toMatchObject({ launchId: "general", providerKind: "openai", model: "dall-e-3" });
+    expect(result.outputs[0].transientPreview?.dataUrl).toBe(`data:image/png;base64,${tinyPngBase64}`);
     expect(result.providerMetadata).toMatchObject({
       generalFallbackContract: "openai-compatible-minimal",
       generalFallbackProvider: "openai",

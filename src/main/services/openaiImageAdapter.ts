@@ -832,6 +832,9 @@ async function saveBase64Image(
     fileName,
     mimeType,
     sourceType,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    transientPreview: {
+      dataUrl: `data:${mimeType};base64,${b64Json}`
+    }
   };
 }

@@ -237,7 +237,10 @@ async function saveOpenAICompatibleGeneralImage(
     fileName,
     mimeType: normalizedMimeType,
     sourceType: "result",
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    transientPreview: {
+      dataUrl: `data:${normalizedMimeType};base64,${buffer.toString("base64")}`
+    }
   };
 }
 

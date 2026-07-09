@@ -1,10 +1,12 @@
 import type {
   FocusedLaunchId,
   GeneralImageParams,
+  GenerationJob,
   GeminiAspectRatio,
   GeminiImageParams,
   GeminiResolution,
   ImageBackground,
+  ImageAsset,
   ImageFormat,
   ImageParams,
   ImageQuality,
@@ -698,6 +700,20 @@ export function dataUrlToBase64(dataUrl: string): string {
   const index = dataUrl.indexOf(marker);
   if (index === -1) return dataUrl;
   return dataUrl.slice(index + marker.length);
+}
+
+export function stripTransientPreviewFromImageAsset(asset: ImageAsset): ImageAsset {
+  if (!asset.transientPreview) return asset;
+  const { transientPreview: _transientPreview, ...persistentAsset } = asset;
+  return persistentAsset;
+}
+
+export function stripTransientPreviewsFromJob(job: GenerationJob): GenerationJob {
+  if (!job.outputs.some((asset) => asset.transientPreview)) return job;
+  return {
+    ...job,
+    outputs: job.outputs.map(stripTransientPreviewFromImageAsset)
+  };
 }
 
 export function getValidationError(params: ImageParams, prompt: string): string | null {
