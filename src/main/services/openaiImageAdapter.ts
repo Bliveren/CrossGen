@@ -274,7 +274,13 @@ async function runGeneration(
   const response = await fetchGenerationResponse(job, apiKey, baseURL, runtime);
 
   if (!job.params.stream) {
-    return handleJsonImagesWithBackfill(response, job, runtime, (nextJob) => fetchGenerationResponse(nextJob, apiKey, baseURL, runtime));
+    return handleJsonGenerationImagesWithFallback(
+      response,
+      job,
+      runtime,
+      (nextJob) => fetchGenerationResponse(nextJob, apiKey, baseURL, runtime),
+      (streamJob) => fetchGenerationResponse(streamJob, apiKey, baseURL, runtime)
+    );
   }
 
   if (!response.ok && shouldRetryNonStreamAfterStreamFailure(response.status)) {
@@ -335,13 +341,10 @@ async function runEdit(
   const response = await fetchEditResponse(job, apiKey, baseURL, runtime);
 
   if (!job.params.stream) {
-    let editImageFieldName: EditImageFieldName = "image[]";
-    return handleJsonImagesWithBackfill(response, job, runtime, (nextJob, purpose) => {
-      if (purpose === "empty-retry") {
-        editImageFieldName = alternateEditImageFieldName(editImageFieldName);
-      }
-      return fetchEditResponse(nextJob, apiKey, baseURL, runtime, editImageFieldName);
-    });
+    return handleJsonEditImagesWithFallback(response, job, runtime, (nextJob, purpose) => {
+      const imageFieldName = purpose === "empty-retry" ? "image" : "image[]";
+      return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName);
+    }, (streamJob) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, "image[]"));
   }
 
   return handleImagesResponse(response, job, "image_edit", runtime);
@@ -401,10 +404,6 @@ async function fetchEditResponse(
   );
 }
 
-function alternateEditImageFieldName(current: EditImageFieldName): EditImageFieldName {
-  return current === "image[]" ? "image" : "image[]";
-}
-
 async function assetToBlob(asset: InputAsset): Promise<Blob> {
   const content = await fs.readFile(asset.path);
   return new Blob([content], { type: asset.mimeType });
@@ -414,7 +413,8 @@ async function handleImagesResponse(
   response: Response,
   job: OpenAIImageJob,
   eventPrefix: "image_generation" | "image_edit",
-  runtime: OpenAIImageRuntime
+  runtime: OpenAIImageRuntime,
+  firstIndex = 0
 ): Promise<GenerationJob> {
   if (!response.ok) {
     throw new Error(await readApiError(response));
@@ -425,7 +425,7 @@ async function handleImagesResponse(
     if (contentType.includes("application/json")) {
       return handleJsonImagesResponse(response, job, runtime);
     }
-    return handleStreamResponse(response, job, eventPrefix, runtime);
+    return handleStreamResponse(response, job, eventPrefix, runtime, firstIndex);
   }
 
   return handleJsonImagesResponse(response, job, runtime);
@@ -502,6 +502,192 @@ async function handleJsonImagesWithBackfill(
     if (nextResult.outputs.length === 0) {
       break;
     }
+    outputs.push(...nextResult.outputs);
+    usage = mergeUsageDetails(usage, nextResult.usage);
+  }
+
+  if (outputs.length < requestedCount) {
+    throw new Error(`OpenAI API 返回图片数量不足：请求 ${requestedCount} 张，实际收到 ${outputs.length} 张。`);
+  }
+
+  return {
+    ...job,
+    outputs,
+    usage,
+    status: "succeeded",
+    updatedAt: new Date().toISOString()
+  };
+}
+
+async function handleJsonGenerationImagesWithFallback(
+  response: Response,
+  job: OpenAIImageJob,
+  runtime: OpenAIImageRuntime,
+  fetchAdditional: (job: OpenAIImageJob, purpose: JsonImageFetchPurpose) => Promise<Response>,
+  fetchStreamFallback: (job: OpenAIImageJob) => Promise<Response>
+): Promise<GenerationJob> {
+  const requestedCount = Math.max(1, job.params.n);
+  const firstResult = await readAndSaveJsonImagesResponse(response, job, runtime, 0, requestedCount);
+  const outputs = [...firstResult.outputs];
+  let usage = firstResult.usage;
+  let emptyReason = firstResult.emptyReason;
+
+  if (outputs.length > 0) {
+    return completeJsonBackfill(job, outputs, usage, runtime, fetchAdditional);
+  }
+
+  if (firstResult.retryableEmpty) {
+    const retryJob: OpenAIImageJob = {
+      ...job,
+      params: {
+        ...job.params,
+        n: requestedCount,
+        stream: false,
+        partialImages: 0
+      }
+    };
+    const retryResponse = await fetchAdditional(retryJob, "empty-retry");
+    const retryResult = await readAndSaveJsonImagesResponse(retryResponse, job, runtime, 0, requestedCount);
+    outputs.push(...retryResult.outputs);
+    usage = mergeUsageDetails(usage, retryResult.usage);
+    emptyReason = retryResult.emptyReason
+      ? `${retryResult.emptyReason}；已自动重试 1 次，仍未收到图片。`
+      : "已自动重试 1 次，仍未收到图片。";
+
+    if (outputs.length > 0) {
+      return completeJsonBackfill(job, outputs, usage, runtime, fetchAdditional);
+    }
+
+    try {
+      while (countFinalOutputs(outputs) < requestedCount) {
+        const firstIndex = countFinalOutputs(outputs);
+        const streamJob: OpenAIImageJob = {
+          ...job,
+          params: {
+            ...job.params,
+            n: 1,
+            stream: true,
+            partialImages: 1
+          }
+        };
+        const streamResponse = await fetchStreamFallback(streamJob);
+        const streamResult = await handleImagesResponse(streamResponse, streamJob, "image_generation", runtime, firstIndex);
+        const finalCountBefore = countFinalOutputs(outputs);
+        outputs.push(...streamResult.outputs);
+        usage = mergeUsageDetails(usage, streamResult.usage);
+        if (countFinalOutputs(outputs) <= finalCountBefore) break;
+      }
+
+      if (countFinalOutputs(outputs) >= requestedCount) {
+        return {
+          ...job,
+          outputs,
+          usage,
+          status: "succeeded",
+          updatedAt: new Date().toISOString()
+        };
+      }
+    } catch (error) {
+      emptyReason = `${emptyReason ?? ""}；已尝试流式生成兜底但仍失败：${normalizeAdapterError(error)}`;
+    }
+  }
+
+  throw new Error(noSavableOpenAIImageMessage(emptyReason));
+}
+
+async function handleJsonEditImagesWithFallback(
+  response: Response,
+  job: OpenAIImageJob,
+  runtime: OpenAIImageRuntime,
+  fetchAdditional: (job: OpenAIImageJob, purpose: JsonImageFetchPurpose) => Promise<Response>,
+  fetchStreamFallback: (job: OpenAIImageJob) => Promise<Response>
+): Promise<GenerationJob> {
+  const requestedCount = Math.max(1, job.params.n);
+  const firstResult = await readAndSaveJsonImagesResponse(response, job, runtime, 0, requestedCount);
+  const outputs = [...firstResult.outputs];
+  let usage = firstResult.usage;
+  let emptyReason = firstResult.emptyReason;
+
+  if (outputs.length > 0) {
+    return completeJsonBackfill(job, outputs, usage, runtime, fetchAdditional);
+  }
+
+  if (firstResult.retryableEmpty) {
+    const retryJob: OpenAIImageJob = {
+      ...job,
+      params: {
+        ...job.params,
+        n: requestedCount,
+        stream: false,
+        partialImages: 0
+      }
+    };
+    const retryResponse = await fetchAdditional(retryJob, "empty-retry");
+    const retryResult = await readAndSaveJsonImagesResponse(retryResponse, job, runtime, 0, requestedCount);
+    outputs.push(...retryResult.outputs);
+    usage = mergeUsageDetails(usage, retryResult.usage);
+    emptyReason = retryResult.emptyReason
+      ? `${retryResult.emptyReason}；已自动重试 1 次，仍未收到图片。`
+      : "已自动重试 1 次，仍未收到图片。";
+
+    if (outputs.length > 0) {
+      return completeJsonBackfill(job, outputs, usage, runtime, fetchAdditional);
+    }
+
+    const streamJob: OpenAIImageJob = {
+      ...job,
+      params: {
+        ...job.params,
+        n: requestedCount,
+        stream: true,
+        partialImages: 1
+      }
+    };
+    try {
+      const streamResponse = await fetchStreamFallback(streamJob);
+      const streamResult = await handleImagesResponse(streamResponse, streamJob, "image_edit", runtime);
+      return {
+        ...streamResult,
+        usage: mergeUsageDetails(usage, streamResult.usage),
+        params: job.params
+      };
+    } catch (error) {
+      emptyReason = `${emptyReason ?? ""}；已尝试流式编辑兜底但仍失败：${normalizeAdapterError(error)}`;
+    }
+  }
+
+  throw new Error(noSavableOpenAIImageMessage(emptyReason));
+}
+
+function countFinalOutputs(outputs: ImageAsset[]): number {
+  return outputs.filter((asset) => asset.sourceType === "result").length;
+}
+
+async function completeJsonBackfill(
+  job: OpenAIImageJob,
+  initialOutputs: ImageAsset[],
+  initialUsage: UsageDetails | undefined,
+  runtime: OpenAIImageRuntime,
+  fetchAdditional: (job: OpenAIImageJob, purpose: JsonImageFetchPurpose) => Promise<Response>
+): Promise<GenerationJob> {
+  const requestedCount = Math.max(1, job.params.n);
+  const outputs = [...initialOutputs];
+  let usage = initialUsage;
+
+  while (outputs.length < requestedCount) {
+    const remainingCount = requestedCount - outputs.length;
+    const nextJob: OpenAIImageJob = {
+      ...job,
+      params: {
+        ...job.params,
+        n: remainingCount,
+        stream: false,
+        partialImages: 0
+      }
+    };
+    const nextResponse = await fetchAdditional(nextJob, "backfill");
+    const nextResult = await readAndSaveJsonImagesResponse(nextResponse, job, runtime, outputs.length, remainingCount);
+    if (nextResult.outputs.length === 0) break;
     outputs.push(...nextResult.outputs);
     usage = mergeUsageDetails(usage, nextResult.usage);
   }
@@ -1048,7 +1234,8 @@ async function handleStreamResponse(
   response: Response,
   job: OpenAIImageJob,
   eventPrefix: "image_generation" | "image_edit",
-  runtime: OpenAIImageRuntime
+  runtime: OpenAIImageRuntime,
+  firstIndex = 0
 ): Promise<GenerationJob> {
   if (!response.body) {
     throw new Error("OpenAI API 返回了空的流式响应。");
@@ -1056,8 +1243,8 @@ async function handleStreamResponse(
 
   const outputs: ImageAsset[] = [];
   let usage: UsageDetails | undefined;
-  let partialIndex = 0;
-  let resultIndex = 0;
+  let partialIndex = firstIndex;
+  let resultIndex = firstIndex;
 
   await parseSSE(response.body, async (event) => {
     if (event.error?.message) {

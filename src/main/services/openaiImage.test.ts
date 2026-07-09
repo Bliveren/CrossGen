@@ -306,6 +306,64 @@ describe("OpenAI image service", () => {
     expect(gatewayBodies[0]).not.toHaveProperty("partial_images");
   });
 
+  it("falls back to streaming generation events when compatible right-image JSON generations stay metadata-only", async () => {
+    const requests: Array<{ accept: string; body: Record<string, unknown> }> = [];
+    const emptyRightImagePayload = {
+      model: "gpt-image-2",
+      data: null,
+      quality: "auto",
+      size: "auto",
+      usage: { num_input_images: 0 },
+      extra_fields: {
+        request_type: "image_generation",
+        routing_info: { route: "test" },
+        provider: "right-image",
+        original_model_requested: "gpt-image-2",
+        resolved_model_used: "gpt-image-2",
+        latency: 1.2,
+        chunk_index: 0,
+        provider_response_headers: {
+          "Cf-Cache-Status": "DYNAMIC",
+          "Cf-Ray": "test-ray",
+          Nel: "{}",
+          "Report-To": "{}",
+          "Server-Timing": "cf",
+          Via: "test"
+        }
+      }
+    };
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requests.push({
+        accept: new Headers(init?.headers).get("Accept") ?? "",
+        body: JSON.parse(String(init?.body))
+      });
+      if (requests.length < 3) {
+        return Response.json(emptyRightImagePayload);
+      }
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: image_generation.completed\ndata: ${JSON.stringify({ type: "image_generation.completed", b64_json: tinyPngBase64, usage: { total_tokens: 7 } })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job({ params: params({ stream: false }) }), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(requests).toEqual([
+      { accept: "application/json", body: expect.objectContaining({ stream: false, n: 1 }) },
+      { accept: "application/json", body: expect.objectContaining({ stream: false, n: 1 }) },
+      { accept: "text/event-stream", body: expect.objectContaining({ stream: true, partial_images: 1, n: 1 }) }
+    ]);
+    expect(result.status).toBe("succeeded");
+    expect(result.params).toMatchObject({ stream: false, partialImages: 0 });
+    expect(result.usage?.total_tokens).toBe(7);
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
   it("backfills OpenAI outputs when a provider ignores n and returns one image at a time", async () => {
     const requestBodies: Array<Record<string, unknown>> = [];
     const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
@@ -434,6 +492,77 @@ describe("OpenAI image service", () => {
 
     expect(imageFieldNames).toEqual(["image[]", "image"]);
     expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("falls back to streaming edit events when compatible right-image JSON edits stay metadata-only", async () => {
+    const source = await sourceAsset();
+    const requests: Array<{ accept: string; imageFieldName: string; stream: string | null; partialImages: string | null }> = [];
+    const emptyRightImagePayload = {
+      model: "gpt-image-2",
+      data: null,
+      quality: "auto",
+      size: "auto",
+      usage: { num_input_images: 1 },
+      extra_fields: {
+        request_type: "image_edit",
+        routing_info: { route: "test" },
+        provider: "right-image",
+        original_model_requested: "gpt-image-2",
+        resolved_model_used: "gpt-image-2",
+        latency: 1.2,
+        chunk_index: 0,
+        provider_response_headers: {
+          "Cf-Cache-Status": "DYNAMIC",
+          "Cf-Ray": "test-ray",
+          Nel: "{}",
+          "Report-To": "{}",
+          "Server-Timing": "cf",
+          Via: "test"
+        }
+      }
+    };
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData;
+      requests.push({
+        accept: new Headers(init?.headers).get("Accept") ?? "",
+        imageFieldName: form.getAll("image[]").length > 0 ? "image[]" : form.getAll("image").length > 0 ? "image" : "missing",
+        stream: form.get("stream")?.toString() ?? null,
+        partialImages: form.get("partial_images")?.toString() ?? null
+      });
+      if (requests.length < 3) {
+        return Response.json(emptyRightImagePayload);
+      }
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: image_edit.completed\ndata: ${JSON.stringify({ type: "image_edit.completed", b64_json: tinyPngBase64, usage: { total_tokens: 7 } })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ stream: false })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests).toEqual([
+      { accept: "application/json", imageFieldName: "image[]", stream: "false", partialImages: null },
+      { accept: "application/json", imageFieldName: "image", stream: "false", partialImages: null },
+      { accept: "text/event-stream", imageFieldName: "image[]", stream: "true", partialImages: "1" }
+    ]);
+    expect(result.status).toBe("succeeded");
+    expect(result.params).toMatchObject({ stream: false, partialImages: 0 });
+    expect(result.usage?.total_tokens).toBe(7);
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
