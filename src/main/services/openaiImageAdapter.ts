@@ -61,6 +61,9 @@ interface OpenAIStreamOptions {
   streamingPartialsEnabled?: boolean;
 }
 
+type JsonImageFetchPurpose = "empty-retry" | "backfill";
+type EditImageFieldName = "image[]" | "image";
+
 export type OpenAIImageRuntime = ImageJobRuntime;
 export type OpenAIImageJob = GenerationJob & { params: OpenAIImageParams };
 
@@ -332,7 +335,13 @@ async function runEdit(
   const response = await fetchEditResponse(job, apiKey, baseURL, runtime);
 
   if (!job.params.stream) {
-    return handleJsonImagesWithBackfill(response, job, runtime, (nextJob) => fetchEditResponse(nextJob, apiKey, baseURL, runtime));
+    let editImageFieldName: EditImageFieldName = "image[]";
+    return handleJsonImagesWithBackfill(response, job, runtime, (nextJob, purpose) => {
+      if (purpose === "empty-retry") {
+        editImageFieldName = alternateEditImageFieldName(editImageFieldName);
+      }
+      return fetchEditResponse(nextJob, apiKey, baseURL, runtime, editImageFieldName);
+    });
   }
 
   return handleImagesResponse(response, job, "image_edit", runtime);
@@ -361,7 +370,8 @@ async function fetchEditResponse(
   job: OpenAIImageJob,
   apiKey: string,
   baseURL: string,
-  runtime: OpenAIImageRuntime
+  runtime: OpenAIImageRuntime,
+  imageFieldName: EditImageFieldName = "image[]"
 ): Promise<Response> {
   const form = new FormData();
   for (const [key, value] of Object.entries(baseRequestBody(job.params, openAIEditPrompt(job)))) {
@@ -369,7 +379,7 @@ async function fetchEditResponse(
   }
 
   for (const asset of job.inputAssets) {
-    form.append("image[]", await assetToBlob(asset), asset.name);
+    form.append(imageFieldName, await assetToBlob(asset), asset.name);
   }
 
   if (job.maskAsset) {
@@ -389,6 +399,10 @@ async function fetchEditResponse(
     },
     job.params.timeoutMs
   );
+}
+
+function alternateEditImageFieldName(current: EditImageFieldName): EditImageFieldName {
+  return current === "image[]" ? "image" : "image[]";
 }
 
 async function assetToBlob(asset: InputAsset): Promise<Blob> {
@@ -441,7 +455,7 @@ async function handleJsonImagesWithBackfill(
   response: Response,
   job: OpenAIImageJob,
   runtime: OpenAIImageRuntime,
-  fetchAdditional: (job: OpenAIImageJob) => Promise<Response>
+  fetchAdditional: (job: OpenAIImageJob, purpose: JsonImageFetchPurpose) => Promise<Response>
 ): Promise<GenerationJob> {
   const requestedCount = Math.max(1, job.params.n);
   const firstResult = await readAndSaveJsonImagesResponse(response, job, runtime, 0, requestedCount);
@@ -459,7 +473,7 @@ async function handleJsonImagesWithBackfill(
         partialImages: 0
       }
     };
-    const retryResponse = await fetchAdditional(retryJob);
+    const retryResponse = await fetchAdditional(retryJob, "empty-retry");
     const retryResult = await readAndSaveJsonImagesResponse(retryResponse, job, runtime, 0, requestedCount);
     outputs.push(...retryResult.outputs);
     usage = mergeUsageDetails(usage, retryResult.usage);
@@ -483,7 +497,7 @@ async function handleJsonImagesWithBackfill(
         partialImages: 0
       }
     };
-    const nextResponse = await fetchAdditional(nextJob);
+    const nextResponse = await fetchAdditional(nextJob, "backfill");
     const nextResult = await readAndSaveJsonImagesResponse(nextResponse, job, runtime, outputs.length, remainingCount);
     if (nextResult.outputs.length === 0) {
       break;
@@ -837,6 +851,11 @@ function describeNoImagePayload(payload: unknown): string | undefined {
   if (isRecord(payload.usage)) {
     const usageKeys = Object.keys(payload.usage).slice(0, 8);
     if (usageKeys.length > 0) details.push(`usage 字段：${usageKeys.join(",")}`);
+    if (typeof payload.usage.num_input_images === "number") {
+      details.push(`输入图片数：${payload.usage.num_input_images}`);
+    } else if (isSimpleDiagnosticValue(payload.usage.num_input_images)) {
+      details.push(`输入图片数：${describePrimitiveValue(payload.usage.num_input_images)}`);
+    }
   }
 
   if (isRecord(payload.extra_fields)) {
