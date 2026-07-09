@@ -269,6 +269,10 @@ export interface UiCopy {
   count: string;
   streamPartialPreview: string;
   streamSingleOutputOnly: string;
+  streamPartialPreviewUnavailable: string;
+  streamPartialPreviewGenerateOnly: string;
+  streamingPartialsConfig: string;
+  streamingPartialsConfigHint: string;
   partialImages: string;
   thinking: string;
   searchGrounding: string;
@@ -625,6 +629,10 @@ export const translations: Record<Language, UiCopy> = {
     count: "Count",
     streamPartialPreview: "Stream partial preview",
     streamSingleOutputOnly: "Stream partial preview is available only when count is 1.",
+    streamPartialPreviewUnavailable: "Enable streaming for the current OpenAI API config first.",
+    streamPartialPreviewGenerateOnly: "Stream partial preview is available only for text-to-image generation.",
+    streamingPartialsConfig: "Enable stream partial previews",
+    streamingPartialsConfigHint: "Direct OpenAI enables this by default; compatible gateways should enable it only after they are known to support SSE image events.",
     partialImages: "Partial images",
     thinking: "Thinking",
     searchGrounding: "Search grounding",
@@ -1043,6 +1051,10 @@ export const translations: Record<Language, UiCopy> = {
     count: "数量",
     streamPartialPreview: "流式局部预览",
     streamSingleOutputOnly: "流式局部预览仅支持数量为 1 时使用。",
+    streamPartialPreviewUnavailable: "请先在当前 OpenAI API 配置中启用流式预览。",
+    streamPartialPreviewGenerateOnly: "流式局部预览仅支持文生图生成。",
+    streamingPartialsConfig: "启用流式局部预览",
+    streamingPartialsConfigHint: "直连 OpenAI 默认启用；兼容网关确认支持 SSE 图片事件后再开启。",
     partialImages: "局部预览数",
     thinking: "Thinking",
     searchGrounding: "联网搜索 grounding",

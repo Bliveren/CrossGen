@@ -99,6 +99,19 @@ export function normalizeBaseURL(value: unknown): string {
   }
 }
 
+export function isDirectOpenAIBaseURL(value: string): boolean {
+  try {
+    const url = new URL(normalizeBaseURL(value));
+    return url.protocol === "https:" && url.hostname === "api.openai.com" && url.pathname.replace(/\/+$/, "") === "/v1";
+  } catch {
+    return false;
+  }
+}
+
+export function defaultStreamingPartialsEnabled(kind: ProviderKind | undefined, baseURL: string): boolean {
+  return kind === "openai" && isDirectOpenAIBaseURL(baseURL);
+}
+
 export function redactSecret(value: unknown): string {
   if (typeof value !== "string") return "";
   if (!value) return "";
@@ -367,6 +380,9 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
   }
   if (!isInteger(input.timeoutMs) || input.timeoutMs < 30000 || input.timeoutMs > 600000) {
     return { ok: false, message: "默认超时时间需在 30 到 600 秒之间。" };
+  }
+  if (input.streamingPartialsEnabled !== undefined && typeof input.streamingPartialsEnabled !== "boolean") {
+    return { ok: false, message: "流式预览配置无效。" };
   }
   if (input.apiKey !== undefined && typeof input.apiKey !== "string") {
     return { ok: false, message: "API Key 格式无效。" };

@@ -220,6 +220,7 @@ interface ApiConfigDetailProps {
   name: string;
   apiKey: string;
   baseURL: string;
+  streamingPartialsEnabled: boolean;
   namePlaceholder: string;
   apiKeyPlaceholder: string;
   discoveryTooltip: string;
@@ -230,6 +231,7 @@ interface ApiConfigDetailProps {
   onNameChange: (value: string) => void;
   onApiKeyChange: (value: string) => void;
   onBaseURLChange: (value: string) => void;
+  onStreamingPartialsEnabledChange: (value: boolean) => void;
   onSubmit: () => void;
   onDiscover: () => void;
   onDelete: () => void;
@@ -270,6 +272,7 @@ interface ApiConfigDialogProps {
   name: string;
   apiKey: string;
   baseURL: string;
+  streamingPartialsEnabled: boolean;
   apiKeyPlaceholder: string;
   selectedDiscoveryText: string;
   selectedModelSummary: string;
@@ -302,6 +305,7 @@ interface ApiConfigDialogProps {
   onNameChange: (value: string) => void;
   onApiKeyChange: (value: string) => void;
   onBaseURLChange: (value: string) => void;
+  onStreamingPartialsEnabledChange: (value: boolean) => void;
   onSubmit: () => void;
 }
 
@@ -322,6 +326,7 @@ export function ApiConfigDialog({
   name,
   apiKey,
   baseURL,
+  streamingPartialsEnabled,
   apiKeyPlaceholder,
   selectedDiscoveryText,
   selectedModelSummary,
@@ -354,6 +359,7 @@ export function ApiConfigDialog({
   onNameChange,
   onApiKeyChange,
   onBaseURLChange,
+  onStreamingPartialsEnabledChange,
   onSubmit
 }: ApiConfigDialogProps) {
   const renderCard = (config: ProviderConfig, active: boolean) => (
@@ -439,6 +445,7 @@ export function ApiConfigDialog({
             name={name}
             apiKey={apiKey}
             baseURL={baseURL}
+            streamingPartialsEnabled={streamingPartialsEnabled}
             namePlaceholder={providerLabelForKind(selectedConfig.kind)}
             apiKeyPlaceholder={apiKeyPlaceholder}
             discoveryTooltip={selectedDiscoveryText}
@@ -449,6 +456,7 @@ export function ApiConfigDialog({
             onNameChange={onNameChange}
             onApiKeyChange={onApiKeyChange}
             onBaseURLChange={onBaseURLChange}
+            onStreamingPartialsEnabledChange={onStreamingPartialsEnabledChange}
             onSubmit={onSubmit}
             onDiscover={() => onDiscoverConfig(selectedConfig)}
             onDelete={() => onDeleteConfig(selectedConfig)}
@@ -533,6 +541,7 @@ export function ApiConfigDetail({
   name,
   apiKey,
   baseURL,
+  streamingPartialsEnabled,
   namePlaceholder,
   apiKeyPlaceholder,
   discoveryTooltip,
@@ -543,6 +552,7 @@ export function ApiConfigDetail({
   onNameChange,
   onApiKeyChange,
   onBaseURLChange,
+  onStreamingPartialsEnabledChange,
   onSubmit,
   onDiscover,
   onDelete
@@ -587,6 +597,16 @@ export function ApiConfigDetail({
           onChange={(event) => onBaseURLChange(event.target.value)}
         />
       </label>
+      {selectedConfig.kind === "openai" && (
+        <label className="checkbox-row" title={copy.streamingPartialsConfigHint}>
+          <input
+            type="checkbox"
+            checked={streamingPartialsEnabled}
+            onChange={(event) => onStreamingPartialsEnabledChange(event.target.checked)}
+          />
+          {copy.streamingPartialsConfig}
+        </label>
+      )}
       <div className="button-row">
         <button type="submit" className={saved ? "saved-action" : undefined} disabled={saving}>
           {saving ? <Loader2 className="spin" size={16} /> : saved ? <CheckCircle2 size={16} /> : <Save size={16} />}

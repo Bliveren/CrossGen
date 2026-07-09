@@ -48,6 +48,7 @@ import type {
 import {
   DEFAULT_IMAGE_PARAMS,
   dataUrlToBase64,
+  defaultStreamingPartialsEnabled,
   getValidationError,
   stripTransientPreviewsFromJob,
   validateApiKey,
@@ -398,6 +399,7 @@ function toPublicConfig(config: StoredProviderConfig): ProviderConfig {
     defaultSize: config.defaultSize,
     defaultQuality: config.defaultQuality,
     timeoutMs: config.timeoutMs,
+    streamingPartialsEnabled: config.streamingPartialsEnabled,
     discoveredModels: config.discoveredModels,
     lastModelDiscoveryAt: config.lastModelDiscoveryAt,
     lastModelDiscoveryError: config.lastModelDiscoveryError,
@@ -1129,6 +1131,7 @@ async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConf
     defaultSize: input.defaultSize,
     defaultQuality: input.defaultQuality,
     timeoutMs: input.timeoutMs,
+    streamingPartialsEnabled: input.streamingPartialsEnabled ?? defaultStreamingPartialsEnabled(kind, input.baseURL),
     discoveredModels: [],
     activeLaunchId: input.activeLaunchId ?? GPT_IMAGE_2_LAUNCH_ID,
     activeModelId: input.activeModelId ?? input.defaultModel,

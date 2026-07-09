@@ -19,7 +19,8 @@ import {
   shouldSendCompression,
   validateMaskMimeType,
   validateMaskSourceFormat,
-  validateOpenAIRunJobRequest
+  validateOpenAIRunJobRequest,
+  defaultStreamingPartialsEnabled
 } from "../../shared/validation.js";
 import type { ImageJobRuntime, ImageProviderAdapter, ImageProviderRuntime } from "./imageProviderAdapter.js";
 import { firstString, isRecord, readProviderApiError, readProviderJsonResponse, redactLikelySecrets } from "./providerHttp.js";
@@ -55,6 +56,10 @@ interface JsonImagesResult {
   emptyReason?: string;
 }
 
+interface OpenAIStreamOptions {
+  streamingPartialsEnabled?: boolean;
+}
+
 export type OpenAIImageRuntime = ImageJobRuntime;
 export type OpenAIImageJob = GenerationJob & { params: OpenAIImageParams };
 
@@ -66,7 +71,9 @@ export const openaiImageAdapter: ImageProviderAdapter = {
     return validateOpenAIRunJobRequest(request);
   },
   runJob(job: GenerationJob, apiKey: string, config: StoredProviderConfig, runtime: ImageJobRuntime) {
-    return runOpenAIImageJob(asOpenAIImageJob(job), apiKey, config.baseURL, runtime);
+    return runOpenAIImageJob(asOpenAIImageJob(job), apiKey, config.baseURL, runtime, {
+      streamingPartialsEnabled: config.streamingPartialsEnabled ?? defaultStreamingPartialsEnabled(config.kind, config.baseURL)
+    });
   }
 };
 
@@ -213,19 +220,22 @@ export async function runOpenAIImageJob(
   job: OpenAIImageJob,
   apiKey: string,
   baseURL: string,
-  runtime: OpenAIImageRuntime
+  runtime: OpenAIImageRuntime,
+  options: OpenAIStreamOptions = {}
 ): Promise<GenerationJob> {
-  const requestJob = normalizeOpenAIJobParams(job);
+  const requestJob = normalizeOpenAIJobParams(job, {
+    streamingPartialsEnabled: options.streamingPartialsEnabled ?? defaultStreamingPartialsEnabled("openai", baseURL)
+  });
   if (requestJob.mode === "generate") {
     return runGeneration(requestJob, apiKey, baseURL, runtime);
   }
   return runEdit(requestJob, apiKey, baseURL, runtime);
 }
 
-export function normalizeOpenAIJobParams(job: OpenAIImageJob): OpenAIImageJob {
+export function normalizeOpenAIJobParams(job: OpenAIImageJob, options: OpenAIStreamOptions = {}): OpenAIImageJob {
   let params = normalizeOpenAIRequestParams(job.params);
-  // 聚合器普遍不支持 SSE 流式响应；统一走非流式以兼容所有提供商。
-  if (params.stream) {
+  const canStream = job.mode === "generate" && options.streamingPartialsEnabled === true;
+  if (params.stream && !canStream) {
     params = { ...params, stream: false, partialImages: 0 };
   }
   return params === job.params ? job : { ...job, params };
@@ -243,7 +253,29 @@ async function runGeneration(
     return handleJsonImagesWithBackfill(response, job, runtime, (nextJob) => fetchGenerationResponse(nextJob, apiKey, baseURL, runtime));
   }
 
+  if (!response.ok && shouldRetryNonStreamAfterStreamFailure(response.status)) {
+    const streamError = await readApiError(response.clone());
+    const fallbackJob: OpenAIImageJob = {
+      ...job,
+      params: {
+        ...job.params,
+        stream: false,
+        partialImages: 0
+      }
+    };
+    try {
+      const fallbackResponse = await fetchGenerationResponse(fallbackJob, apiKey, baseURL, runtime);
+      return handleJsonImagesWithBackfill(fallbackResponse, fallbackJob, runtime, (nextJob) => fetchGenerationResponse(nextJob, apiKey, baseURL, runtime));
+    } catch (error) {
+      throw new Error(`${streamError}；已尝试降级为非流式请求但仍失败：${normalizeAdapterError(error)}`);
+    }
+  }
+
   return handleImagesResponse(response, job, "image_generation", runtime);
+}
+
+function shouldRetryNonStreamAfterStreamFailure(status: number): boolean {
+  return status === 400 || status === 406 || status === 415 || status === 422;
 }
 
 async function fetchGenerationResponse(
