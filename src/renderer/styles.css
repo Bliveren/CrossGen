@@ -893,7 +893,7 @@
   .api-config-dialog {
     display: grid;
     gap: 14px;
-    width: min(1040px, 100%);
+    width: min(960px, 100%);
     max-height: min(780px, calc(100vh - 44px));
     overflow: hidden;
     border: 1px solid var(--border-subtle);
@@ -905,7 +905,7 @@
 
   .api-config-dialog-body {
     display: grid;
-    grid-template-columns: minmax(390px, 0.92fr) minmax(400px, 1.08fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     min-height: 0;
     overflow: hidden;
