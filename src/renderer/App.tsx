@@ -5172,7 +5172,7 @@ export function App() {
       }
     >
       <PerfProfiler id="Sidebar">
-      <aside className={isSidebarCompact ? "sidebar collapsed" : "sidebar"}>
+      <aside className={isSidebarCompact ? "sidebar collapsed" : "sidebar"} aria-label={copy.parameters}>
         <header className="brand-block">
           <img className="brand-icon" src="./brand-logo.png" alt="" />
           <div>
@@ -5433,7 +5433,7 @@ export function App() {
                   <span>{generalModeNotice}</span>
                 </div>
               ) : (
-                <div className="mode-tabs" role="tablist" aria-label={copy.parameters}>
+                <div className="mode-tabs" role="group" aria-label={copy.parameters}>
                   <button
                     type="button"
                     className={tabMode === "text2img" ? "mode-tab active" : "mode-tab"}
@@ -5670,7 +5670,7 @@ export function App() {
       />
 
       <PerfProfiler id="RightRail">
-      <aside className={isRightRailCollapsed ? "history right-rail collapsed" : "history right-rail"}>
+      <aside className={isRightRailCollapsed ? "history right-rail collapsed" : "history right-rail"} aria-label={copy.library}>
         <button
           type="button"
           className={`icon-button right-rail-collapse-button ${isRightRailCollapsed ? "collapsed" : ""}`}
