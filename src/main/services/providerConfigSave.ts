@@ -3,6 +3,7 @@ import {
   DEFAULT_BASE_URL,
   DEFAULT_GEMINI_BASE_URL,
   DEFAULT_IMAGE_PARAMS,
+  defaultStreamingPartialsEnabled,
   normalizeBaseURL
 } from "../../shared/validation.js";
 import {
@@ -31,6 +32,11 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
   const requestedLaunchId = input.activeLaunchId;
   const activeLaunchId = activeLaunchForProvider(kind, requestedLaunchId ?? (providerChanged ? undefined : current.activeLaunchId));
   const activeModelId = requestedLaunchId ? input.activeModelId?.trim() || defaultModelForLaunch(requestedLaunchId, defaultModel) : defaultModel;
+  const streamingPartialsEnabled = typeof input.streamingPartialsEnabled === "boolean"
+    ? input.streamingPartialsEnabled
+    : discoveryInvalidated
+      ? defaultStreamingPartialsEnabled(kind, baseURL)
+      : current.streamingPartialsEnabled ?? defaultStreamingPartialsEnabled(kind, baseURL);
   const nextConfig: StoredProviderConfig = {
     ...current,
     kind,
@@ -40,6 +46,7 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
     defaultSize: input.defaultSize.trim() || DEFAULT_IMAGE_PARAMS.size,
     defaultQuality: input.defaultQuality,
     timeoutMs: input.timeoutMs,
+    streamingPartialsEnabled,
     activeLaunchId,
     activeModelId,
     discoveredModels: discoveryInvalidated ? [] : current.discoveredModels,

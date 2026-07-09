@@ -23,6 +23,7 @@ import {
   IMAGE_FORMAT_OPTIONS,
   IMAGE_QUALITY_OPTIONS,
   MODERATION_MODE_OPTIONS,
+  defaultStreamingPartialsEnabled,
   normalizeBaseURL
 } from "../../shared/validation.js";
 import {
@@ -46,6 +47,7 @@ export interface StoredProviderConfig {
   defaultSize: string;
   defaultQuality: ImageQuality;
   timeoutMs: number;
+  streamingPartialsEnabled: boolean;
   discoveredModels: DiscoveredModel[];
   lastModelDiscoveryAt?: string;
   lastModelDiscoveryError?: string;
@@ -78,6 +80,7 @@ export const defaultStoredConfig: StoredProviderConfig = {
   defaultSize: DEFAULT_IMAGE_PARAMS.size,
   defaultQuality: DEFAULT_IMAGE_PARAMS.quality,
   timeoutMs: DEFAULT_IMAGE_PARAMS.timeoutMs,
+  streamingPartialsEnabled: true,
   discoveredModels: [],
   activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
   activeModelId: DEFAULT_IMAGE_PARAMS.model,
@@ -148,17 +151,21 @@ function normalizeStoredConfig(value: unknown): StoredProviderConfig {
   const activeLaunchId = normalizeFocusedLaunchId(input.activeLaunchId, GPT_IMAGE_2_LAUNCH_ID);
   const defaultBaseURL = kind === "gemini" ? DEFAULT_GEMINI_BASE_URL : DEFAULT_BASE_URL;
   const baseURL = typeof input.baseURL === "string" && input.baseURL.trim() ? input.baseURL : defaultBaseURL;
+  const normalizedBaseURL = normalizeBaseURL(baseURL);
 
   return {
     id: nonEmptyString(input.id, DEFAULT_OPENAI_PROVIDER_ID),
     kind,
     name: nonEmptyString(input.name, kind === "gemini" ? "Gemini" : kind === "custom" ? "Custom" : "OpenAI"),
-    baseURL: normalizeBaseURL(baseURL),
+    baseURL: normalizedBaseURL,
     enabled: typeof input.enabled === "boolean" ? input.enabled : true,
     defaultModel,
     defaultSize,
     defaultQuality: oneOf(input.defaultQuality, IMAGE_QUALITY_OPTIONS, DEFAULT_IMAGE_PARAMS.quality),
     timeoutMs: boundedInteger(input.timeoutMs, 30000, 600000, DEFAULT_IMAGE_PARAMS.timeoutMs),
+    streamingPartialsEnabled: typeof input.streamingPartialsEnabled === "boolean"
+      ? input.streamingPartialsEnabled
+      : defaultStreamingPartialsEnabled(kind, normalizedBaseURL),
     discoveredModels: normalizeDiscoveredModels(input.discoveredModels, kind),
     lastModelDiscoveryAt: optionalString(input.lastModelDiscoveryAt),
     lastModelDiscoveryError: optionalString(input.lastModelDiscoveryError),

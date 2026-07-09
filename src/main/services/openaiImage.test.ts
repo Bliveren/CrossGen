@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { InputAsset, JobProgressEvent, OpenAIImageParams } from "../../shared/types";
-import { DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
+import { DEFAULT_BASE_URL, DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
 import type { StoredProviderConfig } from "./stateMigration";
 import { baseRequestBody, buildEndpoint, normalizeOpenAIJobParams, normalizeOpenAIRequestParams, openaiImageAdapter, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImageAdapter";
 
@@ -59,6 +59,7 @@ function config(patch: Partial<StoredProviderConfig> = {}): StoredProviderConfig
     defaultSize: DEFAULT_IMAGE_PARAMS.size,
     defaultQuality: DEFAULT_IMAGE_PARAMS.quality,
     timeoutMs: DEFAULT_IMAGE_PARAMS.timeoutMs,
+    streamingPartialsEnabled: false,
     discoveredModels: [],
     activeLaunchId: "gpt-image-2",
     activeModelId: DEFAULT_IMAGE_PARAMS.model,
@@ -115,18 +116,30 @@ describe("OpenAI image service", () => {
     });
   });
 
-  it("disables streaming for all jobs regardless of mode", () => {
-    const editJob = normalizeOpenAIJobParams(job({ mode: "edit", params: params({ stream: true, partialImages: 2 }) }));
+  it("enables streaming only for supported generate jobs", () => {
+    const directGenerateJob = normalizeOpenAIJobParams(job({ mode: "generate", params: params({ stream: true, partialImages: 2 }) }), {
+      streamingPartialsEnabled: true
+    });
+    expect(directGenerateJob.params.stream).toBe(true);
+    expect(directGenerateJob.params.partialImages).toBe(2);
+
+    const gatewayGenerateJob = normalizeOpenAIJobParams(job({ mode: "generate", params: params({ stream: true, partialImages: 2 }) }), {
+      streamingPartialsEnabled: false
+    });
+    expect(gatewayGenerateJob.params.stream).toBe(false);
+    expect(gatewayGenerateJob.params.partialImages).toBe(0);
+
+    const editJob = normalizeOpenAIJobParams(job({ mode: "edit", params: params({ stream: true, partialImages: 2 }) }), {
+      streamingPartialsEnabled: true
+    });
     expect(editJob.params.stream).toBe(false);
     expect(editJob.params.partialImages).toBe(0);
 
-    const inpaintJob = normalizeOpenAIJobParams(job({ mode: "inpaint", params: params({ stream: true, partialImages: 3 }) }));
+    const inpaintJob = normalizeOpenAIJobParams(job({ mode: "inpaint", params: params({ stream: true, partialImages: 3 }) }), {
+      streamingPartialsEnabled: true
+    });
     expect(inpaintJob.params.stream).toBe(false);
     expect(inpaintJob.params.partialImages).toBe(0);
-
-    const generateJob = normalizeOpenAIJobParams(job({ mode: "generate", params: params({ stream: true, partialImages: 2 }) }));
-    expect(generateJob.params.stream).toBe(false);
-    expect(generateJob.params.partialImages).toBe(0);
   });
 
   it("calls image generations and saves base64 results", async () => {
@@ -259,6 +272,38 @@ describe("OpenAI image service", () => {
       "job_test-result-2.png",
       "job_test-result-3.png"
     ]);
+  });
+
+  it("defaults streaming on for direct OpenAI and off for OpenAI-compatible gateways", async () => {
+    const directBodies: Array<Record<string, unknown>> = [];
+    const directFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      directBodies.push(JSON.parse(String(init?.body)));
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "image_generation.completed", b64_json: tinyPngBase64 })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime: directRuntime } = await createRuntime(directFetch);
+
+    await runOpenAIImageJob(job({ params: params({ stream: true, partialImages: 1 }) }), "sk-test-key", DEFAULT_BASE_URL, directRuntime);
+
+    expect(directBodies[0]).toMatchObject({ stream: true, partial_images: 1 });
+
+    const gatewayBodies: Array<Record<string, unknown>> = [];
+    const gatewayFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      gatewayBodies.push(JSON.parse(String(init?.body)));
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime: gatewayRuntime } = await createRuntime(gatewayFetch);
+
+    await runOpenAIImageJob(job({ params: params({ stream: true, partialImages: 1 }) }), "sk-test-key", "https://api.test/v1", gatewayRuntime);
+
+    expect(gatewayBodies[0]).toMatchObject({ stream: false });
+    expect(gatewayBodies[0]).not.toHaveProperty("partial_images");
   });
 
   it("backfills OpenAI outputs when a provider ignores n and returns one image at a time", async () => {
@@ -417,15 +462,31 @@ describe("OpenAI image service", () => {
   });
 
   it("parses streaming partial and final events", async () => {
-    // Streaming is always disabled after normalization; verify generate jobs use JSON path.
-    const fetchImpl = (async () =>
-      Response.json({ data: [{ b64_json: tinyPngBase64 }], usage: { total_tokens: 5 } })) as typeof fetch;
+    let requestAccept = "";
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requestAccept = new Headers(init?.headers).get("Accept") ?? "";
+      requestBody = JSON.parse(String(init?.body));
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: image_generation.partial_image\ndata: ${JSON.stringify({ type: "image_generation.partial_image", partial_image_index: 0, b64_json: tinyPngBase64 })}\n\n`));
+          controller.enqueue(encoder.encode(`event: image_generation.completed\ndata: ${JSON.stringify({ type: "image_generation.completed", b64_json: tinyPngBase64, usage: { total_tokens: 5 } })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
     const { runtime } = await createRuntime(fetchImpl);
 
-    const result = await runOpenAIImageJob(job({ params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", runtime);
+    const result = await runOpenAIImageJob(job({ params: params({ stream: true, partialImages: 2 }) }), "sk-test-key", "https://api.test/v1", runtime, {
+      streamingPartialsEnabled: true
+    });
 
+    expect(requestAccept).toBe("text/event-stream");
+    expect(requestBody).toMatchObject({ stream: true, partial_images: 2 });
     expect(result.status).toBe("succeeded");
-    expect(result.outputs.map((asset) => asset.sourceType)).toEqual(["result"]);
+    expect(result.outputs.map((asset) => asset.sourceType)).toEqual(["partial", "result"]);
     expect(result.usage?.total_tokens).toBe(5);
   });
 
@@ -437,7 +498,9 @@ describe("OpenAI image service", () => {
       )) as typeof fetch;
     const { runtime } = await createRuntime(fetchImpl);
 
-    const result = await runOpenAIImageJob(job({ params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", runtime);
+    const result = await runOpenAIImageJob(job({ params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", runtime, {
+      streamingPartialsEnabled: true
+    });
 
     expect(result.status).toBe("succeeded");
     expect(result.outputs.map((asset) => asset.sourceType)).toEqual(["result"]);
@@ -446,15 +509,48 @@ describe("OpenAI image service", () => {
   });
 
   it("parses nested streaming data image payloads", async () => {
-    const fetchImpl = (async () =>
-      Response.json({ data: [{ b64_json: tinyPngBase64 }] })) as typeof fetch;
+    const fetchImpl = (async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "image_generation.completed", data: [{ b64_json: tinyPngBase64 }] })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
     const { runtime } = await createRuntime(fetchImpl);
 
-    const result = await runOpenAIImageJob(job({ mode: "generate", params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", runtime);
+    const result = await runOpenAIImageJob(job({ mode: "generate", params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", runtime, {
+      streamingPartialsEnabled: true
+    });
 
     expect(result.status).toBe("succeeded");
     expect(result.outputs.map((asset) => asset.sourceType)).toEqual(["result"]);
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("falls back to non-stream generation when a stream request is rejected as incompatible", async () => {
+    const requestBodies: Array<Record<string, unknown>> = [];
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)));
+      if (requestBodies.length === 1) {
+        return Response.json({ error: { message: "stream is not supported by this endpoint" } }, { status: 400 });
+      }
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }], usage: { total_tokens: 6 } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job({ params: params({ stream: true, partialImages: 2 }) }), "sk-test-key", "https://api.test/v1", runtime, {
+      streamingPartialsEnabled: true
+    });
+
+    expect(requestBodies).toHaveLength(2);
+    expect(requestBodies[0]).toMatchObject({ stream: true, partial_images: 2 });
+    expect(requestBodies[1]).toMatchObject({ stream: false });
+    expect(requestBodies[1]).not.toHaveProperty("partial_images");
+    expect(result.status).toBe("succeeded");
+    expect(result.params).toMatchObject({ stream: false, partialImages: 0 });
   });
 
   it("saves data URL image payloads", async () => {
@@ -550,7 +646,9 @@ describe("OpenAI image service", () => {
     const streamFetch = (async () => new Response(stream, { headers: { "content-type": "text/event-stream" } })) as typeof fetch;
     const { runtime: streamRuntime } = await createRuntime(streamFetch);
 
-    await expect(runOpenAIImageJob(job({ params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", streamRuntime)).rejects.toThrow("sk-...redacted");
+    await expect(runOpenAIImageJob(job({ params: params({ stream: true }) }), "sk-test-key", "https://api.test/v1", streamRuntime, {
+      streamingPartialsEnabled: true
+    })).rejects.toThrow("sk-...redacted");
   });
 });
 

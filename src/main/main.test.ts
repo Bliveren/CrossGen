@@ -40,6 +40,7 @@ describe("main config save builder", () => {
     expect(next.encryption).toBe("localFallback");
     expect(next.discoveredModels).toEqual([{ id: "gpt-image-2", providerKind: "openai" }]);
     expect(next.lastModelDiscoveryAt).toBe("2026-06-09T01:02:03.000Z");
+    expect(next.streamingPartialsEnabled).toBe(true);
   });
 
   it("invalidates discovery metadata when the same provider base URL changes", () => {
@@ -50,6 +51,7 @@ describe("main config save builder", () => {
     expect(next.discoveredModels).toEqual([]);
     expect(next.lastModelDiscoveryAt).toBeUndefined();
     expect(next.lastModelDiscoveryError).toBeUndefined();
+    expect(next.streamingPartialsEnabled).toBe(false);
   });
 
   it("clears saved key and discovery metadata when switching provider without a new key", () => {

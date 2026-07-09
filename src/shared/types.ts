@@ -58,6 +58,7 @@ export interface ProviderConfig {
   defaultSize: string;
   defaultQuality: ImageQuality;
   timeoutMs: number;
+  streamingPartialsEnabled: boolean;
   discoveredModels: DiscoveredModel[];
   lastModelDiscoveryAt?: string;
   lastModelDiscoveryError?: string;
@@ -76,6 +77,7 @@ export interface ProviderConfigInput {
   defaultSize: string;
   defaultQuality: ImageQuality;
   timeoutMs: number;
+  streamingPartialsEnabled?: boolean;
   activeLaunchId?: FocusedLaunchId;
   activeModelId?: string;
 }
