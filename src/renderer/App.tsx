@@ -239,6 +239,12 @@ const MAX_HISTORY_WIDTH = 460;
 const MIN_WORKSPACE_WIDTH = 620;
 const COMPACT_SIDEBAR_WIDTH = 76;
 const RIGHT_RAIL_COLLAPSED_WIDTH = 256;
+const MIN_RIGHT_RAIL_WIDTH = 176;
+const RIGHT_RAIL_STACKED_WIDTH = 330;
+const RIGHT_RAIL_DENSE_WIDTH = 292;
+const RIGHT_RAIL_THUMB_MAX_SIZE = 180;
+const RIGHT_RAIL_THUMB_MIN_SIZE = 128;
+const RIGHT_RAIL_THUMB_HORIZONTAL_CHROME = 48;
 const LEFT_RAIL_AUTO_COLLAPSE_WIDTH = MIN_SIDEBAR_WIDTH;
 const RIGHT_RAIL_AUTO_COLLAPSE_WIDTH = MIN_HISTORY_WIDTH;
 const DEFAULT_PREVIEW_PANEL_RATIO = 0.618;
@@ -1058,7 +1064,7 @@ export function App() {
   const [buttonFeedback, setButtonFeedback] = useState<Record<string, number>>({});
   const [globalTooltip, setGlobalTooltip] = useState<GlobalTooltip | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredWidth("image2tools.sidebarWidth", DEFAULT_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH));
-  const [historyWidth, setHistoryWidth] = useState(() => readStoredWidth("image2tools.historyWidth", DEFAULT_HISTORY_WIDTH, MIN_HISTORY_WIDTH, MAX_HISTORY_WIDTH));
+  const [historyWidth, setHistoryWidth] = useState(() => readStoredWidth("image2tools.historyWidth", DEFAULT_HISTORY_WIDTH, MIN_RIGHT_RAIL_WIDTH, MAX_HISTORY_WIDTH));
   const [previewPanelRatio, setPreviewPanelRatio] = useState(() => readStoredWidth("image2tools.previewPanelRatio", DEFAULT_PREVIEW_PANEL_RATIO, MIN_PREVIEW_PANEL_RATIO, MAX_PREVIEW_PANEL_RATIO));
   const [resizingColumn, setResizingColumn] = useState<"sidebar" | "history" | "preview" | null>(null);
   const [contextMenu, setContextMenu] = useState<ImageContextMenuState | null>(null);
@@ -1082,6 +1088,7 @@ export function App() {
   const appShellRef = useRef<HTMLElement | null>(null);
   const sidebarWidthRef = useRef(sidebarWidth);
   const historyWidthRef = useRef(historyWidth);
+  const expandedHistoryWidthRef = useRef(Math.max(historyWidth, MIN_HISTORY_WIDTH));
 
   const activeConfig = snapshot.providers.find(p => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
   const isSidebarCompact = isSidebarCollapsed || isAutoSidebarCollapsed;
@@ -1153,10 +1160,30 @@ export function App() {
   const isSelectedConfigSaved = savedApiConfigId === selectedApiConfig.id && selectedApiConfig.apiKeySaved && !apiKey.trim();
   const inactiveApiConfigs = snapshot.providers.filter((config) => config.id !== activeConfig.id);
   const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
-  const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+  const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_RIGHT_RAIL_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+  const isRightRailStacked = historyWidth <= RIGHT_RAIL_STACKED_WIDTH;
+  const isRightRailDense = historyWidth <= RIGHT_RAIL_DENSE_WIDTH;
+  const isRightRailCompact = isRightRailCollapsed || historyWidth <= RIGHT_RAIL_COLLAPSED_WIDTH;
+  const rightRailLayoutMode = isRightRailCompact ? "compact" : isRightRailDense ? "dense" : isRightRailStacked ? "stacked" : "full";
+  const rightRailThumbSize = clamp(
+    historyWidth - RIGHT_RAIL_THUMB_HORIZONTAL_CHROME,
+    RIGHT_RAIL_THUMB_MIN_SIZE,
+    RIGHT_RAIL_THUMB_MAX_SIZE
+  );
 
   const setShellWidthVariable = (name: "--sidebar-width" | "--history-width", value: number) => {
     appShellRef.current?.style.setProperty(name, `${Math.round(value)}px`);
+  };
+
+  const applyRightRailWidth = (nextWidth: number, options: { forceCollapsed?: boolean } = {}) => {
+    const clampedWidth = clamp(nextWidth, MIN_RIGHT_RAIL_WIDTH, maxHistoryWidth);
+    historyWidthRef.current = clampedWidth;
+    setShellWidthVariable("--history-width", clampedWidth);
+    setHistoryWidth(clampedWidth);
+    if (clampedWidth >= MIN_HISTORY_WIDTH) {
+      expandedHistoryWidthRef.current = clampedWidth;
+    }
+    setIsRightRailCollapsed(options.forceCollapsed ?? clampedWidth <= RIGHT_RAIL_COLLAPSED_WIDTH);
   };
 
   const getRightRailAutoCollapseWidth = () => {
@@ -1181,6 +1208,18 @@ export function App() {
       2;
     return Math.max(RIGHT_RAIL_AUTO_COLLAPSE_WIDTH, Math.ceil(requiredWidth));
   };
+
+  function toggleRightRailCollapsed() {
+    if (isRightRailCompact) {
+      const preferredWidth = Math.max(expandedHistoryWidthRef.current, MIN_HISTORY_WIDTH);
+      const targetWidth = clamp(preferredWidth, MIN_RIGHT_RAIL_WIDTH, maxHistoryWidth);
+      applyRightRailWidth(targetWidth, { forceCollapsed: false });
+      return;
+    }
+
+    expandedHistoryWidthRef.current = Math.max(historyWidthRef.current, MIN_HISTORY_WIDTH);
+    applyRightRailWidth(RIGHT_RAIL_COLLAPSED_WIDTH, { forceCollapsed: true });
+  }
 
   const {
     filteredHistory,
@@ -1237,7 +1276,9 @@ export function App() {
     sort: gallerySort,
     viewMode: galleryViewMode,
     scrollTop: galleryContentScrollTop,
-    viewport: galleryContentViewport
+    viewport: galleryContentViewport,
+    compact: isRightRailCompact,
+    compactItemSize: rightRailThumbSize
   });
   const globalTagOptions = useMemo(() => {
     const tags = new Set<string>();
@@ -1747,7 +1788,7 @@ export function App() {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleMeasure);
     };
-  }, [isRightRailCollapsed, isSidebarCompact, notice.text, rightRailView, showAdvanced, updateCheck?.status]);
+  }, [isRightRailCompact, isSidebarCompact, notice.text, rightRailView, rightRailLayoutMode, showAdvanced, updateCheck?.status]);
 
   useEffect(() => {
     const node = historyListRef.current;
@@ -1826,16 +1867,16 @@ export function App() {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", updateViewport);
     };
-  }, [rightRailView, galleryViewMode]);
+  }, [rightRailView, galleryViewMode, rightRailLayoutMode]);
 
   useEffect(() => {
     setGalleryContentScrollTop(0);
     if (galleryContentRef.current) galleryContentRef.current.scrollTop = 0;
-  }, [activeGalleryFolderId, gallerySearch, gallerySort, galleryTagFilter, galleryViewMode, isRightRailCollapsed]);
+  }, [activeGalleryFolderId, gallerySearch, gallerySort, galleryTagFilter, galleryViewMode, isRightRailCompact]);
 
   useEffect(() => {
     setIsRightRailActionDrawerOpen(false);
-  }, [isRightRailCollapsed, rightRailView]);
+  }, [isRightRailCompact, rightRailView]);
 
   useEffect(() => {
     if (historyGalleryFolderId && !snapshot.galleryFolders.some((folder) => folder.id === historyGalleryFolderId)) {
@@ -1862,17 +1903,9 @@ export function App() {
         setSidebarWidth(nextWidth);
       } else if (resizingColumn === "history") {
         const rawWidth = window.innerWidth - event.clientX;
-        if (rawWidth <= getRightRailAutoCollapseWidth()) {
-          setShellWidthVariable("--history-width", RIGHT_RAIL_COLLAPSED_WIDTH);
-          setIsRightRailCollapsed(true);
-          setResizingColumn(null);
-          return;
-        }
-        const nextMax = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_HISTORY_WIDTH, window.innerWidth - sidebarWidthRef.current - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
-        const nextWidth = clamp(rawWidth, MIN_HISTORY_WIDTH, nextMax);
-        historyWidthRef.current = nextWidth;
-        setShellWidthVariable("--history-width", nextWidth);
-        setHistoryWidth(nextWidth);
+        const nextMax = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_RIGHT_RAIL_WIDTH, window.innerWidth - sidebarWidthRef.current - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+        const nextWidth = clamp(rawWidth, MIN_RIGHT_RAIL_WIDTH, nextMax);
+        applyRightRailWidth(nextWidth, { forceCollapsed: rawWidth <= getRightRailAutoCollapseWidth() ? true : undefined });
       } else {
         const layout = previewLayoutRef.current;
         if (!layout) return;
@@ -4677,15 +4710,7 @@ export function App() {
       setSidebarWidth(nextWidth);
     } else if (column === "history") {
       const rawWidth = historyWidthRef.current + delta;
-      if (rawWidth <= getRightRailAutoCollapseWidth()) {
-        setShellWidthVariable("--history-width", RIGHT_RAIL_COLLAPSED_WIDTH);
-        setIsRightRailCollapsed(true);
-        return;
-      }
-      const nextWidth = clamp(rawWidth, MIN_HISTORY_WIDTH, maxHistoryWidth);
-      historyWidthRef.current = nextWidth;
-      setShellWidthVariable("--history-width", nextWidth);
-      setHistoryWidth(nextWidth);
+      applyRightRailWidth(rawWidth, { forceCollapsed: rawWidth <= getRightRailAutoCollapseWidth() ? true : undefined });
     } else {
       setPreviewPanelRatio((current) => clamp(current + delta / 1000, MIN_PREVIEW_PANEL_RATIO, MAX_PREVIEW_PANEL_RATIO));
     }
@@ -5114,12 +5139,15 @@ export function App() {
       className={[
         "app-shell",
         isSidebarCompact ? "sidebar-collapsed" : "",
-        isRightRailCollapsed ? "right-rail-collapsed" : ""
+        isRightRailStacked ? "right-rail-stacked" : "",
+        isRightRailDense ? "right-rail-dense" : "",
+        isRightRailCompact ? "right-rail-collapsed" : ""
       ].filter(Boolean).join(" ")}
       style={
         {
           "--sidebar-width": `${isSidebarCompact ? COMPACT_SIDEBAR_WIDTH : sidebarWidth}px`,
-          "--history-width": `${isRightRailCollapsed ? RIGHT_RAIL_COLLAPSED_WIDTH : historyWidth}px`,
+          "--history-width": `${historyWidth}px`,
+          "--right-rail-thumb-size": `${rightRailThumbSize}px`,
           "--preview-ratio": previewPanelRatio,
           "--sidebar-collapse-button-y": `${sidebarCollapseButtonY}px`,
           "--right-rail-collapse-button-y": `${rightRailCollapseButtonY}px`
@@ -5623,31 +5651,36 @@ export function App() {
         role="separator"
         aria-label="Resize history"
         aria-orientation="vertical"
-        aria-valuemin={MIN_HISTORY_WIDTH}
+        aria-valuemin={MIN_RIGHT_RAIL_WIDTH}
         aria-valuemax={maxHistoryWidth}
         aria-valuenow={historyWidth}
-        aria-disabled={isRightRailCollapsed}
-        tabIndex={isRightRailCollapsed ? -1 : 0}
+        aria-disabled={false}
+        tabIndex={0}
         onPointerDown={(event) => {
-          if (isRightRailCollapsed) return;
           event.currentTarget.setPointerCapture(event.pointerId);
           setResizingColumn("history");
         }}
         onKeyDown={(event) => {
-          if (!isRightRailCollapsed) resizeHandleKeyDown("history", event);
+          resizeHandleKeyDown("history", event);
         }}
       />
 
       <PerfProfiler id="RightRail">
-      <aside className={isRightRailCollapsed ? "history right-rail collapsed" : "history right-rail"}>
+      <aside className={[
+        "history",
+        "right-rail",
+        isRightRailStacked ? "stacked" : "",
+        isRightRailDense ? "dense" : "",
+        isRightRailCompact ? "collapsed" : ""
+      ].filter(Boolean).join(" ")}>
         <button
           type="button"
-          className={`icon-button right-rail-collapse-button ${isRightRailCollapsed ? "collapsed" : ""}`}
-          onClick={() => setIsRightRailCollapsed((current) => !current)}
+          className={`icon-button right-rail-collapse-button ${isRightRailCompact ? "collapsed" : ""}`}
+          onClick={toggleRightRailCollapsed}
           onMouseMove={movePreviewToolbarTowardPointer}
           onMouseLeave={resetPreviewToolbarDrift}
-          aria-label={isRightRailCollapsed ? copy.show : copy.hide}
-          data-tooltip={isRightRailCollapsed ? copy.show : copy.hide}
+          aria-label={isRightRailCompact ? copy.show : copy.hide}
+          data-tooltip={isRightRailCompact ? copy.show : copy.hide}
         >
           <ChevronRight size={16} />
         </button>

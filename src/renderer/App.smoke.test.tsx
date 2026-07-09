@@ -1591,7 +1591,9 @@ describe("renderer multi-model smoke", () => {
     await windowPointer("pointermove", { clientX: 1160 });
 
     expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
-    expect(shell.style.getPropertyValue("--history-width")).toBe("256px");
+    expect(shell.style.getPropertyValue("--history-width")).toBe("280px");
+    expect(historyResizer.getAttribute("aria-disabled")).toBe("false");
+    expect(historyResizer.getAttribute("aria-valuenow")).toBe("280");
   });
 
   it("keeps the workspace in the main grid when the sidebar is collapsed", async () => {
@@ -1639,6 +1641,29 @@ describe("renderer multi-model smoke", () => {
     expect(grid.dataset.renderedCount).toBe("1");
     expect(document.querySelector(".right-rail.collapsed .gallery-thumb img")).toBeTruthy();
     expect(document.querySelector(".right-rail.collapsed .gallery-compact-controls")).toBeTruthy();
+  });
+
+  it("keeps collapsed Gallery thumbnails rendered while the right rail is dragged narrower", async () => {
+    const assets = Array.from({ length: 12 }, (_, index) => galleryAsset(`collapsed-resize-${String(index).padStart(2, "0")}.png`));
+    await renderApp(snapshot({ galleryAssets: assets }));
+
+    await openGalleryRail();
+    await click(document.querySelector<HTMLButtonElement>(".right-rail-collapse-button")!);
+    const shell = document.querySelector<HTMLElement>(".app-shell")!;
+    const historyResizer = separatorByLabel("Resize history");
+    historyResizer.setPointerCapture = vi.fn();
+
+    await pointer(historyResizer, "pointerdown", { clientX: 1184 });
+    await windowPointer("pointermove", { clientX: 1260 });
+    await windowPointer("pointerup", { clientX: 1260 });
+
+    const grid = document.querySelector<HTMLElement>(".gallery-content-grid")!;
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
+    expect(shell.style.getPropertyValue("--history-width")).toBe("180px");
+    expect(shell.style.getPropertyValue("--right-rail-thumb-size")).toBe("132px");
+    expect(historyResizer.getAttribute("aria-disabled")).toBe("false");
+    expect(Number(grid.dataset.renderedCount)).toBeGreaterThan(0);
+    expect(document.querySelector(".right-rail.collapsed .gallery-thumb img")).toBeTruthy();
   });
 
   it("keeps Gallery thumbnails rendered after collapsing from a deep Gallery scroll position", async () => {

@@ -534,11 +534,6 @@
     pointer-events: none;
   }
 
-  .right-rail-collapsed .history-resizer {
-    cursor: default;
-    pointer-events: none;
-  }
-
   .column-resizer[aria-disabled="true"] {
     cursor: default;
     pointer-events: none;
@@ -2826,7 +2821,7 @@
   }
 
   .right-rail.collapsed {
-    --right-rail-collapsed-thumb-size: min(180px, calc(var(--history-width, 256px) - 48px));
+    --right-rail-collapsed-thumb-size: var(--right-rail-thumb-size, min(180px, calc(var(--history-width, 256px) - 48px)));
     gap: 8px;
     padding-right: 16px;
     padding-left: 16px;
@@ -2841,6 +2836,55 @@
     gap: 12px;
     min-height: 0;
     overflow: hidden;
+  }
+
+  .right-rail.stacked:not(.collapsed) .resource-explorer {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .right-rail.stacked:not(.collapsed) .gallery-directory-tree {
+    max-height: 96px;
+    overflow: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-right: 0;
+    padding-bottom: 6px;
+  }
+
+  .right-rail.dense:not(.collapsed) .gallery-content-grid {
+    min-height: 180px;
+  }
+
+  .right-rail.dense:not(.collapsed) .gallery-content-grid-inner {
+    gap: 7px;
+  }
+
+  .right-rail.dense:not(.collapsed) .gallery-content-grid.grid .gallery-item {
+    grid-template-rows: 106px minmax(0, 1fr);
+    padding: 7px;
+  }
+
+  .right-rail.dense:not(.collapsed) .gallery-content-grid.grid .gallery-thumb,
+  .right-rail.dense:not(.collapsed) .gallery-content-grid.grid .gallery-folder-thumb {
+    height: 106px;
+    min-height: 106px;
+  }
+
+  .right-rail.dense:not(.collapsed) .gallery-content-grid.list .gallery-item {
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .right-rail.dense:not(.collapsed) .gallery-content-grid.list.batch-select .gallery-item {
+    grid-template-columns: auto 62px minmax(0, 1fr);
+  }
+
+  .right-rail.dense:not(.collapsed) .gallery-content-grid.list .gallery-thumb,
+  .right-rail.dense:not(.collapsed) .gallery-content-grid.list .gallery-folder-thumb {
+    width: 62px;
+    height: 62px;
+    min-height: 62px;
   }
 
   .right-rail-actions {
@@ -2915,8 +2959,15 @@
   }
 
   .right-rail.collapsed .right-rail-panel {
+    flex: 1 1 0;
     gap: 6px;
     overflow: hidden;
+  }
+
+  .right-rail.collapsed .gallery-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
 
   .right-rail.collapsed .history-list-shell {
@@ -2972,15 +3023,25 @@
   }
 
   .right-rail.collapsed .resource-explorer {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .right-rail.collapsed .gallery-directory-content {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
     min-width: 0;
+    min-height: 0;
+    overflow: hidden;
   }
 
-  .right-rail.collapsed .gallery-content-grid,
-  .right-rail.collapsed .right-rail .gallery-grid {
+  .right-rail.collapsed .gallery-content-grid {
+    flex: 1 1 auto;
+    max-height: none;
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
@@ -2994,6 +3055,8 @@
     align-content: start;
     justify-items: center;
     gap: 8px;
+    width: 100%;
+    min-width: 0;
   }
 
   .right-rail.collapsed .gallery-item {
