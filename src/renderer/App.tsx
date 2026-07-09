@@ -271,7 +271,6 @@ type TabMode = "text2img" | "img2img";
 type ThemeMode = "system" | "light" | "dark";
 
 const THEME_STORAGE_KEY = "image2tools.theme";
-const RELEASE_GUIDE_STORAGE_KEY = "image2tools.releaseGuide.seenVersion";
 const themeModeOrder: ThemeMode[] = ["system", "light", "dark"];
 
 function getInitialThemeMode(): ThemeMode {
@@ -1017,7 +1016,6 @@ export function App() {
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
-  const [isReleaseGuideOpen, setIsReleaseGuideOpen] = useState(false);
   const {
     previewZoom,
     setPreviewZoom,
@@ -1570,13 +1568,6 @@ export function App() {
     applyThemeMode(themeMode);
     window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
-
-  useEffect(() => {
-    const version = snapshot.appVersion;
-    if (!version || version === fallbackSnapshot.appVersion) return;
-    if (window.localStorage.getItem(RELEASE_GUIDE_STORAGE_KEY) === version) return;
-    setIsReleaseGuideOpen(true);
-  }, [snapshot.appVersion]);
 
   useEffect(() => {
     if (!editingHistoryTagsId) return undefined;
@@ -3245,13 +3236,6 @@ export function App() {
 
   function toggleThemeMode() {
     setThemeMode((current) => nextThemeMode(current));
-  }
-
-  function dismissReleaseGuide() {
-    if (snapshot.appVersion && snapshot.appVersion !== fallbackSnapshot.appVersion) {
-      window.localStorage.setItem(RELEASE_GUIDE_STORAGE_KEY, snapshot.appVersion);
-    }
-    setIsReleaseGuideOpen(false);
   }
 
   function renderThemeIcon() {
@@ -6186,33 +6170,6 @@ export function App() {
           }}
           onSubmit={() => void saveConfig()}
         />
-      )}
-      {isReleaseGuideOpen && (
-        <DialogShell className="confirm-dialog release-guide-dialog" labelledBy="release-guide-title" onClose={dismissReleaseGuide}>
-          <div className="release-guide-heading">
-            <span className="release-guide-icon" aria-hidden="true">
-              <Sparkles size={18} />
-            </span>
-            <div>
-              <h2 id="release-guide-title">{copy.releaseGuideTitle(snapshot.appVersion)}</h2>
-              <p>{copy.releaseGuideBody}</p>
-            </div>
-          </div>
-          <ul className="release-guide-list">
-            <li>{copy.releaseGuideEyedropper}</li>
-            <li>{copy.releaseGuideTheme}</li>
-            <li>{copy.releaseGuideGallery}</li>
-          </ul>
-          <div className="dialog-actions">
-            <button type="button" className="ghost" onClick={dismissReleaseGuide}>
-              {copy.releaseGuideSkip}
-            </button>
-            <button type="button" onClick={dismissReleaseGuide}>
-              <CheckCircle2 size={16} />
-              {copy.releaseGuideStart}
-            </button>
-          </div>
-        </DialogShell>
       )}
       {isTemplatesOpen && (
         <DialogShell className="template-dialog" labelledBy="prompt-template-dialog-title" onClose={() => setIsTemplatesOpen(false)}>

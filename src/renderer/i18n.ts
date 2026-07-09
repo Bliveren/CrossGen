@@ -424,13 +424,6 @@ export interface UiCopy {
   cropEllipse: string;
   applyCrop: string;
   cropApplied: string;
-  releaseGuideTitle: (version: string) => string;
-  releaseGuideBody: string;
-  releaseGuideEyedropper: string;
-  releaseGuideTheme: string;
-  releaseGuideGallery: string;
-  releaseGuideSkip: string;
-  releaseGuideStart: string;
   modes: Record<WorkMode, ModeCopy>;
   guidedRegionMode: ModeCopy;
   tabs: { text2img: { title: string; hint: string }; img2img: { title: string; hint: string } };
@@ -795,13 +788,6 @@ export const translations: Record<Language, UiCopy> = {
     cropEllipse: "Ellipse crop",
     applyCrop: "Apply crop",
     cropApplied: "Crop applied.",
-    releaseGuideTitle: (version: string) => `What's new in ${version}`,
-    releaseGuideBody: "A few important entry points changed in this release.",
-    releaseGuideEyedropper: "Edit toolbar: use the pipette to sample a color directly from the image.",
-    releaseGuideTheme: "Left bottom: the theme switch is now the icon-only skin button.",
-    releaseGuideGallery: "Gallery: collapsed library width and mouse-wheel paging were refined.",
-    releaseGuideSkip: "Skip",
-    releaseGuideStart: "Start using",
     modes: {
       generate: { title: "Generate", action: "Generate", hint: "Prompt only" },
       edit: { title: "Edit", action: "Edit", hint: "Use references" },
@@ -1229,13 +1215,6 @@ export const translations: Record<Language, UiCopy> = {
     cropEllipse: "椭圆裁剪",
     applyCrop: "应用裁剪",
     cropApplied: "裁剪已应用。",
-    releaseGuideTitle: (version: string) => `${version} 新功能提示`,
-    releaseGuideBody: "本次版本有几个重要入口调整。",
-    releaseGuideEyedropper: "编辑工具栏：新增吸管，可直接从图片任意位置取色。",
-    releaseGuideTheme: "左下角：皮肤切换改为仅显示图标，悬浮可查看当前模式。",
-    releaseGuideGallery: "图库：优化折叠宽度，并修复图库滚轮翻页。",
-    releaseGuideSkip: "跳过引导",
-    releaseGuideStart: "开始使用",
     modes: {
       generate: { title: "生成", action: "生成", hint: "仅提示词" },
       edit: { title: "编辑", action: "编辑", hint: "使用参考图" },

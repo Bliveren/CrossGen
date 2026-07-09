@@ -35,7 +35,6 @@ let container: HTMLDivElement | null = null;
 beforeEach(() => {
   vi.restoreAllMocks();
   installLocalStorageMock();
-  window.localStorage.setItem("image2tools.releaseGuide.seenVersion", "0.1.0");
   Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -1568,19 +1567,12 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector<HTMLButtonElement>('.sidebar-mini-utility button[aria-label="Theme: System"]')).toBeTruthy();
   });
 
-  it("shows the release guide once per installed version", async () => {
-    window.localStorage.removeItem("image2tools.releaseGuide.seenVersion");
-
+  it("does not show the release guide automatically", async () => {
     await renderApp(snapshot());
     await flushAsync();
 
-    expect(document.body.textContent).toContain("What's new in 0.1.0");
-    expect(document.body.textContent).toContain("pipette");
-
-    await click(buttonByText("Skip"));
-
-    expect(window.localStorage.getItem("image2tools.releaseGuide.seenVersion")).toBe("0.1.0");
     expect(document.body.textContent).not.toContain("What's new in 0.1.0");
+    expect(document.querySelector(".release-guide-dialog")).toBeNull();
   });
 
   it("uses a clear Chinese update failure label instead of an exception shorthand", async () => {

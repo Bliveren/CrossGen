@@ -2785,6 +2785,7 @@
   .right-rail {
     gap: 10px;
     position: relative;
+    z-index: 30;
     transition:
       padding 0.24s ease,
       gap 0.24s ease;
@@ -2832,11 +2833,11 @@
 
   .right-rail.collapsed {
     --right-rail-collapsed-thumb-size: var(--right-rail-thumb-size, min(180px, calc(var(--history-width, 256px) - 48px)));
+    z-index: 1200;
     gap: 8px;
     padding-right: 16px;
     padding-left: 16px;
-    overflow-x: hidden;
-    overflow-y: hidden;
+    overflow: visible;
   }
 
   .right-rail-panel {
@@ -2923,8 +2924,10 @@
     display: flex;
     align-items: center;
     flex: 0 0 auto;
+    width: max-content;
     min-width: 0;
     gap: 7px;
+    white-space: nowrap;
   }
 
   .right-rail.collapsed .right-rail-tabs {
@@ -3092,7 +3095,7 @@
 
   .right-rail.collapsed .right-rail-actions {
     position: relative;
-    z-index: 5000;
+    z-index: 6000;
     justify-content: flex-end;
     border-top: 1px solid var(--border-subtle);
     background: none;
@@ -3121,8 +3124,9 @@
     position: absolute;
     right: 44px;
     bottom: 0;
-    z-index: 5100;
+    z-index: 6100;
     display: flex;
+    width: max-content;
     gap: 6px;
     padding: 0;
     border: 0;
@@ -3138,6 +3142,7 @@
   }
 
   .right-rail.collapsed .right-rail-actions.drawer-open .right-rail-action-group {
+    z-index: 6200;
     opacity: 1;
     pointer-events: auto;
     transform: translate(var(--toolbar-drift-x, 0px), var(--toolbar-drift-y, 0px)) scaleX(1);
@@ -4206,41 +4211,6 @@
 
   .gallery-save-choice-dialog .dialog-actions button {
     min-width: 96px;
-  }
-
-  .release-guide-dialog {
-    width: min(480px, 100%);
-  }
-
-  .release-guide-heading {
-    display: grid;
-    grid-template-columns: 38px minmax(0, 1fr);
-    align-items: start;
-    gap: 12px;
-  }
-
-  .release-guide-icon {
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border: 1px solid var(--accent-border);
-    border-radius: var(--radius-lg);
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-
-  .release-guide-list {
-    display: grid;
-    gap: 9px;
-    margin: 0;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    background: var(--surface-panel-muted);
-    padding: 12px 14px 12px 28px;
-    color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 1.45;
   }
 
   .result-strip,
