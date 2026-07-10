@@ -420,6 +420,11 @@ describe("OpenAI image service", () => {
     expect(String(form?.get("prompt"))).toContain("A mask is attached.");
     expect(form?.getAll("image")).toHaveLength(1);
     expect(form?.getAll("image[]")).toHaveLength(0);
+    expect(form?.get("size")).toBeNull();
+    expect(form?.get("quality")).toBeNull();
+    expect(form?.get("output_format")).toBeNull();
+    expect(form?.get("n")).toBeNull();
+    expect(form?.get("moderation")).toBeNull();
     expect(form?.get("stream")).toBeNull();
     expect(form?.get("mask")).toBeInstanceOf(File);
   });

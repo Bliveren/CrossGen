@@ -410,9 +410,35 @@ async function fetchEditResponse(
 }
 
 function editRequestBody(params: OpenAIImageParams, prompt: string): Record<string, string | number | boolean> {
-  const body = baseRequestBody(params, prompt);
-  if (!params.stream) {
-    delete body.stream;
+  const requestParams = normalizeOpenAIRequestParams(params);
+  const body: Record<string, string | number | boolean> = {
+    model: requestParams.model,
+    prompt
+  };
+  if (requestParams.size !== "auto") {
+    body.size = requestParams.size;
+  }
+  if (requestParams.quality !== "auto") {
+    body.quality = requestParams.quality;
+  }
+  if (requestParams.outputFormat !== "png") {
+    body.output_format = requestParams.outputFormat;
+  }
+  if (requestParams.outputFormat !== "png" && shouldSendCompression(requestParams.outputFormat)) {
+    body.output_compression = requestParams.outputCompression;
+  }
+  if (requestParams.background !== "auto") {
+    body.background = requestParams.background;
+  }
+  if (requestParams.n > 1) {
+    body.n = requestParams.n;
+  }
+  if (requestParams.moderation !== "auto") {
+    body.moderation = requestParams.moderation;
+  }
+  if (requestParams.stream) {
+    body.stream = true;
+    body.partial_images = requestParams.partialImages;
   }
   return body;
 }

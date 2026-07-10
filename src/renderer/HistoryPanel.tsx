@@ -355,7 +355,7 @@ export function HistoryItemCard({
         )}
       </button>
       <div className="history-copy">
-        <div className="history-meta">
+        <div className="history-main-copy">
           <div className="history-name-wrap">
             {editingName ? (
               <input
@@ -382,68 +382,68 @@ export function HistoryItemCard({
               </button>
             )}
           </div>
-          <span className="history-date-model">
-            <span>{createdAtLabel}</span>
-            {durationLabel && <span className="history-duration">{durationLabel}</span>}
-            <span title={modelTitle}>{modelDisplayName}</span>
-          </span>
-        </div>
-        <div className="history-chip-row history-tag-row" aria-label={copy.historyEditTags}>
-          <span className="history-chip system-tag" title={copy.historySystemTag}>{systemTag}</span>
-          {job.tags.map((tag) => (
-            <span key={tag} className="history-chip">{tag}</span>
-          ))}
-          <span className="history-add-tag-anchor">
-            <button
-              type="button"
-              className="history-chip history-add-tag-button"
-              onClick={onEditTags}
-              aria-label={copy.addTag}
-              data-tooltip={copy.addTag}
-            >
-              {copy.addTag}
-            </button>
-            {editingTags && (
-              <div
-                className="history-tag-popover"
-                data-drift="subtle"
-                onPointerDown={onMoveTagPopoverPointerDown}
-                onMouseMove={onMoveToolbarTowardPointer}
-                onMouseLeave={onResetToolbarDrift}
+          <div className="history-chip-row history-tag-row" aria-label={copy.historyEditTags}>
+            <span className="history-chip system-tag" title={copy.historySystemTag}>{systemTag}</span>
+            {job.tags.map((tag) => (
+              <span key={tag} className="history-chip">{tag}</span>
+            ))}
+            <span className="history-add-tag-anchor">
+              <button
+                type="button"
+                className="history-chip history-add-tag-button"
+                onClick={onEditTags}
+                aria-label={copy.addTag}
+                data-tooltip={copy.addTag}
               >
-                <input
-                  value={tagsInput}
-                  onChange={(event) => onTagsInputChange(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      onSaveTags();
-                    }
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      onCancelTags();
-                    }
-                  }}
-                  placeholder={copy.templateTags}
-                  aria-label={copy.addTag}
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  className="icon-button"
-                  disabled={!tagsInput.trim()}
-                  onClick={onSaveTags}
-                  aria-label={copy.historySaveTags}
-                  data-tooltip={copy.historySaveTags}
+                {copy.addTag}
+              </button>
+              {editingTags && (
+                <div
+                  className="history-tag-popover"
+                  data-drift="subtle"
+                  onPointerDown={onMoveTagPopoverPointerDown}
+                  onMouseMove={onMoveToolbarTowardPointer}
+                  onMouseLeave={onResetToolbarDrift}
                 >
-                  <Save size={14} />
-                </button>
-              </div>
-            )}
-          </span>
+                  <input
+                    value={tagsInput}
+                    onChange={(event) => onTagsInputChange(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        onSaveTags();
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        onCancelTags();
+                      }
+                    }}
+                    placeholder={copy.templateTags}
+                    aria-label={copy.addTag}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    className="icon-button"
+                    disabled={!tagsInput.trim()}
+                    onClick={onSaveTags}
+                    aria-label={copy.historySaveTags}
+                    data-tooltip={copy.historySaveTags}
+                  >
+                    <Save size={14} />
+                  </button>
+                </div>
+              )}
+            </span>
+          </div>
+          <p>{job.prompt}</p>
+          {jobError && <p className="history-error">{jobError}</p>}
         </div>
-        <p>{job.prompt}</p>
-        {jobError && <p className="history-error">{jobError}</p>}
+        <span className="history-date-model">
+          <span>{createdAtLabel}</span>
+          {durationLabel && <span className="history-duration">{durationLabel}</span>}
+          <span title={modelTitle}>{modelDisplayName}</span>
+        </span>
       </div>
       <div className="history-actions">
         <button type="button" className={reuseButtonClass} onClick={onReuse} aria-label={copy.reuse} data-tooltip={copy.reuse}>
