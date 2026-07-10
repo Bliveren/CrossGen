@@ -37,6 +37,7 @@
     --surface-app: var(--color-surface-app);
     --surface-panel: var(--color-surface-panel);
     --surface-panel-muted: var(--color-surface-panel-muted);
+    --surface-muted: var(--surface-panel-muted);
     --surface-raised: var(--color-surface-raised);
     --surface-selected: var(--color-surface-selected);
     --surface-hover: var(--color-surface-hover);
@@ -66,6 +67,7 @@
     --warning-soft: #fff6e6;
     --shadow-soft: 0 10px 28px rgba(82, 51, 23, 0.08);
     --shadow-popover: 0 18px 48px rgba(82, 51, 23, 0.18);
+    --shadow-rgb: 82, 51, 23;
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
@@ -105,6 +107,7 @@
       --surface-app: #101720;
       --surface-panel: #17212c;
       --surface-panel-muted: #202c38;
+      --surface-muted: var(--surface-panel-muted);
       --surface-raised: #223040;
       --surface-selected: #2a2b31;
       --surface-hover: #233241;
@@ -134,6 +137,7 @@
       --warning-soft: #372b18;
       --shadow-soft: 0 14px 30px rgba(0, 0, 0, 0.24);
       --shadow-popover: 0 20px 54px rgba(0, 0, 0, 0.42);
+      --shadow-rgb: 0, 0, 0;
       --surface-floating: color-mix(in srgb, var(--surface-panel) 82%, transparent);
       --checker-mark: rgba(231, 238, 246, 0.045);
       --glass-surface: rgba(23, 33, 44, 0.66);
@@ -147,6 +151,7 @@
     --surface-app: #101720;
     --surface-panel: #17212c;
     --surface-panel-muted: #202c38;
+    --surface-muted: var(--surface-panel-muted);
     --surface-raised: #223040;
     --surface-selected: #2a2b31;
     --surface-hover: #233241;
@@ -176,6 +181,7 @@
     --warning-soft: #372b18;
     --shadow-soft: 0 14px 30px rgba(0, 0, 0, 0.24);
     --shadow-popover: 0 20px 54px rgba(0, 0, 0, 0.42);
+    --shadow-rgb: 0, 0, 0;
     --surface-floating: color-mix(in srgb, var(--surface-panel) 82%, transparent);
     --checker-mark: rgba(231, 238, 246, 0.045);
     --glass-surface: rgba(23, 33, 44, 0.66);
