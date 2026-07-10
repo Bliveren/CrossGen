@@ -4983,14 +4983,15 @@
 
   .history-copy {
     display: grid;
-    gap: 4px;
+    align-content: start;
+    gap: 6px;
     min-width: 0;
   }
 
   .history-meta {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
+    align-items: start;
     gap: 8px;
     font-size: 12px;
   }
@@ -5013,7 +5014,7 @@
   .history-name-button {
     display: block;
     width: 100%;
-    min-height: 24px;
+    min-height: 18px;
     border: 0;
     background: transparent;
     color: var(--text-primary);
@@ -5040,10 +5041,15 @@
   .history-date-model {
     display: grid;
     justify-items: end;
-    gap: 2px;
+    gap: 1px;
     max-width: 112px;
     font-size: 11px;
     text-align: right;
+  }
+
+  .history-duration {
+    color: var(--accent);
+    font-weight: 650;
   }
 
   .history-date-model span {
@@ -5064,6 +5070,7 @@
   .history-tag-row {
     align-items: center;
     position: relative;
+    margin-top: 0;
   }
 
   .history-chip {

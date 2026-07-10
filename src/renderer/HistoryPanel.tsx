@@ -68,6 +68,7 @@ interface HistoryItemCardProps {
   batchMode: boolean;
   displayName: string;
   createdAtLabel: string;
+  durationLabel?: string;
   modelDisplayName: string;
   modelTitle: string;
   systemTag: string;
@@ -282,6 +283,7 @@ export function HistoryItemCard({
   batchMode,
   displayName,
   createdAtLabel,
+  durationLabel,
   modelDisplayName,
   modelTitle,
   systemTag,
@@ -382,6 +384,7 @@ export function HistoryItemCard({
           </div>
           <span className="history-date-model">
             <span>{createdAtLabel}</span>
+            {durationLabel && <span className="history-duration">{durationLabel}</span>}
             <span title={modelTitle}>{modelDisplayName}</span>
           </span>
         </div>

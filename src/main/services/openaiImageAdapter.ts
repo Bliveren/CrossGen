@@ -61,7 +61,9 @@ interface OpenAIStreamOptions {
 }
 
 type JsonImageFetchPurpose = "empty-retry" | "backfill";
-type EditImageFieldName = "image[]" | "image";
+type EditImageFieldName = "image" | "image[]" | "images";
+
+const EDIT_IMAGE_FIELD_NAMES = ["image", "image[]", "images"] as const satisfies readonly EditImageFieldName[];
 
 export type OpenAIImageRuntime = ImageJobRuntime;
 export type OpenAIImageJob = GenerationJob & { params: OpenAIImageParams };
@@ -333,16 +335,24 @@ async function runEdit(
 ): Promise<GenerationJob> {
   validateEditJob(job);
 
-  const response = await fetchEditResponse(job, apiKey, baseURL, runtime);
+  const initialImageFieldName = defaultEditImageFieldName(job);
+  const response = await fetchEditResponse(job, apiKey, baseURL, runtime, initialImageFieldName);
 
   if (!job.params.stream) {
-    return handleJsonEditImagesWithFallback(response, job, runtime, (nextJob, purpose) => {
-      const imageFieldName = purpose === "empty-retry" ? "image" : "image[]";
+    return handleJsonEditImagesWithFallback(response, job, runtime, initialImageFieldName, (nextJob, imageFieldName) => {
       return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName);
     }, (streamJob, imageFieldName) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, imageFieldName));
   }
 
   return handleImagesResponse(response, job, "image_edit", runtime);
+}
+
+function defaultEditImageFieldName(job: OpenAIImageJob): EditImageFieldName {
+  return job.inputAssets.length === 1 ? "image" : "image[]";
+}
+
+function fallbackEditImageFieldNames(initialImageFieldName: EditImageFieldName): EditImageFieldName[] {
+  return EDIT_IMAGE_FIELD_NAMES.filter((imageFieldName) => imageFieldName !== initialImageFieldName);
 }
 
 function validateEditJob(job: OpenAIImageJob): void {
@@ -369,10 +379,10 @@ async function fetchEditResponse(
   apiKey: string,
   baseURL: string,
   runtime: OpenAIImageRuntime,
-  imageFieldName: EditImageFieldName = "image[]"
+  imageFieldName: EditImageFieldName = defaultEditImageFieldName(job)
 ): Promise<Response> {
   const form = new FormData();
-  for (const [key, value] of Object.entries(baseRequestBody(job.params, openAIEditPrompt(job)))) {
+  for (const [key, value] of Object.entries(editRequestBody(job.params, openAIEditPrompt(job)))) {
     form.append(key, String(value));
   }
 
@@ -397,6 +407,14 @@ async function fetchEditResponse(
     },
     job.params.timeoutMs
   );
+}
+
+function editRequestBody(params: OpenAIImageParams, prompt: string): Record<string, string | number | boolean> {
+  const body = baseRequestBody(params, prompt);
+  if (!params.stream) {
+    delete body.stream;
+  }
+  return body;
 }
 
 async function assetToBlob(asset: InputAsset): Promise<Blob> {
@@ -594,7 +612,8 @@ async function handleJsonEditImagesWithFallback(
   response: Response,
   job: OpenAIImageJob,
   runtime: OpenAIImageRuntime,
-  fetchAdditional: (job: OpenAIImageJob, purpose: JsonImageFetchPurpose) => Promise<Response>,
+  initialImageFieldName: EditImageFieldName,
+  fetchAdditional: (job: OpenAIImageJob, imageFieldName: EditImageFieldName, purpose: JsonImageFetchPurpose) => Promise<Response>,
   fetchStreamFallback: (job: OpenAIImageJob, imageFieldName: EditImageFieldName) => Promise<Response>
 ): Promise<GenerationJob> {
   const requestedCount = Math.max(1, job.params.n);
@@ -604,29 +623,42 @@ async function handleJsonEditImagesWithFallback(
   let emptyReason = firstResult.emptyReason;
 
   if (outputs.length > 0) {
-    return completeJsonBackfill(job, outputs, usage, runtime, fetchAdditional);
+    return completeJsonBackfill(job, outputs, usage, runtime, (nextJob, purpose) => fetchAdditional(nextJob, initialImageFieldName, purpose));
   }
 
   if (firstResult.retryableEmpty) {
-    const retryJob: OpenAIImageJob = {
-      ...job,
-      params: {
-        ...job.params,
-        n: requestedCount,
-        stream: false,
-        partialImages: 0
-      }
-    };
-    const retryResponse = await fetchAdditional(retryJob, "empty-retry");
-    const retryResult = await readAndSaveJsonImagesResponse(retryResponse, job, runtime, 0, requestedCount);
-    outputs.push(...retryResult.outputs);
-    usage = mergeUsageDetails(usage, retryResult.usage);
-    emptyReason = retryResult.emptyReason
-      ? `${retryResult.emptyReason}；已自动重试 1 次，仍未收到图片。`
-      : "已自动重试 1 次，仍未收到图片。";
+    let retryCount = 0;
+    const jsonErrors: string[] = [];
+    for (const imageFieldName of fallbackEditImageFieldNames(initialImageFieldName)) {
+      retryCount += 1;
+      const retryJob: OpenAIImageJob = {
+        ...job,
+        params: {
+          ...job.params,
+          n: requestedCount,
+          stream: false,
+          partialImages: 0
+        }
+      };
+      try {
+        const retryResponse = await fetchAdditional(retryJob, imageFieldName, "empty-retry");
+        const retryResult = await readAndSaveJsonImagesResponse(retryResponse, job, runtime, 0, requestedCount);
+        outputs.push(...retryResult.outputs);
+        usage = mergeUsageDetails(usage, retryResult.usage);
+        emptyReason = retryResult.emptyReason
+          ? `${retryResult.emptyReason}；已自动重试 ${retryCount} 次，仍未收到图片。`
+          : `已自动重试 ${retryCount} 次，仍未收到图片。`;
 
-    if (outputs.length > 0) {
-      return completeJsonBackfill(job, outputs, usage, runtime, fetchAdditional);
+        if (outputs.length > 0) {
+          return completeJsonBackfill(job, outputs, usage, runtime, (nextJob, purpose) => fetchAdditional(nextJob, imageFieldName, purpose));
+        }
+      } catch (error) {
+        jsonErrors.push(`${imageFieldName}: ${normalizeAdapterError(error)}`);
+      }
+    }
+
+    if (jsonErrors.length > 0) {
+      emptyReason = `${emptyReason ?? ""}；非流式编辑字段兜底失败：${jsonErrors.join("；")}`;
     }
 
     const streamJob: OpenAIImageJob = {
@@ -639,7 +671,7 @@ async function handleJsonEditImagesWithFallback(
       }
     };
     const streamErrors: string[] = [];
-    for (const imageFieldName of ["image[]", "image"] satisfies EditImageFieldName[]) {
+    for (const imageFieldName of EDIT_IMAGE_FIELD_NAMES) {
       try {
         const streamResponse = await fetchStreamFallback(streamJob, imageFieldName);
         const streamResult = await handleImagesResponse(streamResponse, streamJob, "image_edit", runtime);

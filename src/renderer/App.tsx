@@ -5980,6 +5980,7 @@ export function App() {
                         batchMode={isHistoryBatchMode}
                         displayName={displayName}
                         createdAtLabel={formatDate(job.createdAt)}
+                        durationLabel={job.durationMs === undefined ? undefined : copy.historyDuration(formatDuration(job.durationMs))}
                         modelDisplayName={modelDetails.modelDisplayName}
                         modelTitle={modelDetails.modelTitle}
                         systemTag={systemTag}

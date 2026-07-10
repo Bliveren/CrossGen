@@ -354,6 +354,7 @@ export interface UiCopy {
   historySaveTags: string;
   historySystemTag: string;
   historyImageName: string;
+  historyDuration: (duration: string) => string;
   historyPageSizeMenu: string;
   historyPageSizeOption: (count: number) => string;
   noJobsYet: string;
@@ -717,6 +718,7 @@ export const translations: Record<Language, UiCopy> = {
     historySaveTags: "Save history tags",
     historySystemTag: "System tag",
     historyImageName: "Image name",
+    historyDuration: (duration: string) => `Took ${duration}`,
     historyPageSizeMenu: "History page size",
     historyPageSizeOption: (count: number) => `Show ${count} per page`,
     noJobsYet: "No jobs yet.",
@@ -1142,6 +1144,7 @@ export const translations: Record<Language, UiCopy> = {
     historySaveTags: "保存历史标签",
     historySystemTag: "系统标签",
     historyImageName: "图片名称",
+    historyDuration: (duration: string) => `耗时 ${duration}`,
     historyPageSizeMenu: "历史每页数量",
     historyPageSizeOption: (count: number) => `每页显示 ${count} 条`,
     noJobsYet: "暂无任务。",

@@ -909,8 +909,10 @@ describe("renderer multi-model smoke", () => {
   });
 
   it("edits History image names and user tags while keeping the mode system tag", async () => {
-    const job = geminiJob(0, { name: "original-name.png", tags: ["draft"] });
+    const job = geminiJob(0, { name: "original-name.png", tags: ["draft"], durationMs: 1250 });
     const bridge = await renderApp(snapshot({ history: [job] }));
+
+    expect(document.querySelector(".history-duration")?.textContent).toBe("Took 1.3 s");
 
     await click(buttonByText("original-name.png", ".history-name-button"));
     await changeInput(document.querySelector<HTMLInputElement>(".history-name-input")!, "renamed-history.png");

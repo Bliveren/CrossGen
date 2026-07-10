@@ -387,7 +387,7 @@ describe("OpenAI image service", () => {
     ]);
   });
 
-  it("calls image edits with image[] and mask multipart fields", async () => {
+  it("calls single image edits with image and mask multipart fields", async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
     const sourcePath = path.join(tmpDir, "source.png");
     const maskPath = path.join(tmpDir, "mask.png");
@@ -418,8 +418,9 @@ describe("OpenAI image service", () => {
     expect(String(form?.get("prompt"))).toContain("Make a clean product render");
     expect(String(form?.get("prompt"))).toContain("The request includes 1 attached reference image.");
     expect(String(form?.get("prompt"))).toContain("A mask is attached.");
-    expect(form?.getAll("image")).toHaveLength(0);
-    expect(form?.getAll("image[]")).toHaveLength(1);
+    expect(form?.getAll("image")).toHaveLength(1);
+    expect(form?.getAll("image[]")).toHaveLength(0);
+    expect(form?.get("stream")).toBeNull();
     expect(form?.get("mask")).toBeInstanceOf(File);
   });
 
@@ -457,11 +458,14 @@ describe("OpenAI image service", () => {
 
   it("retries OpenAI-compatible edits with singular image fields after metadata-only empty responses", async () => {
     const source = await sourceAsset();
-    const imageFieldNames: string[] = [];
+    const requests: Array<{ imageFieldName: string; stream: string | null }> = [];
     const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
       const form = init?.body as FormData;
-      imageFieldNames.push(form.getAll("image[]").length > 0 ? "image[]" : form.getAll("image").length > 0 ? "image" : "missing");
-      if (imageFieldNames.length === 1) {
+      requests.push({
+        imageFieldName: form.getAll("image").length > 0 ? "image" : form.getAll("image[]").length > 0 ? "image[]" : form.getAll("images").length > 0 ? "images" : "missing",
+        stream: form.get("stream")?.toString() ?? null
+      });
+      if (requests.length === 1) {
         return Response.json({
           model: "gpt-image-2",
           data: null,
@@ -489,7 +493,10 @@ describe("OpenAI image service", () => {
       runtime
     );
 
-    expect(imageFieldNames).toEqual(["image[]", "image"]);
+    expect(requests).toEqual([
+      { imageFieldName: "image", stream: null },
+      { imageFieldName: "image[]", stream: null }
+    ]);
     expect(result.status).toBe("succeeded");
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
@@ -525,11 +532,11 @@ describe("OpenAI image service", () => {
       const form = init?.body as FormData;
       requests.push({
         accept: new Headers(init?.headers).get("Accept") ?? "",
-        imageFieldName: form.getAll("image[]").length > 0 ? "image[]" : form.getAll("image").length > 0 ? "image" : "missing",
+        imageFieldName: form.getAll("image").length > 0 ? "image" : form.getAll("image[]").length > 0 ? "image[]" : form.getAll("images").length > 0 ? "images" : "missing",
         stream: form.get("stream")?.toString() ?? null,
         partialImages: form.get("partial_images")?.toString() ?? null
       });
-      if (requests.length < 3) {
+      if (requests.length < 4) {
         return Response.json(emptyRightImagePayload);
       }
       const encoder = new TextEncoder();
@@ -560,9 +567,10 @@ describe("OpenAI image service", () => {
     );
 
     expect(requests).toEqual([
-      { accept: "application/json", imageFieldName: "image[]", stream: "false", partialImages: null },
-      { accept: "application/json", imageFieldName: "image", stream: "false", partialImages: null },
-      { accept: "text/event-stream", imageFieldName: "image[]", stream: "true", partialImages: "1" }
+      { accept: "application/json", imageFieldName: "image", stream: null, partialImages: null },
+      { accept: "application/json", imageFieldName: "image[]", stream: null, partialImages: null },
+      { accept: "application/json", imageFieldName: "images", stream: null, partialImages: null },
+      { accept: "text/event-stream", imageFieldName: "image", stream: "true", partialImages: "1" }
     ]);
     expect(result.status).toBe("succeeded");
     expect(result.params).toMatchObject({ stream: false, partialImages: 0 });
@@ -594,14 +602,14 @@ describe("OpenAI image service", () => {
       const form = init?.body as FormData;
       requests.push({
         accept: new Headers(init?.headers).get("Accept") ?? "",
-        imageFieldName: form.getAll("image[]").length > 0 ? "image[]" : form.getAll("image").length > 0 ? "image" : "missing",
+        imageFieldName: form.getAll("image").length > 0 ? "image" : form.getAll("image[]").length > 0 ? "image[]" : form.getAll("images").length > 0 ? "images" : "missing",
         stream: form.get("stream")?.toString() ?? null,
         partialImages: form.get("partial_images")?.toString() ?? null
       });
-      if (requests.length < 3) {
+      if (requests.length < 4) {
         return Response.json(emptyRightImagePayload);
       }
-      if (requests.length === 3) {
+      if (requests.length === 4) {
         const stream = new ReadableStream<Uint8Array>({
           start(controller) {
             controller.error(new Error("terminated"));
@@ -632,14 +640,69 @@ describe("OpenAI image service", () => {
     );
 
     expect(requests).toEqual([
-      { accept: "application/json", imageFieldName: "image[]", stream: "false", partialImages: null },
-      { accept: "application/json", imageFieldName: "image", stream: "false", partialImages: null },
-      { accept: "text/event-stream", imageFieldName: "image[]", stream: "true", partialImages: "1" },
-      { accept: "text/event-stream", imageFieldName: "image", stream: "true", partialImages: "1" }
+      { accept: "application/json", imageFieldName: "image", stream: null, partialImages: null },
+      { accept: "application/json", imageFieldName: "image[]", stream: null, partialImages: null },
+      { accept: "application/json", imageFieldName: "images", stream: null, partialImages: null },
+      { accept: "text/event-stream", imageFieldName: "image", stream: "true", partialImages: "1" },
+      { accept: "text/event-stream", imageFieldName: "image[]", stream: "true", partialImages: "1" }
     ]);
     expect(result.status).toBe("succeeded");
     expect(result.usage?.total_tokens).toBe(11);
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("tries non-streaming images fallback before streaming edit fallbacks", async () => {
+    const source = await sourceAsset();
+    const requests: Array<{ accept: string; imageFieldName: string; stream: string | null }> = [];
+    const emptyRightImagePayload = {
+      model: "gpt-image-2",
+      data: null,
+      quality: "auto",
+      size: "auto",
+      usage: { num_input_images: 1 },
+      extra_fields: {
+        request_type: "image_edit",
+        routing_info: { route: "test" },
+        provider: "right-image",
+        original_model_requested: "gpt-image-2",
+        resolved_model_used: "gpt-image-2",
+        latency: 1.2,
+        chunk_index: 0,
+        provider_response_headers: { "Cf-Ray": "test-ray" }
+      }
+    };
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData;
+      requests.push({
+        accept: new Headers(init?.headers).get("Accept") ?? "",
+        imageFieldName: form.getAll("image").length > 0 ? "image" : form.getAll("image[]").length > 0 ? "image[]" : form.getAll("images").length > 0 ? "images" : "missing",
+        stream: form.get("stream")?.toString() ?? null
+      });
+      if (requests.length < 3) {
+        return Response.json(emptyRightImagePayload);
+      }
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }], usage: { total_tokens: 13 } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ stream: false })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests).toEqual([
+      { accept: "application/json", imageFieldName: "image", stream: null },
+      { accept: "application/json", imageFieldName: "image[]", stream: null },
+      { accept: "application/json", imageFieldName: "images", stream: null }
+    ]);
+    expect(result.status).toBe("succeeded");
+    expect(result.usage?.total_tokens).toBe(13);
   });
 
   it("passes advanced gpt-image-2 parameters through multipart edit requests", async () => {
