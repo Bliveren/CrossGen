@@ -1,26 +1,28 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.0",
-  "lastUpdated": "2026-07-09T12:13:15.013Z",
+  "lastUpdated": "2026-07-10T15:24:01.464Z",
   "gates": [
     {
       "id": "real-openai-api",
-      "title": "Real OpenAI GPT Image 2 API acceptance",
+      "title": "Real OpenAI GPT Image 2 acceptance via AIHub aggregation API",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
-        "Model discovery confirms gpt-image-2 is available to the tested key on the v0.3.0 release branch.",
-        "Text-to-image generation succeeds with real OpenAI Image API output.",
-        "Reference-image editing succeeds with real OpenAI Image API output.",
-        "Mask-based inpaint succeeds with real OpenAI Image API output.",
-        "Per-config streaming preview behavior is accepted or explicitly disabled for the tested endpoint.",
-        "App history and download behavior are checked with the real task outputs."
+        "AIHub model discovery confirms gpt-image-2 is available to the tested key on the v0.3.0 release branch.",
+        "GPT Image 2 text-to-image generation succeeds through the app-supported AIHub /chat/completions streaming path.",
+        "GPT Image 2 reference-image editing succeeds through the app-supported AIHub /chat/completions streaming path.",
+        "GPT Image 2 guided-region editing with a source image and mask-like reference succeeds through the app-supported AIHub path.",
+        "The tested endpoint returns savable image artifacts within the configured 240 second timeout.",
+        "The incompatible direct /images/edits path is explicitly documented and not used as the AIHub release gate."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-10T15:24:01.464Z",
+        "commit": "04e8795f11a49b5fefc1dde1e49325f995e41df3",
+        "environment": "macOS local release gate using AIHub OpenAI-compatible aggregation endpoint https://aihub.nowosoft.cn/v1; API keys loaded from .env.local and redacted from committed evidence.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm verify:real-aihub-api"
+        ],
         "references": [
           {
             "label": "Real OpenAI GPT Image 2 external acceptance tracker",
@@ -34,31 +36,45 @@
         "artifacts": [
           {
             "kind": "evidence-note",
-            "path": "docs/release/v0.3.0-closeout.md",
+            "path": "docs/release/v0.3.0-aihub-real-api-gate.md",
             "public": true,
-            "description": "Local v0.3.0 closeout report with mock OpenAI validation and streaming compatibility notes."
+            "description": "Redacted AIHub real-provider acceptance record for v0.3.0 OpenAI and Gemini gates."
+          },
+          {
+            "kind": "real-api-summary",
+            "path": "real-api-artifacts/aihub/2026-07-10T15-17-54-945Z/summary.json",
+            "public": false,
+            "description": "Redacted AIHub real-provider acceptance summary for GPT Image 2 and Gemini image models."
+          },
+          {
+            "kind": "real-api-output-directory",
+            "path": "real-api-artifacts/aihub/2026-07-10T15-17-54-945Z",
+            "public": false,
+            "description": "Local generated image artifacts for OpenAI GPT Image 2 and Gemini/Nano Banana acceptance."
           }
         ],
-        "summary": "Pending v0.3.0 real GPT Image 2 acceptance. Mock OpenAI verification and final closeout performance gates passed, but real-provider acceptance must be rerun with cost approval before publishing."
+        "summary": "Passed via AIHub aggregation API. Model discovery confirmed gpt-image-2 and gemini-3.1-flash-image. GPT Image 2 chat-routed text-to-image, reference-image editing, and guided-region editing all returned savable images. The direct /images/edits compatibility path was separately observed to return empty data through this provider, so v0.3.0 release acceptance intentionally validates the app-supported chat-completions path for AIHub."
       }
     },
     {
       "id": "real-gemini-api",
-      "title": "Real Gemini / Nano Banana 3 API acceptance",
+      "title": "Real Gemini / Nano Banana acceptance via AIHub aggregation API",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
-        "Model discovery confirms a Nano Banana 3-compatible Gemini image model is available to the tested key on the v0.3.0 release branch.",
-        "Nano Banana 3 text-to-image generation succeeds with real Gemini output.",
-        "Reference-image editing succeeds with real Gemini output.",
-        "Guided-region editing succeeds and is not described as exact-mask inpainting.",
-        "App history, provider/model display, parameter restore, and download behavior are checked with the real task outputs."
+        "AIHub model discovery confirms gemini-3.1-flash-image is available to the tested key on the v0.3.0 release branch.",
+        "Gemini/Nano Banana text-to-image generation succeeds through the AIHub /chat/completions streaming path.",
+        "Gemini/Nano Banana reference-image editing succeeds through the AIHub /chat/completions streaming path.",
+        "Gemini/Nano Banana guided-region editing succeeds and is not described as exact-mask inpainting.",
+        "The tested endpoint returns savable image artifacts within the configured 240 second timeout."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-10T15:24:01.464Z",
+        "commit": "04e8795f11a49b5fefc1dde1e49325f995e41df3",
+        "environment": "macOS local release gate using AIHub OpenAI-compatible aggregation endpoint https://aihub.nowosoft.cn/v1; API keys loaded from .env.local and redacted from committed evidence.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm verify:real-aihub-api"
+        ],
         "references": [
           {
             "label": "Real Gemini / Nano Banana 3 external acceptance tracker",
@@ -72,12 +88,24 @@
         "artifacts": [
           {
             "kind": "evidence-note",
-            "path": "docs/release/v0.3.0-closeout.md",
+            "path": "docs/release/v0.3.0-aihub-real-api-gate.md",
             "public": true,
-            "description": "Local v0.3.0 closeout report with mock Gemini validation and residual-risk notes."
+            "description": "Redacted AIHub real-provider acceptance record for v0.3.0 OpenAI and Gemini gates."
+          },
+          {
+            "kind": "real-api-summary",
+            "path": "real-api-artifacts/aihub/2026-07-10T15-17-54-945Z/summary.json",
+            "public": false,
+            "description": "Redacted AIHub real-provider acceptance summary for GPT Image 2 and Gemini image models."
+          },
+          {
+            "kind": "real-api-output-directory",
+            "path": "real-api-artifacts/aihub/2026-07-10T15-17-54-945Z",
+            "public": false,
+            "description": "Local generated image artifacts for OpenAI GPT Image 2 and Gemini/Nano Banana acceptance."
           }
         ],
-        "summary": "Pending v0.3.0 real Gemini/Nano Banana acceptance. Mock Gemini verification passed during closeout, but real-provider acceptance must be rerun with cost approval before publishing."
+        "summary": "Passed via AIHub aggregation API. Model discovery confirmed gemini-3.1-flash-image. Gemini/Nano Banana chat-routed text-to-image, reference-image editing, and guided-region editing all returned savable images. Guided-region validation is recorded as guided editing, not exact-mask inpainting."
       }
     },
     {

@@ -68,9 +68,9 @@ describe("release evidence verifier", () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 0/5 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated: 2/5 required gate(s) passed.");
     expect(result.stdout).toContain(
-      "Pending required gate(s): real-openai-api, real-gemini-api, windows-native-release, linux-native-release, update-manifest-assets"
+      "Pending required gate(s): windows-native-release, linux-native-release, update-manifest-assets"
     );
   });
 
@@ -79,7 +79,7 @@ describe("release evidence verifier", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Required release evidence gates are not passed");
-    expect(result.stderr).toContain("real-openai-api");
+    expect(result.stderr).toContain("windows-native-release");
     expect(result.stderr).toContain("update-manifest-assets");
   });
 
