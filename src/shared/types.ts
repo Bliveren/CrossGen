@@ -64,6 +64,26 @@ export interface ProviderConfig {
   lastModelDiscoveryError?: string;
   activeLaunchId: FocusedLaunchId;
   activeModelId: string;
+  openAIImageRouting?: OpenAIImageRouting;
+  updatedAt: string;
+}
+
+export type OpenAIImageRoute = "image-api" | "responses" | "chat-completions";
+
+export interface OpenAIImageRouteProbe {
+  route: OpenAIImageRoute;
+  mode: "generate" | "edit";
+  endpoint: string;
+  ok: boolean;
+  latencyMs: number;
+  status?: number;
+  error?: string;
+}
+
+export interface OpenAIImageRouting {
+  preferredGenerateRoute?: OpenAIImageRoute;
+  preferredEditRoute?: OpenAIImageRoute;
+  probes: OpenAIImageRouteProbe[];
   updatedAt: string;
 }
 

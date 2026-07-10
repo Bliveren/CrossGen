@@ -656,6 +656,340 @@ describe("OpenAI image service", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("parses Responses-style streaming edit events from compatible gateways", async () => {
+    const source = await sourceAsset();
+    const requests: Array<{ accept: string; imageFieldName: string; stream: string | null }> = [];
+    const emptyRightImagePayload = {
+      model: "gpt-image-2",
+      data: null,
+      usage: { num_input_images: 1 },
+      extra_fields: {
+        request_type: "image_edit",
+        provider: "right-image",
+        resolved_model_used: "gpt-image-2",
+        provider_response_headers: { "Cf-Ray": "test-ray" }
+      }
+    };
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData;
+      requests.push({
+        accept: new Headers(init?.headers).get("Accept") ?? "",
+        imageFieldName: form.getAll("image").length > 0 ? "image" : form.getAll("image[]").length > 0 ? "image[]" : form.getAll("images").length > 0 ? "images" : "missing",
+        stream: form.get("stream")?.toString() ?? null
+      });
+      if (requests.length < 4) {
+        return Response.json(emptyRightImagePayload);
+      }
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: response.image_generation_call.partial_image\ndata: ${JSON.stringify({ partial_image_index: 0, partial_image_b64: tinyPngBase64 })}\n\n`));
+          controller.enqueue(encoder.encode(`event: response.completed\ndata: ${JSON.stringify({
+            response: {
+              output: [
+                {
+                  type: "image_generation_call",
+                  result: tinyPngBase64
+                }
+              ],
+              usage: { total_tokens: 23 }
+            }
+          })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime, events } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ stream: false })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests).toEqual([
+      { accept: "application/json", imageFieldName: "image", stream: null },
+      { accept: "application/json", imageFieldName: "image[]", stream: null },
+      { accept: "application/json", imageFieldName: "images", stream: null },
+      { accept: "text/event-stream", imageFieldName: "image", stream: "true" }
+    ]);
+    expect(result.status).toBe("succeeded");
+    expect(result.outputs.map((asset) => asset.sourceType)).toEqual(["partial", "result"]);
+    expect(events.some((event) => event.type === "partial")).toBe(true);
+    await expect(readFile(result.outputs[1].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("falls back to the Responses image tool when image edits stay metadata-only", async () => {
+    const source = await sourceAsset();
+    const requests: Array<{ url: string; accept: string; bodyType: "json" | "form"; body: unknown }> = [];
+    const emptyRightImagePayload = {
+      model: "gpt-image-2",
+      data: null,
+      usage: { num_input_images: 1 },
+      extra_fields: {
+        request_type: "image_edit",
+        provider: "right-image",
+        resolved_model_used: "gpt-image-2",
+        provider_response_headers: { "Cf-Ray": "test-ray" }
+      }
+    };
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      const body = init?.body;
+      if (body instanceof FormData) {
+        requests.push({
+          url: String(url),
+          accept: headers.get("Accept") ?? "",
+          bodyType: "form",
+          body: {
+            imageFieldName: body.getAll("image").length > 0 ? "image" : body.getAll("image[]").length > 0 ? "image[]" : body.getAll("images").length > 0 ? "images" : "missing",
+            stream: body.get("stream")?.toString() ?? null
+          }
+        });
+        return Response.json(emptyRightImagePayload);
+      }
+
+      const requestBody = JSON.parse(String(body));
+      requests.push({
+        url: String(url),
+        accept: headers.get("Accept") ?? "",
+        bodyType: "json",
+        body: requestBody
+      });
+      return Response.json({
+        output: [
+          {
+            type: "image_generation_call",
+            result: tinyPngBase64
+          }
+        ],
+        usage: { total_tokens: 29 }
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ stream: false })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://api.test/v1/images/edits",
+      "https://api.test/v1/images/edits",
+      "https://api.test/v1/images/edits",
+      "https://api.test/v1/images/edits",
+      "https://api.test/v1/images/edits",
+      "https://api.test/v1/images/edits",
+      "https://api.test/v1/responses"
+    ]);
+    expect(requests.at(-1)).toMatchObject({
+      accept: "application/json",
+      bodyType: "json",
+      body: {
+        model: "gpt-image-2",
+        tools: [{ type: "image_generation", action: "edit" }]
+      }
+    });
+    const responseBody = requests.at(-1)?.body as { input?: Array<{ content?: Array<{ type: string; image_url?: string }> }> };
+    expect(responseBody.input?.[0]?.content?.some((item) => item.type === "input_image" && item.image_url?.startsWith("data:image/png;base64,"))).toBe(true);
+    expect(result.status).toBe("succeeded");
+    expect(result.usage?.total_tokens).toBe(29);
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("falls back to chat completions when Responses image fallback is unavailable", async () => {
+    const source = await sourceAsset();
+    const requests: Array<{ url: string; accept: string; bodyType: "json" | "form"; body: unknown }> = [];
+    const emptyRightImagePayload = {
+      model: "gpt-image-2",
+      data: null,
+      usage: { num_input_images: 1 },
+      extra_fields: {
+        request_type: "image_edit",
+        provider: "right-image",
+        resolved_model_used: "gpt-image-2",
+        provider_response_headers: { "Cf-Ray": "test-ray" }
+      }
+    };
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      const body = init?.body;
+      if (body instanceof FormData) {
+        requests.push({
+          url: String(url),
+          accept: headers.get("Accept") ?? "",
+          bodyType: "form",
+          body: {
+            imageFieldName: body.getAll("image").length > 0 ? "image" : body.getAll("image[]").length > 0 ? "image[]" : body.getAll("images").length > 0 ? "images" : "missing"
+          }
+        });
+        return Response.json(emptyRightImagePayload);
+      }
+
+      const requestBody = JSON.parse(String(body));
+      requests.push({
+        url: String(url),
+        accept: headers.get("Accept") ?? "",
+        bodyType: "json",
+        body: requestBody
+      });
+      if (String(url).endsWith("/responses")) {
+        return Response.json({ error: { message: "responses endpoint unavailable" } }, { status: 404 });
+      }
+
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  image: tinyPngBase64
+                }
+              }
+            ],
+            usage: { total_tokens: 31 }
+          })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ stream: false })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests.map((request) => request.url).slice(-3)).toEqual([
+      "https://api.test/v1/responses",
+      "https://api.test/v1/responses",
+      "https://api.test/v1/chat/completions"
+    ]);
+    expect(requests.at(-1)).toMatchObject({
+      accept: "text/event-stream",
+      bodyType: "json",
+      body: {
+        model: "gpt-image-2",
+        stream: true,
+        params: {},
+        features: { image_generation: true }
+      }
+    });
+    const chatBody = requests.at(-1)?.body as { messages?: Array<{ content?: Array<{ type: string; image_url?: { url?: string } }> }> };
+    expect(chatBody.messages?.[0]?.content?.some((item) => item.type === "image_url" && item.image_url?.url?.startsWith("data:image/png;base64,"))).toBe(true);
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("uses probed chat completions route before image edits", async () => {
+    const source = await sourceAsset();
+    const requests: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requests.push(String(url));
+      expect(init?.body).not.toBeInstanceOf(FormData);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  image: tinyPngBase64
+                }
+              }
+            ]
+          })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await openaiImageAdapter.runJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ stream: false })
+      }),
+      "sk-test-key",
+      config({
+        openAIImageRouting: {
+          preferredEditRoute: "chat-completions",
+          probes: [],
+          updatedAt: new Date(0).toISOString()
+        }
+      }),
+      runtime
+    );
+
+    expect(requests).toEqual(["https://api.test/v1/chat/completions"]);
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("uses probed chat completions route before image generations", async () => {
+    const requests: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requests.push(String(url));
+      expect(init?.body).not.toBeInstanceOf(FormData);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  image: tinyPngBase64
+                }
+              }
+            ]
+          })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await openaiImageAdapter.runJob(
+      job({ mode: "generate", params: params({ stream: false }) }),
+      "sk-test-key",
+      config({
+        openAIImageRouting: {
+          preferredGenerateRoute: "chat-completions",
+          probes: [],
+          updatedAt: new Date(0).toISOString()
+        }
+      }),
+      runtime
+    );
+
+    expect(requests).toEqual(["https://api.test/v1/chat/completions"]);
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
   it("tries non-streaming images fallback before streaming edit fallbacks", async () => {
     const source = await sourceAsset();
     const requests: Array<{ accept: string; imageFieldName: string; stream: string | null }> = [];

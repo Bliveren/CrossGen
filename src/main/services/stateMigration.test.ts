@@ -129,6 +129,67 @@ describe("state migration", () => {
     expect(migrated.galleryFolders).toEqual([]);
   });
 
+  it("preserves OpenAI image route probes in v3 provider state", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "default",
+      providers: [{
+        id: "default",
+        kind: "openai",
+        name: "OpenAI",
+        baseURL: "https://api.test/v1",
+        enabled: true,
+        defaultModel: "gpt-image-2",
+        defaultSize: "auto",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        streamingPartialsEnabled: false,
+        discoveredModels: [],
+        activeLaunchId: "gpt-image-2",
+        activeModelId: "gpt-image-2",
+        openAIImageRouting: {
+          preferredEditRoute: "chat-completions",
+          probes: [
+            {
+              route: "chat-completions",
+              mode: "edit",
+              endpoint: "/chat/completions",
+              ok: true,
+              latencyMs: 96,
+              status: 200
+            },
+            {
+              route: "bad-route",
+              mode: "edit",
+              endpoint: "/bad",
+              ok: true,
+              latencyMs: 1
+            }
+          ],
+          updatedAt: "2026-07-10T04:00:00.000Z"
+        },
+        updatedAt: "2026-07-10T04:00:00.000Z",
+        encryption: "none"
+      }],
+      history: []
+    });
+
+    expect(migrated.providers[0].openAIImageRouting).toEqual({
+      preferredEditRoute: "chat-completions",
+      preferredGenerateRoute: undefined,
+      probes: [{
+        route: "chat-completions",
+        mode: "edit",
+        endpoint: "/chat/completions",
+        ok: true,
+        latencyMs: 96,
+        status: 200,
+        error: undefined
+      }],
+      updatedAt: "2026-07-10T04:00:00.000Z"
+    });
+  });
+
   it("normalizes prompt templates and filters malformed records", () => {
     const migrated = normalizeState({
       version: 3,

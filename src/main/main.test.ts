@@ -12,6 +12,18 @@ function savedConfig(patch: Partial<StoredProviderConfig> = {}): StoredProviderC
     discoveredModels: [{ id: "gpt-image-2", providerKind: "openai" }],
     lastModelDiscoveryAt: "2026-06-09T01:02:03.000Z",
     lastModelDiscoveryError: "old discovery error",
+    openAIImageRouting: {
+      preferredEditRoute: "chat-completions",
+      probes: [{
+        route: "chat-completions",
+        mode: "edit",
+        endpoint: "/chat/completions",
+        ok: true,
+        latencyMs: 80,
+        status: 200
+      }],
+      updatedAt: "2026-06-09T01:02:03.000Z"
+    },
     updatedAt: "2026-06-09T01:02:03.000Z",
     ...patch
   };
@@ -40,6 +52,7 @@ describe("main config save builder", () => {
     expect(next.encryption).toBe("localFallback");
     expect(next.discoveredModels).toEqual([{ id: "gpt-image-2", providerKind: "openai" }]);
     expect(next.lastModelDiscoveryAt).toBe("2026-06-09T01:02:03.000Z");
+    expect(next.openAIImageRouting?.preferredEditRoute).toBe("chat-completions");
     expect(next.streamingPartialsEnabled).toBe(true);
   });
 
@@ -51,6 +64,7 @@ describe("main config save builder", () => {
     expect(next.discoveredModels).toEqual([]);
     expect(next.lastModelDiscoveryAt).toBeUndefined();
     expect(next.lastModelDiscoveryError).toBeUndefined();
+    expect(next.openAIImageRouting).toBeUndefined();
     expect(next.streamingPartialsEnabled).toBe(false);
   });
 
@@ -75,6 +89,7 @@ describe("main config save builder", () => {
     expect(next.discoveredModels).toEqual([]);
     expect(next.lastModelDiscoveryAt).toBeUndefined();
     expect(next.lastModelDiscoveryError).toBeUndefined();
+    expect(next.openAIImageRouting).toBeUndefined();
   });
 
   it("does not clear the key slot before a new provider key is encrypted", () => {

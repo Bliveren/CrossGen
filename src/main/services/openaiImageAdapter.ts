@@ -38,10 +38,13 @@ interface ModelsResponse {
 export interface ImageStreamEvent {
   type?: string;
   b64_json?: string;
+  partial_image_b64?: string;
+  result?: string;
   url?: string;
   data?: Array<{ b64_json?: string; url?: string }>;
   partial_image_index?: number;
   usage?: UsageDetails;
+  response?: unknown;
   error?: {
     message?: string;
     type?: string;
@@ -58,6 +61,7 @@ interface JsonImagesResult {
 
 interface OpenAIStreamOptions {
   streamingPartialsEnabled?: boolean;
+  routePreference?: StoredProviderConfig["openAIImageRouting"];
 }
 
 type JsonImageFetchPurpose = "empty-retry" | "backfill";
@@ -76,11 +80,13 @@ export const openaiImageAdapter: ImageProviderAdapter = {
     return validateOpenAIRunJobRequest(request);
   },
   runJob(job: GenerationJob, apiKey: string, config: StoredProviderConfig, runtime: ImageJobRuntime) {
-    return runOpenAIImageJob(asOpenAIImageJob(job), apiKey, config.baseURL, runtime);
+    return runOpenAIImageJob(asOpenAIImageJob(job), apiKey, config.baseURL, runtime, {
+      routePreference: config.openAIImageRouting
+    });
   }
 };
 
-export function buildEndpoint(baseURL: string, endpoint: "/images/generations" | "/images/edits" | "/models"): string {
+export function buildEndpoint(baseURL: string, endpoint: "/images/generations" | "/images/edits" | "/models" | "/responses" | "/chat/completions"): string {
   return `${baseURL.trim().replace(/\/+$/, "")}${endpoint}`;
 }
 
@@ -248,9 +254,9 @@ export async function runOpenAIImageJob(
 ): Promise<GenerationJob> {
   const requestJob = normalizeOpenAIJobParams(job, options);
   if (requestJob.mode === "generate") {
-    return runGeneration(requestJob, apiKey, baseURL, runtime);
+    return runGeneration(requestJob, apiKey, baseURL, runtime, options);
   }
-  return runEdit(requestJob, apiKey, baseURL, runtime);
+  return runEdit(requestJob, apiKey, baseURL, runtime, options);
 }
 
 export function normalizeOpenAIJobParams(job: OpenAIImageJob, options: OpenAIStreamOptions = {}): OpenAIImageJob {
@@ -262,18 +268,44 @@ async function runGeneration(
   job: OpenAIImageJob,
   apiKey: string,
   baseURL: string,
-  runtime: OpenAIImageRuntime
+  runtime: OpenAIImageRuntime,
+  options: OpenAIStreamOptions = {}
 ): Promise<GenerationJob> {
-  const response = await fetchGenerationResponse(job, apiKey, baseURL, runtime);
+  const preferredRoute = options.routePreference?.preferredGenerateRoute;
+  let preferredRouteError: string | undefined;
+  if (preferredRoute === "responses" || preferredRoute === "chat-completions") {
+    try {
+      return await runPreferredConversationalImageRoute(job, apiKey, baseURL, runtime, preferredRoute);
+    } catch (error) {
+      preferredRouteError = `${preferredRoute}: ${normalizeAdapterError(error)}`;
+    }
+  }
+
+  let response: Response;
+  try {
+    response = await fetchGenerationResponse(job, apiKey, baseURL, runtime);
+  } catch (error) {
+    if (preferredRouteError) {
+      throw new Error(`首选路径失败：${preferredRouteError}；Images API 也失败：${normalizeAdapterError(error)}`);
+    }
+    throw error;
+  }
 
   if (!job.params.stream) {
-    return handleJsonGenerationImagesWithFallback(
-      response,
-      job,
-      runtime,
-      (nextJob) => fetchGenerationResponse(nextJob, apiKey, baseURL, runtime),
-      (streamJob) => fetchGenerationResponse(streamJob, apiKey, baseURL, runtime)
-    );
+    try {
+      return await handleJsonGenerationImagesWithFallback(
+        response,
+        job,
+        runtime,
+        (nextJob) => fetchGenerationResponse(nextJob, apiKey, baseURL, runtime),
+        (streamJob) => fetchGenerationResponse(streamJob, apiKey, baseURL, runtime)
+      );
+    } catch (error) {
+      if (preferredRouteError) {
+        throw new Error(`首选路径失败：${preferredRouteError}；Images API 也失败：${normalizeAdapterError(error)}`);
+      }
+      throw error;
+    }
   }
 
   if (!response.ok && shouldRetryNonStreamAfterStreamFailure(response.status)) {
@@ -294,7 +326,14 @@ async function runGeneration(
     }
   }
 
-  return handleImagesResponse(response, job, "image_generation", runtime);
+  try {
+    return await handleImagesResponse(response, job, "image_generation", runtime);
+  } catch (error) {
+    if (preferredRouteError) {
+      throw new Error(`首选路径失败：${preferredRouteError}；Images API 也失败：${normalizeAdapterError(error)}`);
+    }
+    throw error;
+  }
 }
 
 function shouldRetryNonStreamAfterStreamFailure(status: number): boolean {
@@ -327,11 +366,22 @@ async function runEdit(
   job: OpenAIImageJob,
   apiKey: string,
   baseURL: string,
-  runtime: OpenAIImageRuntime
+  runtime: OpenAIImageRuntime,
+  options: OpenAIStreamOptions = {}
 ): Promise<GenerationJob> {
   validateEditJob(job);
 
   const initialImageFieldName = defaultEditImageFieldName(job);
+  const preferredRoute = options.routePreference?.preferredEditRoute;
+  let preferredRouteError: string | undefined;
+
+  if (preferredRoute === "responses" || preferredRoute === "chat-completions") {
+    try {
+      return await runPreferredConversationalImageRoute(job, apiKey, baseURL, runtime, preferredRoute);
+    } catch (error) {
+      preferredRouteError = `${preferredRoute}: ${normalizeAdapterError(error)}`;
+    }
+  }
 
   if (job.params.stream) {
     try {
@@ -352,15 +402,113 @@ async function runEdit(
           return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName);
         }, (streamJob, imageFieldName) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, imageFieldName));
       } catch (fallbackError) {
-        throw new Error(`${normalizeAdapterError(error)}；已尝试降级为非流式图生图请求但仍失败：${normalizeAdapterError(fallbackError)}`);
+        const imagesApiError = new Error(`${normalizeAdapterError(error)}；已尝试降级为非流式图生图请求但仍失败：${normalizeAdapterError(fallbackError)}`);
+        if (canUseResponsesImageFallback(fallbackJob)) {
+          return runResponsesImageFallback(fallbackJob, apiKey, baseURL, runtime, imagesApiError, preferredRouteError);
+        }
+        throw imagesApiError;
       }
     }
   }
 
   const response = await fetchEditResponse(job, apiKey, baseURL, runtime, initialImageFieldName);
-  return handleJsonEditImagesWithFallback(response, job, runtime, initialImageFieldName, (nextJob, imageFieldName) => {
-    return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName);
-  }, (streamJob, imageFieldName) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, imageFieldName));
+  try {
+    return await handleJsonEditImagesWithFallback(response, job, runtime, initialImageFieldName, (nextJob, imageFieldName) => {
+      return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName);
+    }, (streamJob, imageFieldName) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, imageFieldName));
+  } catch (error) {
+    if (canUseResponsesImageFallback(job)) {
+      return runResponsesImageFallback(job, apiKey, baseURL, runtime, error, preferredRouteError);
+    }
+    throw error;
+  }
+}
+
+async function runPreferredConversationalImageRoute(
+  job: OpenAIImageJob,
+  apiKey: string,
+  baseURL: string,
+  runtime: OpenAIImageRuntime,
+  preferredRoute: "responses" | "chat-completions"
+): Promise<GenerationJob> {
+  const streamJob: OpenAIImageJob = {
+    ...job,
+    params: {
+      ...job.params,
+      n: 1,
+      stream: true,
+      partialImages: Math.max(1, job.params.partialImages || 1)
+    }
+  };
+
+  if (preferredRoute === "chat-completions") {
+    const response = await fetchChatCompletionsImageResponse(streamJob, apiKey, baseURL, runtime);
+    const result = await handleImagesResponse(response, streamJob, "image_generation", runtime);
+    return { ...result, params: job.params };
+  }
+
+  const response = await fetchResponsesImageResponse(streamJob, apiKey, baseURL, runtime, true);
+  const result = await handleImagesResponse(response, streamJob, "image_generation", runtime);
+  return { ...result, params: job.params };
+}
+
+function canUseResponsesImageFallback(job: OpenAIImageJob): boolean {
+  return job.mode === "edit" && !job.maskAsset;
+}
+
+async function runResponsesImageFallback(
+  job: OpenAIImageJob,
+  apiKey: string,
+  baseURL: string,
+  runtime: OpenAIImageRuntime,
+  priorError: unknown,
+  preferredRouteError?: string
+): Promise<GenerationJob> {
+  const jsonJob: OpenAIImageJob = {
+    ...job,
+    params: {
+      ...job.params,
+      stream: false,
+      partialImages: 0
+    }
+  };
+
+  try {
+    const response = await fetchResponsesImageResponse(jsonJob, apiKey, baseURL, runtime, false);
+    return await handleJsonImagesResponse(response, jsonJob, runtime);
+  } catch (jsonError) {
+    const streamJob: OpenAIImageJob = {
+      ...job,
+      params: {
+        ...job.params,
+        n: 1,
+        stream: true,
+        partialImages: 1
+      }
+    };
+    try {
+      const response = await fetchResponsesImageResponse(streamJob, apiKey, baseURL, runtime, true);
+      const result = await handleImagesResponse(response, streamJob, "image_generation", runtime);
+      return {
+        ...result,
+        params: job.params
+      };
+    } catch (streamError) {
+      try {
+        const response = await fetchChatCompletionsImageResponse(streamJob, apiKey, baseURL, runtime);
+        const result = await handleImagesResponse(response, streamJob, "image_generation", runtime);
+        return {
+          ...result,
+          params: job.params
+        };
+      } catch (chatError) {
+        const preferredPrefix = preferredRouteError ? `首选路径失败：${preferredRouteError}；` : "";
+        throw new Error(
+          `${preferredPrefix}${normalizeAdapterError(priorError)}；已尝试 Responses 图像工具兜底但仍失败：非流式 ${normalizeAdapterError(jsonError)}；流式 ${normalizeAdapterError(streamError)}；已尝试 Chat Completions 图像兜底但仍失败：${normalizeAdapterError(chatError)}`
+        );
+      }
+    }
+  }
 }
 
 function defaultEditImageFieldName(job: OpenAIImageJob): EditImageFieldName {
@@ -423,6 +571,147 @@ async function fetchEditResponse(
     },
     job.params.timeoutMs
   );
+}
+
+async function fetchResponsesImageResponse(
+  job: OpenAIImageJob,
+  apiKey: string,
+  baseURL: string,
+  runtime: OpenAIImageRuntime,
+  stream: boolean
+): Promise<Response> {
+  return fetchWithTimeout(
+    runtime.fetch,
+    buildEndpoint(baseURL, "/responses"),
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        Accept: stream ? "text/event-stream" : "application/json"
+      },
+      body: JSON.stringify(await responsesImageRequestBody(job, stream))
+    },
+    job.params.timeoutMs
+  );
+}
+
+async function fetchChatCompletionsImageResponse(
+  job: OpenAIImageJob,
+  apiKey: string,
+  baseURL: string,
+  runtime: OpenAIImageRuntime
+): Promise<Response> {
+  return fetchWithTimeout(
+    runtime.fetch,
+    buildEndpoint(baseURL, "/chat/completions"),
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "text/event-stream"
+      },
+      body: JSON.stringify(await chatCompletionsImageRequestBody(job))
+    },
+    job.params.timeoutMs
+  );
+}
+
+async function chatCompletionsImageRequestBody(job: OpenAIImageJob): Promise<Record<string, unknown>> {
+  return {
+    model: job.params.model,
+    stream: true,
+    params: {},
+    features: {
+      image_generation: true
+    },
+    messages: [
+      {
+        role: "user",
+        content: await chatCompletionsImageContent(job)
+      }
+    ]
+  };
+}
+
+async function chatCompletionsImageContent(job: OpenAIImageJob): Promise<Array<Record<string, unknown>>> {
+  const content: Array<Record<string, unknown>> = [
+    {
+      type: "text",
+      text: openAIEditPrompt(job)
+    }
+  ];
+
+  for (const asset of job.inputAssets) {
+    content.push({
+      type: "image_url",
+      image_url: {
+        url: await assetToDataUrl(asset)
+      }
+    });
+  }
+
+  return content;
+}
+
+async function responsesImageRequestBody(job: OpenAIImageJob, stream: boolean): Promise<Record<string, unknown>> {
+  const inputContent: Array<Record<string, string>> = [
+    {
+      type: "input_text",
+      text: openAIEditPrompt(job)
+    }
+  ];
+
+  for (const asset of job.inputAssets) {
+    inputContent.push({
+      type: "input_image",
+      image_url: await assetToDataUrl(asset)
+    });
+  }
+
+  const tool: Record<string, unknown> = {
+    type: "image_generation",
+    action: job.mode === "generate" ? "generate" : "edit"
+  };
+  if (job.params.quality !== "auto") {
+    tool.quality = job.params.quality;
+  }
+  if (job.params.size !== "auto") {
+    tool.size = job.params.size;
+  }
+  if (job.params.outputFormat !== "png") {
+    tool.output_format = job.params.outputFormat;
+  }
+  if (job.params.outputFormat !== "png" && shouldSendCompression(job.params.outputFormat)) {
+    tool.output_compression = job.params.outputCompression;
+  }
+  if (stream) {
+    tool.partial_images = Math.max(1, job.params.partialImages || 1);
+  }
+
+  const body: Record<string, unknown> = {
+    model: job.params.model,
+    input: [
+      {
+        role: "user",
+        content: inputContent
+      }
+    ],
+    tools: [tool]
+  };
+
+  if (stream) {
+    body.stream = true;
+  }
+
+  return body;
+}
+
+async function assetToDataUrl(asset: InputAsset): Promise<string> {
+  if (asset.dataUrl?.startsWith("data:image/")) return asset.dataUrl;
+  const content = await fs.readFile(asset.path);
+  return `data:${asset.mimeType};base64,${content.toString("base64")}`;
 }
 
 function editRequestBody(params: OpenAIImageParams, prompt: string): Record<string, string | number | boolean> {
@@ -868,6 +1157,7 @@ const PRIORITY_NESTED_IMAGE_KEYS = new Set([
   "choices",
   "content",
   "data",
+  "delta",
   "extra_fields",
   "extraFields",
   "generation",
@@ -1329,7 +1619,7 @@ async function handleStreamResponse(
       const isPartial = type === `${eventPrefix}.partial_image` || type.endsWith(".partial_image");
       const sourceType = isPartial ? "partial" : "result";
       const index = isPartial ? event.partial_image_index ?? partialIndex++ : resultIndex++;
-      const items = event.data?.length ? event.data : [{ b64_json: event.b64_json, url: event.url }];
+      const items = imageItemsFromStreamEvent(event);
       const images = await saveImageItems(job, items, sourceType, runtime, index);
       if (images.length === 0) return;
       outputs.push(...images);
@@ -1367,6 +1657,34 @@ async function handleStreamResponse(
     status: "succeeded",
     updatedAt: new Date().toISOString()
   };
+}
+
+function imageItemsFromStreamEvent(event: ImageStreamEvent): OpenAIImageItem[] {
+  const items: OpenAIImageItem[] = [];
+
+  if (event.data?.length) {
+    items.push(...event.data);
+  }
+  if (event.b64_json) {
+    items.push({ b64_json: event.b64_json });
+  }
+  if (event.partial_image_b64) {
+    items.push({ b64_json: event.partial_image_b64 });
+  }
+  if (event.result) {
+    items.push({ b64_json: event.result });
+  }
+  if (event.url) {
+    items.push({ url: event.url });
+  }
+  if (event.response !== undefined) {
+    items.push(...collectImageItemsFromPayload(event.response));
+  }
+  if (items.length === 0) {
+    items.push(...collectImageItemsFromPayload(event));
+  }
+
+  return items;
 }
 
 function isIgnorableStreamTerminationError(error: unknown): boolean {
@@ -1431,10 +1749,15 @@ async function imageItemToBase64(item: { b64_json?: string; url?: string }): Pro
 
 async function processSSEBlock(block: string, onEvent: (event: ImageStreamEvent) => Promise<void>): Promise<void> {
   const dataLines: string[] = [];
+  let eventType: string | undefined;
 
   for (const rawLine of block.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
     if (!line || line.startsWith(":")) continue;
+    if (line.startsWith("event:")) {
+      eventType = line.slice(6).trimStart();
+      continue;
+    }
     if (line.startsWith("data:")) {
       dataLines.push(line.slice(5).trimStart());
     }
@@ -1445,7 +1768,11 @@ async function processSSEBlock(block: string, onEvent: (event: ImageStreamEvent)
   if (data === "[DONE]") return;
 
   try {
-    await onEvent(JSON.parse(data) as ImageStreamEvent);
+    const event = JSON.parse(data) as ImageStreamEvent;
+    if (eventType && !event.type) {
+      event.type = eventType;
+    }
+    await onEvent(event);
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new Error("无法解析 OpenAI 流式响应。");

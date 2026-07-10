@@ -52,6 +52,7 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
     discoveredModels: discoveryInvalidated ? [] : current.discoveredModels,
     lastModelDiscoveryAt: discoveryInvalidated ? undefined : current.lastModelDiscoveryAt,
     lastModelDiscoveryError: discoveryInvalidated ? undefined : current.lastModelDiscoveryError,
+    openAIImageRouting: discoveryInvalidated ? undefined : current.openAIImageRouting,
     updatedAt: now
   };
 
@@ -62,7 +63,8 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
       encryption: "none",
       discoveredModels: [],
       lastModelDiscoveryAt: undefined,
-      lastModelDiscoveryError: undefined
+      lastModelDiscoveryError: undefined,
+      openAIImageRouting: undefined
     };
   }
 

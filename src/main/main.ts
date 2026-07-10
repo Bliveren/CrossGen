@@ -31,6 +31,9 @@ import type {
   ImageAsset,
   InputAsset,
   JobProgressEvent,
+  OpenAIImageRoute,
+  OpenAIImageRouteProbe,
+  OpenAIImageRouting,
   PromptTemplate,
   PromptTemplateInput,
   ProviderConfig,
@@ -68,7 +71,7 @@ import {
   normalizeModelId
 } from "../shared/modelCatalog.js";
 import { compareVersions, isAllowedUpdateUrl, parseUpdateManifest, safeUpdateFileName, selectUpdateAsset } from "../shared/updateManifest.js";
-import { fetchWithTimeout } from "./services/openaiImageAdapter.js";
+import { buildEndpoint, fetchWithTimeout } from "./services/openaiImageAdapter.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
@@ -405,6 +408,7 @@ function toPublicConfig(config: StoredProviderConfig): ProviderConfig {
     lastModelDiscoveryError: config.lastModelDiscoveryError,
     activeLaunchId: config.activeLaunchId,
     activeModelId: config.activeModelId,
+    openAIImageRouting: config.openAIImageRouting,
     updatedAt: config.updatedAt
   };
 }
@@ -1955,6 +1959,13 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
       discoveredModels: discovery.models,
       lastModelDiscoveryAt: new Date().toISOString(),
       lastModelDiscoveryError: undefined,
+      openAIImageRouting: await probeOpenAIImageRouting({
+        ...config,
+        kind,
+        defaultModel: activeSelection.defaultModel,
+        activeLaunchId: activeSelection.activeLaunchId,
+        activeModelId: activeSelection.activeModelId
+      }, apiKey),
       updatedAt: new Date().toISOString()
     };
   } catch (error) {
@@ -1963,9 +1974,122 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
       discoveredModels: [],
       lastModelDiscoveryAt: new Date().toISOString(),
       lastModelDiscoveryError: sanitizeModelDiscoveryError(error, apiKey),
+      openAIImageRouting: await probeOpenAIImageRouting(config, apiKey),
       updatedAt: new Date().toISOString()
     };
   }
+}
+
+async function probeOpenAIImageRouting(config: StoredProviderConfig, apiKey: string): Promise<OpenAIImageRouting | undefined> {
+  if (config.kind !== "openai" || config.activeLaunchId !== GPT_IMAGE_2_LAUNCH_ID) return config.openAIImageRouting;
+
+  const model = config.activeModelId || config.defaultModel || GPT_IMAGE_2_MODEL_ID;
+  const probeTimeoutMs = Math.min(Math.max(Math.floor(config.timeoutMs / 8), 2500), 8000);
+  const probes = await Promise.all([
+    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "image-api", "generate", {
+      endpoint: "/images/generations",
+      body: {
+        model
+      }
+    }),
+    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "image-api", "edit", {
+      endpoint: "/images/edits",
+      body: new FormData()
+    }),
+    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "responses", "edit", {
+      endpoint: "/responses",
+      body: {
+        model
+      }
+    }),
+    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "responses", "generate", {
+      endpoint: "/responses",
+      body: {
+        model
+      }
+    }),
+    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "chat-completions", "edit", {
+      endpoint: "/chat/completions",
+      body: {
+        model
+      }
+    }),
+    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "chat-completions", "generate", {
+      endpoint: "/chat/completions",
+      body: {
+        model
+      }
+    })
+  ]);
+
+  return {
+    preferredGenerateRoute: preferredOpenAIImageRoute(probes, "generate"),
+    preferredEditRoute: preferredOpenAIImageRoute(probes, "edit"),
+    probes,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+async function probeOpenAIImageRoute(
+  baseURL: string,
+  apiKey: string,
+  timeoutMs: number,
+  route: OpenAIImageRoute,
+  mode: "generate" | "edit",
+  request: {
+    endpoint: "/images/generations" | "/images/edits" | "/responses" | "/chat/completions";
+    body: Record<string, unknown> | FormData;
+  }
+): Promise<OpenAIImageRouteProbe> {
+  const startedAt = Date.now();
+  try {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: request.endpoint === "/chat/completions" ? "text/event-stream" : "application/json"
+    };
+    if (!(request.body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
+    }
+    const response = await fetchWithTimeout(fetch, buildEndpoint(baseURL, request.endpoint), {
+      method: "POST",
+      headers,
+      body: request.body instanceof FormData ? request.body : JSON.stringify(request.body)
+    }, timeoutMs);
+    const latencyMs = Date.now() - startedAt;
+    return {
+      route,
+      mode,
+      endpoint: request.endpoint,
+      ok: isRouteProbeReachableStatus(response.status),
+      latencyMs,
+      status: response.status,
+      error: isRouteProbeReachableStatus(response.status) ? undefined : `HTTP ${response.status}`
+    };
+  } catch (error) {
+    return {
+      route,
+      mode,
+      endpoint: request.endpoint,
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      error: normalizeError(error)
+    };
+  }
+}
+
+function isRouteProbeReachableStatus(status: number): boolean {
+  return (status >= 200 && status < 300) || status === 400 || status === 406 || status === 415 || status === 422;
+}
+
+function preferredOpenAIImageRoute(probes: OpenAIImageRouteProbe[], mode: "generate" | "edit"): OpenAIImageRoute | undefined {
+  const candidates = probes
+    .filter((probe) => probe.mode === mode && probe.ok)
+    .sort((a, b) => routePreferenceScore(a) - routePreferenceScore(b));
+  return candidates[0]?.route;
+}
+
+function routePreferenceScore(probe: OpenAIImageRouteProbe): number {
+  return probe.latencyMs;
 }
 
 function selectActiveLaunchForDiscovery(

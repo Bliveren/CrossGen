@@ -6,6 +6,7 @@ import type {
   GenerationJob,
   ImageParams,
   ImageQuality,
+  OpenAIImageRouting,
   OpenAIImageParams,
   PromptTemplate,
   ProviderKind,
@@ -53,6 +54,7 @@ export interface StoredProviderConfig {
   lastModelDiscoveryError?: string;
   activeLaunchId: FocusedLaunchId;
   activeModelId: string;
+  openAIImageRouting?: OpenAIImageRouting;
   updatedAt: string;
   encryptedApiKey?: string;
   encryption: "safeStorage" | "localFallback" | "none";
@@ -171,9 +173,38 @@ function normalizeStoredConfig(value: unknown): StoredProviderConfig {
     lastModelDiscoveryError: optionalString(input.lastModelDiscoveryError),
     activeLaunchId,
     activeModelId: nonEmptyString(input.activeModelId, activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ? defaultModel : getDefaultModelForLaunch(activeLaunchId)),
+    openAIImageRouting: normalizeOpenAIImageRouting(input.openAIImageRouting),
     updatedAt: nonEmptyString(input.updatedAt, new Date(0).toISOString()),
     encryptedApiKey: optionalString(input.encryptedApiKey),
     encryption: normalizeEncryption(input.encryption)
+  };
+}
+
+function normalizeOpenAIImageRouting(value: unknown): OpenAIImageRouting | undefined {
+  if (!isRecord(value)) return undefined;
+  const probes = Array.isArray(value.probes)
+    ? value.probes.flatMap((probe) => {
+        if (!isRecord(probe)) return [];
+        const route = optionalOneOf(probe.route, ["image-api", "responses", "chat-completions"] as const);
+        const mode = optionalOneOf(probe.mode, ["generate", "edit"] as const);
+        const endpoint = optionalString(probe.endpoint);
+        if (!route || !mode || !endpoint) return [];
+        return [{
+          route,
+          mode,
+          endpoint,
+          ok: typeof probe.ok === "boolean" ? probe.ok : false,
+          latencyMs: boundedInteger(probe.latencyMs, 0, 600000, 0),
+          status: typeof probe.status === "number" ? probe.status : undefined,
+          error: optionalString(probe.error)
+        }];
+      })
+    : [];
+  return {
+    preferredGenerateRoute: optionalOneOf(value.preferredGenerateRoute, ["image-api", "responses", "chat-completions"] as const),
+    preferredEditRoute: optionalOneOf(value.preferredEditRoute, ["image-api", "responses", "chat-completions"] as const),
+    probes,
+    updatedAt: nonEmptyString(value.updatedAt, new Date(0).toISOString())
   };
 }
 
@@ -469,6 +500,10 @@ function normalizeEncryption(value: unknown): StoredProviderConfig["encryption"]
 
 function oneOf<T extends string>(value: unknown, options: readonly T[], fallback: T): T {
   return typeof value === "string" && (options as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+function optionalOneOf<T extends string>(value: unknown, options: readonly T[]): T | undefined {
+  return typeof value === "string" && (options as readonly string[]).includes(value) ? (value as T) : undefined;
 }
 
 function nonEmptyString(value: unknown, fallback: string): string {
