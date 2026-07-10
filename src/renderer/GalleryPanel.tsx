@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownUp, ChevronDown, ChevronRight, FileUp, Folder, FolderOpen, FolderPlus, Pencil, Save, X } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ChevronRight, FileUp, Folder, FolderOpen, FolderPlus, Save, X } from "lucide-react";
 import type { GalleryAsset, GalleryFolder } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
@@ -54,12 +54,19 @@ interface GalleryFolderCardProps {
   batchMode: boolean;
   displayPath: string;
   meta: string;
+  previewAssets: GalleryAsset[];
+  assetThumbnailPath: (asset: GalleryAsset) => string;
+  editingName: boolean;
+  nameDraft: string;
   dropHandlers: GalleryEntryDropHandlers;
   onDragStart: (event: React.DragEvent<HTMLElement>) => void;
   onOpen: () => void;
   onContextMenu: (event: React.MouseEvent<HTMLElement>) => void;
   onToggleSelection: (event: React.MouseEvent<HTMLInputElement>) => void;
-  onRename: () => void;
+  onStartEditName: () => void;
+  onNameDraftChange: (value: string) => void;
+  onSaveName: () => void;
+  onCancelName: () => void;
 }
 
 interface GalleryAssetCardProps {
@@ -142,6 +149,8 @@ interface GalleryContentGridProps {
   virtualTopSpacer: number;
   virtualBottomSpacer: number;
   isGalleryEmpty: boolean;
+  editingGalleryFolderId: string | null;
+  galleryFolderNameDraft: string;
   editingGalleryNameId: string | null;
   galleryNameDraft: string;
   editingGalleryId: string | null;
@@ -151,6 +160,7 @@ interface GalleryContentGridProps {
   formatBytes: (bytes: number) => string;
   formatDate: (value: string) => string;
   folderDisplayPath: (folder: GalleryFolder) => string;
+  folderPreviewAssets: ReadonlyMap<string, GalleryAsset[]>;
   assetThumbnailPath: (asset: GalleryAsset) => string;
   isEntrySelected: (entry: GalleryExplorerEntry) => boolean;
   onScrollTopChange: (scrollTop: number) => void;
@@ -158,7 +168,10 @@ interface GalleryContentGridProps {
   onPrepareEntryDrag: (event: React.DragEvent<HTMLElement>, entry: GalleryExplorerEntry) => void;
   onToggleSelection: (entry: GalleryExplorerEntry, index: number, event: React.MouseEvent<HTMLInputElement>) => void;
   onOpenFolder: (folderId: GalleryFolderFilter) => void;
-  onRenameFolder: (folder: GalleryFolder) => void;
+  onStartEditFolderName: (folder: GalleryFolder) => void;
+  onFolderNameDraftChange: (value: string) => void;
+  onSaveFolderName: (folder: GalleryFolder) => void;
+  onCancelFolderName: () => void;
   onPreviewAsset: (asset: GalleryAsset) => void;
   onAssetContextMenu: (event: React.MouseEvent<HTMLElement>, asset: GalleryAsset) => void;
   onStartEditAssetName: (asset: GalleryAsset) => void;
@@ -514,13 +527,21 @@ export function GalleryFolderCard({
   batchMode,
   displayPath,
   meta,
+  previewAssets,
+  assetThumbnailPath,
+  editingName,
+  nameDraft,
   dropHandlers,
   onDragStart,
   onOpen,
   onContextMenu,
   onToggleSelection,
-  onRename
+  onStartEditName,
+  onNameDraftChange,
+  onSaveName,
+  onCancelName
 }: GalleryFolderCardProps) {
+  const visiblePreviewAssets = previewAssets.slice(0, 4);
   return (
     <article
       className={`gallery-item gallery-folder-entry ${selected ? "selected" : ""} ${dropTarget ? "drop-target" : ""}`}
@@ -541,19 +562,49 @@ export function GalleryFolderCard({
         />
       )}
       <button type="button" className="gallery-folder-thumb folder-thumb" onClick={onOpen} aria-label={copy.galleryOpenItem(folder.name)} data-tooltip={copy.galleryOpenItem(folder.name)}>
-        <FolderOpen size={24} />
+        {visiblePreviewAssets.length > 0 ? (
+          <span className="folder-thumb-collage" aria-hidden="true">
+            {Array.from({ length: 4 }, (_, index) => {
+              const asset = visiblePreviewAssets[index];
+              return (
+                <span key={asset?.id ?? `empty-${index}`} className="folder-thumb-collage-cell">
+                  {asset ? <img src={assetThumbnailPath(asset)} alt="" draggable={false} loading="lazy" decoding="async" /> : <Folder size={14} />}
+                </span>
+              );
+            })}
+          </span>
+        ) : (
+          <FolderOpen size={24} />
+        )}
       </button>
       <div className="gallery-meta">
-        <strong title={displayPath}>{folder.name}</strong>
+        <div className="gallery-name-wrap">
+          {editingName ? (
+            <input
+              className="gallery-name-input"
+              value={nameDraft}
+              onChange={(event) => onNameDraftChange(event.target.value)}
+              onBlur={onSaveName}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onSaveName();
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onCancelName();
+                }
+              }}
+              aria-label={copy.galleryFolderRename}
+              autoFocus
+            />
+          ) : (
+            <button type="button" className="gallery-name-button" onClick={onStartEditName} aria-label={copy.galleryFolderRename} data-tooltip={copy.galleryFolderRename} title={displayPath}>
+              {folder.name}
+            </button>
+          )}
+        </div>
         <small>{meta}</small>
-      </div>
-      <div className="gallery-actions">
-        <button type="button" className="icon-button" onClick={onOpen} aria-label={copy.openFolder} data-tooltip={copy.openFolder}>
-          <FolderOpen size={15} />
-        </button>
-        <button type="button" className="icon-button" onClick={onRename} aria-label={copy.galleryFolderRename} data-tooltip={copy.galleryFolderRename}>
-          <Pencil size={15} />
-        </button>
       </div>
     </article>
   );
@@ -694,6 +745,8 @@ export function GalleryContentGrid({
   virtualTopSpacer,
   virtualBottomSpacer,
   isGalleryEmpty,
+  editingGalleryFolderId,
+  galleryFolderNameDraft,
   editingGalleryNameId,
   galleryNameDraft,
   editingGalleryId,
@@ -703,6 +756,7 @@ export function GalleryContentGrid({
   formatBytes,
   formatDate,
   folderDisplayPath,
+  folderPreviewAssets,
   assetThumbnailPath,
   isEntrySelected,
   onScrollTopChange,
@@ -710,7 +764,10 @@ export function GalleryContentGrid({
   onPrepareEntryDrag,
   onToggleSelection,
   onOpenFolder,
-  onRenameFolder,
+  onStartEditFolderName,
+  onFolderNameDraftChange,
+  onSaveFolderName,
+  onCancelFolderName,
   onPreviewAsset,
   onAssetContextMenu,
   onStartEditAssetName,
@@ -769,22 +826,29 @@ export function GalleryContentGrid({
               {virtualEntries.map((entry, virtualIndex) => {
                 const index = virtualStartIndex + virtualIndex;
                 return entry.kind === "folder" ? (
-                  <GalleryFolderCard
-                    key={entry.id}
-                    copy={copy}
-                    folder={entry.folder}
-                    selected={isEntrySelected(entry)}
-                    dropTarget={folderDropTargetId === entry.id}
-                    batchMode={batchMode}
-                    displayPath={folderDisplayPath(entry.folder)}
-                    meta={copy.galleryFolderItemMeta(folderSubtreeAssetCounts.get(entry.id) ?? 0, formatDate(entry.folder.updatedAt))}
-                    dropHandlers={dropHandlersForFolder(entry.id)}
-                    onDragStart={(event) => onPrepareEntryDrag(event, entry)}
-                    onOpen={() => onOpenFolder(entry.id)}
-                    onContextMenu={(event) => onFolderContextMenu(event, entry.id)}
-                    onToggleSelection={(event) => onToggleSelection(entry, index, event)}
-                    onRename={() => onRenameFolder(entry.folder)}
-                  />
+                    <GalleryFolderCard
+                      key={entry.id}
+                      copy={copy}
+                      folder={entry.folder}
+                      selected={isEntrySelected(entry)}
+                      dropTarget={folderDropTargetId === entry.id}
+                      batchMode={batchMode}
+                      displayPath={folderDisplayPath(entry.folder)}
+                      meta={copy.galleryFolderItemMeta(folderSubtreeAssetCounts.get(entry.id) ?? 0, formatDate(entry.folder.updatedAt))}
+                      previewAssets={folderPreviewAssets.get(entry.id) ?? []}
+                      assetThumbnailPath={assetThumbnailPath}
+                      editingName={editingGalleryFolderId === entry.folder.id}
+                      nameDraft={editingGalleryFolderId === entry.folder.id ? galleryFolderNameDraft : entry.folder.name}
+                      dropHandlers={dropHandlersForFolder(entry.id)}
+                      onDragStart={(event) => onPrepareEntryDrag(event, entry)}
+                      onOpen={() => onOpenFolder(entry.id)}
+                      onContextMenu={(event) => onFolderContextMenu(event, entry.id)}
+                      onToggleSelection={(event) => onToggleSelection(entry, index, event)}
+                      onStartEditName={() => onStartEditFolderName(entry.folder)}
+                      onNameDraftChange={onFolderNameDraftChange}
+                      onSaveName={() => onSaveFolderName(entry.folder)}
+                      onCancelName={onCancelFolderName}
+                    />
                 ) : (
                   <GalleryAssetCard
                     key={entry.id}

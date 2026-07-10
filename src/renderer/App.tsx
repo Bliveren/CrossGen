@@ -1327,6 +1327,28 @@ export function App() {
     compact: isRightRailCompact,
     compactItemSize: rightRailThumbSize
   });
+  const galleryFolderPreviewAssets = useMemo(() => {
+    const previews = new Map<string, GalleryAsset[]>();
+    const sortedAssets = [...snapshot.galleryAssets].sort((a, b) =>
+      Date.parse(b.modifiedAt ?? b.updatedAt ?? b.createdAt) - Date.parse(a.modifiedAt ?? a.updatedAt ?? a.createdAt)
+    );
+
+    for (const asset of sortedAssets) {
+      let currentFolderId = asset.folderId ?? null;
+      const visited = new Set<string>();
+      while (currentFolderId && !visited.has(currentFolderId)) {
+        visited.add(currentFolderId);
+        const items = previews.get(currentFolderId) ?? [];
+        if (items.length < 4) {
+          items.push(asset);
+          previews.set(currentFolderId, items);
+        }
+        currentFolderId = galleryFolderById.get(currentFolderId)?.parentId ?? null;
+      }
+    }
+
+    return previews;
+  }, [galleryFolderById, snapshot.galleryAssets]);
   const globalTagOptions = useMemo(() => {
     const tags = new Set<string>();
     [...historyTagsAvailable, ...historySystemTagsAvailable, ...galleryTagsAvailable].forEach((tag) => tags.add(tag));
@@ -5248,9 +5270,12 @@ export function App() {
     galleryFolderAssetCounts,
     galleryFolderDragTarget,
     galleryFolderSelectOptions,
+    galleryFolderPreviewAssets,
     galleryFolderSubtreeAssetCounts,
     galleryFoldersByParent,
     gallerySearch,
+    editingGalleryFolderId,
+    editingGalleryFolderName,
     galleryNameDraft,
     gallerySort,
     gallerySortLabel,
@@ -5364,6 +5389,8 @@ export function App() {
           virtualTopSpacer={galleryVirtualTopSpacer}
           virtualBottomSpacer={galleryVirtualBottomSpacer}
           isGalleryEmpty={snapshot.galleryAssets.length === 0}
+          editingGalleryFolderId={editingGalleryFolderId}
+          galleryFolderNameDraft={editingGalleryFolderName}
           editingGalleryNameId={editingGalleryNameId}
           galleryNameDraft={galleryNameDraft}
           editingGalleryId={editingGalleryId}
@@ -5373,6 +5400,7 @@ export function App() {
           formatBytes={formatBytes}
           formatDate={formatDate}
           folderDisplayPath={galleryFolderDisplayPath}
+          folderPreviewAssets={galleryFolderPreviewAssets}
           assetThumbnailPath={galleryAssetThumbnailPath}
           isEntrySelected={isGalleryEntrySelected}
           onScrollTopChange={setGalleryContentScrollTop}
@@ -5380,7 +5408,13 @@ export function App() {
           onPrepareEntryDrag={prepareGalleryEntryDrag}
           onToggleSelection={toggleGalleryEntrySelection}
           onOpenFolder={navigateGalleryFolder}
-          onRenameFolder={openRenameGalleryFolderDialog}
+          onStartEditFolderName={editGalleryFolder}
+          onFolderNameDraftChange={setEditingGalleryFolderName}
+          onSaveFolderName={(folder) => void renameGalleryFolder(folder)}
+          onCancelFolderName={() => {
+            setEditingGalleryFolderId(null);
+            setEditingGalleryFolderName("");
+          }}
           onPreviewAsset={previewGalleryAsset}
           onAssetContextMenu={openGalleryAssetContextMenu}
           onStartEditAssetName={beginEditGalleryAssetName}

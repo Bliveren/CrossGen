@@ -1110,6 +1110,26 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("imported.png");
   });
 
+  it("uses folder preview thumbnails and renames Gallery folders from the card name", async () => {
+    const folder = galleryFolder("Product refs");
+    const first = galleryAsset("hero-a.png", { folderId: folder.id });
+    const second = galleryAsset("hero-b.png", { folderId: folder.id });
+    const bridge = await renderApp(snapshot({ galleryFolders: [folder], galleryAssets: [first, second] }));
+
+    await openGalleryRail();
+    const folderCard = document.querySelector<HTMLElement>(".gallery-folder-entry")!;
+
+    expect(folderCard.querySelector(".gallery-actions")).toBeNull();
+    expect(folderCard.querySelectorAll(".folder-thumb-collage-cell img")).toHaveLength(2);
+
+    await click(buttonByText("Product refs", ".gallery-folder-entry .gallery-name-button"));
+    await changeInput(document.querySelector<HTMLInputElement>(".gallery-folder-entry .gallery-name-input")!, "Campaign refs");
+    await keyDown(document.querySelector<HTMLInputElement>(".gallery-folder-entry .gallery-name-input")!, "Enter");
+
+    expect(bridge.renameGalleryFolder).toHaveBeenCalledWith(folder.id, { name: "Campaign refs" });
+    expect(document.body.textContent).toContain("Gallery folder renamed.");
+  });
+
   it("shows a canceled notice when Gallery import returns no assets", async () => {
     const bridge = await renderApp(snapshot());
     vi.mocked(bridge.importToGallery).mockResolvedValueOnce([]);
