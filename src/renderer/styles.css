@@ -1864,8 +1864,9 @@
 
   .template-dialog {
     display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     gap: 14px;
-    width: min(860px, 100%);
+    width: min(960px, 100%);
     max-height: min(760px, calc(100vh - 44px));
     overflow: hidden;
     border: 1px solid var(--border-subtle);
@@ -1876,20 +1877,32 @@
   }
 
   .template-dialog .template-panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     min-height: 0;
   }
 
   .template-dialog-body {
     display: grid;
-    grid-template-columns: minmax(260px, 0.9fr) minmax(300px, 1.1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     min-height: 0;
     overflow: hidden;
   }
 
+  .template-dialog .template-editor,
   .template-dialog .template-list {
     max-height: none;
     min-height: 0;
+  }
+
+  .template-dialog .template-list {
+    overflow: auto;
+    padding-right: 2px;
+  }
+
+  .template-dialog .template-editor {
+    overflow: auto;
   }
 
   .template-toolbar {
@@ -3705,6 +3718,9 @@
     font-size: 13px;
     font-weight: 750;
     text-align: left;
+    transition:
+      background 0.16s ease,
+      color 0.16s ease;
   }
 
   .mode-tab:last-child,
@@ -3729,6 +3745,18 @@
   .right-rail-tabs button.active {
     background: var(--accent);
     color: var(--text-on-accent);
+  }
+
+  .mode-tab:hover:not(:disabled):not(.active),
+  .right-rail-tabs button:hover:not(:disabled):not(.active) {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .mode-tab.active:hover:not(:disabled),
+  .right-rail-tabs button.active:hover:not(:disabled) {
+    background: var(--accent-hover);
+    color: var(--text-on-accent-hover);
   }
 
   .preview-layout {
