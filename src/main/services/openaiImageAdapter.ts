@@ -87,7 +87,8 @@ export const openaiImageAdapter: ImageProviderAdapter = {
   },
   runJob(job: GenerationJob, apiKey: string, config: StoredProviderConfig, runtime: ImageJobRuntime) {
     return runOpenAIImageJob(asOpenAIImageJob(job), apiKey, config.baseURL, runtime, {
-      routePreference: config.openAIImageRouting
+      routePreference: config.openAIImageRouting,
+      abortSignal: runtime.abortSignal
     });
   }
 };
@@ -711,7 +712,7 @@ async function chatCompletionsImageRequestBody(job: OpenAIImageJob): Promise<Rec
     stream: true,
     params: {},
     features: {
-      image_generation: true
+      image_generation: false
     },
     messages: [
       {
@@ -726,7 +727,7 @@ async function chatCompletionsImageContent(job: OpenAIImageJob): Promise<Array<R
   const content: Array<Record<string, unknown>> = [
     {
       type: "text",
-      text: openAIEditPrompt(job)
+      text: job.inputAssets.length > 0 ? openAIEditPrompt(job) : job.prompt.trim()
     }
   ];
 
@@ -1695,6 +1696,7 @@ async function handleStreamResponse(
   let usage: UsageDetails | undefined;
   let partialIndex = firstIndex;
   let resultIndex = firstIndex;
+  const expectedFinalResults = Math.max(1, job.params.n);
 
   try {
     await parseSSE(response.body, async (event) => {
@@ -1722,6 +1724,9 @@ async function handleStreamResponse(
           partialIndex: index,
           image: images[0]
         });
+      }
+      if (!isPartial && outputs.filter((asset) => asset.sourceType === "result").length >= expectedFinalResults) {
+        return false;
       }
     });
   } catch (error) {
@@ -1779,7 +1784,7 @@ function isIgnorableStreamTerminationError(error: unknown): boolean {
   return message.includes("terminated") || message.includes("premature close") || message.includes("socket hang up") || message.includes("aborted");
 }
 
-export async function parseSSE(body: ReadableStream<Uint8Array>, onEvent: (event: ImageStreamEvent) => Promise<void>): Promise<void> {
+export async function parseSSE(body: ReadableStream<Uint8Array>, onEvent: (event: ImageStreamEvent) => Promise<boolean | void>): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -1792,7 +1797,11 @@ export async function parseSSE(body: ReadableStream<Uint8Array>, onEvent: (event
     buffer = parts.pop() ?? "";
 
     for (const part of parts) {
-      await processSSEBlock(part, onEvent);
+      const shouldContinue = await processSSEBlock(part, onEvent);
+      if (shouldContinue === false) {
+        await reader.cancel().catch(() => undefined);
+        return;
+      }
     }
   }
 
@@ -1834,7 +1843,7 @@ async function imageItemToBase64(item: { b64_json?: string; url?: string }): Pro
   return buffer.toString("base64");
 }
 
-async function processSSEBlock(block: string, onEvent: (event: ImageStreamEvent) => Promise<void>): Promise<void> {
+async function processSSEBlock(block: string, onEvent: (event: ImageStreamEvent) => Promise<boolean | void>): Promise<boolean | void> {
   const dataLines: string[] = [];
   let eventType: string | undefined;
 
@@ -1859,7 +1868,7 @@ async function processSSEBlock(block: string, onEvent: (event: ImageStreamEvent)
     if (eventType && !event.type) {
       event.type = eventType;
     }
-    await onEvent(event);
+    return await onEvent(event);
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new Error("无法解析 OpenAI 流式响应。");

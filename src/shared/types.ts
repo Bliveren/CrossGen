@@ -437,6 +437,7 @@ export interface AppBridge {
   importImages: (paths: string[]) => Promise<InputAsset[]>;
   selectMask: () => Promise<InputAsset | null>;
   runJob: (request: RunJobRequest) => Promise<GenerationJob>;
+  cancelJob: (jobId: string) => Promise<boolean>;
   downloadAsset: (request: DownloadRequest) => Promise<string | null>;
   downloadEditedImage: (request: EditedImageDownloadRequest) => Promise<string | null>;
   openAssetFolder: (assetPath: string) => Promise<void>;

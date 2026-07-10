@@ -133,6 +133,7 @@ async function runOpenAICompatibleGeneralImageJob(
     buildEndpoint(baseURL, "/images/generations"),
     {
       method: "POST",
+      signal: runtime.abortSignal,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",

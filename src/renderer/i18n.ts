@@ -29,6 +29,7 @@ interface NoticeCopy {
   maskAdded: string;
   bridgeRunJob: string;
   requestSent: (action: string) => string;
+  cancelRequested: string;
   actionFinished: (action: string) => string;
   savedTo: (filePath: string) => string;
   jobDeleted: string;
@@ -149,6 +150,7 @@ export interface UiCopy {
   imageRouteResponses: string;
   imageRouteImageApi: string;
   imageRouteInpaintLocked: string;
+  imageRouteInfo: string;
   hide: string;
   show: string;
   promptTemplates: string;
@@ -302,6 +304,7 @@ export interface UiCopy {
   generationAttempt: (index: number | string) => string;
   prompt: string;
   running: string;
+  cancelGeneration: string;
   copy: string;
   addReferences: string;
   addLocalReferences: string;
@@ -520,6 +523,7 @@ export const translations: Record<Language, UiCopy> = {
     imageRouteResponses: "Responses",
     imageRouteImageApi: "Image API",
     imageRouteInpaintLocked: "Mask edits use Image API.",
+    imageRouteInfo: "CrossGen automatically probes the fastest path after API setup. For aggregator platforms, the chat path is recommended.",
     hide: "Hide",
     show: "Show",
     promptTemplates: "Prompt templates",
@@ -674,6 +678,7 @@ export const translations: Record<Language, UiCopy> = {
     generationAttempt: (index: number | string) => `Generation attempt ${index}`,
     prompt: "Prompt",
     running: "Running",
+    cancelGeneration: "Stop",
     copy: "Copy",
     addReferences: "Add references",
     addLocalReferences: "Add local reference image",
@@ -836,6 +841,7 @@ export const translations: Record<Language, UiCopy> = {
       maskAdded: "Mask added.",
       bridgeRunJob: "Electron bridge is required to run image jobs.",
       requestSent: (action: string) => `${action} request sent.`,
+      cancelRequested: "Stopping generation.",
       actionFinished: (action: string) => `${action} finished.`,
       savedTo: (filePath: string) => `Saved to ${filePath}`,
       jobDeleted: "Job deleted.",
@@ -955,6 +961,7 @@ export const translations: Record<Language, UiCopy> = {
     imageRouteResponses: "Responses",
     imageRouteImageApi: "Image API",
     imageRouteInpaintLocked: "蒙版编辑固定使用 Image API。",
+    imageRouteInfo: "CrossGen会在用户配置好api后自动探测最快路径，如果使用聚合平台，推荐使用chat路径",
     hide: "收起",
     show: "展开",
     promptTemplates: "提示词模板",
@@ -1106,9 +1113,10 @@ export const translations: Record<Language, UiCopy> = {
     jobFailed: "任务失败",
     outputEmpty: "生成图片和局部预览会显示在这里。",
     generatingElapsed: (seconds: number) => `正在生图，已耗时 ${seconds} 秒`,
-    generationAttempt: (index: number | string) => `第【${index}】次生图尝试`,
+    generationAttempt: (index: number | string) => `第${index}次生图尝试`,
     prompt: "提示词",
     running: "运行中",
+    cancelGeneration: "终止",
     copy: "复制",
     addReferences: "添加参考图",
     addLocalReferences: "添加本地参考图",
@@ -1253,7 +1261,7 @@ export const translations: Record<Language, UiCopy> = {
       ready: "就绪。",
       browserPreview: "浏览器预览：Electron IPC 不可用。",
       jobStarted: "任务已开始。",
-      generationAttempt: (index: number | string) => `第【${index}】次生图尝试。`,
+      generationAttempt: (index: number | string) => `第${index}次生图尝试。`,
       partialReceived: (index: number | string) => `收到局部预览 ${index}。`,
       imageCompleted: "图片已完成。",
       maskValidationFailed: "蒙版校验失败。",
@@ -1271,6 +1279,7 @@ export const translations: Record<Language, UiCopy> = {
       maskAdded: "蒙版已添加。",
       bridgeRunJob: "需要 Electron bridge 才能运行图片任务。",
       requestSent: (action: string) => `${action}请求已发送。`,
+      cancelRequested: "正在终止生图。",
       actionFinished: (action: string) => `${action}已完成。`,
       savedTo: (filePath: string) => `已保存到 ${filePath}`,
       jobDeleted: "任务已删除。",

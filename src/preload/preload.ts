@@ -50,6 +50,7 @@ const bridge: AppBridge = {
   importImages: (paths: string[]) => ipcRenderer.invoke("dialog:importImages", paths),
   selectMask: () => ipcRenderer.invoke("dialog:selectMask"),
   runJob: (request: RunJobRequest) => ipcRenderer.invoke("job:run", request),
+  cancelJob: (jobId: string) => ipcRenderer.invoke("job:cancel", jobId),
   downloadAsset: (request: DownloadRequest) => ipcRenderer.invoke("asset:download", request),
   downloadEditedImage: (request: EditedImageDownloadRequest) => ipcRenderer.invoke("asset:downloadEdited", request),
   openAssetFolder: (assetPath: string) => ipcRenderer.invoke("asset:openFolder", assetPath),

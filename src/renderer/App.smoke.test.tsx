@@ -341,6 +341,26 @@ describe("renderer multi-model smoke", () => {
     await flushAsync();
   });
 
+  it("can stop a running generation from the primary action", async () => {
+    const bridge = await renderApp(snapshot());
+    vi.mocked(bridge.runJob).mockImplementationOnce(() => new Promise<GenerationJob>(() => undefined));
+
+    await click(buttonByText("Generate", ".primary-run"));
+    const firstHandler = vi.mocked(bridge.onJobEvent).mock.calls[0]?.[0];
+    await act(async () => {
+      firstHandler?.({ jobId: "job-to-stop", type: "started" });
+      await Promise.resolve();
+    });
+
+    const stopButton = buttonByText("Stop", ".primary-run");
+    expect(stopButton.disabled).toBe(false);
+    await click(stopButton);
+    await flushAsync();
+
+    expect(bridge.cancelJob).toHaveBeenCalledWith("job-to-stop");
+    expect(document.body.textContent).toContain("Stopping generation.");
+  });
+
   it("enables OpenAI General prompt-only fallback for non-focused image models", async () => {
     const defaultConfig = providerConfig({
       apiKeySaved: true,
@@ -2412,6 +2432,7 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
       currentSnapshot = { ...currentSnapshot, history: [job, ...currentSnapshot.history] };
       return job;
     }),
+    cancelJob: vi.fn(async () => true),
     downloadAsset: vi.fn(async () => "/tmp/downloaded.png"),
     downloadEditedImage: vi.fn(async () => "/tmp/edited.png"),
     openAssetFolder: vi.fn(async () => undefined),

@@ -17,6 +17,7 @@ export interface ImageJobRuntime extends ImageProviderRuntime {
   imagesDir: string;
   ensureDir: (dirPath: string) => Promise<void>;
   sendJobEvent: (event: JobProgressEvent) => void;
+  abortSignal?: AbortSignal;
 }
 
 export interface ImageProviderAdapter {

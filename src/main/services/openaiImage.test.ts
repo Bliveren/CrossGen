@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { InputAsset, JobProgressEvent, OpenAIImageParams } from "../../shared/types";
+import type { GenerationJob, InputAsset, JobProgressEvent, OpenAIImageParams } from "../../shared/types";
 import { DEFAULT_BASE_URL, DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
 import type { StoredProviderConfig } from "./stateMigration";
 import { baseRequestBody, buildEndpoint, normalizeOpenAIJobParams, normalizeOpenAIRequestParams, openaiImageAdapter, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImageAdapter";
@@ -893,7 +893,7 @@ describe("OpenAI image service", () => {
         model: "gpt-image-2",
         stream: true,
         params: {},
-        features: { image_generation: true }
+        features: { image_generation: false }
       }
     });
     const chatBody = requests.at(-1)?.body as { messages?: Array<{ content?: Array<{ type: string; image_url?: { url?: string } }> }> };
@@ -1034,11 +1034,62 @@ describe("OpenAI image service", () => {
       model: "gpt-image-2",
       stream: true,
       params: {},
-      features: { image_generation: true }
+      features: { image_generation: false }
     });
     const chatBody = requests[0].body as { messages?: Array<{ content?: Array<{ type: string; image_url?: { url?: string } }> }> };
     expect(chatBody.messages?.[0]?.content?.some((item) => item.type === "image_url" && item.image_url?.url?.startsWith("data:image/png;base64,"))).toBe(true);
     expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("finishes chat-routed image edits after the final streamed image even when the SSE socket stays open", async () => {
+    const source = await sourceAsset();
+    let streamCanceled = false;
+    const fetchImpl = (async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  image: tinyPngBase64
+                }
+              }
+            ]
+          })}\n\n`));
+        },
+        cancel() {
+          streamCanceled = true;
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const resultPromise = runOpenAIImageJob(
+        job({
+          mode: "edit",
+          inputAssets: [source],
+          params: params({ imageRoute: "auto", stream: false, timeoutMs: 5000 })
+        }),
+        "sk-test-key",
+        "https://api.test/v1",
+        runtime
+      );
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(() => reject(new Error("stream did not finish after final image")), 500);
+    });
+    let result: GenerationJob;
+    try {
+      result = await Promise.race([resultPromise, timeoutPromise]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+
+    expect(result.status).toBe("succeeded");
+    expect(streamCanceled).toBe(true);
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 

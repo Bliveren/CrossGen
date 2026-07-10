@@ -19,6 +19,7 @@ import {
   FolderOpen,
   FolderPlus,
   History,
+  Info,
   Images,
   ImageUp,
   KeyRound,
@@ -959,6 +960,7 @@ export function App() {
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck>({ status: "idle" });
   const [isRunning, setIsRunning] = useState(false);
+  const [runningJobId, setRunningJobId] = useState<string | null>(null);
   const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
   const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
   const [generationAttemptIndex, setGenerationAttemptIndex] = useState<number | null>(null);
@@ -1573,7 +1575,8 @@ export function App() {
   const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, effectivePrompt), copy) ?? modeError;
   const canRun = !validationError && !isRunning;
-  const primaryRunActionLabel = isRunning ? copy.running : modeLabels[requestMode].action;
+  const canCancelRun = isRunning && Boolean(runningJobId);
+  const primaryRunActionLabel = isRunning ? copy.cancelGeneration : modeLabels[requestMode].action;
   const promptCopyActionLabel = buttonFeedback["copy:prompt"] ? copy.clicked : copy.copyPrompt;
   const savedApiConfigs = snapshot.providers;
   const canDeleteActiveApiAccess = snapshot.providers.length > 1;
@@ -2061,6 +2064,7 @@ export function App() {
     if (!bridge) return;
     return bridge.onJobEvent((event) => {
       if (event.type === "started") {
+        setRunningJobId(event.jobId);
         setNotice({ kind: "info", text: copy.notices.jobStarted });
       }
       if (event.type === "attempt") {
@@ -2075,9 +2079,11 @@ export function App() {
         setNotice({ kind: "info", text: copy.notices.partialReceived(event.partialIndex ?? fallbackLabel) });
       }
       if (event.type === "completed") {
+        setRunningJobId(null);
         setNotice({ kind: "success", text: copy.notices.imageCompleted });
       }
       if (event.type === "failed") {
+        setRunningJobId(null);
         setNotice({ kind: "error", text: event.error ?? copy.jobFailed });
       }
     });
@@ -3364,6 +3370,7 @@ export function App() {
     }
 
     setIsRunning(true);
+    setRunningJobId(null);
     resetPartialImages();
     setGenerationStartedAt(Date.now());
     setGenerationElapsedSeconds(0);
@@ -3400,8 +3407,19 @@ export function App() {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
       setIsRunning(false);
+      setRunningJobId(null);
       setGenerationStartedAt(null);
       setGenerationAttemptIndex(null);
+    }
+  }
+
+  async function cancelRunningJob() {
+    if (!bridge || !runningJobId) return;
+    setNotice({ kind: "info", text: copy.notices.cancelRequested });
+    try {
+      await bridge.cancelJob(runningJobId);
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
     }
   }
 
@@ -4868,7 +4886,12 @@ export function App() {
   const parameterSummary = openAIParams ? (
     <>
       <label title={imageRouteTitle}>
-        <span>{copy.imageRoute}</span>
+        <span className="route-label">
+          <span>{copy.imageRoute}</span>
+          <span className="route-info-icon" aria-label={copy.imageRouteInfo} data-tooltip={copy.imageRouteInfo} title={copy.imageRouteInfo}>
+            <Info size={12} />
+          </span>
+        </span>
         <select
           value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
           disabled={requestMode === "inpaint"}
@@ -5740,12 +5763,12 @@ export function App() {
                     ref={primaryRunButtonRef}
                     type="button"
                     className="primary-run"
-                    onClick={runJob}
-                    disabled={!canRun}
+                    onClick={isRunning ? () => void cancelRunningJob() : runJob}
+                    disabled={isRunning ? !canCancelRun : !canRun}
                     aria-label={primaryRunActionLabel}
                     data-tooltip={primaryRunActionLabel}
                   >
-                    {isRunning ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
+                    {isRunning ? <X size={18} /> : <Sparkles size={18} />}
                     <span className="button-label">{primaryRunActionLabel}</span>
                   </button>
                   <button

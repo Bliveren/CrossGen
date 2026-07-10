@@ -252,6 +252,7 @@ export async function runGeminiImageJob(
     buildGeminiGenerateContentEndpoint(baseURL, job.params.model),
     {
       method: "POST",
+      signal: runtime.abortSignal,
       headers: geminiJsonHeaders(apiKey),
       body: JSON.stringify(buildGeminiGenerateContentBody(job.params, job.prompt, inlineDataParts))
     },
@@ -485,6 +486,7 @@ async function geminiImageSourceToBase64(image: GeminiImageSource, runtime: Gemi
     image.url,
     {
       method: "GET",
+      signal: runtime.abortSignal,
       headers: {
         Accept: image.mimeType
       }

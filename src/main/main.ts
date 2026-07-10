@@ -171,6 +171,7 @@ let galleryOperationQueue: Promise<void> = Promise.resolve();
 let galleryWatchNeedsFullSync = false;
 let galleryWatchChangedRelPaths = new Set<string>();
 let stateWriteCount = 0;
+const runningJobControllers = new Map<string, AbortController>();
 
 interface AssetProtocolPerfMetrics {
   galleryOriginalRequests: number;
@@ -2244,6 +2245,8 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     updatedAt: new Date().toISOString()
   };
   await upsertJob(job);
+  const abortController = new AbortController();
+  runningJobControllers.set(job.id, abortController);
   sendJobEvent({ jobId: job.id, type: "started" });
 
   try {
@@ -2251,7 +2254,8 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
       fetch,
       imagesDir,
       ensureDir,
-      sendJobEvent
+      sendJobEvent,
+      abortSignal: abortController.signal
     });
     job = {
       ...job,
@@ -2263,7 +2267,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     sendJobEvent({ jobId: job.id, type: "completed" });
     return job;
   } catch (error) {
-    const message = normalizeError(error);
+    const message = abortController.signal.aborted ? "任务已终止。" : normalizeError(error);
     job = {
       ...job,
       status: "failed",
@@ -2274,7 +2278,17 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     await upsertJob(job);
     sendJobEvent({ jobId: job.id, type: "failed", error: message });
     return job;
+  } finally {
+    runningJobControllers.delete(job.id);
   }
+}
+
+function handleCancelJob(jobId: string): boolean {
+  if (typeof jobId !== "string" || !jobId.trim()) return false;
+  const controller = runningJobControllers.get(jobId);
+  if (!controller) return false;
+  controller.abort();
+  return true;
 }
 
 function canRunRequestWithConfig(request: RunJobRequest, config: StoredProviderConfig): boolean {
@@ -3074,6 +3088,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("dialog:importImages", handleImportImages);
   ipcMain.handle("dialog:selectMask", handleSelectMask);
   ipcMain.handle("job:run", handleRunJob);
+  ipcMain.handle("job:cancel", (_event, jobId: string) => handleCancelJob(jobId));
   ipcMain.handle("asset:download", handleDownloadAsset);
   ipcMain.handle("asset:downloadEdited", handleDownloadEditedImage);
   ipcMain.handle("asset:openFolder", handleOpenAssetFolder);
