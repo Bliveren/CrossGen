@@ -54,7 +54,11 @@ describe("gpt-image-2 validation", () => {
   });
 
   it("rejects invalid enum-like params from runtime state or IPC", () => {
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, imageRoute: "chat-completions" }).ok).toBe(true);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, imageRoute: "responses" }).ok).toBe(true);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, imageRoute: "image-api" }).ok).toBe(true);
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, quality: "standard" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, imageRoute: "legacy-images" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, outputFormat: "gif" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, background: "transparent" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, moderation: "strict" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);

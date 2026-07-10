@@ -82,6 +82,8 @@ import type {
   ImageQuality,
   InputAsset,
   ModerationMode,
+  OpenAIImageRoute,
+  OpenAIImageRouteSelection,
   OpenAIImageParams,
   PromptTemplate,
   PromptTemplateInput,
@@ -554,6 +556,25 @@ function streamPartialPreviewDisabledReason(params: OpenAIImageParams, config: P
   return undefined;
 }
 
+function openAIImageRouteLabel(copy: UiCopy, route: OpenAIImageRoute): string {
+  if (route === "chat-completions") return copy.imageRouteChatCompletions;
+  if (route === "responses") return copy.imageRouteResponses;
+  return copy.imageRouteImageApi;
+}
+
+function autoOpenAIImageRoute(config: ProviderConfig, mode: WorkMode): OpenAIImageRoute {
+  if (mode === "inpaint") return "image-api";
+  const probedRoute = mode === "generate"
+    ? config.openAIImageRouting?.preferredGenerateRoute
+    : config.openAIImageRouting?.preferredEditRoute;
+  return probedRoute ?? "chat-completions";
+}
+
+function selectedOpenAIImageRoute(params: OpenAIImageParams, config: ProviderConfig, mode: WorkMode): OpenAIImageRoute {
+  if (mode === "inpaint") return "image-api";
+  return params.imageRoute === "auto" ? autoOpenAIImageRoute(config, mode) : params.imageRoute;
+}
+
 function normalizeParamsForOutputCount(params: ImageParams): ImageParams {
   return isOpenAIImageParams(params) ? normalizeOpenAIParamsForOutputCount(params) : params;
 }
@@ -940,6 +961,7 @@ export function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
   const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
+  const [generationAttemptIndex, setGenerationAttemptIndex] = useState<number | null>(null);
   const [arePromptSecondaryActionsIconOnly, setArePromptSecondaryActionsIconOnly] = useState(false);
   const [isPrimaryRunIconOnly, setIsPrimaryRunIconOnly] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -2040,6 +2062,11 @@ export function App() {
     return bridge.onJobEvent((event) => {
       if (event.type === "started") {
         setNotice({ kind: "info", text: copy.notices.jobStarted });
+      }
+      if (event.type === "attempt") {
+        const attemptIndex = event.attemptIndex ?? 1;
+        setGenerationAttemptIndex(attemptIndex);
+        setNotice({ kind: "info", text: copy.notices.generationAttempt(attemptIndex) });
       }
       if (event.type === "partial" && event.image) {
         const fallbackLabel = currentPartialLabel(partialImageCountRef.current);
@@ -3340,6 +3367,7 @@ export function App() {
     resetPartialImages();
     setGenerationStartedAt(Date.now());
     setGenerationElapsedSeconds(0);
+    setGenerationAttemptIndex(null);
     setActiveJob(null);
     setActiveGalleryAssetId(null);
     setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[requestMode].action) });
@@ -3373,6 +3401,7 @@ export function App() {
     } finally {
       setIsRunning(false);
       setGenerationStartedAt(null);
+      setGenerationAttemptIndex(null);
     }
   }
 
@@ -4830,8 +4859,27 @@ export function App() {
 
   const sizeValidation = openAIParams ? validateGptImage2Size(openAIParams.size) : null;
   const maskDescription = activeInpaintCapability === "guided-region" ? copy.guidedRegionDescription : copy.maskDescription;
+  const effectiveOpenAIImageRoute = openAIParams ? selectedOpenAIImageRoute(openAIParams, activeConfig, requestMode) : null;
+  const imageRouteTitle = requestMode === "inpaint"
+    ? copy.imageRouteInpaintLocked
+    : effectiveOpenAIImageRoute
+      ? copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, effectiveOpenAIImageRoute))
+      : undefined;
   const parameterSummary = openAIParams ? (
     <>
+      <label title={imageRouteTitle}>
+        <span>{copy.imageRoute}</span>
+        <select
+          value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
+          disabled={requestMode === "inpaint"}
+          onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
+        >
+          <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
+          <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
+          <option value="responses">{copy.imageRouteResponses}</option>
+          <option value="image-api">{copy.imageRouteImageApi}</option>
+        </select>
+      </label>
       <label>
         <span>{copy.size}</span>
         <select
@@ -5012,6 +5060,11 @@ export function App() {
       {sizeValidation && (
         <p className={sizeValidation.ok ? "inline-check ok" : "inline-check error"}>
           {sizeValidation.ok ? copy.sizeValid : localizeValidationMessage(sizeValidation.message, copy)}
+        </p>
+      )}
+      {effectiveOpenAIImageRoute && (
+        <p className="inline-check route-check" title={imageRouteTitle}>
+          {copy.imageRoute}: {openAIImageRouteLabel(copy, effectiveOpenAIImageRoute)}
         </p>
       )}
     </div>
@@ -5377,7 +5430,16 @@ export function App() {
           <button type="button" className="icon-button" onClick={() => setIsSidebarCollapsed(false)} aria-label={copy.launchModels} data-tooltip={copy.launchModels}>
             <Rocket size={17} />
           </button>
-          <button type="button" className="icon-button" onClick={() => setShowAdvanced((current) => !current)} aria-label={copy.parameters} data-tooltip={copy.parameters}>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => {
+              setIsSidebarCollapsed(false);
+              setShowAdvanced(true);
+            }}
+            aria-label={copy.parameters}
+            data-tooltip={copy.parameters}
+          >
             <SlidersHorizontal size={17} />
           </button>
         </div>
@@ -5515,6 +5577,7 @@ export function App() {
             activeJobError={activeJobError}
             isGenerating={isRunning}
             generationElapsedSeconds={generationElapsedSeconds}
+            generationAttemptIndex={generationAttemptIndex}
             activeImage={activeImage}
             activeResults={activeResults}
             partialImages={partialImages}
@@ -6211,7 +6274,7 @@ export function App() {
                     </button>
                   </div>
                 </div>
-                <div className="template-list">
+                <div className="template-list" data-scroll-region="prompt-templates">
                   {filteredTemplates.length === 0 && (
                     <p className="empty-inline">{snapshot.promptTemplates.length === 0 ? copy.templateEmpty : copy.templateNoMatch}</p>
                   )}

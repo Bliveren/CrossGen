@@ -36,6 +36,7 @@ export const DEFAULT_IMAGE_PARAMS: OpenAIImageParams = {
   providerKind: "openai",
   launchId: GPT_IMAGE_2_LAUNCH_ID,
   model: GPT_IMAGE_2_MODEL,
+  imageRoute: "auto",
   size: "auto",
   quality: "auto",
   outputFormat: "png",
@@ -240,6 +241,9 @@ export function validateOpenAIImageParams(params: unknown): ValidationResult {
   }
   if (typeof params.stream !== "boolean") {
     return { ok: false, message: "流式预览参数无效。" };
+  }
+  if (!isOneOf(params.imageRoute ?? "auto", ["auto", "image-api", "responses", "chat-completions"] as const)) {
+    return { ok: false, message: "接口路径参数无效。" };
   }
   if (params.model.trim() !== GPT_IMAGE_2_MODEL) {
     return { ok: false, message: `MVP 仅支持 ${GPT_IMAGE_2_MODEL}。` };

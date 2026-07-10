@@ -12,6 +12,7 @@ interface NoticeCopy {
   ready: string;
   browserPreview: string;
   jobStarted: string;
+  generationAttempt: (index: number | string) => string;
   partialReceived: (index: number | string) => string;
   imageCompleted: string;
   maskValidationFailed: string;
@@ -141,6 +142,13 @@ export interface UiCopy {
   keySaved: string;
   noKeySaved: string;
   parameters: string;
+  imageRoute: string;
+  imageRouteAuto: string;
+  imageRouteAutoUsing: (route: string) => string;
+  imageRouteChatCompletions: string;
+  imageRouteResponses: string;
+  imageRouteImageApi: string;
+  imageRouteInpaintLocked: string;
   hide: string;
   show: string;
   promptTemplates: string;
@@ -291,6 +299,7 @@ export interface UiCopy {
   jobFailed: string;
   outputEmpty: string;
   generatingElapsed: (seconds: number) => string;
+  generationAttempt: (index: number | string) => string;
   prompt: string;
   running: string;
   copy: string;
@@ -504,6 +513,13 @@ export const translations: Record<Language, UiCopy> = {
     keySaved: "Key saved",
     noKeySaved: "No key saved",
     parameters: "Parameters",
+    imageRoute: "API route",
+    imageRouteAuto: "Auto",
+    imageRouteAutoUsing: (route: string) => `Auto · ${route}`,
+    imageRouteChatCompletions: "Chat",
+    imageRouteResponses: "Responses",
+    imageRouteImageApi: "Image API",
+    imageRouteInpaintLocked: "Mask edits use Image API.",
     hide: "Hide",
     show: "Show",
     promptTemplates: "Prompt templates",
@@ -655,6 +671,7 @@ export const translations: Record<Language, UiCopy> = {
     jobFailed: "Job failed",
     outputEmpty: "Generated images and partial previews appear here.",
     generatingElapsed: (seconds: number) => `Generating image, elapsed ${seconds} seconds`,
+    generationAttempt: (index: number | string) => `Generation attempt ${index}`,
     prompt: "Prompt",
     running: "Running",
     copy: "Copy",
@@ -801,6 +818,7 @@ export const translations: Record<Language, UiCopy> = {
       ready: "Ready.",
       browserPreview: "Browser preview: Electron IPC is unavailable.",
       jobStarted: "Job started.",
+      generationAttempt: (index: number | string) => `Generation attempt ${index}.`,
       partialReceived: (index: number | string) => `Partial image ${index} received.`,
       imageCompleted: "Image completed.",
       maskValidationFailed: "Mask validation failed.",
@@ -930,6 +948,13 @@ export const translations: Record<Language, UiCopy> = {
     keySaved: "Key 已保存",
     noKeySaved: "未保存 Key",
     parameters: "参数配置",
+    imageRoute: "接口路径",
+    imageRouteAuto: "自动",
+    imageRouteAutoUsing: (route: string) => `自动 · ${route}`,
+    imageRouteChatCompletions: "Chat",
+    imageRouteResponses: "Responses",
+    imageRouteImageApi: "Image API",
+    imageRouteInpaintLocked: "蒙版编辑固定使用 Image API。",
     hide: "收起",
     show: "展开",
     promptTemplates: "提示词模板",
@@ -1081,6 +1106,7 @@ export const translations: Record<Language, UiCopy> = {
     jobFailed: "任务失败",
     outputEmpty: "生成图片和局部预览会显示在这里。",
     generatingElapsed: (seconds: number) => `正在生图，已耗时 ${seconds} 秒`,
+    generationAttempt: (index: number | string) => `第【${index}】次生图尝试`,
     prompt: "提示词",
     running: "运行中",
     copy: "复制",
@@ -1227,6 +1253,7 @@ export const translations: Record<Language, UiCopy> = {
       ready: "就绪。",
       browserPreview: "浏览器预览：Electron IPC 不可用。",
       jobStarted: "任务已开始。",
+      generationAttempt: (index: number | string) => `第【${index}】次生图尝试。`,
       partialReceived: (index: number | string) => `收到局部预览 ${index}。`,
       imageCompleted: "图片已完成。",
       maskValidationFailed: "蒙版校验失败。",

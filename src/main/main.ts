@@ -2082,10 +2082,12 @@ function isRouteProbeReachableStatus(status: number): boolean {
 }
 
 function preferredOpenAIImageRoute(probes: OpenAIImageRouteProbe[], mode: "generate" | "edit"): OpenAIImageRoute | undefined {
-  const candidates = probes
-    .filter((probe) => probe.mode === mode && probe.ok)
+  const successfulCandidates = probes
+    .filter((probe) => probe.mode === mode && probe.ok && probe.status !== undefined && probe.status >= 200 && probe.status < 300)
     .sort((a, b) => routePreferenceScore(a) - routePreferenceScore(b));
-  return candidates[0]?.route;
+  if (successfulCandidates[0]) return successfulCandidates[0].route;
+
+  return "chat-completions";
 }
 
 function routePreferenceScore(probe: OpenAIImageRouteProbe): number {

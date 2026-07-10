@@ -222,6 +222,48 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).not.toContain("PNG ignores compression");
   });
 
+  it("shows the resolved OpenAI image route and submits a manual route selection", async () => {
+    const config = providerConfig({
+      openAIImageRouting: {
+        preferredGenerateRoute: "chat-completions",
+        preferredEditRoute: "chat-completions",
+        probes: [],
+        updatedAt: now
+      }
+    });
+    const bridge = await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    await click(buttonByText("Parameters", ".section-toggle"));
+
+    expect(selectByLabel("API route").selectedOptions[0]?.textContent).toBe("Auto · Chat");
+    expect(document.body.textContent).toContain("API route: Chat");
+
+    await changeSelect(selectByLabel("API route"), "responses");
+    await click(buttonByText("Generate", ".primary-run"));
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          providerKind: "openai",
+          launchId: GPT_IMAGE_2_LAUNCH_ID,
+          imageRoute: "responses"
+        })
+      })
+    );
+  });
+
+  it("opens the parameter controls from the collapsed left rail", async () => {
+    await renderApp(snapshot());
+
+    await click(document.querySelector<HTMLButtonElement>(".sidebar-collapse-button")!);
+    expect(document.querySelector<HTMLElement>(".app-shell")?.classList.contains("sidebar-collapsed")).toBe(true);
+
+    await click(document.querySelector<HTMLButtonElement>('.sidebar-mini-stack button[aria-label="Parameters"]')!);
+
+    expect(document.querySelector<HTMLElement>(".app-shell")?.classList.contains("sidebar-collapsed")).toBe(false);
+    expect(document.querySelector(".advanced-controls")).toBeTruthy();
+  });
+
   it("keeps the job progress listener stable when partial images arrive", async () => {
     const bridge = await renderApp(snapshot());
     const firstHandler = vi.mocked(bridge.onJobEvent).mock.calls[0]?.[0];
@@ -284,6 +326,11 @@ describe("renderer multi-model smoke", () => {
     await click(buttonByText("Generate", ".primary-run"));
 
     expect(document.querySelector(".generation-status-overlay")?.textContent).toContain("Generating image, elapsed 0 seconds");
+    const firstHandler = vi.mocked(bridge.onJobEvent).mock.calls[0]?.[0];
+    await act(async () => {
+      firstHandler?.({ jobId: "job_bridge_result", type: "attempt", attemptIndex: 1, route: "chat-completions" });
+    });
+    expect(document.querySelector(".generation-status-overlay")?.textContent).toContain("Generation attempt 1");
     const request = vi.mocked(bridge.runJob).mock.calls[0]?.[0];
     expect(request).toBeTruthy();
 
@@ -645,6 +692,26 @@ describe("renderer multi-model smoke", () => {
 
     expect(bridge.exportTemplates).toHaveBeenCalledWith();
     expect(document.body.textContent).toContain("Templates exported to /tmp/templates.json");
+  });
+
+  it("keeps the prompt template list inside a bounded scrolling dialog", async () => {
+    const promptTemplates = Array.from({ length: 24 }, (_, index) => ({
+      id: `template-scroll-${index}`,
+      title: `Template ${index}`,
+      body: `Template body ${index}`,
+      tags: [],
+      createdAt: now,
+      updatedAt: now
+    }));
+    await renderApp(snapshot({ promptTemplates }));
+
+    await openTemplateDialog();
+
+    const dialog = document.querySelector<HTMLElement>(".template-dialog")!;
+    const list = document.querySelector<HTMLElement>(".template-dialog .template-list")!;
+    expect(dialog).toBeTruthy();
+    expect(list.dataset.scrollRegion).toBe("prompt-templates");
+    expect(list.querySelectorAll(".template-item")).toHaveLength(24);
   });
 
   it("opens a Gallery image in the editor from the thumbnail", async () => {

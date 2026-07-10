@@ -21,6 +21,7 @@ afterEach(async () => {
 function params(patch: Partial<OpenAIImageParams> = {}): OpenAIImageParams {
   return {
     ...DEFAULT_IMAGE_PARAMS,
+    imageRoute: "image-api",
     timeoutMs: 30000,
     ...patch
   };
@@ -930,7 +931,7 @@ describe("OpenAI image service", () => {
       job({
         mode: "edit",
         inputAssets: [source],
-        params: params({ stream: false })
+        params: params({ imageRoute: "auto", stream: false })
       }),
       "sk-test-key",
       config({
@@ -973,7 +974,7 @@ describe("OpenAI image service", () => {
     const { runtime } = await createRuntime(fetchImpl);
 
     const result = await openaiImageAdapter.runJob(
-      job({ mode: "generate", params: params({ stream: false }) }),
+      job({ mode: "generate", params: params({ imageRoute: "auto", stream: false }) }),
       "sk-test-key",
       config({
         openAIImageRouting: {
@@ -988,6 +989,126 @@ describe("OpenAI image service", () => {
     expect(requests).toEqual(["https://api.test/v1/chat/completions"]);
     expect(result.status).toBe("succeeded");
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("defaults auto routed image edits to chat completions when no probe preference is available", async () => {
+    const source = await sourceAsset();
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requests.push({
+        url: String(url),
+        body: JSON.parse(String(init?.body))
+      });
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  image: tinyPngBase64
+                }
+              }
+            ]
+          })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ imageRoute: "auto", stream: false })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests.map((request) => request.url)).toEqual(["https://api.test/v1/chat/completions"]);
+    expect(requests[0].body).toMatchObject({
+      model: "gpt-image-2",
+      stream: true,
+      params: {},
+      features: { image_generation: true }
+    });
+    const chatBody = requests[0].body as { messages?: Array<{ content?: Array<{ type: string; image_url?: { url?: string } }> }> };
+    expect(chatBody.messages?.[0]?.content?.some((item) => item.type === "image_url" && item.image_url?.url?.startsWith("data:image/png;base64,"))).toBe(true);
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("honors manual image API routing over probed chat completions", async () => {
+    const source = await sourceAsset();
+    const requests: Array<{ url: string; isForm: boolean }> = [];
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requests.push({
+        url: String(url),
+        isForm: init?.body instanceof FormData
+      });
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await openaiImageAdapter.runJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ imageRoute: "image-api", stream: false })
+      }),
+      "sk-test-key",
+      config({
+        openAIImageRouting: {
+          preferredEditRoute: "chat-completions",
+          probes: [],
+          updatedAt: new Date(0).toISOString()
+        }
+      }),
+      runtime
+    );
+
+    expect(requests).toEqual([
+      { url: "https://api.test/v1/images/edits", isForm: true }
+    ]);
+    expect(result.status).toBe("succeeded");
+  });
+
+  it("emits generation attempt events before routed OpenAI requests", async () => {
+    const fetchImpl = (async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  image: tinyPngBase64
+                }
+              }
+            ]
+          })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime, events } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({ params: params({ imageRoute: "auto", timeoutMs: 30000 }) }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(result.status).toBe("succeeded");
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "attempt", attemptIndex: 1, route: "chat-completions" })
+    );
   });
 
   it("tries non-streaming images fallback before streaming edit fallbacks", async () => {

@@ -70,6 +70,8 @@ export interface ProviderConfig {
 
 export type OpenAIImageRoute = "image-api" | "responses" | "chat-completions";
 
+export type OpenAIImageRouteSelection = "auto" | OpenAIImageRoute;
+
 export interface OpenAIImageRouteProbe {
   route: OpenAIImageRoute;
   mode: "generate" | "edit";
@@ -106,6 +108,7 @@ export interface OpenAIImageParams {
   providerKind: "openai";
   launchId: "gpt-image-2";
   model: string;
+  imageRoute: OpenAIImageRouteSelection;
   size: string;
   quality: ImageQuality;
   outputFormat: ImageFormat;
@@ -297,7 +300,9 @@ export interface RunJobRequest {
 
 export interface JobProgressEvent {
   jobId: string;
-  type: "started" | "partial" | "completed" | "failed";
+  type: "started" | "attempt" | "partial" | "completed" | "failed";
+  attemptIndex?: number;
+  route?: OpenAIImageRoute;
   partialIndex?: number;
   image?: ImageAsset;
   error?: string;

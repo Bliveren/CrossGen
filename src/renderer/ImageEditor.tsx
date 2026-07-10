@@ -44,6 +44,7 @@ interface ImageEditorProps {
   activeJobError: string | null;
   isGenerating: boolean;
   generationElapsedSeconds: number;
+  generationAttemptIndex: number | null;
   activeImage?: ImageAsset;
   activeResults: ImageAsset[];
   partialImages: ImageAsset[];
@@ -128,6 +129,7 @@ export function ImageEditor({
   activeJobError,
   isGenerating,
   generationElapsedSeconds,
+  generationAttemptIndex,
   activeImage,
   activeResults,
   partialImages,
@@ -526,6 +528,7 @@ export function ImageEditor({
           <div className="generation-status-overlay" role="status" aria-live="polite" aria-atomic="true">
             <Loader2 className="spin" size={20} />
             <span>{copy.generatingElapsed(generationElapsedSeconds)}</span>
+            {generationAttemptIndex ? <small>{copy.generationAttempt(generationAttemptIndex)}</small> : null}
           </div>
         )}
       </div>

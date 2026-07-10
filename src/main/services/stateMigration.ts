@@ -464,6 +464,7 @@ function normalizeOpenAIImageParams(input: Record<string, unknown>): OpenAIImage
     providerKind: "openai",
     launchId: GPT_IMAGE_2_LAUNCH_ID,
     model: nonEmptyString(input.model, GPT_IMAGE_2_MODEL_ID),
+    imageRoute: oneOf(input.imageRoute, ["auto", "image-api", "responses", "chat-completions"] as const, DEFAULT_IMAGE_PARAMS.imageRoute),
     size: nonEmptyString(input.size, DEFAULT_IMAGE_PARAMS.size),
     quality: oneOf(input.quality, IMAGE_QUALITY_OPTIONS, DEFAULT_IMAGE_PARAMS.quality),
     outputFormat: oneOf(input.outputFormat, IMAGE_FORMAT_OPTIONS, DEFAULT_IMAGE_PARAMS.outputFormat),
