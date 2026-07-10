@@ -1926,7 +1926,12 @@ async function saveImageItems(
 ): Promise<ImageAsset[]> {
   const outputs: ImageAsset[] = [];
   for (const [offset, item] of items.entries()) {
-    const b64Json = await imageItemToBase64(item);
+    const b64Json = await imageItemToBase64(
+      item,
+      runtime.fetch,
+      Math.min(job.params.timeoutMs, 30000),
+      runtime.abortSignal
+    );
     if (b64Json) {
       outputs.push(await saveBase64Image(job.id, b64Json, job.params, sourceType, firstIndex + offset, runtime));
     }
@@ -1934,14 +1939,19 @@ async function saveImageItems(
   return outputs;
 }
 
-async function imageItemToBase64(item: { b64_json?: string; url?: string }): Promise<string | null> {
+async function imageItemToBase64(
+  item: { b64_json?: string; url?: string },
+  fetchImpl: typeof fetch,
+  timeoutMs: number,
+  abortSignal?: AbortSignal
+): Promise<string | null> {
   if (item.b64_json) return item.b64_json;
   if (!item.url) return null;
   if (item.url.startsWith("data:image/")) {
     return dataUrlToBase64(item.url);
   }
 
-  const response = await fetch(item.url);
+  const response = await fetchWithTimeout(fetchImpl, item.url, { signal: abortSignal }, timeoutMs);
   if (!response.ok) {
     throw new Error(`OpenAI API 返回了图片 URL，但下载失败：HTTP ${response.status}。`);
   }

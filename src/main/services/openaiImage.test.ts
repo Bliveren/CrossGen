@@ -1521,6 +1521,32 @@ describe("OpenAI image service", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("downloads returned image URLs through the provider runtime fetch", async () => {
+    const requests: Array<{ url: string; hasSignal: boolean }> = [];
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requests.push({
+        url: String(url),
+        hasSignal: init?.signal instanceof AbortSignal
+      });
+      if (String(url) === "https://cdn.test/result.png") {
+        return new Response(Buffer.from(tinyPngBase64, "base64"), {
+          headers: { "content-type": "image/png" }
+        });
+      }
+      return Response.json({ data: [{ url: "https://cdn.test/result.png" }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job(), "sk-test-key", "https://api.test/v1", runtime);
+
+    expect(requests).toEqual([
+      { url: "https://api.test/v1/images/generations", hasSignal: true },
+      { url: "https://cdn.test/result.png", hasSignal: true }
+    ]);
+    expect(result.status).toBe("succeeded");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
   it("saves Responses-style image generation output results", async () => {
     const fetchImpl = (async () => Response.json({
       output: [
