@@ -533,10 +533,15 @@ describe("OpenAI image service", () => {
         return Response.json(emptyRightImagePayload);
       }
       const encoder = new TextEncoder();
+      let pulled = false;
       const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
+        pull(controller) {
+          if (pulled) {
+            controller.error(new Error("terminated"));
+            return;
+          }
+          pulled = true;
           controller.enqueue(encoder.encode(`event: image_edit.completed\ndata: ${JSON.stringify({ type: "image_edit.completed", b64_json: tinyPngBase64, usage: { total_tokens: 7 } })}\n\n`));
-          controller.close();
         }
       });
       return new Response(stream, { headers: { "content-type": "text/event-stream" } });
@@ -562,6 +567,78 @@ describe("OpenAI image service", () => {
     expect(result.status).toBe("succeeded");
     expect(result.params).toMatchObject({ stream: false, partialImages: 0 });
     expect(result.usage?.total_tokens).toBe(7);
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("retries streaming edit fallback with singular image when image array streams terminate before a final image", async () => {
+    const source = await sourceAsset();
+    const requests: Array<{ accept: string; imageFieldName: string; stream: string | null; partialImages: string | null }> = [];
+    const emptyRightImagePayload = {
+      model: "gpt-image-2",
+      data: null,
+      quality: "auto",
+      size: "auto",
+      usage: { num_input_images: 1 },
+      extra_fields: {
+        request_type: "image_edit",
+        routing_info: { route: "test" },
+        provider: "right-image",
+        original_model_requested: "gpt-image-2",
+        resolved_model_used: "gpt-image-2",
+        latency: 1.2,
+        chunk_index: 0,
+        provider_response_headers: { "Cf-Ray": "test-ray" }
+      }
+    };
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData;
+      requests.push({
+        accept: new Headers(init?.headers).get("Accept") ?? "",
+        imageFieldName: form.getAll("image[]").length > 0 ? "image[]" : form.getAll("image").length > 0 ? "image" : "missing",
+        stream: form.get("stream")?.toString() ?? null,
+        partialImages: form.get("partial_images")?.toString() ?? null
+      });
+      if (requests.length < 3) {
+        return Response.json(emptyRightImagePayload);
+      }
+      if (requests.length === 3) {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.error(new Error("terminated"));
+          }
+        });
+        return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+      }
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: image_edit.completed\ndata: ${JSON.stringify({ type: "image_edit.completed", b64_json: tinyPngBase64, usage: { total_tokens: 11 } })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ stream: false })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests).toEqual([
+      { accept: "application/json", imageFieldName: "image[]", stream: "false", partialImages: null },
+      { accept: "application/json", imageFieldName: "image", stream: "false", partialImages: null },
+      { accept: "text/event-stream", imageFieldName: "image[]", stream: "true", partialImages: "1" },
+      { accept: "text/event-stream", imageFieldName: "image", stream: "true", partialImages: "1" }
+    ]);
+    expect(result.status).toBe("succeeded");
+    expect(result.usage?.total_tokens).toBe(11);
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 

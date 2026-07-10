@@ -339,7 +339,7 @@ async function runEdit(
     return handleJsonEditImagesWithFallback(response, job, runtime, (nextJob, purpose) => {
       const imageFieldName = purpose === "empty-retry" ? "image" : "image[]";
       return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName);
-    }, (streamJob) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, "image[]"));
+    }, (streamJob, imageFieldName) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, imageFieldName));
   }
 
   return handleImagesResponse(response, job, "image_edit", runtime);
@@ -595,7 +595,7 @@ async function handleJsonEditImagesWithFallback(
   job: OpenAIImageJob,
   runtime: OpenAIImageRuntime,
   fetchAdditional: (job: OpenAIImageJob, purpose: JsonImageFetchPurpose) => Promise<Response>,
-  fetchStreamFallback: (job: OpenAIImageJob) => Promise<Response>
+  fetchStreamFallback: (job: OpenAIImageJob, imageFieldName: EditImageFieldName) => Promise<Response>
 ): Promise<GenerationJob> {
   const requestedCount = Math.max(1, job.params.n);
   const firstResult = await readAndSaveJsonImagesResponse(response, job, runtime, 0, requestedCount);
@@ -638,17 +638,21 @@ async function handleJsonEditImagesWithFallback(
         partialImages: 1
       }
     };
-    try {
-      const streamResponse = await fetchStreamFallback(streamJob);
-      const streamResult = await handleImagesResponse(streamResponse, streamJob, "image_edit", runtime);
-      return {
-        ...streamResult,
-        usage: mergeUsageDetails(usage, streamResult.usage),
-        params: job.params
-      };
-    } catch (error) {
-      emptyReason = `${emptyReason ?? ""}；已尝试流式编辑兜底但仍失败：${normalizeAdapterError(error)}`;
+    const streamErrors: string[] = [];
+    for (const imageFieldName of ["image[]", "image"] satisfies EditImageFieldName[]) {
+      try {
+        const streamResponse = await fetchStreamFallback(streamJob, imageFieldName);
+        const streamResult = await handleImagesResponse(streamResponse, streamJob, "image_edit", runtime);
+        return {
+          ...streamResult,
+          usage: mergeUsageDetails(usage, streamResult.usage),
+          params: job.params
+        };
+      } catch (error) {
+        streamErrors.push(`${imageFieldName}: ${normalizeAdapterError(error)}`);
+      }
     }
+    emptyReason = `${emptyReason ?? ""}；已尝试流式编辑兜底但仍失败：${streamErrors.join("；")}`;
   }
 
   throw new Error(noSavableOpenAIImageMessage(emptyReason));
@@ -1241,33 +1245,41 @@ async function handleStreamResponse(
   let partialIndex = firstIndex;
   let resultIndex = firstIndex;
 
-  await parseSSE(response.body, async (event) => {
-    if (event.error?.message) {
-      throw new Error(`OpenAI API 请求失败：${redactLikelySecrets(event.error.message)}`);
-    }
+  try {
+    await parseSSE(response.body, async (event) => {
+      if (event.error?.message) {
+        throw new Error(`OpenAI API 请求失败：${redactLikelySecrets(event.error.message)}`);
+      }
 
-    const type = event.type ?? "";
-    const isPartial = type === `${eventPrefix}.partial_image` || type.endsWith(".partial_image");
-    const sourceType = isPartial ? "partial" : "result";
-    const index = isPartial ? event.partial_image_index ?? partialIndex++ : resultIndex++;
-    const items = event.data?.length ? event.data : [{ b64_json: event.b64_json, url: event.url }];
-    const images = await saveImageItems(job, items, sourceType, runtime, index);
-    if (images.length === 0) return;
-    outputs.push(...images);
+      const type = event.type ?? "";
+      const isPartial = type === `${eventPrefix}.partial_image` || type.endsWith(".partial_image");
+      const sourceType = isPartial ? "partial" : "result";
+      const index = isPartial ? event.partial_image_index ?? partialIndex++ : resultIndex++;
+      const items = event.data?.length ? event.data : [{ b64_json: event.b64_json, url: event.url }];
+      const images = await saveImageItems(job, items, sourceType, runtime, index);
+      if (images.length === 0) return;
+      outputs.push(...images);
 
-    if (event.usage) {
-      usage = event.usage;
-    }
+      if (event.usage) {
+        usage = event.usage;
+      }
 
-    if (isPartial) {
-      runtime.sendJobEvent({
-        jobId: job.id,
-        type: "partial",
-        partialIndex: index,
-        image: images[0]
-      });
+      if (isPartial) {
+        runtime.sendJobEvent({
+          jobId: job.id,
+          type: "partial",
+          partialIndex: index,
+          image: images[0]
+        });
+      }
+    });
+  } catch (error) {
+    if (outputs.some((asset) => asset.sourceType === "result") && isIgnorableStreamTerminationError(error)) {
+      // Some compatible providers close SSE sockets abruptly after the completed event.
+    } else {
+      throw error;
     }
-  });
+  }
 
   const finalOutputs = outputs.filter((asset) => asset.sourceType === "result");
   if (finalOutputs.length === 0) {
@@ -1281,6 +1293,11 @@ async function handleStreamResponse(
     status: "succeeded",
     updatedAt: new Date().toISOString()
   };
+}
+
+function isIgnorableStreamTerminationError(error: unknown): boolean {
+  const message = normalizeAdapterError(error).toLowerCase();
+  return message.includes("terminated") || message.includes("premature close") || message.includes("socket hang up") || message.includes("aborted");
 }
 
 export async function parseSSE(body: ReadableStream<Uint8Array>, onEvent: (event: ImageStreamEvent) => Promise<void>): Promise<void> {
