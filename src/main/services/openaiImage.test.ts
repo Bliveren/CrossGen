@@ -116,7 +116,7 @@ describe("OpenAI image service", () => {
     });
   });
 
-  it("enables streaming only for supported generate jobs", () => {
+  it("enables streaming for supported GPT Image 2 jobs", () => {
     const directGenerateJob = normalizeOpenAIJobParams(job({ mode: "generate", params: params({ stream: true, partialImages: 2 }) }), {
       streamingPartialsEnabled: true
     });
@@ -132,14 +132,14 @@ describe("OpenAI image service", () => {
     const editJob = normalizeOpenAIJobParams(job({ mode: "edit", params: params({ stream: true, partialImages: 2 }) }), {
       streamingPartialsEnabled: true
     });
-    expect(editJob.params.stream).toBe(false);
-    expect(editJob.params.partialImages).toBe(0);
+    expect(editJob.params.stream).toBe(true);
+    expect(editJob.params.partialImages).toBe(2);
 
     const inpaintJob = normalizeOpenAIJobParams(job({ mode: "inpaint", params: params({ stream: true, partialImages: 3 }) }), {
       streamingPartialsEnabled: true
     });
-    expect(inpaintJob.params.stream).toBe(false);
-    expect(inpaintJob.params.partialImages).toBe(0);
+    expect(inpaintJob.params.stream).toBe(true);
+    expect(inpaintJob.params.partialImages).toBe(3);
   });
 
   it("calls image generations and saves base64 results", async () => {
@@ -708,6 +708,91 @@ describe("OpenAI image service", () => {
     ]);
     expect(result.status).toBe("succeeded");
     expect(result.usage?.total_tokens).toBe(13);
+  });
+
+  it("runs streaming image edits when partial previews are enabled", async () => {
+    const source = await sourceAsset();
+    const requests: Array<{ accept: string; imageFieldName: string; stream: string | null; partialImages: string | null }> = [];
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData;
+      requests.push({
+        accept: new Headers(init?.headers).get("Accept") ?? "",
+        imageFieldName: form.getAll("image").length > 0 ? "image" : form.getAll("image[]").length > 0 ? "image[]" : "missing",
+        stream: form.get("stream")?.toString() ?? null,
+        partialImages: form.get("partial_images")?.toString() ?? null
+      });
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: image_edit.partial_image\ndata: ${JSON.stringify({ type: "image_edit.partial_image", partial_image_index: 0, b64_json: tinyPngBase64 })}\n\n`));
+          controller.enqueue(encoder.encode(`event: image_edit.completed\ndata: ${JSON.stringify({ type: "image_edit.completed", b64_json: tinyPngBase64, usage: { total_tokens: 17 } })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime, events } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ stream: true, partialImages: 1 })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests).toEqual([
+      { accept: "text/event-stream", imageFieldName: "image", stream: "true", partialImages: "1" }
+    ]);
+    expect(result.status).toBe("succeeded");
+    expect(result.outputs.map((asset) => asset.sourceType)).toEqual(["partial", "result"]);
+    expect(result.usage?.total_tokens).toBe(17);
+    expect(events.some((event) => event.type === "partial")).toBe(true);
+  });
+
+  it("falls back to non-streaming image edits when streaming edits terminate", async () => {
+    const source = await sourceAsset();
+    const requests: Array<{ accept: string; imageFieldName: string; stream: string | null }> = [];
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData;
+      requests.push({
+        accept: new Headers(init?.headers).get("Accept") ?? "",
+        imageFieldName: form.getAll("image").length > 0 ? "image" : form.getAll("image[]").length > 0 ? "image[]" : "missing",
+        stream: form.get("stream")?.toString() ?? null
+      });
+      if (requests.length === 1) {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.error(new Error("terminated"));
+          }
+        });
+        return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+      }
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }], usage: { total_tokens: 19 } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ stream: true, partialImages: 1 })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests).toEqual([
+      { accept: "text/event-stream", imageFieldName: "image", stream: "true" },
+      { accept: "application/json", imageFieldName: "image", stream: null }
+    ]);
+    expect(result.status).toBe("succeeded");
+    expect(result.params).toMatchObject({ stream: false, partialImages: 0 });
+    expect(result.usage?.total_tokens).toBe(19);
   });
 
   it("passes advanced gpt-image-2 parameters through multipart edit requests", async () => {

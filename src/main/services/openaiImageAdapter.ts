@@ -254,11 +254,7 @@ export async function runOpenAIImageJob(
 }
 
 export function normalizeOpenAIJobParams(job: OpenAIImageJob, options: OpenAIStreamOptions = {}): OpenAIImageJob {
-  let params = normalizeOpenAIRequestParams(job.params);
-  const canStream = job.mode === "generate";
-  if (params.stream && !canStream) {
-    params = { ...params, stream: false, partialImages: 0 };
-  }
+  const params = normalizeOpenAIRequestParams(job.params);
   return params === job.params ? job : { ...job, params };
 }
 
@@ -336,15 +332,35 @@ async function runEdit(
   validateEditJob(job);
 
   const initialImageFieldName = defaultEditImageFieldName(job);
-  const response = await fetchEditResponse(job, apiKey, baseURL, runtime, initialImageFieldName);
 
-  if (!job.params.stream) {
-    return handleJsonEditImagesWithFallback(response, job, runtime, initialImageFieldName, (nextJob, imageFieldName) => {
-      return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName);
-    }, (streamJob, imageFieldName) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, imageFieldName));
+  if (job.params.stream) {
+    try {
+      const response = await fetchEditResponse(job, apiKey, baseURL, runtime, initialImageFieldName);
+      return await handleImagesResponse(response, job, "image_edit", runtime);
+    } catch (error) {
+      const fallbackJob: OpenAIImageJob = {
+        ...job,
+        params: {
+          ...job.params,
+          stream: false,
+          partialImages: 0
+        }
+      };
+      try {
+        const fallbackResponse = await fetchEditResponse(fallbackJob, apiKey, baseURL, runtime, initialImageFieldName);
+        return await handleJsonEditImagesWithFallback(fallbackResponse, fallbackJob, runtime, initialImageFieldName, (nextJob, imageFieldName) => {
+          return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName);
+        }, (streamJob, imageFieldName) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, imageFieldName));
+      } catch (fallbackError) {
+        throw new Error(`${normalizeAdapterError(error)}；已尝试降级为非流式图生图请求但仍失败：${normalizeAdapterError(fallbackError)}`);
+      }
+    }
   }
 
-  return handleImagesResponse(response, job, "image_edit", runtime);
+  const response = await fetchEditResponse(job, apiKey, baseURL, runtime, initialImageFieldName);
+  return handleJsonEditImagesWithFallback(response, job, runtime, initialImageFieldName, (nextJob, imageFieldName) => {
+    return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName);
+  }, (streamJob, imageFieldName) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, imageFieldName));
 }
 
 function defaultEditImageFieldName(job: OpenAIImageJob): EditImageFieldName {

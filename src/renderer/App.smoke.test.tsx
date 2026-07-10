@@ -179,6 +179,37 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("lets users enable stream partial previews for GPT Image 2 image editing", async () => {
+    const asset = galleryAsset("stream-edit-ref.png");
+    const bridge = await renderApp(snapshot({ galleryAssets: [asset] }));
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    await openGalleryRail();
+    await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
+    await click(elementByText("Choose from Gallery", ".context-menu-item"));
+    await click(buttonByText("Parameters", ".section-toggle"));
+    const streamPreview = inputByLabel("Stream partial preview");
+    expect(streamPreview.disabled).toBe(false);
+
+    await changeCheckbox(streamPreview, true);
+    expect(streamPreview.checked).toBe(true);
+
+    await click(buttonByText("Edit", ".primary-run"));
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "edit",
+        inputPaths: [`/tmp/gallery/${asset.fileName}`],
+        params: expect.objectContaining({
+          providerKind: "openai",
+          launchId: GPT_IMAGE_2_LAUNCH_ID,
+          stream: true,
+          partialImages: 1
+        })
+      })
+    );
+  });
+
   it("keeps the PNG compression note in a tooltip instead of inline text", async () => {
     await renderApp(snapshot());
 

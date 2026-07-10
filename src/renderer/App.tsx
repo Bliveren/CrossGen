@@ -545,12 +545,11 @@ function normalizeOpenAIParamsForOutputCount(params: OpenAIImageParams): OpenAII
 }
 
 function canUseStreamPartialPreview(config: ProviderConfig, mode: WorkMode): boolean {
-  return config.kind === "openai" && config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID && mode === "generate";
+  return config.kind === "openai" && config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID && (mode === "generate" || mode === "edit" || mode === "inpaint");
 }
 
 function streamPartialPreviewDisabledReason(params: OpenAIImageParams, config: ProviderConfig, mode: WorkMode, copy: UiCopy): string | undefined {
   if (params.n > 1) return copy.streamSingleOutputOnly;
-  if (mode !== "generate") return copy.streamPartialPreviewGenerateOnly;
   if (!canUseStreamPartialPreview(config, mode)) return copy.streamPartialPreviewUnavailable;
   return undefined;
 }
