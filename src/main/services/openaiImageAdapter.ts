@@ -1697,6 +1697,8 @@ async function handleStreamResponse(
   let partialIndex = firstIndex;
   let resultIndex = firstIndex;
   const expectedFinalResults = Math.max(1, job.params.n);
+  let streamedTextBuffer = "";
+  const seenTextImageSources = new Set<string>();
 
   try {
     await parseSSE(response.body, async (event) => {
@@ -1707,11 +1709,29 @@ async function handleStreamResponse(
       const type = event.type ?? "";
       const isPartial = type === `${eventPrefix}.partial_image` || type.endsWith(".partial_image");
       const sourceType = isPartial ? "partial" : "result";
-      const index = isPartial ? event.partial_image_index ?? partialIndex++ : resultIndex++;
-      const items = imageItemsFromStreamEvent(event);
+      const index = isPartial ? event.partial_image_index ?? partialIndex : resultIndex;
+      const items = resolveImageItemUrls(imageItemsFromStreamEvent(event), response.url);
+      const textFragments = textFragmentsFromStreamEvent(event);
+      if (textFragments.length > 0) {
+        streamedTextBuffer = trimStreamedTextBuffer(`${streamedTextBuffer}${textFragments.join("")}`);
+        const textItems = imageItemsFromText(streamedTextBuffer)
+          .filter((item) => {
+            const key = item.url ?? item.b64_json;
+            if (!key || seenTextImageSources.has(key)) return false;
+            seenTextImageSources.add(key);
+            return true;
+          });
+        items.push(...resolveImageItemUrls(textItems, response.url));
+      }
       const images = await saveImageItems(job, items, sourceType, runtime, index);
       if (images.length === 0) return;
       outputs.push(...images);
+      if (isPartial && event.partial_image_index === undefined) {
+        partialIndex += images.length;
+      }
+      if (!isPartial) {
+        resultIndex += images.length;
+      }
 
       if (event.usage) {
         usage = event.usage;
@@ -1777,6 +1797,92 @@ function imageItemsFromStreamEvent(event: ImageStreamEvent): OpenAIImageItem[] {
   }
 
   return items;
+}
+
+function resolveImageItemUrls(items: OpenAIImageItem[], baseUrl: string): OpenAIImageItem[] {
+  return items.map((item) => {
+    if (!item.url || item.url.startsWith("data:image/") || isLikelyHttpUrl(item.url)) return item;
+    try {
+      return { ...item, url: new URL(item.url, baseUrl).toString() };
+    } catch {
+      return item;
+    }
+  });
+}
+
+const STREAM_TEXT_KEYS = new Set([
+  "content",
+  "delta",
+  "message",
+  "output_text",
+  "text"
+]);
+
+function textFragmentsFromStreamEvent(event: ImageStreamEvent): string[] {
+  const fragments: string[] = [];
+
+  const visit = (value: unknown, key = "", depth = 0) => {
+    if (depth > 8 || value == null) return;
+    if (typeof value === "string") {
+      if (STREAM_TEXT_KEYS.has(key)) fragments.push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, key, depth + 1);
+      return;
+    }
+    if (!isRecord(value)) return;
+    for (const [childKey, childValue] of Object.entries(value)) {
+      if (IMAGE_STRING_KEYS.has(childKey) || IMAGE_URL_KEYS.has(childKey)) continue;
+      visit(childValue, childKey, depth + 1);
+    }
+  };
+
+  visit(event);
+  return fragments;
+}
+
+function trimStreamedTextBuffer(value: string): string {
+  const maxLength = 64_000_000;
+  return value.length <= maxLength ? value : value.slice(value.length - maxLength);
+}
+
+function imageItemsFromText(text: string): OpenAIImageItem[] {
+  const items: OpenAIImageItem[] = [];
+  const pushUrl = (url: string) => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    items.push({ url: trimmed });
+  };
+
+  for (const match of text.matchAll(/!\[[^\]]*]\((<[^>]+>|[^)\s]+)(?:\s+["'][^"']*["'])?\)/gi)) {
+    pushUrl(stripUrlDelimiters(match[1] ?? ""));
+  }
+
+  for (const match of text.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)) {
+    pushUrl(match[1] ?? "");
+  }
+
+  for (const match of text.matchAll(/\bhttps?:\/\/[^\s"'<>)]*\.(?:png|jpe?g|webp|gif)(?:\?[^\s"'<>)]*)?/gi)) {
+    pushUrl(match[0] ?? "");
+  }
+
+  return dedupeImageItems(items);
+}
+
+function stripUrlDelimiters(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.startsWith("<") && trimmed.endsWith(">") ? trimmed.slice(1, -1).trim() : trimmed;
+}
+
+function dedupeImageItems(items: OpenAIImageItem[]): OpenAIImageItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.url ?? item.b64_json;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function isIgnorableStreamTerminationError(error: unknown): boolean {

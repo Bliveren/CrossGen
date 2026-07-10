@@ -1093,6 +1093,57 @@ describe("OpenAI image service", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("extracts chunked markdown images from chat-routed image edit streams", async () => {
+    const source = await sourceAsset();
+    let streamCanceled = false;
+    const fetchImpl = (async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            choices: [{ delta: { content: "生成结果：![image](data:image/png;base64," } }]
+          })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            choices: [{ delta: { content: `${tinyPngBase64})` } }]
+          })}\n\n`));
+        },
+        cancel() {
+          streamCanceled = true;
+        }
+      });
+      return new Response(stream, {
+        headers: { "content-type": "text/event-stream" },
+        status: 200
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const resultPromise = runOpenAIImageJob(
+      job({
+        mode: "edit",
+        inputAssets: [source],
+        params: params({ imageRoute: "auto", stream: false, timeoutMs: 5000 })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(() => reject(new Error("chunked markdown image stream did not finish")), 500);
+    });
+    let result: GenerationJob;
+    try {
+      result = await Promise.race([resultPromise, timeoutPromise]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+
+    expect(result.status).toBe("succeeded");
+    expect(streamCanceled).toBe(true);
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
   it("honors manual image API routing over probed chat completions", async () => {
     const source = await sourceAsset();
     const requests: Array<{ url: string; isForm: boolean }> = [];

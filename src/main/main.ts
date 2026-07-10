@@ -2079,7 +2079,7 @@ async function probeOpenAIImageRoute(
 }
 
 function isRouteProbeReachableStatus(status: number): boolean {
-  return (status >= 200 && status < 300) || status === 400 || status === 406 || status === 415 || status === 422;
+  return status >= 200 && status < 300;
 }
 
 function preferredOpenAIImageRoute(probes: OpenAIImageRouteProbe[], mode: "generate" | "edit"): OpenAIImageRoute | undefined {
