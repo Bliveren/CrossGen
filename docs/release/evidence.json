@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.0",
-  "lastUpdated": "2026-07-12T15:41:25.000Z",
+  "lastUpdated": "2026-07-12T15:56:23.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -112,7 +112,7 @@
       "id": "macos-signed",
       "title": "Developer ID signed macOS release package",
       "required": false,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Developer ID signing is performed without exposing secret values.",
         "macOS artifacts are built from the v0.3.0 release commit.",
@@ -121,18 +121,44 @@
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-12T15:56:23.000Z",
+        "commit": "b0a6d02604364b992edb29cc6aeb73f9ecce8ca2",
+        "environment": "macOS 26.0 local release signing shell; package version 0.3.0; Developer ID Application identity Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7) available in the local keychain; Apple notarization credentials were not configured.",
+        "commands": [
+          "pnpm build",
+          "pnpm exec node scripts/electron-builder-pnpm.mjs --mac -c.mac.identity=\"Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)\" -c.mac.notarize=false",
+          "codesign --verify --deep --strict --verbose=4 release/mac-arm64/CrossGen.app",
+          "codesign -dv --verbose=4 release/mac-arm64/CrossGen.app",
+          "spctl --assess --type execute --verbose=4 release/mac-arm64/CrossGen.app",
+          "pnpm verify:release:mac",
+          "shasum -a 256 release/CrossGen-0.3.0-mac-arm64.dmg release/CrossGen-0.3.0-mac-arm64.zip",
+          "wc -c release/CrossGen-0.3.0-mac-arm64.dmg release/CrossGen-0.3.0-mac-arm64.zip"
+        ],
         "references": [
           {
             "label": "Developer ID signed macOS distribution tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/3"
+          },
+          {
+            "label": "v0.3.0 GitHub Release",
+            "url": "https://github.com/Bliveren/image2tools/releases/tag/v0.3.0"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.0 Developer ID signed macOS artifacts. Local signing readiness found a valid code signing identity, but CSC_NAME and Apple notarization environment variables were not configured in the release shell, so no Developer ID signing has been attempted for v0.3.0 yet."
+        "artifacts": [
+          {
+            "kind": "macos-dmg",
+            "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
+            "public": true,
+            "description": "Developer ID signed CrossGen-0.3.0-mac-arm64.dmg; SHA256 3e379ea62c849c949b2d756c4dc60c0c1ef1b4f78b82506a9b47213fb31c3d30; 103573862 bytes."
+          },
+          {
+            "kind": "macos-zip",
+            "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.zip",
+            "public": true,
+            "description": "Developer ID signed CrossGen-0.3.0-mac-arm64.zip; SHA256 db3a152802903d72ab664aff379e07f026a7a72b0baecdc418d807162e5341d7; 99277843 bytes."
+          }
+        ],
+        "summary": "v0.3.0 macOS arm64 artifacts were rebuilt from the v0.3.0 source commit and signed with Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7). codesign --verify --deep --strict passed, the app signature authority chain shows Developer ID Application, Developer ID Certification Authority, and Apple Root CA, hardened runtime is present, and pnpm verify:release:mac passed two DMG install/launch cycles. spctl assessment reports Unnotarized Developer ID, so notarization remains tracked separately in the macos-notarized gate."
       }
     },
     {
@@ -158,7 +184,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "Blocked for v0.3.0 until APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID are configured in the release environment. No notarization attempt has been made for v0.3.0."
+        "summary": "Blocked for v0.3.0 until APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID are configured in the release environment. The v0.3.0 macOS app is Developer ID signed, but spctl assessment reports Unnotarized Developer ID because no Apple notarization credentials were available in the release shell."
       }
     },
     {
@@ -280,12 +306,12 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-12T15:41:25.000Z",
+        "verifiedAt": "2026-07-12T15:56:23.000Z",
         "commit": "5d3994c8a203cd3d25e1d3abcdc31ec96fd0402e",
         "environment": "macOS 26.0 local release finalization shell; package version 0.3.0; public release URLs prepared for GitHub release tag v0.3.0; generated assets under release/ with hashes and byte sizes computed before manifest update.",
         "commands": [
           "pnpm build",
-          "pnpm package:mac",
+          "pnpm exec node scripts/electron-builder-pnpm.mjs --mac -c.mac.identity=\"Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)\" -c.mac.notarize=false",
           "pnpm verify:release:mac",
           "pnpm package:win",
           "pnpm exec node scripts/electron-builder-pnpm.mjs --win --x64",
@@ -316,7 +342,7 @@
             "kind": "macos-dmg",
             "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
             "public": true,
-            "description": "CrossGen-0.3.0-mac-arm64.dmg; SHA256 cf436529f26acfed425ff17b7b59bfff500cc1a4c323ed1fa031d59f033ea56c; 103487206 bytes; local macOS release verifier passed."
+            "description": "Developer ID signed CrossGen-0.3.0-mac-arm64.dmg; SHA256 3e379ea62c849c949b2d756c4dc60c0c1ef1b4f78b82506a9b47213fb31c3d30; 103573862 bytes; local macOS release verifier passed."
           },
           {
             "kind": "windows-nsis-installer",
@@ -325,7 +351,7 @@
             "description": "CrossGen-Setup.exe Windows x64 NSIS installer; SHA256 17c5927ac2a8c4482e5626d5a016903bd10299fcbb5df795901102977fac9e15; 98828812 bytes; Windows native full-install release gate is recorded separately in windows-native-release."
           }
         ],
-        "summary": "v0.3.0 update manifest assets are prepared with exact public GitHub Release download URLs, SHA256 hashes, and byte sizes for macOS arm64 and Windows x64. The macOS DMG was rebuilt from the final release line and passed pnpm verify:release:mac. The Windows manifest entry points to a CrossGen x64 NSIS installer generated for the final release line; native Windows full-install validation for v0.3.0 is recorded in the windows-native-release gate. The app update downloader verifies both sizeBytes and sha256 before opening an installer."
+        "summary": "v0.3.0 update manifest assets are prepared with exact public GitHub Release download URLs, SHA256 hashes, and byte sizes for macOS arm64 and Windows x64. The macOS DMG is Developer ID signed and passed pnpm verify:release:mac. The Windows manifest entry points to a CrossGen x64 NSIS installer generated for the final release line; native Windows full-install validation for v0.3.0 is recorded in the windows-native-release gate. The app update downloader verifies both sizeBytes and sha256 before opening an installer."
       }
     }
   ]
