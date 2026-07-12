@@ -29,7 +29,7 @@ External gate trackers:
 | Developer ID signed macOS release package | https://github.com/Bliveren/image2tools/issues/3 |
 | Apple notarized macOS release package | https://github.com/Bliveren/image2tools/issues/3 |
 | Native Windows release package validation | https://github.com/Bliveren/image2tools/issues/4 |
-| Native Linux desktop AppImage validation | https://github.com/Bliveren/image2tools/issues/4 |
+| CI Linux package and AppImage validation | https://github.com/Bliveren/image2tools/issues/4 |
 | Formal update manifest distribution assets | https://github.com/Bliveren/image2tools/issues/103 |
 
 Release-specific preparation:
