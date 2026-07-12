@@ -26,6 +26,7 @@
   <a href="#visual-tour">Visual Tour</a> ·
   <a href="#core-workflows">Core Workflows</a> ·
   <a href="#download-and-use">Download</a> ·
+  <a href="https://discord.gg/XphwmYtY">Discord</a> ·
   <a href="#technical-notes">Technical Notes</a>
 </p>
 
@@ -80,7 +81,7 @@ CrossGen keeps that whole loop inside one app. No repeated file hunting, no scat
 CrossGen keeps API access simple:
 
 - save multiple API keys and Base URLs,
-- switch between OpenAI, Gemini, AIHub or other OpenAI-compatible providers,
+- switch between OpenAI, Gemini, and OpenAI-compatible providers,
 - run model discovery from the app,
 - detect available image models,
 - automatically probe compatible generation routes,
@@ -118,7 +119,7 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 ## Other Highlights
 
 - **GPT Image 2 and Gemini image workflows**: focused launch entries for GPT Image 2 and Nano Banana/Gemini image models.
-- **AIHub real-provider acceptance**: v0.3.0 release gates include AIHub aggregation API validation for GPT Image 2 and Gemini-compatible image models.
+- **Aggregation-provider compatibility**: v0.3.0 release gates include real-provider validation through an OpenAI-compatible aggregation endpoint for GPT Image 2 and Gemini-compatible image models.
 - **Prompt templates**: save reusable prompt structures and apply them quickly.
 - **Prompt chips**: insert Gallery assets, color values, and templates into prompts.
 - **Image-to-image reference handling**: drag local files, Gallery assets, or History outputs into reference slots.
@@ -162,6 +163,8 @@ The product promise is deliberately practical:
 
 CrossGen is maintained by [Nowo](https://www.nowo.com/) and [Corgnitor](https://www.corgnitor.com/). Nowo focuses on AI-native product design and applied workflows. Corgnitor focuses on AI engineering and productization.
 
+Join the CrossGen community on [Discord](https://discord.gg/XphwmYtY) for feedback, release discussion, and workflow ideas.
+
 ## Technical Notes
 
 CrossGen is an Electron + React + Tailwind desktop app. The app focuses on local-first workflows and supports OpenAI, Gemini, and compatible image providers.
@@ -180,7 +183,6 @@ Validation:
 pnpm verify:mock-api
 pnpm verify:mock-gemini-api
 pnpm verify:mock-model-discovery
-pnpm verify:real-aihub-api
 pnpm verify:release-evidence
 ```
 

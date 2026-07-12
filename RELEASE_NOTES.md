@@ -8,12 +8,13 @@ CrossGen 0.3.0 is the release where Image2Tools becomes a one-stop AI image gene
 
 - **CrossGen brand and positioning**: README, release messaging, and package metadata now describe CrossGen as a one-stop AI image generation manager rather than a low-level image API utility.
 - **One API access hub**: save multiple API keys and Base URLs, switch access profiles, run model discovery, and let CrossGen use the route that works for the configured provider.
-- **AIHub-compatible real gate**: v0.3.0 real-provider acceptance now validates GPT Image 2 and Gemini image models through the AIHub aggregation API and the product-supported `/chat/completions` streaming path.
+- **OpenAI-compatible aggregation gate**: v0.3.0 real-provider acceptance validates GPT Image 2 and Gemini image models through a compatible aggregation endpoint and the product-supported `/chat/completions` image path.
 - **Better Gallery and History reuse**: generated outputs and saved Gallery assets can be searched, tagged, organized into folders, previewed, edited, and dragged directly into image-to-image reference slots.
 - **Local folder-friendly Gallery**: Gallery assets remain local files, so users can manage reusable images both inside CrossGen and through their normal local file workflow.
 - **Simple image editing loop**: preview, crop, draw, add text, pick colors, save edited results to Gallery, then reuse them immediately for another generation.
 - **Prompt templates and chips**: prompt templates, Gallery references, and color values can be inserted into the prompt workflow without leaving the main workspace.
 - **Dark mode**: the UI now has a calmer dark theme for longer image review and editing sessions.
+- **Community**: feedback and workflow discussion are available through the CrossGen Discord community at https://discord.gg/XphwmYtY.
 
 ### Validation
 
@@ -21,7 +22,7 @@ CrossGen 0.3.0 is the release where Image2Tools becomes a one-stop AI image gene
 - `pnpm verify:mock-api`
 - `pnpm verify:mock-gemini-api`
 - `pnpm verify:mock-model-discovery`
-- `pnpm verify:real-aihub-api`
+- Real-provider acceptance through an OpenAI-compatible aggregation endpoint is recorded in `docs/release/evidence.json`.
 - `pnpm verify:release-evidence`
 - `pnpm verify:release-evidence -- --require-complete`
 - `pnpm package:mac` and `pnpm verify:release:mac` for the macOS arm64 package
