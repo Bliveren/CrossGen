@@ -1,11 +1,12 @@
-<h1 align="center">CrossGen</h1>
+<h1 align="center">CrossGen 0.3.0</h1>
 
 <p align="center">
   <img src="./build/icon.png" width="132" height="132" alt="CrossGen app icon" />
 </p>
 
 <p align="center">
-  A local-first desktop workspace for AI image generation, editing, API configuration management, prompt reuse, reference images, and generation history.
+  <b>One-stop AI image generation manager.</b><br />
+  Configure APIs, generate images, edit results, organize assets, and reuse references in one desktop app.
 </p>
 
 <p align="center">
@@ -21,105 +22,127 @@
 </p>
 
 <p align="center">
-  <a href="#what-is-crossgen">Overview</a> ·
-  <a href="#product-tour">Product Tour</a> ·
-  <a href="#features">Features</a> ·
-  <a href="#download-and-install">Download</a> ·
-  <a href="#development">Development</a> ·
-  <a href="#about-nowo-and-corgnitor">Nowo & Corgnitor</a>
+  <a href="#why-crossgen-030">Why 0.3.0</a> ·
+  <a href="#visual-tour">Visual Tour</a> ·
+  <a href="#core-workflows">Core Workflows</a> ·
+  <a href="#download-and-use">Download</a> ·
+  <a href="#technical-notes">Technical Notes</a>
 </p>
 
-## What Is CrossGen
+## Why CrossGen 0.3.0
 
-CrossGen is an easy-to-use desktop tool for managing AI image generation and editing workflows. It currently focuses on GPT Image 2, Gemini-backed image models such as Nano Banana 3, and OpenAI-compatible custom image providers.
-<img width="1721" height="1154" alt="image" src="https://github.com/user-attachments/assets/e3810a38-4604-47b8-8cb8-46d073bdb252" />
+CrossGen 0.3.0 is the release where Image2Tools becomes CrossGen: a practical desktop workspace for people who generate, edit, compare, and reuse AI images every day.
 
-The current mainline is preparing the `v0.3.0` workspace release. It keeps the local-first generation surface from `v0.2.x` and adds a stronger prompt and asset workflow:
+It is built for real image-generation work, not just one-off prompting. Designers, comic and storyboarding teams, UI makers, operators, product teams, and AI image hobbyists often need the same loop:
 
-- Multiple API configurations are managed in the left rail with consistent API configuration wording.
-- The active API configuration is shown as one compact card with API type, Base URL, saved-key status, and discovered-model count.
-- Saved but inactive API configurations can be reviewed, switched, edited, or removed from the API configuration dialog.
-- Prompt templates live in a focused manager for create, edit, search, tag, import, export, and apply flows.
-- The reference Gallery lives in the right rail next to Recent jobs, so history results and saved references can both be dragged into the reference area.
-- Gallery folders let users organize reusable images into logical collections without exposing arbitrary local paths.
-- Prompt chips support `@` Gallery assets, `#` hex colors, and `~` templates, then serialize into model-ready prompt text and reference inputs.
-- Image-to-image mode has clearer reference and mask drop zones, including tooltips for ambiguous controls.
-- The interface uses a unified visual system with the `#F37021` accent reserved for important actions and active states.
+1. connect an image model with an API key,
+2. generate a batch of ideas,
+3. keep useful outputs,
+4. crop, annotate, pick colors, or make quick edits,
+5. reuse the result as a reference image,
+6. generate again.
 
-CrossGen is for creators, operators, product teams, and internal AI workflow builders who want a local desktop app instead of a hosted image workspace or account-based cloud product.
+CrossGen keeps that whole loop inside one app. No repeated file hunting, no scattered browser downloads, no separate folder cleanup before the next image-to-image attempt.
 
-## Product Tour
-
-The screenshots below show the published `0.2.x` workspace. Updated `v0.3.0` screenshots will be captured during release preparation.
+## Visual Tour
 
 <table>
 <tr>
 <td width="50%" valign="top">
-<img src="./docs/assets/v023-workspace-text-to-image.png" alt="CrossGen text-to-image workspace" />
+<img src="./docs/assets/v030/api-model-switching.gif" alt="CrossGen API and model switching" />
 <br />
-<sub><b>Text to image workspace.</b> Configure the active API, launch a model, write a prompt, and generate from a compact central workspace.</sub>
+<sub><b>API access and model switching.</b> Save API keys, switch access profiles, discover models, and let CrossGen pick the most compatible image route.</sub>
 </td>
 <td width="50%" valign="top">
-<img src="./docs/assets/v023-image-to-image-reference.png" alt="CrossGen image-to-image reference and mask workspace" />
+<img src="./docs/assets/v030/gallery-history-to-reference.gif" alt="CrossGen Gallery and History drag to reference image area" />
 <br />
-<sub><b>Image to image.</b> Add reference images, drag saved Gallery items or history outputs, and use mask controls for local edits where the selected model supports them.</sub>
+<sub><b>History and Gallery become reusable references.</b> Drag results or saved assets directly into image-to-image reference slots.</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<img src="./docs/assets/v023-prompt-template-dialog.png" alt="CrossGen prompt template dialog" />
+<img src="./docs/assets/v030/image-editing-loop.gif" alt="CrossGen image editing workflow" />
 <br />
-<sub><b>Prompt templates.</b> Save reusable prompt templates in a dedicated modal instead of occupying the main generation surface.</sub>
+<sub><b>Edit without leaving the workflow.</b> Preview, crop, draw, add text, pick colors, save to Gallery, then use the edited image for the next generation.</sub>
 </td>
 <td width="50%" valign="top">
-<img src="./docs/assets/v023-gallery-history-rail.png" alt="CrossGen recent jobs and Gallery right rail" />
+<img src="./docs/assets/v030/dark-mode.gif" alt="CrossGen dark mode" />
 <br />
-<sub><b>Recent jobs and Gallery.</b> Keep generated results and reusable references together in the right rail for fast reuse.</sub>
+<sub><b>Dark mode.</b> A calmer workspace for long image-selection and editing sessions.</sub>
 </td>
 </tr>
 </table>
 
-## Features
+## Core Workflows
 
-| Area | Capability |
+### 1. One API Key Hub
+
+CrossGen keeps API access simple:
+
+- save multiple API keys and Base URLs,
+- switch between OpenAI, Gemini, AIHub or other OpenAI-compatible providers,
+- run model discovery from the app,
+- detect available image models,
+- automatically probe compatible generation routes,
+- keep the active API profile visible without crowding the workspace.
+
+For aggregation platforms, route compatibility matters. CrossGen 0.3.0 can prefer the route that actually works for the configured provider, including chat-style image generation paths used by compatible gateways.
+
+### 2. Gallery And History That Actually Help
+
+Generated images are not throwaway files. CrossGen treats them as reusable working material:
+
+- History records every generation result with prompt, model, duration, and output actions.
+- Gallery stores selected images as reusable assets.
+- Gallery folders map to local files so assets remain manageable outside the app.
+- Tags, folders, search, sorting, and compact/collapsed views keep large libraries usable.
+- History and Gallery images can be clicked for preview/editing or dragged into image-to-image references.
+- Right-click actions include local path copy for workflows that still need direct file access.
+
+The goal is simple: the image you generated ten minutes ago should be easy to find, edit, and reuse.
+
+### 3. Generate, Edit, Reuse, Generate Again
+
+CrossGen 0.3.0 adds a much stronger image preview and editing area:
+
+- crop results and save the selected region as a new image,
+- draw quick annotations,
+- add text boxes,
+- pick colors from the image,
+- save edited results into Gallery,
+- use Gallery/history items as reference images,
+- continue the next image-to-image round without leaving the app.
+
+This makes CrossGen useful for iterative visual work: generate a base image, crop a detail, annotate or adjust it, save it, then feed it back into the next prompt.
+
+## Other Highlights
+
+- **GPT Image 2 and Gemini image workflows**: focused launch entries for GPT Image 2 and Nano Banana/Gemini image models.
+- **AIHub real-provider acceptance**: v0.3.0 release gates include AIHub aggregation API validation for GPT Image 2 and Gemini-compatible image models.
+- **Prompt templates**: save reusable prompt structures and apply them quickly.
+- **Prompt chips**: insert Gallery assets, color values, and templates into prompts.
+- **Image-to-image reference handling**: drag local files, Gallery assets, or History outputs into reference slots.
+- **Dark mode**: built for longer visual review sessions.
+- **Local-first storage**: history, outputs, templates, and Gallery assets are stored locally.
+- **Open source**: released under the MIT License.
+
+## Download And Use
+
+CrossGen is distributed as a desktop release package. Download the latest installer from the [GitHub Releases page](https://github.com/Bliveren/image2tools/releases/latest), install it, open the app, add your API key, and start generating.
+
+| Platform | Package |
 | --- | --- |
-| API configurations | Save and switch OpenAI, Gemini, and OpenAI-compatible custom API configurations. Each profile keeps its own name, Base URL, saved-key status, launch model, and model discovery result. |
-| API configuration management | The active API configuration is presented as a compact card. Open the dialog when you need to edit API Key, Base URL, API type, or discovery settings. |
-| Model discovery | Detects available models from the configured API and shows discovered-model counts and actionable failure messages. |
-| Launch models | GPT Image 2, Nano Banana 3, and General launch entries are enabled or disabled based on provider support, saved key status, and discovery results. |
-| GPT Image 2 | Text-to-image, reference editing, multi-image editing, exact-mask inpainting, validated OpenAI Image API parameters, and per-config streaming partial previews. Direct OpenAI enables generation streaming by default; compatible gateways keep it opt-in. |
-| Nano Banana 3 | Gemini `generateContent` image generation, reference-image editing, guided-region editing, aspect ratio, resolution, Thinking, and Search grounding controls. |
-| General mode | A minimal fallback for discovered image-capable models. Gemini supports prompt and reference-image flows; OpenAI and Custom use a prompt-only OpenAI-compatible generation contract. |
-| Prompt templates | A focused manager supports saving, searching, tagging, importing, exporting, and applying reusable prompts. |
-| Prompt chips | `@` Gallery assets, `#` hex colors, and `~` templates can be inserted into the prompt flow, then serialized into model-ready prompt and reference inputs. |
-| Reference Gallery | A right-rail Gallery stores reusable reference images with folders, tags, and search. Items can be clicked or dragged into the reference area. |
-| Recent jobs | History cards show provider/model context, prompt summaries, reusable outputs, download actions, and Gallery import actions. |
-| Mask workflow | Image-to-image mode provides a clearer mask area, brush-size control, upload-mask action, and hover tooltips for ambiguous controls. |
-| Local storage | Outputs, history, templates, and Gallery assets are stored locally under Electron user data. |
-| Bilingual app UI | English and Simplified Chinese are available in the app and persisted locally. |
-| Update checks | The app checks platform-specific update metadata and verifies downloaded asset size and SHA-256 before opening installers. |
+| macOS Apple Silicon | `.dmg` |
+| Windows x64 | `.exe` installer |
+| Linux x64 | AppImage when published |
 
-## Download and Install
+Basic setup:
 
-Download the latest published installer from the [GitHub Releases page](https://github.com/Bliveren/image2tools/releases/latest). The `v0.3.0` release candidate is being prepared from `main`; public installers remain on the latest published release until the v0.3.0 assets are built, validated, uploaded, and written into the update manifest.
-
-| Platform | Artifact | Status |
-| --- | --- | --- |
-| macOS Apple Silicon | `CrossGen-0.2.4-mac-arm64.dmg` | Current published asset. The v0.3.0 macOS package is pending fresh signing or local package validation. |
-| Windows x64 | `CrossGen-Setup.exe` | Current published asset. The v0.3.0 Windows installer still requires native Windows validation before manifest publication. |
-| Linux x64 | AppImage | Packaging support exists; not published in the current `0.2.4` update manifest. |
-
-The update manifest should be regenerated from the exact CrossGen-branded artifacts when they are uploaded for release. Existing manifest entries are kept until those files exist.
-
-Verify downloads against [`docs/updates/latest.json`](./docs/updates/latest.json):
-
-```bash
-# macOS
-shasum -a 256 ~/Downloads/CrossGen-0.2.4-mac-arm64.dmg
-
-# Windows PowerShell
-Get-FileHash .\CrossGen-Setup.exe -Algorithm SHA256
-```
+1. Open **API access**.
+2. Add an API key and Base URL.
+3. Run model discovery.
+4. Launch GPT Image 2, Nano Banana/Gemini, or a compatible model.
+5. Generate, edit, save useful images to Gallery, and reuse them as references.
 
 If macOS Gatekeeper blocks an unnotarized local build, right-click the app and choose **Open**, or clear the quarantine attribute:
 
@@ -129,37 +152,36 @@ xattr -dr com.apple.quarantine /Applications/CrossGen.app
 
 If Windows SmartScreen appears, choose **More info** and then **Run anyway**.
 
-## Product Flow
+## Brand
 
-1. Add or open an API configuration profile.
-2. Save the API Key and Base URL, then run model discovery.
-3. Launch GPT Image 2, Nano Banana 3, or General based on discovered capability.
-4. Enter a prompt, optionally combine prompt templates, Gallery assets, and color chips, then generate.
-5. For image-to-image work, add references from disk, Gallery folders, or Recent jobs.
-6. When supported, upload or paint a mask for local edits.
-7. Reuse history, import useful outputs into Gallery folders, or download results.
+CrossGen means a cross-model, cross-step generation workspace: one place for API access, generation, editing, Gallery management, and repeated image-to-image iteration.
 
-## Development
+The product promise is deliberately practical:
 
-Requirements:
+> configure once, generate quickly, keep useful images organized, edit without friction, and reuse everything in the next round.
 
-- Node.js 20+
-- pnpm 10+
-- macOS, Windows, or Linux
-- OpenAI or Gemini API access for real image generation
+CrossGen is maintained by [Nowo](https://www.nowo.com/) and [Corgnitor](https://www.corgnitor.com/). Nowo focuses on AI-native product design and applied workflows. Corgnitor focuses on AI engineering and productization.
+
+## Technical Notes
+
+CrossGen is an Electron + React + Tailwind desktop app. The app focuses on local-first workflows and supports OpenAI, Gemini, and compatible image providers.
+
+Useful commands:
 
 ```bash
 pnpm install
 pnpm dev:electron
+pnpm build
 ```
 
-Build and test:
+Validation:
 
 ```bash
-pnpm build
 pnpm verify:mock-api
 pnpm verify:mock-gemini-api
 pnpm verify:mock-model-discovery
+pnpm verify:real-aihub-api
+pnpm verify:release-evidence
 ```
 
 Packaging:
@@ -171,73 +193,9 @@ pnpm package:win
 pnpm verify:release:mac
 pnpm verify:release:windows
 pnpm verify:release:linux
-pnpm verify:release-evidence
 ```
 
-`pnpm build` runs TypeScript checks, Vitest, the renderer build, and the Electron main build. Mock verifiers cover OpenAI image calls, Gemini `generateContent`, model discovery, and API-specific error handling without spending real API credits.
-
-For a Developer ID signed local macOS build without notarization, use the configured signing identity directly:
-
-```bash
-PATH="$PWD/node_modules/.bin:$PATH" node scripts/electron-builder-pnpm.mjs --mac \
-  -c.mac.notarize=false \
-  -c.mac.identity="Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)"
-```
-
-Use `pnpm package:mac:signed` only when the full Apple notarization environment is configured:
-
-- `CSC_NAME`
-- `APPLE_ID`
-- `APPLE_APP_SPECIFIC_PASSWORD`
-- `APPLE_TEAM_ID`
-
-## Mock API
-
-Use mock servers when you want to test the app without real API spending.
-
-```bash
-pnpm mock:openai
-```
-
-Configure CrossGen:
-
-```text
-API Key: sk-mock-crossgen
-Base URL: http://127.0.0.1:8787/v1
-```
-
-```bash
-pnpm mock:gemini
-```
-
-Configure CrossGen:
-
-```text
-API type: Gemini
-API Key: mock-gemini-key
-Base URL: http://127.0.0.1:8788/v1beta
-```
-
-## Release Evidence
-
-External gates are recorded in [`docs/release/evidence.json`](./docs/release/evidence.json). The ledger covers real provider API acceptance, signed macOS packaging, native Windows/Linux validation, and update-manifest assets.
-
-```bash
-pnpm verify:release-evidence
-pnpm verify:release-evidence -- --require-complete
-```
-
-Release artifacts and update metadata should be refreshed from the exact package being published.
-
-## About Nowo and Corgnitor
-
-CrossGen is provided by [Nowo](https://www.nowo.com/) and [Corgnitor](https://www.corgnitor.com/).
-
-[Nowo](https://www.nowo.com/), known in Chinese as 诺惟, focuses on AI-native product design, product strategy, and applied software workflows. Its work centers on turning AI capabilities into usable products, workflows, and user-facing experiences.
-
-[Corgnitor](https://www.corgnitor.com/), known in Chinese as 核炬科技, focuses on AI engineering implementation and productization. It helps turn model capabilities, automation systems, and internal tools into maintainable software products.
-
-Together, Nowo and Corgnitor maintain CrossGen as a practical open-source desktop utility for image-generation workflows.
+Release evidence is tracked in [`docs/release/evidence.json`](./docs/release/evidence.json). Mock verifiers do not spend real API credits. Real-provider gates require explicit cost approval and local environment variables.
 
 ## License
 

@@ -1,7 +1,7 @@
 {
   "name": "crossgen",
   "version": "0.3.0",
-  "description": "A multi-model desktop image workspace for GPT Image 2, Nano Banana 3, and compatible image providers.",
+  "description": "One-stop AI image generation manager for API access, model discovery, Gallery/history reuse, and lightweight image editing.",
   "author": "Nowo, Corgnitor, and CrossGen contributors",
   "license": "MIT",
   "crossgen": {

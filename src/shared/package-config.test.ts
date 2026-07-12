@@ -6,9 +6,9 @@ describe("package release configuration", () => {
   it("stages the v0.3.0 release metadata", () => {
     expect(packageJson.name).toBe("crossgen");
     expect(packageJson.version).toBe("0.3.0");
-    expect(packageJson.description).toContain("multi-model desktop image workspace");
-    expect(packageJson.description).toContain("GPT Image 2");
-    expect(packageJson.description).toContain("Nano Banana 3");
+    expect(packageJson.description).toContain("One-stop AI image generation manager");
+    expect(packageJson.description).toContain("API access");
+    expect(packageJson.description).toContain("Gallery/history reuse");
     expect(packageJson.build.appId).toBe("com.bliveren.crossgen");
     expect(packageJson.build.productName).toBe("CrossGen");
     expect(packageJson.build.copyright).toContain("Nowo");

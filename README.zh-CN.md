@@ -1,11 +1,12 @@
-<h1 align="center">CrossGen</h1>
+<h1 align="center">CrossGen 0.3.0</h1>
 
 <p align="center">
   <img src="./build/icon.png" width="132" height="132" alt="CrossGen 应用图标" />
 </p>
 
 <p align="center">
-  本地优先的 AI 生图桌面工作台，覆盖图片生成、编辑、API 配置管理、提示词复用、参考图库和历史任务。
+  <b>一站式 AI 生图管理工具。</b><br />
+  配 API、探测模型、快速生图、编辑图片、管理图库、复用参考图，都在一个桌面应用里完成。
 </p>
 
 <p align="center">
@@ -21,104 +22,129 @@
 </p>
 
 <p align="center">
-  <a href="#crossgen-是什么">项目定位</a> ·
-  <a href="#产品示意">产品示意</a> ·
-  <a href="#功能特点">功能特点</a> ·
-  <a href="#下载与安装">下载</a> ·
-  <a href="#开发运行">开发运行</a> ·
-  <a href="#关于诺惟与核炬">诺惟与核炬</a>
+  <a href="#为什么是-crossgen-030">0.3.0 介绍</a> ·
+  <a href="#功能演示">功能演示</a> ·
+  <a href="#核心工作流">核心工作流</a> ·
+  <a href="#下载安装">下载安装</a> ·
+  <a href="#技术说明">技术说明</a>
 </p>
 
-## CrossGen 是什么
+## 为什么是 CrossGen 0.3.0
 
-CrossGen 是一个方便易用的 AI 生图与图片编辑桌面工具。当前版本聚焦 GPT Image 2、Gemini 支撑的图片模型能力，例如 Nano Banana 3，以及 OpenAI 兼容的自定义图片服务。
-<img width="1721" height="1154" alt="image" src="https://github.com/user-attachments/assets/e3810a38-4604-47b8-8cb8-46d073bdb252" />
-当前 main 正在准备 `v0.3.0` 工作台版本，在 `v0.2.x` 本地生成主流程基础上，补齐提示词与素材复用工作流：
+从 0.3.0 开始，Image2Tools 正式升级为 CrossGen。它不再只是一个“调用模型出图”的小工具，而是面向日常生图人员的一站式 AI 生图管理工作台。
 
-- 多个 API 配置在左侧栏统一管理，界面文案统一为 API 配置。
-- 当前正在使用的 API 配置以紧凑信息卡展示，包含 API 类型、Base URL、Key 保存状态和探测模型数。
-- 已保存但未使用的 API 配置可在 API 配置弹窗中集中查看、切换、编辑或删除。
-- 提示词模板保留独立管理器，支持新建、编辑、搜索、标签筛选、导入、导出和应用。
-- 参考图库移动到右侧，与最近任务并列，图库图片和历史结果都可以拖入参考图区域。
-- 图库文件夹支持把可复用图片素材按逻辑文件夹收纳，不暴露任意本地路径。
-- 提示词 chip 支持 `@` 图库素材、`#` 十六进制颜色和 `~` 提示词模板，并在运行前序列化为模型可用的提示词和参考图输入。
-- 图生图区域强化参考图与蒙版边界，模糊按钮和拖拽条增加悬浮说明。
-- 界面统一使用更克制的视觉系统，`#F37021` 只用于关键按钮和激活状态。
+它解决的是很实际的工作问题：
 
-CrossGen 适合创作者、运营人员、产品团队和内部 AI 工具团队，在本地桌面完成 API 配置、模型探测、生成、编辑、复用和更新检查，而不是依赖账号型云端图片工作台。
+1. API Key 多、Base URL 多、模型多，切换和排错很麻烦；
+2. 生出来的图散落在下载目录、本地文件夹和聊天记录里，很难复用；
+3. 好不容易有一张可用图，还要到别的软件里裁剪、批注、取色，再重新上传做参考；
+4. 历史图、素材图、参考图之间不连通，图生图迭代效率很低。
 
-## 产品示意
+CrossGen 把这些环节放在一个桌面应用里：配置 API、自动探测模型与路径、生成图片、编辑图片、保存到图库、从图库或历史拖回参考图区域，再进入下一轮图生图。
 
-以下截图展示已发布的 `0.2.x` 工作台。`v0.3.0` 的最新截图会在发布准备阶段补充。
+适合平面设计、漫剧制作、UI 制作、运营配图、产品原型、内部 AI 工具团队，以及只是想更方便地使用生图模型的用户。
+
+## 功能演示
 
 <table>
 <tr>
 <td width="50%" valign="top">
-<img src="./docs/assets/v023-workspace-text-to-image.png" alt="CrossGen 文生图工作区" />
+<img src="./docs/assets/v030/api-model-switching.gif" alt="CrossGen API 配置和模型切换" />
 <br />
-<sub><b>文生图工作区。</b>在左侧配置当前 API 并启动模型，中间输入提示词，右侧查看最近任务和图库。</sub>
+<sub><b>一站式 API 配置与模型切换。</b>保存多个 API Key 和 Base URL，自动探测模型与可用路径，快速切换不同模型。</sub>
 </td>
 <td width="50%" valign="top">
-<img src="./docs/assets/v023-image-to-image-reference.png" alt="CrossGen 图生图参考图与蒙版工作区" />
+<img src="./docs/assets/v030/gallery-history-to-reference.gif" alt="CrossGen 从图库和历史拖入参考图" />
 <br />
-<sub><b>图生图。</b>可以添加参考图、拖入图库图片或历史结果，并在模型支持时使用蒙版做局部编辑。</sub>
+<sub><b>图库与历史直接变成参考图。</b>历史结果和图库素材可以直接拖到图生图参考区，不用反复找文件、上传文件。</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<img src="./docs/assets/v023-prompt-template-dialog.png" alt="CrossGen 提示词模板弹窗" />
+<img src="./docs/assets/v030/image-editing-loop.gif" alt="CrossGen 图片编辑工作流" />
 <br />
-<sub><b>提示词模板。</b>提示词模板不再占据主工作台，而是在独立弹窗内保存、搜索、导入、导出和应用。</sub>
+<sub><b>简单易用的图片编辑。</b>预览、裁剪、涂鸦、加文本、取色、保存到图库，再继续用于下一轮生图。</sub>
 </td>
 <td width="50%" valign="top">
-<img src="./docs/assets/v023-gallery-history-rail.png" alt="CrossGen 最近任务与图库" />
+<img src="./docs/assets/v030/dark-mode.gif" alt="CrossGen 暗色模式" />
 <br />
-<sub><b>最近任务与图库。</b>右侧栏同时管理生成历史和可复用参考图，让结果复用和参考图调用更顺手。</sub>
+<sub><b>暗色模式。</b>长时间选图、修图、对比结果时更舒服。</sub>
 </td>
 </tr>
 </table>
 
-## 功能特点
+## 核心工作流
 
-| 模块 | 能力 |
+### 1. 一站式 API Key 配置与管理
+
+CrossGen 0.3.0 将 API 配置从“技术配置项”变成日常可用的工作入口：
+
+- 保存多个 API Key 和 Base URL；
+- 支持 OpenAI、Gemini、AIHub 及其他 OpenAI 兼容聚合平台；
+- 一键探测模型；
+- 自动识别可用生图模型；
+- 自动探测更适合当前服务商的生成路径；
+- 当前使用的 API 配置始终清楚可见，但不挤占主工作区。
+
+对于聚合平台来说，同一个模型可能不是每条接口路径都可用。CrossGen 会尽量使用当前平台真正能返回图片的路径，减少“接口明明通了但就是不出图”的情况。
+
+### 2. 高效易用的图库与历史管理
+
+生图用户真正需要的不是“生成完就结束”，而是把有价值的图沉淀下来、快速复用：
+
+- 历史记录保存每一次生图结果、提示词、模型和耗时；
+- 图库用于集中管理值得保存的图片素材；
+- 图库打通本地文件夹，用户既可以在 CrossGen 中管理，也可以在本地文件夹中整理；
+- 支持文件夹、标签、搜索、排序和折叠浏览；
+- 历史和图库图片都可以点击预览或编辑；
+- 历史和图库图片都可以直接拖到图生图参考图区域；
+- 右键可复制本地绝对路径，方便与外部软件协作。
+
+目标很简单：刚生成的图、之前保存的图、某个文件夹里的参考图，都应该马上找得到、拿得出来、用得上。
+
+### 3. 生图、编辑、再生图的高效循环
+
+0.3.0 的图片编辑区不再只是预览结果，而是串联图库和图生图的核心区域：
+
+- 生成后直接预览；
+- 快速裁剪图片；
+- 可将裁剪区域另存为新图；
+- 支持涂鸦、文本框、取色；
+- 编辑后的图片可以保存到图库；
+- 图库图片又可以拖回参考区，继续作为下一轮图生图输入。
+
+这让 CrossGen 更适合连续创作：先生成一个基础方向，裁剪或标注关键区域，保存成素材，再立刻进入下一轮生成。
+
+## 其他特点
+
+- **GPT Image 2 与 Gemini/Nano Banana 图像模型**：面向重点图片模型提供清晰启动入口。
+- **AIHub 聚合 API 验证**：0.3.0 已通过 AIHub 聚合 API 的 GPT Image 2 与 Gemini 图像模型真实生图门禁。
+- **提示词模板**：常用提示词可以保存、搜索、复用。
+- **Prompt Chips**：在提示词中插入图库素材、颜色值和模板。
+- **图生图参考图管理**：本地图片、图库素材、历史结果都可以成为参考图。
+- **暗色模式**：适合长时间选图、对图和编辑。
+- **本地优先存储**：历史、输出、模板、图库资产保存在本地。
+- **MIT 开源**：可以自由使用、研究和协作改进。
+
+## 下载安装
+
+CrossGen 提供 release 安装包。到 [GitHub Releases](https://github.com/Bliveren/image2tools/releases/latest) 下载对应平台安装包，安装后打开应用，填写 API Key 即可使用。
+
+| 平台 | 安装包 |
 | --- | --- |
-| API 配置 | 保存并切换 OpenAI、Gemini 和 OpenAI 兼容 Custom 配置。每个配置独立保存名称、Base URL、Key 状态、启动模型和模型探测结果。 |
-| API 配置管理 | 当前 API 配置以紧凑信息卡展示，需要编辑 API Key、Base URL、API 类型或探测信息时打开弹窗集中管理。 |
-| 模型探测 | 根据当前 API 配置探测可用模型，展示探测模型数和清晰的失败原因。 |
-| 启动模型 | GPT Image 2、Nano Banana 3、General 根据服务商支持、Key 保存状态和探测结果启用或置灰。 |
-| GPT Image 2 | 文生图、参考图编辑、多图编辑、精确 mask 局部重绘，以及 OpenAI Image API 参数校验。为兼容聚合器，OpenAI streaming 当前全局关闭。 |
-| Nano Banana 3 | Gemini `generateContent` 图片生成、参考图编辑、引导式区域编辑、画面比例、分辨率、Thinking 和 Search grounding 控件。 |
-| General 模式 | 为探测到的非重点图片模型提供最小兜底。Gemini 支持提示词和参考图；OpenAI 与 Custom 使用 OpenAI 兼容纯提示词生成契约。 |
-| 提示词模板 | 独立管理器支持保存、搜索、打标签、导入、导出和应用常用提示词。 |
-| 提示词 chip | `@` 图库素材、`#` 十六进制颜色和 `~` 模板可进入提示词流程，并在运行前序列化为模型可用的提示词和参考图输入。 |
-| 参考图库 | 右侧图库保存可复用参考图，支持文件夹、标签和搜索组合筛选，可以点击或拖拽到参考图区域使用。 |
-| 最近任务 | 历史卡片展示 provider/model、提示词摘要、可复用输出、下载操作和加入图库操作。 |
-| 蒙版工作流 | 图生图模式提供更明确的蒙版区域、画笔大小、上传蒙版和悬浮说明。 |
-| 本地存储 | 输出、历史、模板和图库资产均保存在 Electron user data 本地目录。 |
-| 双语界面 | 应用内支持 English / 简体中文切换，并保存在本地。 |
-| 更新检查 | 根据平台匹配更新 manifest，下载前校验 size 与 SHA-256，再打开安装器。 |
+| macOS Apple Silicon | `.dmg` |
+| Windows x64 | `.exe` 安装程序 |
+| Linux x64 | 发布时提供 AppImage |
 
-## 下载与安装
+基本使用流程：
 
-从 [GitHub Releases](https://github.com/Bliveren/image2tools/releases/latest) 下载最新已发布安装包。上方 `v0.3.0` 功能目前在 `main`，会在发布确认后打包。
-
-| 平台 | 文件 | 状态 |
-| --- | --- | --- |
-| macOS Apple Silicon | `CrossGen-0.2.4-mac-arm64.dmg` | 本机签名身份可用时使用 Developer ID 签名。Apple 公证取决于 notary 凭据是否配置。 |
-| Windows x64 | `CrossGen-Setup.exe` | NSIS 安装程序，原生 Windows 验证记录在 release evidence。 |
-| Linux x64 | AppImage | 已有打包支持，当前 `0.2.4` update manifest 未发布 Linux 资产。 |
-
-正式上传 CrossGen 品牌安装包后，应使用同一批最终产物重新生成 update manifest；在新文件存在前，现有 manifest 条目保持不变。
-
-可对照 [`docs/updates/latest.json`](./docs/updates/latest.json) 校验下载文件：
-
-```bash
-# macOS
-shasum -a 256 ~/Downloads/CrossGen-0.2.4-mac-arm64.dmg
-
-# Windows PowerShell
-Get-FileHash .\CrossGen-Setup.exe -Algorithm SHA256
-```
+1. 打开 **API 配置**；
+2. 填写 API Key 和 Base URL；
+3. 执行模型探测；
+4. 启动 GPT Image 2、Nano Banana/Gemini 或兼容模型；
+5. 输入提示词生图；
+6. 将有用的结果保存到图库；
+7. 从历史或图库拖回参考图区域，继续图生图。
 
 如果 macOS Gatekeeper 拦截未公证的本地构建，可右键应用选择 **打开**，或清除隔离属性：
 
@@ -128,37 +154,42 @@ xattr -dr com.apple.quarantine /Applications/CrossGen.app
 
 如果 Windows 出现 SmartScreen 提示，选择 **更多信息**，再点击 **仍要运行**。
 
-## 产品流程
+## 品牌定位
 
-1. 添加或打开 API 配置。
-2. 保存 API Key 与 Base URL，然后执行模型探测。
-3. 根据探测结果启动 GPT Image 2、Nano Banana 3 或 General。
-4. 输入提示词，可组合提示词模板、图库素材和颜色 chip，然后生成。
-5. 图生图时可从本地、图库文件夹或最近任务添加参考图。
-6. 模型支持时，可上传或绘制蒙版进行局部编辑。
-7. 从历史复用结果，将有价值输出加入图库文件夹，或下载图片。
+CrossGen 的含义是跨模型、跨步骤的生成工作台。它把 API 配置、生图、编辑、图库管理、历史复用和图生图迭代连接起来。
 
-## 开发运行
+一句话定位：
 
-环境要求：
+> CrossGen 是一站式 AI 生图管理工具。
 
-- Node.js 20+
-- pnpm 10+
-- macOS、Windows 或 Linux
-- 如需真实生成图片，需要 OpenAI 或 Gemini API 权限
+产品承诺很直接：
+
+> API 配好一次，图片快速生成；有用结果集中管理；简单编辑不离开应用；所有素材都能进入下一轮生图。
+
+CrossGen 由 [诺惟 Nowo](https://www.nowo.com/) 与 [核炬科技 Corgnitor](https://www.corgnitor.com/) 共同维护。
+
+诺惟关注 AI 原生产品设计、产品策略和应用工作流；核炬科技关注 AI 工程实现与产品化落地。CrossGen 是双方共同沉淀的开源桌面工具。
+
+## 技术说明
+
+CrossGen 使用 Electron、React 和 Tailwind 构建。本节面向开发、测试和发布维护人员；普通用户下载安装包即可使用。
+
+开发运行：
 
 ```bash
 pnpm install
 pnpm dev:electron
+pnpm build
 ```
 
-构建与测试：
+验证：
 
 ```bash
-pnpm build
 pnpm verify:mock-api
 pnpm verify:mock-gemini-api
 pnpm verify:mock-model-discovery
+pnpm verify:real-aihub-api
+pnpm verify:release-evidence
 ```
 
 打包：
@@ -170,73 +201,9 @@ pnpm package:win
 pnpm verify:release:mac
 pnpm verify:release:windows
 pnpm verify:release:linux
-pnpm verify:release-evidence
 ```
 
-`pnpm build` 会执行 TypeScript 检查、Vitest、renderer 构建和 Electron main 构建。mock 验证覆盖 OpenAI 图片调用、Gemini `generateContent`、模型探测和 API 错误处理，不会产生真实 API 费用。
-
-使用本机 Developer ID 身份进行不公证的 macOS 签名构建：
-
-```bash
-PATH="$PWD/node_modules/.bin:$PATH" node scripts/electron-builder-pnpm.mjs --mac \
-  -c.mac.notarize=false \
-  -c.mac.identity="Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)"
-```
-
-仅当完整 Apple 公证环境已配置后再使用 `pnpm package:mac:signed`：
-
-- `CSC_NAME`
-- `APPLE_ID`
-- `APPLE_APP_SPECIFIC_PASSWORD`
-- `APPLE_TEAM_ID`
-
-## Mock API
-
-不希望消耗真实 API 额度时，可以使用 mock 服务。
-
-```bash
-pnpm mock:openai
-```
-
-应用中填写：
-
-```text
-API Key: sk-mock-crossgen
-Base URL: http://127.0.0.1:8787/v1
-```
-
-```bash
-pnpm mock:gemini
-```
-
-应用中填写：
-
-```text
-API 类型: Gemini
-API Key: mock-gemini-key
-Base URL: http://127.0.0.1:8788/v1beta
-```
-
-## Release Evidence
-
-外部发布门禁统一记录在 [`docs/release/evidence.json`](./docs/release/evidence.json)，包括真实 provider API 验收、macOS 签名包、Windows/Linux 原生验证和更新 manifest 资产。
-
-```bash
-pnpm verify:release-evidence
-pnpm verify:release-evidence -- --require-complete
-```
-
-发布产物和更新元数据应当从最终准备发布的同一份包刷新。
-
-## 关于诺惟与核炬
-
-CrossGen 由 [诺惟 Nowo](https://www.nowo.com/) 与 [核炬科技 Corgnitor](https://www.corgnitor.com/) 提供。
-
-[诺惟 Nowo](https://www.nowo.com/) 专注 AI 原生产品设计、产品策略和应用软件工作流，关注如何把 AI 能力转化为真正可用的产品、流程和用户体验。
-
-[核炬科技 Corgnitor](https://www.corgnitor.com/) 专注 AI 工程实现与产品化落地，帮助模型能力、自动化系统和内部工具沉淀为可维护的软件产品。
-
-双方共同维护 CrossGen，希望把图片生成、编辑和局部重绘这类高频能力沉淀为一个简单、可本地运行、可开源协作的桌面工具。
+发布门禁记录在 [`docs/release/evidence.json`](./docs/release/evidence.json)。Mock 验证不会消耗真实 API 额度；真实 provider 验证需要显式授权并配置本地环境变量。
 
 ## 许可证
 

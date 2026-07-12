@@ -2,20 +2,18 @@
 
 ## v0.3.0 (release candidate)
 
-Release candidate notes for the 0.3.0 workspace release. The package version is staged at `0.3.0`; public update manifest assets, final release evidence, tag, and GitHub Release still require the platform-specific gates recorded in `docs/release/evidence.json`.
+CrossGen 0.3.0 is the release where Image2Tools becomes a one-stop AI image generation manager. The focus is practical daily work: configure API access once, discover models and compatible routes, generate images, keep useful results organized, edit images quickly, then reuse them as references for the next image-to-image round.
 
-### Features
+### User-Facing Highlights
 
-- **API access wording and left-rail flow refined**: user-facing copy now consistently uses API access terminology, while the left rail keeps API access, launch model, prompt templates, parameters, draft, notices, and updates in a predictable order.
-- **Prompt template workflow expanded**: prompt templates now have a left-rail section plus a focused manager for create, edit, search, tag filtering, JSON import, JSON export, and apply flows.
-- **Gallery folders**: reusable reference images can be organized into logical folders. Deleting a folder keeps images in Gallery and moves them back to Uncategorized.
-- **Gallery filtering**: folder, tag, and search filters compose together, with counts visible in the Gallery folder list.
-- **Prompt chips**: prompt input supports `@` Gallery assets, `#` hex colors, and `~` templates. Chips serialize into model-ready prompt text plus reference inputs before `runJob`.
-- **Folder-aware Gallery chips**: `@` Gallery chip suggestions inherit the current Gallery folder, tag, and search filters.
-- **Per-config OpenAI streaming previews**: direct OpenAI generation can stream partial previews by default, while OpenAI-compatible gateways keep streaming opt-in for compatibility.
-- **Generation hot path cleanup**: generation persistence now avoids duplicate pre-run writes, skips the post-success full snapshot refresh, and can show transient previews without persisting generated base64 into state.
-- **Gallery and renderer performance closeout**: large-gallery reads, thumbnail serving, partial-image updates, and RightRail rendering were tightened for the 0.3.0 release gate.
-- **Accessibility and theme closeout**: light and dark renderer captures report zero axe violations in the final local release gate, with clearer landmark semantics and contrast tokens.
+- **CrossGen brand and positioning**: README, release messaging, and package metadata now describe CrossGen as a one-stop AI image generation manager rather than a low-level image API utility.
+- **One API access hub**: save multiple API keys and Base URLs, switch access profiles, run model discovery, and let CrossGen use the route that works for the configured provider.
+- **AIHub-compatible real gate**: v0.3.0 real-provider acceptance now validates GPT Image 2 and Gemini image models through the AIHub aggregation API and the product-supported `/chat/completions` streaming path.
+- **Better Gallery and History reuse**: generated outputs and saved Gallery assets can be searched, tagged, organized into folders, previewed, edited, and dragged directly into image-to-image reference slots.
+- **Local folder-friendly Gallery**: Gallery assets remain local files, so users can manage reusable images both inside CrossGen and through their normal local file workflow.
+- **Simple image editing loop**: preview, crop, draw, add text, pick colors, save edited results to Gallery, then reuse them immediately for another generation.
+- **Prompt templates and chips**: prompt templates, Gallery references, and color values can be inserted into the prompt workflow without leaving the main workspace.
+- **Dark mode**: the UI now has a calmer dark theme for longer image review and editing sessions.
 
 ### Validation
 
@@ -23,13 +21,12 @@ Release candidate notes for the 0.3.0 workspace release. The package version is 
 - `pnpm verify:mock-api`
 - `pnpm verify:mock-gemini-api`
 - `pnpm verify:mock-model-discovery`
+- `pnpm verify:real-aihub-api`
 - `pnpm verify:release-evidence`
-- `pnpm package:mac` and `pnpm verify:release:mac` for a local ad-hoc macOS arm64 release-candidate package
+- `pnpm package:mac` and `pnpm verify:release:mac` for a local macOS arm64 release-candidate package
 
 ### Pending Release Gates
 
-- Real GPT Image 2 acceptance on the 0.3.0 release branch.
-- Real Gemini / Nano Banana acceptance on the 0.3.0 release branch.
 - Native Windows and Linux package validation for 0.3.0 artifacts.
 - Public v0.3.0 update manifest assets generated from uploaded artifact hashes and byte sizes.
 - Developer ID signing and Apple notarization remain environment-dependent; notarization is blocked until Apple credentials are configured.
