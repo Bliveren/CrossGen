@@ -64,23 +64,19 @@ function completeLedger() {
 }
 
 describe("release evidence verifier", () => {
-  it("validates the staged release evidence ledger", async () => {
+  it("validates the completed release evidence ledger", async () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 4/5 required gate(s) passed.");
-    expect(result.stdout).toContain(
-      "Pending required gate(s): update-manifest-assets"
-    );
+    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
+    expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
-  it("fails --require-complete for the staged release candidate", async () => {
+  it("passes --require-complete for the completed release ledger", async () => {
     const result = await run(["--require-complete"]);
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Required release evidence gates are not passed");
-    expect(result.stderr).toContain("update-manifest-assets");
-    expect(result.stderr).not.toContain("linux-native-release");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
   });
 
   it("fails --require-complete when a required gate is still pending", async () => {

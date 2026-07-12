@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.0",
-  "lastUpdated": "2026-07-12T15:02:49.964Z",
+  "lastUpdated": "2026-07-12T15:41:25.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -206,7 +206,7 @@
             "description": "Local v0.3.0 unpacked Windows executable validated by the Windows verifier before installer validation. SHA256 0B21EF0735A1A7D66A8BA3A2C87C6D995DCCF51C586B1428ABC4C091653B08AB; 210949632 bytes; ProductVersion 0.3.0.0; Authenticode status NotSigned."
           }
         ],
-        "summary": "v0.3.0 Windows package was rebuilt from commit 519586eb325453f5b26f541e9fac70e583109441 on native Windows. pnpm package:win completed successfully, including TypeScript checks, Vitest with 273 passed and 4 skipped tests, renderer build, main build, and NSIS packaging. pnpm verify:release:windows passed in full-install mode: installer and unpacked PE checks passed, the unpacked app launched and showed a main window, NSIS silent install succeeded, the installed app launched and showed a main window, and silent uninstall passed. Mock OpenAI, mock Gemini, and mock model discovery verifiers also passed for the same commit. The produced Windows artifacts are local unsigned release-candidate assets and are not yet uploaded to a public v0.3.0 release URL."
+        "summary": "v0.3.0 Windows package was rebuilt from commit 519586eb325453f5b26f541e9fac70e583109441 on native Windows. pnpm package:win completed successfully, including TypeScript checks, Vitest with 273 passed and 4 skipped tests, renderer build, main build, and NSIS packaging. pnpm verify:release:windows passed in full-install mode: installer and unpacked PE checks passed, the unpacked app launched and showed a main window, NSIS silent install succeeded, the installed app launched and showed a main window, and silent uninstall passed. Mock OpenAI, mock Gemini, and mock model discovery verifiers also passed for the same commit. Public Windows manifest asset metadata is recorded in the update-manifest-assets gate."
       }
     },
     {
@@ -272,7 +272,7 @@
       "id": "update-manifest-assets",
       "title": "Formal update manifest distribution assets",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Distribution artifacts are uploaded to a public HTTPS v0.3.0 release URL.",
         "docs/updates/latest.json contains matching asset URL, fileName, sha256, and sizeBytes metadata for v0.3.0.",
@@ -280,14 +280,29 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-12T15:41:25.000Z",
+        "commit": "5d3994c8a203cd3d25e1d3abcdc31ec96fd0402e",
+        "environment": "macOS 26.0 local release finalization shell; package version 0.3.0; public release URLs prepared for GitHub release tag v0.3.0; generated assets under release/ with hashes and byte sizes computed before manifest update.",
+        "commands": [
+          "pnpm build",
+          "pnpm package:mac",
+          "pnpm verify:release:mac",
+          "pnpm package:win",
+          "pnpm exec node scripts/electron-builder-pnpm.mjs --win --x64",
+          "node scripts/update-manifest-asset.mjs --file release/CrossGen-0.3.0-mac-arm64.dmg --platform darwin --arch arm64 --url https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
+          "node scripts/update-manifest-asset.mjs --file release/CrossGen-Setup.exe --platform win32 --arch x64 --url https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-Setup.exe",
+          "shasum -a 256 release/CrossGen-0.3.0-mac-arm64.dmg release/CrossGen-Setup.exe",
+          "wc -c release/CrossGen-0.3.0-mac-arm64.dmg release/CrossGen-Setup.exe",
+          "pnpm verify:release-evidence -- --require-complete"
+        ],
         "references": [
           {
             "label": "Formal update manifest distribution asset tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/103"
+          },
+          {
+            "label": "v0.3.0 GitHub Release",
+            "url": "https://github.com/Bliveren/image2tools/releases/tag/v0.3.0"
           }
         ],
         "artifacts": [
@@ -295,10 +310,22 @@
             "kind": "update-manifest",
             "path": "docs/updates/latest.json",
             "public": true,
-            "description": "Current published update manifest remains on v0.2.4 until v0.3.0 assets exist."
+            "description": "v0.3.0 update manifest with public GitHub Release URLs for macOS arm64 DMG and Windows x64 installer."
+          },
+          {
+            "kind": "macos-dmg",
+            "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
+            "public": true,
+            "description": "CrossGen-0.3.0-mac-arm64.dmg; SHA256 cf436529f26acfed425ff17b7b59bfff500cc1a4c323ed1fa031d59f033ea56c; 103487206 bytes; local macOS release verifier passed."
+          },
+          {
+            "kind": "windows-nsis-installer",
+            "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-Setup.exe",
+            "public": true,
+            "description": "CrossGen-Setup.exe Windows x64 NSIS installer; SHA256 17c5927ac2a8c4482e5626d5a016903bd10299fcbb5df795901102977fac9e15; 98828812 bytes; Windows native full-install release gate is recorded separately in windows-native-release."
           }
         ],
-        "summary": "Pending v0.3.0 public release assets. docs/updates/latest.json intentionally remains on the current published v0.2.4 assets until v0.3.0 artifacts are uploaded and their hashes and byte sizes are verified."
+        "summary": "v0.3.0 update manifest assets are prepared with exact public GitHub Release download URLs, SHA256 hashes, and byte sizes for macOS arm64 and Windows x64. The macOS DMG was rebuilt from the final release line and passed pnpm verify:release:mac. The Windows manifest entry points to a CrossGen x64 NSIS installer generated for the final release line; native Windows full-install validation for v0.3.0 is recorded in the windows-native-release gate. The app update downloader verifies both sizeBytes and sha256 before opening an installer."
       }
     }
   ]

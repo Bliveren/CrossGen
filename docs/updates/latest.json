@@ -1,22 +1,22 @@
 {
-  "version": "0.2.4",
-  "pubDate": "2026-06-30T17:57:13.000Z",
-  "notes": "Bugfix release. Saved model configurations now appear in the saved configurations list, configuration wording is unified, add-configuration flow is aligned with model configuration, and Gemini image size selections are sent through Gemini imageConfig. macOS build is Developer ID signed but not Apple-notarized.",
+  "version": "0.3.0",
+  "pubDate": "2026-07-12T15:41:25.000Z",
+  "notes": "CrossGen 0.3.0 introduces the one-stop AI image generation manager: API access management, automatic model and route probing, Gallery and History reuse, prompt templates, lightweight image editing, and dark mode.",
   "assets": [
     {
       "platform": "darwin",
-      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.4/Image2Tools-0.2.4-mac-arm64.dmg",
-      "fileName": "Image2Tools-0.2.4-mac-arm64.dmg",
-      "sha256": "4931076a2cd8d6d69c0afcdd7c17d20286d0bd1906fcde501be7bdfe9b1dad34",
-      "sizeBytes": 103470128,
+      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
+      "fileName": "CrossGen-0.3.0-mac-arm64.dmg",
+      "sha256": "cf436529f26acfed425ff17b7b59bfff500cc1a4c323ed1fa031d59f033ea56c",
+      "sizeBytes": 103487206,
       "arch": "arm64"
     },
     {
       "platform": "win32",
-      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.4/Image2Tools-Setup.exe",
-      "fileName": "Image2Tools-Setup.exe",
-      "sha256": "cf0e5514a17155d298181ba401537d1296cbb0531021491019126fc222f6350a",
-      "sizeBytes": 98680474,
+      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-Setup.exe",
+      "fileName": "CrossGen-Setup.exe",
+      "sha256": "17c5927ac2a8c4482e5626d5a016903bd10299fcbb5df795901102977fac9e15",
+      "sizeBytes": 98828812,
       "arch": "x64"
     }
   ]

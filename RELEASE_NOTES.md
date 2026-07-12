@@ -1,6 +1,6 @@
 # CrossGen Release Notes
 
-## v0.3.0 (release candidate)
+## v0.3.0
 
 CrossGen 0.3.0 is the release where Image2Tools becomes a one-stop AI image generation manager. The focus is practical daily work: configure API access once, discover models and compatible routes, generate images, keep useful results organized, edit images quickly, then reuse them as references for the next image-to-image round.
 
@@ -23,12 +23,15 @@ CrossGen 0.3.0 is the release where Image2Tools becomes a one-stop AI image gene
 - `pnpm verify:mock-model-discovery`
 - `pnpm verify:real-aihub-api`
 - `pnpm verify:release-evidence`
-- `pnpm package:mac` and `pnpm verify:release:mac` for a local macOS arm64 release-candidate package
+- `pnpm verify:release-evidence -- --require-complete`
+- `pnpm package:mac` and `pnpm verify:release:mac` for the macOS arm64 package
+- Windows native full-install verification and Linux CI package/AppImage verification are recorded in `docs/release/evidence.json`.
 
-### Pending Release Gates
+### Release Assets
 
-- Native Windows and Linux package validation for 0.3.0 artifacts.
-- Public v0.3.0 update manifest assets generated from uploaded artifact hashes and byte sizes.
+- macOS arm64 DMG is published as `CrossGen-0.3.0-mac-arm64.dmg`.
+- Windows x64 installer is published as `CrossGen-Setup.exe`.
+- `docs/updates/latest.json` contains the final v0.3.0 macOS and Windows asset URLs, SHA256 hashes, and byte sizes.
 - Developer ID signing and Apple notarization remain environment-dependent; notarization is blocked until Apple credentials are configured.
 
 ---
