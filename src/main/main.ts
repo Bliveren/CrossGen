@@ -76,8 +76,23 @@ import {
 import { compareVersions, isAllowedUpdateUrl, parseUpdateManifest, safeUpdateFileName, selectUpdateAsset } from "../shared/updateManifest.js";
 import { resolveDataDirs, resolveUserDataDir } from "../core/dataDirs.js";
 import { createGenerationQueueItem } from "../core/generation.js";
+import {
+  createGalleryFolder as createCoreGalleryFolder,
+  deleteGalleryFolder as deleteCoreGalleryFolder,
+  exportGalleryAsset as exportCoreGalleryAsset,
+  getGalleryAssetPublicMetadata,
+  importGalleryAssets as importCoreGalleryAssets,
+  moveGalleryFolder as moveCoreGalleryFolder,
+  removeGalleryAsset as removeCoreGalleryAsset,
+  renameGalleryFolder as renameCoreGalleryFolder,
+  resolveGalleryAssetPath as resolveCoreGalleryAssetPath,
+  updateGalleryAsset as updateCoreGalleryAsset,
+  type GalleryDuplicateAction,
+  type GalleryMutationContext
+} from "../core/gallery.js";
 import { recordGenerationQueuePartialOutput, requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion } from "../core/generationQueue.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
+import { createJsonStateStore, type JsonStateStore } from "../core/stateStore.js";
 import {
   buildCliAssetInspect,
   buildCliConfigStatus,
@@ -193,6 +208,7 @@ let galleryOperationQueue: Promise<void> = Promise.resolve();
 let galleryWatchNeedsFullSync = false;
 let galleryWatchChangedRelPaths = new Set<string>();
 let stateWriteCount = 0;
+let appStateStore: JsonStateStore<AppStateFile> | null = null;
 let generationQueueStore: QueueStore | null = null;
 const desktopWorkerHostId = `desktop_${process.pid}_${randomUUID()}`;
 const runningJobControllers = new Map<string, AbortController>();
@@ -361,6 +377,10 @@ function getBackupStatePath(): string {
   return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).backupStatePath;
 }
 
+function getStateLockPath(): string {
+  return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).lockPath;
+}
+
 function getQueuePath(): string {
   return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).queuePath;
 }
@@ -411,6 +431,17 @@ function getGenerationQueueStore(): QueueStore {
     lockPath: getQueueLockPath()
   });
   return generationQueueStore;
+}
+
+function getAppStateStore(): JsonStateStore<AppStateFile> {
+  appStateStore ??= createJsonStateStore({
+    statePath: getStatePath(),
+    backupPath: getBackupStatePath(),
+    lockPath: getStateLockPath(),
+    defaultState: getDefaultState(),
+    normalize: normalizeState
+  });
+  return appStateStore;
 }
 
 function assertKnownHistoryAssetPath(state: AppStateFile, assetPath: string): string {
@@ -513,20 +544,7 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
     storage: state.storage,
     draft: state.draft
   };
-  const statePath = getStatePath();
-  const backupPath = getBackupStatePath();
-  const tmpPath = `${statePath}.tmp`;
-  if (options.updateBackup !== false) {
-    try {
-      await fs.copyFile(statePath, backupPath);
-    } catch (error) {
-      if (!isNodeError(error) || error.code !== "ENOENT") {
-        console.warn("[CrossGen] Failed to update state backup.", sanitizeError(error));
-      }
-    }
-  }
-  await fs.writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-  await fs.rename(tmpPath, statePath);
+  await getAppStateStore().write(payload, options);
   stateWriteCount += 1;
   stateCache = payload;
 }
@@ -1112,7 +1130,8 @@ function sendGalleryEvent(state: AppStateFile, reason: "disk" | "mutation"): voi
 }
 
 async function readGalleryMutationState(): Promise<AppStateFile> {
-  return syncGalleryWithDisk(await readState());
+  stateCache = applyStartupRecovery(await getAppStateStore().read());
+  return syncGalleryWithDisk(stateCache);
 }
 
 async function commitGalleryMutationState<TResult>(state: AppStateFile, result: TResult): Promise<TResult> {
@@ -3239,6 +3258,32 @@ function getCliPositionalAfter(args: string[], token: string): string | undefine
   return args.slice(index + 1).find((arg) => !arg.startsWith("--"));
 }
 
+function getCliPositionalsAfter(args: string[], token: string): string[] {
+  const index = args.indexOf(token);
+  if (index < 0) return [];
+  const valueFlags = new Set(["--asset-id", "--client", "--correlation-id", "--duplicate", "--folder", "--mode", "--name", "--parent", "--request-id", "--tag", "--to"]);
+  const result: string[] = [];
+  for (let cursor = index + 1; cursor < args.length; cursor += 1) {
+    const arg = args[cursor];
+    if (arg.startsWith("--")) {
+      if (valueFlags.has(arg) && args[cursor + 1] && !args[cursor + 1].startsWith("--")) cursor += 1;
+      continue;
+    }
+    result.push(arg);
+  }
+  return result;
+}
+
+function getCliOptions(args: string[], name: string): string[] {
+  const values: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] !== name) continue;
+    const value = args[index + 1];
+    if (value && !value.startsWith("--")) values.push(value);
+  }
+  return values;
+}
+
 function writeCliJson(response: CrossGenJsonResponse): void {
   process.stdout.write(`${JSON.stringify(response)}\n`);
 }
@@ -3287,6 +3332,46 @@ async function readExistingQueueForCli() {
   return getGenerationQueueStore().read();
 }
 
+function normalizeCliDuplicateAction(value: string | undefined): GalleryDuplicateAction {
+  return value === "replace" || value === "copy" ? value : "cancel";
+}
+
+function galleryMutationContext(state: AppStateFile, options: { duplicateAction?: GalleryDuplicateAction } = {}): GalleryMutationContext {
+  return {
+    galleryDir: getGalleryDir(state),
+    duplicateAction: options.duplicateAction
+  };
+}
+
+function mergeGalleryState(state: AppStateFile, galleryState: { galleryFolders: GalleryFolder[]; galleryAssets: GalleryAsset[] }): AppStateFile {
+  return {
+    ...state,
+    galleryFolders: galleryState.galleryFolders,
+    galleryAssets: galleryState.galleryAssets
+  };
+}
+
+async function mutateGalleryStateForCli<TResult>(
+  operation: (state: AppStateFile, context: GalleryMutationContext) => Promise<{ state: { galleryFolders: GalleryFolder[]; galleryAssets: GalleryAsset[] }; result: TResult }>,
+  options: { duplicateAction?: GalleryDuplicateAction } = {}
+): Promise<TResult> {
+  let result: TResult | undefined;
+  const nextState = await getAppStateStore().mutate(async (state) => {
+    const outcome = await operation(state, galleryMutationContext(state, options));
+    result = outcome.result;
+    return mergeGalleryState(state, outcome.state);
+  });
+  stateCache = nextState;
+  if (result === undefined) throw new Error("Gallery 操作没有返回结果。");
+  return result;
+}
+
+async function readGalleryStateForCli(): Promise<AppStateFile> {
+  const state = await getAppStateStore().read();
+  stateCache = state;
+  return state;
+}
+
 async function runMcpCommandMode(args: string[]): Promise<number> {
   const requestedMode = normalizeCliMcpMode(getCliOption(args, "--mode") ?? process.env.CROSSGEN_MCP_MODE);
   return runReadonlyMcpStdioServer({
@@ -3301,6 +3386,90 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
       folderList: async () => buildCliFolderList(await readExistingStateForCli()),
       galleryList: async () => buildCliGalleryList(await readExistingStateForCli()),
       assetInspect: async (assetId) => buildCliAssetInspect(await readExistingStateForCli(), assetId)
+    },
+    writers: requestedMode === "readonly" ? undefined : {
+      folderCreate: async ({ name, parentId }) => {
+        const folder = await mutateGalleryStateForCli(async (state, context) => {
+          const outcome = await createCoreGalleryFolder(state, context, { name, parentId });
+          return { state: outcome.state, result: outcome.folder };
+        });
+        return { folder };
+      },
+      folderRename: async ({ folderId, name, parentId }) => {
+        const folder = await mutateGalleryStateForCli(async (state, context) => {
+          const outcome = await renameCoreGalleryFolder(state, context, folderId, { name, parentId });
+          return { state: outcome.state, result: outcome.folder };
+        });
+        return { folder };
+      },
+      folderMove: async ({ folderId, parentId }) => {
+        const folder = await mutateGalleryStateForCli(async (state, context) => {
+          const outcome = await moveCoreGalleryFolder(state, context, folderId, parentId);
+          return { state: outcome.state, result: outcome.folder };
+        });
+        return { folder };
+      },
+      folderDelete: async ({ folderId }) => mutateGalleryStateForCli(async (state, context) => {
+        const outcome = await deleteCoreGalleryFolder(state, context, folderId);
+        return { state: outcome.state, result: outcome.result };
+      }),
+      assetImport: async ({ paths, folderId, duplicateAction }) => {
+        const result = await mutateGalleryStateForCli(
+          async (state, context) => {
+            const outcome = await importCoreGalleryAssets(state, context, paths, folderId ?? null);
+            return { state: outcome.state, result: outcome.result };
+          },
+          { duplicateAction: normalizeCliDuplicateAction(duplicateAction) }
+        );
+        return {
+          imported: result.assets.map(getGalleryAssetPublicMetadata),
+          skipped: result.skipped,
+          replacedAssetIds: result.replacedAssetIds
+        };
+      },
+      assetMove: async ({ assetId, folderId }) => {
+        const asset = await mutateGalleryStateForCli(async (state, context) => {
+          const outcome = await updateCoreGalleryAsset(state, context, assetId, { folderId });
+          return { state: outcome.state, result: outcome.asset };
+        });
+        return { asset: getGalleryAssetPublicMetadata(asset) };
+      },
+      assetUpdate: async ({ assetId, originalName, tags, folderId }) => {
+        const patch: GalleryAssetPatch = {};
+        if (originalName) patch.originalName = originalName;
+        if (tags) patch.tags = tags;
+        if (folderId !== undefined) patch.folderId = folderId;
+        if (!Object.keys(patch).length) throw new Error("No asset update fields were provided.");
+        const asset = await mutateGalleryStateForCli(async (state, context) => {
+          const outcome = await updateCoreGalleryAsset(state, context, assetId, patch);
+          return { state: outcome.state, result: outcome.asset };
+        });
+        return { asset: getGalleryAssetPublicMetadata(asset) };
+      },
+      assetRemove: async ({ assetId }) => mutateGalleryStateForCli(async (state, context) => {
+        const outcome = await removeCoreGalleryAsset(state, context, assetId);
+        return {
+          state: outcome.state,
+          result: {
+            assets: outcome.assets.map(getGalleryAssetPublicMetadata),
+            removed: outcome.removed ? getGalleryAssetPublicMetadata(outcome.removed) : null
+          }
+        };
+      }),
+      assetPath: async ({ assetId }) => {
+        const state = await readGalleryStateForCli();
+        const result = await resolveCoreGalleryAssetPath(state, galleryMutationContext(state), assetId);
+        return { asset: getGalleryAssetPublicMetadata(result.asset), path: result.path };
+      },
+      assetExport: async ({ assetId, to, replace }) => {
+        const state = await readGalleryStateForCli();
+        const result = await exportCoreGalleryAsset(state, galleryMutationContext(state), assetId, to, { replace });
+        return {
+          asset: getGalleryAssetPublicMetadata(result.asset),
+          exportedPath: result.exportedPath,
+          replaced: result.replaced
+        };
+      }
     },
     sanitizeError: (error) => redactLikelySecrets(normalizeError(error))
   });
@@ -3390,9 +3559,9 @@ async function runCliCommandMode(args: string[]): Promise<number> {
           pathDisclosureRequiresConfirmation: true
         },
         knownLimitations: [
-          "v0.3.1 CLI/MCP command mode currently exposes readonly discovery tools.",
+          "v0.3.1 CLI/MCP command mode currently exposes readonly discovery and Gallery asset management tools.",
           "The desktop generation path uses the durable queue foundation; CLI/MCP generation tools are not implemented yet.",
-          "Gallery write tools and agent generation tools are still in later v0.3.1 phases."
+          "Agent generation tools are still in later v0.3.1 phases."
         ]
       };
       writeCliJson(cliSuccess(requestId, correlationId, data));
@@ -3449,6 +3618,199 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       return 0;
     }
 
+    if (command === "folder" && subcommand === "create") {
+      const [name] = getCliPositionalsAfter(args, subcommand);
+      if (!name) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing folder name.", ["Use folder create <name>."]));
+        return 2;
+      }
+      const folder = await mutateGalleryStateForCli(async (state, context) => {
+        const outcome = await createCoreGalleryFolder(state, context, {
+          name,
+          parentId: getCliOption(args, "--parent") ?? undefined
+        });
+        return { state: outcome.state, result: outcome.folder };
+      });
+      writeCliJson(cliSuccess(requestId, correlationId, { folder }));
+      return 0;
+    }
+
+    if (command === "folder" && subcommand === "rename") {
+      const [folderId, name] = getCliPositionalsAfter(args, subcommand);
+      if (!folderId || !name) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing folder id or name.", ["Use folder rename <id> <name>."]));
+        return 2;
+      }
+      const folder = await mutateGalleryStateForCli(async (state, context) => {
+        const outcome = await renameCoreGalleryFolder(state, context, folderId, {
+          name,
+          parentId: getCliOption(args, "--parent") ?? undefined
+        });
+        return { state: outcome.state, result: outcome.folder };
+      });
+      writeCliJson(cliSuccess(requestId, correlationId, { folder }));
+      return 0;
+    }
+
+    if (command === "folder" && subcommand === "move") {
+      const [folderId] = getCliPositionalsAfter(args, subcommand);
+      if (!folderId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing folder id.", ["Use folder move <id> --parent <id|null>."]));
+        return 2;
+      }
+      const folder = await mutateGalleryStateForCli(async (state, context) => {
+        const outcome = await moveCoreGalleryFolder(state, context, folderId, getCliOption(args, "--parent") ?? null);
+        return { state: outcome.state, result: outcome.folder };
+      });
+      writeCliJson(cliSuccess(requestId, correlationId, { folder }));
+      return 0;
+    }
+
+    if (command === "folder" && subcommand === "delete") {
+      const [folderId] = getCliPositionalsAfter(args, subcommand);
+      if (!folderId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing folder id.", ["Use folder delete <id> --yes."]));
+        return 2;
+      }
+      if (!hasCliFlag(args, "--yes")) {
+        writeCliJson(cliFailure(requestId, correlationId, "CONFIRMATION_REQUIRED", "Folder deletion requires --yes.", ["Re-run with --yes if you intend to delete this Gallery folder."]));
+        return 3;
+      }
+      const result = await mutateGalleryStateForCli(async (state, context) => {
+        const outcome = await deleteCoreGalleryFolder(state, context, folderId);
+        return { state: outcome.state, result: outcome.result };
+      });
+      writeCliJson(cliSuccess(requestId, correlationId, { folders: result.folders, assets: result.assets }));
+      return 0;
+    }
+
+    if (command === "asset" && subcommand === "import") {
+      const paths = getCliPositionalsAfter(args, subcommand);
+      if (paths.length === 0) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing image path for asset import.", ["Use asset import <path...> [--folder <id>] [--duplicate cancel|replace|copy]."]));
+        return 2;
+      }
+      const result = await mutateGalleryStateForCli(
+        async (state, context) => {
+          const outcome = await importCoreGalleryAssets(state, context, paths, getCliOption(args, "--folder") ?? null);
+          return { state: outcome.state, result: outcome.result };
+        },
+        { duplicateAction: normalizeCliDuplicateAction(getCliOption(args, "--duplicate")) }
+      );
+      writeCliJson(cliSuccess(requestId, correlationId, {
+        imported: result.assets.map(getGalleryAssetPublicMetadata),
+        skipped: result.skipped,
+        replacedAssetIds: result.replacedAssetIds
+      }));
+      return 0;
+    }
+
+    if (command === "asset" && subcommand === "move") {
+      const [assetId] = getCliPositionalsAfter(args, subcommand);
+      if (!assetId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing asset id.", ["Use asset move <id> --folder <id|null>."]));
+        return 2;
+      }
+      const asset = await mutateGalleryStateForCli(async (state, context) => {
+        const outcome = await updateCoreGalleryAsset(state, context, assetId, { folderId: getCliOption(args, "--folder") ?? null });
+        return { state: outcome.state, result: outcome.asset };
+      });
+      writeCliJson(cliSuccess(requestId, correlationId, { asset: getGalleryAssetPublicMetadata(asset) }));
+      return 0;
+    }
+
+    if (command === "asset" && subcommand === "update") {
+      const [assetId] = getCliPositionalsAfter(args, subcommand);
+      if (!assetId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing asset id.", ["Use asset update <id> [--name <name>] [--tag <tag>] [--folder <id|null>]."]));
+        return 2;
+      }
+      const patch: GalleryAssetPatch = {};
+      const name = getCliOption(args, "--name");
+      if (name) patch.originalName = name;
+      const tags = getCliOptions(args, "--tag");
+      if (tags.length > 0) patch.tags = tags;
+      if (args.includes("--folder")) patch.folderId = getCliOption(args, "--folder") ?? null;
+      if (!Object.keys(patch).length) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "No asset update fields were provided.", ["Use --name, --tag, or --folder."]));
+        return 2;
+      }
+      const asset = await mutateGalleryStateForCli(async (state, context) => {
+        const outcome = await updateCoreGalleryAsset(state, context, assetId, patch);
+        return { state: outcome.state, result: outcome.asset };
+      });
+      writeCliJson(cliSuccess(requestId, correlationId, { asset: getGalleryAssetPublicMetadata(asset) }));
+      return 0;
+    }
+
+    if (command === "asset" && subcommand === "remove") {
+      const [assetId] = getCliPositionalsAfter(args, subcommand);
+      if (!assetId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing asset id.", ["Use asset remove <id> --yes."]));
+        return 2;
+      }
+      if (!hasCliFlag(args, "--yes")) {
+        writeCliJson(cliFailure(requestId, correlationId, "CONFIRMATION_REQUIRED", "Asset removal requires --yes.", ["Re-run with --yes if you intend to remove this Gallery asset."]));
+        return 3;
+      }
+      const result = await mutateGalleryStateForCli(async (state, context) => {
+        const outcome = await removeCoreGalleryAsset(state, context, assetId);
+        return { state: outcome.state, result: { assets: outcome.assets.map(getGalleryAssetPublicMetadata), removed: outcome.removed ? getGalleryAssetPublicMetadata(outcome.removed) : null } };
+      });
+      writeCliJson(cliSuccess(requestId, correlationId, result));
+      return 0;
+    }
+
+    if (command === "asset" && subcommand === "path") {
+      const [assetId] = getCliPositionalsAfter(args, subcommand);
+      if (!assetId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing asset id.", ["Use asset path <id> --yes."]));
+        return 2;
+      }
+      if (!hasCliFlag(args, "--yes")) {
+        writeCliJson(cliFailure(requestId, correlationId, "CONFIRMATION_REQUIRED", "Absolute asset path disclosure requires --yes.", ["Re-run with --yes if you intend to expose the local absolute path."]));
+        return 3;
+      }
+      const state = await readGalleryStateForCli();
+      const result = await resolveCoreGalleryAssetPath(state, galleryMutationContext(state), assetId);
+      writeCliJson(cliSuccess(requestId, correlationId, { asset: getGalleryAssetPublicMetadata(result.asset), path: result.path }));
+      return 0;
+    }
+
+    if (command === "asset" && subcommand === "export") {
+      const [assetId] = getCliPositionalsAfter(args, subcommand);
+      const targetPath = getCliOption(args, "--to");
+      if (!assetId || !targetPath) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing asset id or --to path.", ["Use asset export <id> --to <path> --yes."]));
+        return 2;
+      }
+      if (!hasCliFlag(args, "--yes")) {
+        writeCliJson(cliFailure(requestId, correlationId, "CONFIRMATION_REQUIRED", "Asset export requires --yes.", ["Re-run with --yes if you intend to copy this asset to the target path."]));
+        return 3;
+      }
+      const state = await readGalleryStateForCli();
+      const result = await exportCoreGalleryAsset(state, galleryMutationContext(state), assetId, targetPath, { replace: hasCliFlag(args, "--replace") });
+      writeCliJson(cliSuccess(requestId, correlationId, {
+        asset: getGalleryAssetPublicMetadata(result.asset),
+        exportedPath: result.exportedPath,
+        replaced: result.replaced
+      }));
+      return 0;
+    }
+
+    if (command === "asset" && subcommand === "open") {
+      const [assetId] = getCliPositionalsAfter(args, subcommand);
+      if (!assetId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing asset id.", ["Use asset open <id>."]));
+        return 2;
+      }
+      const state = await readGalleryStateForCli();
+      const result = await resolveCoreGalleryAssetPath(state, galleryMutationContext(state), assetId);
+      shell.showItemInFolder(result.path);
+      writeCliJson(cliSuccess(requestId, correlationId, { asset: getGalleryAssetPublicMetadata(result.asset), opened: true }));
+      return 0;
+    }
+
     const response = cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Unsupported CrossGen CLI command.", [
       "Use --cli --version --json.",
       "Use --cli doctor --agent --json.",
@@ -3458,6 +3820,9 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       "Use --cli queue status --json.",
       "Use --cli job list --json.",
       "Use --cli gallery list --json.",
+      "Use --cli folder create <name> --json.",
+      "Use --cli asset import <path...> --json.",
+      "Use --cli asset export <id> --to <path> --yes --json.",
       "Use --cli mcp config --client codex --mode readonly --json."
     ]);
     if (json) {

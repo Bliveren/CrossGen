@@ -1,6 +1,6 @@
 import { PassThrough, Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { runReadonlyMcpStdioServer, type ReadonlyMcpReaders } from "./stdioServer";
+import { runReadonlyMcpStdioServer, type GalleryMcpWriters, type ReadonlyMcpMode, type ReadonlyMcpReaders } from "./stdioServer";
 
 function captureOutput() {
   const chunks: Buffer[] = [];
@@ -29,13 +29,29 @@ function readers(): ReadonlyMcpReaders {
   };
 }
 
-async function runServer(inputText: string) {
+function writers(): GalleryMcpWriters {
+  return {
+    folderCreate: async ({ name }) => ({ folder: { id: "folder-1", name } }),
+    folderRename: async ({ folderId, name }) => ({ folder: { id: folderId, name } }),
+    folderMove: async ({ folderId, parentId }) => ({ folder: { id: folderId, parentId } }),
+    folderDelete: async ({ folderId }) => ({ folderId }),
+    assetImport: async ({ paths }) => ({ imported: paths.map((path) => ({ path })) }),
+    assetMove: async ({ assetId, folderId }) => ({ asset: { id: assetId, folderId } }),
+    assetUpdate: async ({ assetId, originalName }) => ({ asset: { id: assetId, originalName } }),
+    assetRemove: async ({ assetId }) => ({ removed: { id: assetId } }),
+    assetPath: async ({ assetId }) => ({ asset: { id: assetId }, path: "/tmp/sample.png" }),
+    assetExport: async ({ assetId, to }) => ({ asset: { id: assetId }, exportedPath: to, replaced: false })
+  };
+}
+
+async function runServer(inputText: string, options: { mode?: ReadonlyMcpMode; withWriters?: boolean } = {}) {
   const input = new PassThrough();
   const captured = captureOutput();
   const run = runReadonlyMcpStdioServer({
-    mode: "readonly",
+    mode: options.mode ?? "readonly",
     serverVersion: "0.3.0-test",
     readers: readers(),
+    writers: options.withWriters ? writers() : undefined,
     input,
     output: captured.output
   });
@@ -77,7 +93,9 @@ describe("readonly MCP stdio server", () => {
       }
     });
     expect(responses[1]).toMatchObject({ id: 2 });
-    expect((responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name)).toContain("crossgen_config_status");
+    const toolNames = (responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name);
+    expect(toolNames).toContain("crossgen_config_status");
+    expect(toolNames).not.toContain("crossgen_folder_create");
   });
 
   it("returns structured content for tool calls and tool errors", async () => {
@@ -92,14 +110,58 @@ describe("readonly MCP stdio server", () => {
     expect(responses[0]).toMatchObject({
       id: 1,
       result: {
-        structuredContent: { stateFound: true, providerCount: 1 }
+        structuredContent: {
+          schemaVersion: 1,
+          data: { stateFound: true, providerCount: 1 }
+        }
       }
     });
     expect(responses[1]).toMatchObject({
       id: 2,
       result: {
         isError: true,
-        structuredContent: { code: "INVALID_ARGUMENT" }
+        structuredContent: {
+          schemaVersion: 1,
+          error: { code: "INVALID_ARGUMENT" }
+        }
+      }
+    });
+  });
+
+  it("registers Gallery write tools only in write mode", async () => {
+    const { output } = await runServer(
+      [
+        JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
+        JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "crossgen_folder_create", arguments: { name: "Campaign" } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "crossgen_asset_remove", arguments: { assetId: "asset-1" } } })
+      ].join("\n"),
+      { mode: "write", withWriters: true }
+    );
+
+    const responses = lineResponses(output);
+    expect(responses[0]).toMatchObject({
+      result: {
+        crossgen: {
+          effectiveMode: "write",
+          permissions: { readonly: true, write: true, generate: false }
+        }
+      }
+    });
+    expect((responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name)).toContain("crossgen_folder_create");
+    expect(responses[2]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: { folder: { id: "folder-1", name: "Campaign" } }
+        }
+      }
+    });
+    expect(responses[3]).toMatchObject({
+      result: {
+        isError: true,
+        structuredContent: {
+          error: { code: "CONFIRMATION_REQUIRED" }
+        }
       }
     });
   });

@@ -252,7 +252,7 @@ export function buildCliAssetInspect(state: ReadonlyAppState | null, assetId: st
 
 export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMode; command: string }) {
   const args = ["--mcp"];
-  const effectiveMode: McpMode = "readonly";
+  const effectiveMode: McpMode = options.mode === "generate" ? "write" : options.mode;
   return {
     client: options.client,
     requestedMode: options.mode,
@@ -265,13 +265,15 @@ export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMod
     },
     permissions: {
       readonly: true,
-      write: false,
+      write: effectiveMode === "write",
       generate: false
     },
-    supportedModes: [effectiveMode],
+    supportedModes: ["readonly", "write"],
     unsupportedModeWarning:
-      options.mode === effectiveMode
+      options.mode === "generate"
+        ? "This build currently exposes readonly and Gallery write MCP tools only. Generation MCP tools are reserved for later v0.3.1 phases."
+        : options.mode === effectiveMode
         ? undefined
-        : "This build currently exposes readonly MCP tools only. Write and generation MCP modes are reserved for later v0.3.1 phases."
+        : "This build currently exposes readonly and Gallery write MCP tools only."
   };
 }
