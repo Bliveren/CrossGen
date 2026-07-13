@@ -75,6 +75,9 @@ import {
 } from "../shared/modelCatalog.js";
 import { compareVersions, isAllowedUpdateUrl, parseUpdateManifest, safeUpdateFileName, selectUpdateAsset } from "../shared/updateManifest.js";
 import { resolveDataDirs, resolveUserDataDir } from "../core/dataDirs.js";
+import { createGenerationQueueItem } from "../core/generation.js";
+import { requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion } from "../core/generationQueue.js";
+import { createQueueStore, type QueueStore } from "../core/queueStore.js";
 import { buildEndpoint, fetchWithTimeout } from "./services/openaiImageAdapter.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
@@ -176,7 +179,10 @@ let galleryOperationQueue: Promise<void> = Promise.resolve();
 let galleryWatchNeedsFullSync = false;
 let galleryWatchChangedRelPaths = new Set<string>();
 let stateWriteCount = 0;
+let generationQueueStore: QueueStore | null = null;
+const desktopWorkerHostId = `desktop_${process.pid}_${randomUUID()}`;
 const runningJobControllers = new Map<string, AbortController>();
+const queuedJobIds = new Map<string, string>();
 
 interface AssetProtocolPerfMetrics {
   galleryOriginalRequests: number;
@@ -341,6 +347,14 @@ function getBackupStatePath(): string {
   return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).backupStatePath;
 }
 
+function getQueuePath(): string {
+  return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).queuePath;
+}
+
+function getQueueLockPath(): string {
+  return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).queueLockPath;
+}
+
 function getDefaultImagesDir(): string {
   return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).imagesDir;
 }
@@ -375,6 +389,14 @@ function getHistoryImageRoots(state?: AppStateFile | null): string[] {
     ...dirs.legacyImageRoots
   ];
   return [...new Set(roots.map((root) => path.resolve(root)))];
+}
+
+function getGenerationQueueStore(): QueueStore {
+  generationQueueStore ??= createQueueStore({
+    queuePath: getQueuePath(),
+    lockPath: getQueueLockPath()
+  });
+  return generationQueueStore;
 }
 
 function assertKnownHistoryAssetPath(state: AppStateFile, assetPath: string): string {
@@ -2254,56 +2276,123 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   const apiKey = await getApiKeyOrThrow();
   const imagesDir = getImagesDir(state);
   const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir);
-  const startedAt = Date.now();
-  let job: GenerationJob = {
-    ...createJob(normalizedRequest, activeProvider, inputs, mask),
-    status: "running",
+  const queuedAt = Date.now();
+  let job: GenerationJob = createJob(normalizedRequest, activeProvider, inputs, mask);
+  await upsertJob(job);
+  const queueItem = createGenerationQueueItem({
+    source: "desktop",
+    providerId: activeProvider.id,
+    request: normalizedRequest,
+    costConfirmed: true,
+    historyJobId: job.id,
+    sourceAssetIds: [...inputs.map((asset) => asset.id), ...(mask ? [mask.id] : [])],
+    outputMediaKinds: ["image"]
+  });
+  queuedJobIds.set(job.id, queueItem.queueId);
+  await getGenerationQueueStore().appendItem(queueItem);
+
+  const result = await runGenerationQueueItemToCompletion<GenerationJob>({
+    queueStore: getGenerationQueueStore(),
+    queueId: queueItem.queueId,
+    host: { hostId: desktopWorkerHostId, kind: "desktop", processId: process.pid },
+    maxGlobalRunning: 1,
+    waitTimeoutMs: normalizedRequest.params.timeoutMs,
+    executeItem: async (_item, abortSignal) => {
+      const startedAt = Date.now();
+      const sendQueuedJobEvent = (event: JobProgressEvent) => sendJobEvent({ ...event, queueId: queueItem.queueId });
+      job = {
+        ...job,
+        status: "running",
+        updatedAt: new Date().toISOString()
+      };
+      await upsertJob(job);
+      sendQueuedJobEvent({ jobId: job.id, type: "started" });
+
+      try {
+        job = await adapter.runJob(job, apiKey, activeProvider, {
+          fetch,
+          imagesDir,
+          ensureDir,
+          sendJobEvent: sendQueuedJobEvent,
+          abortSignal
+        });
+        job = {
+          ...job,
+          name: job.name.trim() || defaultHistoryJobName(job),
+          durationMs: Date.now() - startedAt,
+          updatedAt: new Date().toISOString()
+        };
+        await upsertJob(job);
+        if (job.status === "succeeded") {
+          sendQueuedJobEvent({ jobId: job.id, type: "completed" });
+        } else {
+          sendQueuedJobEvent({ jobId: job.id, type: "failed", error: job.error });
+        }
+        return {
+          status: job.status === "succeeded" ? "succeeded" : "failed",
+          value: job,
+          historyJobId: job.id,
+          outputAssetIds: job.outputs.map((asset) => asset.id),
+          error: job.status === "failed" ? job.error : undefined
+        };
+      } catch (error) {
+        const message = abortSignal.aborted ? "任务已终止。" : normalizeError(error);
+        job = {
+          ...job,
+          status: "failed",
+          durationMs: Date.now() - startedAt,
+          error: message,
+          updatedAt: new Date().toISOString()
+        };
+        await upsertJob(job);
+        sendQueuedJobEvent({ jobId: job.id, type: "failed", error: message });
+        return {
+          status: "failed",
+          value: job,
+          historyJobId: job.id,
+          outputAssetIds: job.outputs.map((asset) => asset.id),
+          error: message
+        };
+      }
+    },
+    onStarted: (_item, controller) => {
+      runningJobControllers.set(job.id, controller);
+    },
+    onFinished: () => {
+      runningJobControllers.delete(job.id);
+      queuedJobIds.delete(job.id);
+    }
+  });
+
+  if (result.execution?.value) {
+    return result.execution.value;
+  }
+
+  const message = result.item?.status === "cancelled" ? "任务已终止。" : "任务等待超时。";
+  await requestGenerationQueueItemCancel(getGenerationQueueStore(), queueItem.queueId);
+  job = {
+    ...job,
+    status: "failed",
+    durationMs: Date.now() - queuedAt,
+    error: message,
     updatedAt: new Date().toISOString()
   };
   await upsertJob(job);
-  const abortController = new AbortController();
-  runningJobControllers.set(job.id, abortController);
-  sendJobEvent({ jobId: job.id, type: "started" });
-
-  try {
-    job = await adapter.runJob(job, apiKey, activeProvider, {
-      fetch,
-      imagesDir,
-      ensureDir,
-      sendJobEvent,
-      abortSignal: abortController.signal
-    });
-    job = {
-      ...job,
-      name: job.name.trim() || defaultHistoryJobName(job),
-      durationMs: Date.now() - startedAt,
-      updatedAt: new Date().toISOString()
-    };
-    await upsertJob(job);
-    sendJobEvent({ jobId: job.id, type: "completed" });
-    return job;
-  } catch (error) {
-    const message = abortController.signal.aborted ? "任务已终止。" : normalizeError(error);
-    job = {
-      ...job,
-      status: "failed",
-      durationMs: Date.now() - startedAt,
-      error: message,
-      updatedAt: new Date().toISOString()
-    };
-    await upsertJob(job);
-    sendJobEvent({ jobId: job.id, type: "failed", error: message });
-    return job;
-  } finally {
-    runningJobControllers.delete(job.id);
-  }
+  sendJobEvent({ jobId: job.id, queueId: queueItem.queueId, type: "failed", error: message });
+  queuedJobIds.delete(job.id);
+  return job;
 }
 
 function handleCancelJob(jobId: string): boolean {
   if (typeof jobId !== "string" || !jobId.trim()) return false;
   const controller = runningJobControllers.get(jobId);
-  if (!controller) return false;
-  controller.abort();
+  if (controller) {
+    controller.abort();
+    return true;
+  }
+  const queueId = queuedJobIds.get(jobId);
+  if (!queueId) return false;
+  void requestGenerationQueueItemCancel(getGenerationQueueStore(), queueId);
   return true;
 }
 
@@ -3208,9 +3297,9 @@ async function runCliCommandMode(args: string[]): Promise<number> {
           pathDisclosureRequiresConfirmation: true
         },
         knownLimitations: [
-          "v0.3.1 command mode is in Phase 0 spike state.",
-          "Durable queue, MCP stdio server, Gallery write tools, and generation tools are not implemented yet.",
-          "Use the desktop app for production image generation until the v0.3.1 queue path lands."
+          "v0.3.1 command mode is still readonly.",
+          "The desktop generation path uses the durable queue foundation; CLI/MCP generation tools are not implemented yet.",
+          "MCP stdio server, Gallery write tools, and agent generation tools are still in later v0.3.1 phases."
         ]
       };
       writeCliJson(cliSuccess(requestId, correlationId, data));

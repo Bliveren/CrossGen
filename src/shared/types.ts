@@ -441,6 +441,7 @@ export type CrossGenJsonResponse<TData = unknown> = CrossGenJsonSuccess<TData> |
 
 export interface JobProgressEvent {
   jobId: string;
+  queueId?: string;
   type: "started" | "attempt" | "partial" | "completed" | "failed";
   attemptIndex?: number;
   route?: OpenAIImageRoute;
