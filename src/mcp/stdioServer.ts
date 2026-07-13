@@ -41,6 +41,21 @@ export interface ReadonlyMcpReaders {
 }
 
 export interface GenerationMcpControllers {
+  generationSubmit(args: {
+    mode: "generate" | "edit";
+    prompt: string;
+    inputPaths: string[];
+    maskPath?: string;
+    providerId?: string;
+    model?: string;
+    idempotencyKey?: string;
+    confirm: boolean;
+    timeoutMs?: number;
+    size?: string;
+    quality?: string;
+    aspectRatio?: string;
+    resolution?: string;
+  }): Promise<unknown>;
   jobCancel(args: { queueId: string; confirm: boolean }): Promise<unknown | null>;
 }
 
@@ -157,6 +172,10 @@ function nullableStringProperty(description: string): JsonRpcObject {
 
 function confirmProperty(description: string): JsonRpcObject {
   return { type: "boolean", description };
+}
+
+function numberProperty(description: string): JsonRpcObject {
+  return { type: "number", description };
 }
 
 function objectSchema(properties: JsonRpcObject, required: string[] = []): JsonRpcObject {
@@ -298,6 +317,87 @@ function makeReadonlyTools(readers: ReadonlyMcpReaders): ReadonlyMcpTool[] {
 
 function makeGenerationControlTools(controllers: GenerationMcpControllers): ReadonlyMcpTool[] {
   return [
+    {
+      name: "crossgen_generate_image",
+      title: "CrossGen Generate Image",
+      description: "Submit a prompt-only image generation request to the durable CrossGen queue.",
+      inputSchema: objectSchema({
+        prompt: stringProperty("Generation prompt."),
+        providerId: stringProperty("Optional provider id. Defaults to the active provider."),
+        model: stringProperty("Optional model id override."),
+        idempotencyKey: stringProperty("Optional key to prevent duplicate paid submissions."),
+        timeoutMs: numberProperty("Optional request timeout in milliseconds."),
+        size: stringProperty("Optional OpenAI image size, such as auto or 1024x1024."),
+        quality: stringProperty("Optional OpenAI quality."),
+        aspectRatio: stringProperty("Optional Gemini aspect ratio."),
+        resolution: stringProperty("Optional Gemini resolution."),
+        confirm: confirmProperty("Must be true to submit a paid generation request.")
+      }, ["prompt", "confirm"]),
+      annotations: writeAnnotations(),
+      handler: (args) => {
+        const confirmationError = requireConfirmed(args, "Image generation requires confirm: true.");
+        if (confirmationError) return confirmationError;
+        const prompt = requiredString(args, "prompt");
+        if (typeof prompt !== "string") return prompt;
+        return controllers.generationSubmit({
+          mode: "generate",
+          prompt,
+          inputPaths: [],
+          providerId: typeof args.providerId === "string" ? args.providerId.trim() : undefined,
+          model: typeof args.model === "string" ? args.model.trim() : undefined,
+          idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey.trim() : undefined,
+          confirm: true,
+          timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : undefined,
+          size: typeof args.size === "string" ? args.size.trim() : undefined,
+          quality: typeof args.quality === "string" ? args.quality.trim() : undefined,
+          aspectRatio: typeof args.aspectRatio === "string" ? args.aspectRatio.trim() : undefined,
+          resolution: typeof args.resolution === "string" ? args.resolution.trim() : undefined
+        });
+      }
+    },
+    {
+      name: "crossgen_edit_image",
+      title: "CrossGen Edit Image",
+      description: "Submit an image edit request with local input image paths to the durable CrossGen queue.",
+      inputSchema: objectSchema({
+        prompt: stringProperty("Edit prompt."),
+        inputPaths: { type: "array", items: { type: "string" }, description: "Local input image paths." },
+        maskPath: stringProperty("Optional mask path for later inpaint-compatible flows."),
+        providerId: stringProperty("Optional provider id. Defaults to the active provider."),
+        model: stringProperty("Optional model id override."),
+        idempotencyKey: stringProperty("Optional key to prevent duplicate paid submissions."),
+        timeoutMs: numberProperty("Optional request timeout in milliseconds."),
+        size: stringProperty("Optional OpenAI image size, such as auto or 1024x1024."),
+        quality: stringProperty("Optional OpenAI quality."),
+        aspectRatio: stringProperty("Optional Gemini aspect ratio."),
+        resolution: stringProperty("Optional Gemini resolution."),
+        confirm: confirmProperty("Must be true to submit a paid edit request.")
+      }, ["prompt", "inputPaths", "confirm"]),
+      annotations: writeAnnotations(),
+      handler: (args) => {
+        const confirmationError = requireConfirmed(args, "Image editing requires confirm: true.");
+        if (confirmationError) return confirmationError;
+        const prompt = requiredString(args, "prompt");
+        if (typeof prompt !== "string") return prompt;
+        const inputPaths = stringArray(args, "inputPaths");
+        if (!Array.isArray(inputPaths)) return inputPaths;
+        return controllers.generationSubmit({
+          mode: "edit",
+          prompt,
+          inputPaths,
+          maskPath: typeof args.maskPath === "string" ? args.maskPath.trim() : undefined,
+          providerId: typeof args.providerId === "string" ? args.providerId.trim() : undefined,
+          model: typeof args.model === "string" ? args.model.trim() : undefined,
+          idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey.trim() : undefined,
+          confirm: true,
+          timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : undefined,
+          size: typeof args.size === "string" ? args.size.trim() : undefined,
+          quality: typeof args.quality === "string" ? args.quality.trim() : undefined,
+          aspectRatio: typeof args.aspectRatio === "string" ? args.aspectRatio.trim() : undefined,
+          resolution: typeof args.resolution === "string" ? args.resolution.trim() : undefined
+        });
+      }
+    },
     {
       name: "crossgen_job_cancel",
       title: "CrossGen Job Cancel",
@@ -679,7 +779,7 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
               ? "CrossGen MCP is running in readonly mode. It can inspect configuration, providers, models, queue state, and Gallery metadata without exposing local asset paths."
               : effectiveMode === "write"
               ? "CrossGen MCP is running in write mode. It can inspect CrossGen state and manage Gallery folders/assets. Generation tools are reserved for later v0.3.1 phases."
-              : "CrossGen MCP is running in generate mode. It can inspect CrossGen state, manage Gallery folders/assets, and request durable queue cancellation. Image generation submission tools are reserved for later v0.3.1 phases.",
+              : "CrossGen MCP is running in generate mode. It can inspect CrossGen state, manage Gallery folders/assets, submit image generation/edit requests to the durable queue, and request queue cancellation.",
           crossgen: {
             requestedMode: options.mode,
             effectiveMode,
@@ -690,9 +790,9 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
             },
             generateModeWarning:
               effectiveMode === "generate"
-                ? "Image generation submit/edit tools are not implemented yet; generate mode currently exposes queue cancellation controls."
+                ? "Generate mode currently enqueues image generation/edit requests. Worker execution and wait-mode completion are still later v0.3.1 phases."
                 : options.mode === "generate"
-                ? "Generate mode was requested, but queue cancellation controls were not available in this process."
+                ? "Generate mode was requested, but generation controls were not available in this process."
                 : undefined
           }
         })

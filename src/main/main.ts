@@ -29,10 +29,14 @@ import type {
   GalleryFolder,
   GalleryFolderDeleteResult,
   GalleryFolderInput,
+  GeminiAspectRatio,
+  GeminiResolution,
   GenerationJob,
   HistoryJobPatch,
   ImageAsset,
   InputAsset,
+  ImageParams,
+  ImageQuality,
   JobProgressEvent,
   OpenAIImageRoute,
   OpenAIImageRouteProbe,
@@ -41,6 +45,7 @@ import type {
   PromptTemplateInput,
   ProviderConfig,
   ProviderConfigInput,
+  QueueSource,
   RunJobRequest,
   StorageKind,
   StorageFolderOptions,
@@ -53,6 +58,8 @@ import type {
 } from "../shared/types.js";
 import {
   DEFAULT_IMAGE_PARAMS,
+  DEFAULT_GEMINI_IMAGE_PARAMS,
+  DEFAULT_GENERAL_IMAGE_PARAMS,
   dataUrlToBase64,
   defaultStreamingPartialsEnabled,
   getValidationError,
@@ -3262,7 +3269,32 @@ function getCliPositionalAfter(args: string[], token: string): string | undefine
 function getCliPositionalsAfter(args: string[], token: string): string[] {
   const index = args.indexOf(token);
   if (index < 0) return [];
-  const valueFlags = new Set(["--asset-id", "--client", "--correlation-id", "--duplicate", "--folder", "--mode", "--name", "--parent", "--request-id", "--tag", "--to"]);
+  const valueFlags = new Set([
+    "--asset-id",
+    "--aspect-ratio",
+    "--client",
+    "--correlation-id",
+    "--duplicate",
+    "--folder",
+    "--idempotency-key",
+    "--input",
+    "--mask",
+    "--max-attempts",
+    "--mode",
+    "--model",
+    "--name",
+    "--parent",
+    "--prompt",
+    "--prompt-file",
+    "--provider",
+    "--quality",
+    "--request-id",
+    "--resolution",
+    "--size",
+    "--tag",
+    "--timeout-ms",
+    "--to"
+  ]);
   const result: string[] = [];
   for (let cursor = index + 1; cursor < args.length; cursor += 1) {
     const arg = args[cursor];
@@ -3320,6 +3352,34 @@ function cliFailure(
   };
 }
 
+class CliCommandModeError extends Error {
+  constructor(
+    readonly code: CrossGenJsonErrorCode,
+    message: string,
+    readonly nextActions: string[] = [],
+    readonly exitCode = 2
+  ) {
+    super(message);
+  }
+}
+
+function throwCliCommandError(code: CrossGenJsonErrorCode, message: string, nextActions: string[] = [], exitCode = 2): never {
+  throw new CliCommandModeError(code, message, nextActions, exitCode);
+}
+
+function mcpToolErrorFromCli(error: CliCommandModeError) {
+  const message = redactLikelySecrets(error.message);
+  return {
+    isError: true,
+    content: [{ type: "text", text: `${error.code}: ${message}` }],
+    structuredContent: {
+      code: error.code,
+      message,
+      nextActions: error.nextActions
+    }
+  };
+}
+
 async function readExistingStateForCli(): Promise<AppStateFile | null> {
   try {
     return normalizeState(await readStateFile(getStatePath()));
@@ -3362,6 +3422,195 @@ async function cancelGenerationQueueItemForCli(queueId: string) {
         : undefined,
     job
   };
+}
+
+interface AgentGenerationEnqueueInput {
+  source: QueueSource;
+  mode: "generate" | "edit";
+  prompt: string;
+  inputPaths: string[];
+  maskPath?: string;
+  providerId?: string;
+  model?: string;
+  costConfirmed: boolean;
+  idempotencyKey?: string;
+  requestId?: string;
+  correlationId?: string;
+  maxAttempts?: number;
+  timeoutMs?: number;
+  size?: string;
+  quality?: string;
+  aspectRatio?: string;
+  resolution?: string;
+}
+
+function parsePositiveIntegerOption(value: string | undefined, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throwCliCommandError("INVALID_ARGUMENT", `${name} must be a positive integer.`, [`Use ${name} <number>.`]);
+  }
+  return parsed;
+}
+
+function selectProviderForAgent(state: AppStateFile, providerId?: string): StoredProviderConfig {
+  const requestedId = providerId?.trim() || state.activeProviderId;
+  const provider = state.providers.find((candidate) => candidate.id === requestedId);
+  if (!provider) {
+    throwCliCommandError("CONFIG_NOT_FOUND", "Provider configuration not found.", ["Run crossgen --cli provider list --json to find provider ids."], 4);
+  }
+  if (!provider.enabled) {
+    throwCliCommandError("CONFIG_NOT_FOUND", "Provider configuration is disabled.", ["Enable or switch provider in CrossGen before submitting generation jobs."], 4);
+  }
+  return provider;
+}
+
+function activeProviderModel(provider: StoredProviderConfig, override?: string): string {
+  return override?.trim() || provider.activeModelId || provider.defaultModel;
+}
+
+function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGenerationEnqueueInput): ImageParams {
+  const model = activeProviderModel(provider, input.model);
+  const timeoutMs = input.timeoutMs ?? provider.timeoutMs;
+  if (provider.activeLaunchId === GENERAL_LAUNCH_ID) {
+    return {
+      ...DEFAULT_GENERAL_IMAGE_PARAMS,
+      providerKind: provider.kind,
+      model,
+      timeoutMs
+    };
+  }
+  if (provider.kind === "gemini" || provider.activeLaunchId === NANO_BANANA_3_LAUNCH_ID) {
+    return {
+      ...DEFAULT_GEMINI_IMAGE_PARAMS,
+      providerKind: "gemini",
+      model,
+      aspectRatio: (input.aspectRatio as GeminiAspectRatio | undefined) ?? DEFAULT_GEMINI_IMAGE_PARAMS.aspectRatio,
+      resolution: (input.resolution as GeminiResolution | undefined) ?? DEFAULT_GEMINI_IMAGE_PARAMS.resolution,
+      timeoutMs
+    };
+  }
+  return {
+    ...DEFAULT_IMAGE_PARAMS,
+    providerKind: "openai",
+    model,
+    imageRoute:
+      input.mode === "generate"
+        ? provider.openAIImageRouting?.preferredGenerateRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute
+        : provider.openAIImageRouting?.preferredEditRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute,
+    size: input.size ?? (provider.defaultSize || DEFAULT_IMAGE_PARAMS.size),
+    quality: (input.quality as ImageQuality | undefined) ?? provider.defaultQuality,
+    stream: false,
+    partialImages: 0,
+    timeoutMs
+  };
+}
+
+function buildAgentRunJobRequest(provider: StoredProviderConfig, input: AgentGenerationEnqueueInput): RunJobRequest {
+  return {
+    mode: input.mode,
+    prompt: input.prompt,
+    inputPaths: input.inputPaths,
+    maskPath: input.maskPath,
+    params: buildAgentImageParams(provider, input)
+  };
+}
+
+function validateAgentRunJobRequest(request: RunJobRequest, provider: StoredProviderConfig): RunJobRequest {
+  const validation = validateRunJobRequest(request);
+  if (!validation.ok) {
+    throwCliCommandError("INVALID_ARGUMENT", validation.message ?? "Generation request is invalid.");
+  }
+  const normalizedRequest: RunJobRequest = {
+    ...request,
+    prompt: request.prompt.trim(),
+    params: normalizeImageParams(request.params)
+  };
+  const validationError = getValidationError(normalizedRequest.params, normalizedRequest.prompt);
+  if (validationError) {
+    throwCliCommandError("INVALID_ARGUMENT", validationError);
+  }
+  const adapter = getImageProviderAdapterForRequest(normalizedRequest);
+  if (!adapter) {
+    throwCliCommandError("CAPABILITY_UNSUPPORTED", unsupportedImageProviderMessage(), ["Run crossgen --cli models list --json to inspect supported model capabilities."], 4);
+  }
+  const adapterValidation = adapter.validateJob(normalizedRequest);
+  if (!adapterValidation.ok) {
+    throwCliCommandError("CAPABILITY_UNSUPPORTED", adapterValidation.message ?? "Generation request is not supported by the selected model.", ["Run crossgen --cli models list --json to inspect supported model capabilities."], 4);
+  }
+  if (!canRunRequestWithConfig(normalizedRequest, provider)) {
+    throwCliCommandError("CAPABILITY_UNSUPPORTED", "Request provider/model does not match the selected provider configuration.", ["Switch provider or pass --provider/--model for a compatible configuration."], 4);
+  }
+  return normalizedRequest;
+}
+
+async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
+  if (!input.costConfirmed) {
+    throwCliCommandError("CONFIRMATION_REQUIRED", "Generation submission requires explicit confirmation.", ["Re-run with --yes or call the MCP tool with confirm: true."], 3);
+  }
+  const idempotencyKey = input.idempotencyKey?.trim() || undefined;
+  if (idempotencyKey) {
+    const existingQueue = await readExistingQueueForCli();
+    const existing = existingQueue.items.find((item) => item.idempotencyKey === idempotencyKey);
+    if (existing) {
+      return {
+        created: false,
+        duplicate: true,
+        idempotencyKey,
+        queueId: existing.queueId,
+        historyJobId: existing.historyJobId,
+        job: buildCliJobStatus(existingQueue, await readExistingStateForCli(), existing.queueId)
+      };
+    }
+  }
+
+  const state = await readState();
+  const provider = selectProviderForAgent(state, input.providerId);
+  const request = validateAgentRunJobRequest(buildAgentRunJobRequest(provider, input), provider);
+  const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
+  const job = createJob(request, provider, inputs, mask);
+  await upsertJob(job);
+  const queueItem = createGenerationQueueItem({
+    source: input.source,
+    providerId: provider.id,
+    request,
+    costConfirmed: true,
+    historyJobId: job.id,
+    maxAttempts: input.maxAttempts,
+    sourceAssetIds: [...inputs.map((asset) => asset.id), ...(mask ? [mask.id] : [])],
+    outputMediaKinds: ["image"],
+    idempotencyKey,
+    requestId: input.requestId,
+    correlationId: input.correlationId
+  });
+  await getGenerationQueueStore().appendItem(queueItem);
+  const queue = await readExistingQueueForCli();
+  return {
+    created: true,
+    duplicate: false,
+    idempotencyKey,
+    queueId: queueItem.queueId,
+    historyJobId: job.id,
+    status: queueItem.status,
+    job: buildCliJobStatus(queue, await readExistingStateForCli(), queueItem.queueId)
+  };
+}
+
+function readGenerationPromptFromCli(args: string[], command: string): string {
+  const prompt = getCliOption(args, "--prompt");
+  if (prompt !== undefined) return prompt;
+  const promptFile = getCliOption(args, "--prompt-file");
+  if (promptFile) return readFileSync(promptFile, "utf8");
+  if (command === "generate") {
+    return getCliPositionalsAfter(args, command).join(" ");
+  }
+  return "";
+}
+
+function getCliGenerationInputPaths(args: string[], command: string): string[] {
+  const explicit = getCliOptions(args, "--input");
+  if (explicit.length > 0) return explicit;
+  return command === "edit" ? getCliPositionalsAfter(args, command) : [];
 }
 
 function normalizeCliDuplicateAction(value: string | undefined): GalleryDuplicateAction {
@@ -3505,6 +3754,39 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
       }
     },
     jobControllers: requestedMode === "generate" ? {
+      generationSubmit: async ({
+        mode,
+        prompt,
+        inputPaths,
+        maskPath,
+        providerId,
+        model,
+        idempotencyKey,
+        confirm,
+        timeoutMs,
+        size,
+        quality,
+        aspectRatio,
+        resolution
+      }) => enqueueGenerationForAgent({
+        source: "mcp",
+        mode,
+        prompt,
+        inputPaths,
+        maskPath,
+        providerId,
+        model,
+        costConfirmed: confirm,
+        idempotencyKey,
+        timeoutMs,
+        size,
+        quality,
+        aspectRatio,
+        resolution
+      }).catch((error: unknown) => {
+        if (error instanceof CliCommandModeError) return mcpToolErrorFromCli(error);
+        throw error;
+      }),
       jobCancel: async ({ queueId }) => cancelGenerationQueueItemForCli(queueId)
     } : undefined,
     sanitizeError: (error) => redactLikelySecrets(normalizeError(error))
@@ -3595,12 +3877,45 @@ async function runCliCommandMode(args: string[]): Promise<number> {
           pathDisclosureRequiresConfirmation: true
         },
         knownLimitations: [
-          "v0.3.1 CLI/MCP command mode currently exposes readonly discovery, queue inspection/cancellation, and Gallery asset management tools.",
-          "The desktop generation path uses the durable queue foundation; CLI/MCP generation submission tools are not implemented yet.",
-          "Agent generation submit/edit tools are still in later v0.3.1 phases."
+          "v0.3.1 CLI/MCP command mode currently exposes readonly discovery, queue inspection/cancellation, Gallery asset management, and generation enqueue tools.",
+          "CLI/MCP generation tools currently submit durable queue items; worker execution and wait-mode completion are still later v0.3.1 phases.",
+          "Agent generation submit/edit tools require explicit confirmation because they may create paid provider requests when a worker executes them."
         ]
       };
       writeCliJson(cliSuccess(requestId, correlationId, data));
+      return 0;
+    }
+
+    if (command === "generate" || command === "edit") {
+      const prompt = readGenerationPromptFromCli(args, command);
+      if (!prompt.trim()) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing prompt.", ["Use --prompt <text> or --prompt-file <path>."]));
+        return 2;
+      }
+      if (!hasCliFlag(args, "--yes")) {
+        writeCliJson(cliFailure(requestId, correlationId, "CONFIRMATION_REQUIRED", "Generation submission requires --yes.", [`Re-run ${command} with --yes if you intend to submit this paid job.`]));
+        return 3;
+      }
+      const result = await enqueueGenerationForAgent({
+        source: "cli",
+        mode: command,
+        prompt,
+        inputPaths: getCliGenerationInputPaths(args, command),
+        maskPath: getCliOption(args, "--mask"),
+        providerId: getCliOption(args, "--provider"),
+        model: getCliOption(args, "--model"),
+        costConfirmed: true,
+        idempotencyKey: getCliOption(args, "--idempotency-key"),
+        requestId,
+        correlationId,
+        maxAttempts: parsePositiveIntegerOption(getCliOption(args, "--max-attempts"), "--max-attempts"),
+        timeoutMs: parsePositiveIntegerOption(getCliOption(args, "--timeout-ms"), "--timeout-ms"),
+        size: getCliOption(args, "--size"),
+        quality: getCliOption(args, "--quality"),
+        aspectRatio: getCliOption(args, "--aspect-ratio"),
+        resolution: getCliOption(args, "--resolution")
+      });
+      writeCliJson(cliSuccess(requestId, correlationId, result));
       return 0;
     }
 
@@ -3887,6 +4202,8 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       "Use --cli config status --json.",
       "Use --cli provider list --json.",
       "Use --cli models list --json.",
+      "Use --cli generate --prompt <text> --yes --json.",
+      "Use --cli edit --prompt <text> --input <path> --yes --json.",
       "Use --cli queue status --json.",
       "Use --cli job list --json.",
       "Use --cli job status <queue-id-or-history-job-id> --json.",
@@ -3904,6 +4221,10 @@ async function runCliCommandMode(args: string[]): Promise<number> {
     }
     return 2;
   } catch (error) {
+    if (error instanceof CliCommandModeError) {
+      writeCliJson(cliFailure(requestId, correlationId, error.code, error.message, error.nextActions));
+      return error.exitCode;
+    }
     writeCliJson(cliFailure(requestId, correlationId, "UNKNOWN_ERROR", normalizeError(error)));
     return 1;
   }

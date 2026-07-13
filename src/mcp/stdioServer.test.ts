@@ -53,6 +53,17 @@ function writers(): GalleryMcpWriters {
 
 function controllers(): GenerationMcpControllers {
   return {
+    generationSubmit: async ({ mode, prompt, inputPaths, idempotencyKey }) => ({
+      created: true,
+      duplicate: false,
+      queueId: `queue-${mode}`,
+      historyJobId: `history-${mode}`,
+      idempotencyKey,
+      job: {
+        lookupId: `queue-${mode}`,
+        queueItem: { queueId: `queue-${mode}`, mode, promptPreview: prompt, inputCount: inputPaths.length, status: "queued" }
+      }
+    }),
     jobCancel: async ({ queueId }) => (queueId === "missing" ? null : { action: "cancel_requested", queueId, status: "running", cancelRequested: true })
   };
 }
@@ -221,6 +232,8 @@ describe("readonly MCP stdio server", () => {
     });
     const toolNames = (responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name);
     expect(toolNames).toContain("crossgen_folder_create");
+    expect(toolNames).toContain("crossgen_generate_image");
+    expect(toolNames).toContain("crossgen_edit_image");
     expect(toolNames).toContain("crossgen_job_cancel");
     expect(responses[2]).toMatchObject({
       result: {
@@ -246,6 +259,50 @@ describe("readonly MCP stdio server", () => {
         isError: true,
         structuredContent: {
           error: { code: "JOB_NOT_FOUND" }
+        }
+      }
+    });
+  });
+
+  it("submits generation tools only after confirmation", async () => {
+    const { output } = await runServer(
+      [
+        JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "crossgen_generate_image", arguments: { prompt: "yellow product render" } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "crossgen_generate_image", arguments: { prompt: "yellow product render", idempotencyKey: "idem-1", confirm: true } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "crossgen_edit_image", arguments: { prompt: "make it brighter", inputPaths: ["/tmp/input.png"], confirm: true } } })
+      ].join("\n"),
+      { mode: "generate", withWriters: true, withControllers: true }
+    );
+
+    const responses = lineResponses(output);
+    expect(responses[0]).toMatchObject({
+      result: {
+        isError: true,
+        structuredContent: {
+          error: { code: "CONFIRMATION_REQUIRED" }
+        }
+      }
+    });
+    expect(responses[1]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: {
+            created: true,
+            queueId: "queue-generate",
+            historyJobId: "history-generate",
+            idempotencyKey: "idem-1"
+          }
+        }
+      }
+    });
+    expect(responses[2]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: {
+            created: true,
+            queueId: "queue-edit",
+            job: { queueItem: { inputCount: 1 } }
+          }
         }
       }
     });
