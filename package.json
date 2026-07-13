@@ -4,6 +4,9 @@
   "description": "One-stop AI image generation manager for API access, model discovery, Gallery/history reuse, and lightweight image editing.",
   "author": "Nowo, Corgnitor, and CrossGen contributors",
   "license": "MIT",
+  "bin": {
+    "crossgen": "dist/cli/crossgen.js"
+  },
   "crossgen": {
     "updateManifestUrl": "https://raw.githubusercontent.com/Bliveren/CrossGen/main/docs/updates/latest.json"
   },
