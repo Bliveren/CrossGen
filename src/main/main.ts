@@ -32,6 +32,7 @@ import type {
   GeminiAspectRatio,
   GeminiResolution,
   GenerationJob,
+  GenerationQueueFile,
   GenerationQueueItem,
   GenerationQueueWorkerHost,
   HistoryJobPatch,
@@ -117,6 +118,7 @@ import {
 } from "../core/queueConfig.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
 import { createJsonStateStore, type JsonStateStore } from "../core/stateStore.js";
+import { withStateQueueTransaction } from "../core/stateQueueTransaction.js";
 import { parseGenerationPromptFile, type GenerationPromptFileEntry } from "../cli/generationBatch.js";
 import {
   buildCliAssetInspect,
@@ -570,7 +572,14 @@ async function readState(): Promise<AppStateFile> {
 
 async function writeState(state: AppStateFile, options: WriteStateOptions = {}): Promise<void> {
   await ensureDir(app.getPath("userData"));
-  const payload: AppStateFile = {
+  const payload = persistentStatePayload(state);
+  await getAppStateStore().write(payload, options);
+  stateWriteCount += 1;
+  stateCache = payload;
+}
+
+function persistentStatePayload(state: AppStateFile): AppStateFile {
+  return {
     version: STATE_VERSION,
     providers: state.providers,
     activeProviderId: state.activeProviderId,
@@ -582,9 +591,32 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
     storage: state.storage,
     draft: state.draft
   };
-  await getAppStateStore().write(payload, options);
+}
+
+async function mutateStateAndQueue<TResult>(
+  operation: (state: AppStateFile, queue: GenerationQueueFile) => Promise<{ state: AppStateFile; queue: GenerationQueueFile; result: TResult }> | { state: AppStateFile; queue: GenerationQueueFile; result: TResult },
+  options: WriteStateOptions = {}
+): Promise<{ state: AppStateFile; queue: GenerationQueueFile; result: TResult }> {
+  await ensureDir(app.getPath("userData"));
+  const transaction = await withStateQueueTransaction<AppStateFile, TResult>({
+    lockPath: getStateLockPath(),
+    queuePath: getQueuePath(),
+    updateBackup: options.updateBackup,
+    state: {
+      statePath: getStatePath(),
+      backupPath: getBackupStatePath(),
+      defaultState: getDefaultState(),
+      normalize: (value) => applyStartupRecovery(normalizeState(value))
+    }
+  }, async (context) => {
+    const next = await operation(context.state, context.queue);
+    context.setState(persistentStatePayload(next.state));
+    context.setQueue(next.queue);
+    return next.result;
+  });
   stateWriteCount += 1;
-  stateCache = payload;
+  stateCache = transaction.state;
+  return transaction;
 }
 
 async function readStateFile(filePath: string): Promise<unknown> {
@@ -1143,14 +1175,26 @@ function mergeImageAssets(...groups: ImageAsset[][]): ImageAsset[] {
 }
 
 async function upsertJob(job: GenerationJob): Promise<void> {
-  const persistentJob = stripTransientPreviewsFromJob(job);
   const state = await readState();
+  await writeState(upsertJobInState(state, job));
+}
+
+function upsertJobInState(state: AppStateFile, job: GenerationJob): AppStateFile {
+  const persistentJob = stripTransientPreviewsFromJob(job);
   const existingIndex = state.history.findIndex((item) => item.id === persistentJob.id);
   const nextHistory =
     existingIndex === -1
       ? [persistentJob, ...state.history]
       : state.history.map((item) => (item.id === persistentJob.id ? persistentJob : item));
-  await writeState({ ...state, history: nextHistory.slice(0, MAX_HISTORY) });
+  return { ...state, history: nextHistory.slice(0, MAX_HISTORY) };
+}
+
+function appendQueueItem(queue: GenerationQueueFile, item: GenerationQueueItem): GenerationQueueFile {
+  return {
+    ...queue,
+    updatedAt: new Date().toISOString(),
+    items: [...queue.items, item]
+  };
 }
 
 function sendJobEvent(event: JobProgressEvent): void {
@@ -2687,19 +2731,30 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   const imagesDir = getImagesDir(state);
   const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir);
   const queuedAt = Date.now();
-  let job: GenerationJob = createJob(normalizedRequest, activeProvider, inputs, mask);
-  await upsertJob(job);
-  const queueItem = createGenerationQueueItem({
-    source: "desktop",
-    providerId: activeProvider.id,
-    request: normalizedRequest,
-    costConfirmed: true,
-    historyJobId: job.id,
-    sourceAssetIds: [...inputs.map((asset) => asset.id), ...(mask ? [mask.id] : [])],
-    outputMediaKinds: ["image"]
+  let job!: GenerationJob;
+  let queueItem!: GenerationQueueItem;
+  await mutateStateAndQueue((currentState, queue) => {
+    const currentProvider = currentState.providers.find(p => p.id === currentState.activeProviderId) ?? currentState.providers[0];
+    if (!canRunRequestWithConfig(normalizedRequest, currentProvider)) {
+      throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
+    }
+    job = createJob(normalizedRequest, currentProvider, inputs, mask);
+    queueItem = createGenerationQueueItem({
+      source: "desktop",
+      providerId: currentProvider.id,
+      request: normalizedRequest,
+      costConfirmed: true,
+      historyJobId: job.id,
+      sourceAssetIds: [...inputs.map((asset) => asset.id), ...(mask ? [mask.id] : [])],
+      outputMediaKinds: ["image"]
+    });
+    return {
+      state: upsertJobInState(currentState, job),
+      queue: appendQueueItem(queue, queueItem),
+      result: null
+    };
   });
   queuedJobIds.set(job.id, queueItem.queueId);
-  await getGenerationQueueStore().appendItem(queueItem);
 
   const result = await runQueuedGenerationForAgent(queueItem.queueId, "desktop", normalizedRequest.params.timeoutMs);
 
@@ -3848,6 +3903,16 @@ interface AgentGenerationEnqueueInput {
   resolution?: string;
 }
 
+interface AgentGenerationEnqueueTransactionResult {
+  created: boolean;
+  duplicate: boolean;
+  idempotencyKey?: string;
+  queueId: string;
+  historyJobId?: string;
+  status: JobStatus;
+  lookupQueueId: string;
+}
+
 function parsePositiveIntegerOption(value: string | undefined, name: string): number | undefined {
   if (value === undefined) return undefined;
   const parsed = Number(value);
@@ -3985,7 +4050,6 @@ async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
   const request = validateAgentRunJobRequest(buildAgentRunJobRequest(provider, input), provider);
   const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
   const job = createJob(request, provider, inputs, mask);
-  await upsertJob(job);
   const queueItem = createGenerationQueueItem({
     source: input.source,
     providerId: provider.id,
@@ -4000,16 +4064,46 @@ async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
     requestId: input.requestId,
     correlationId: input.correlationId
   });
-  await getGenerationQueueStore().appendItem(queueItem);
-  const queue = await readExistingQueueForCli();
+  const transaction = await mutateStateAndQueue<AgentGenerationEnqueueTransactionResult>((currentState, queue) => {
+    if (idempotencyKey) {
+      const existing = queue.items.find((item) => item.idempotencyKey === idempotencyKey);
+      if (existing) {
+        return {
+          state: currentState,
+          queue,
+          result: {
+            created: false,
+            duplicate: true,
+            idempotencyKey,
+            queueId: existing.queueId,
+            historyJobId: existing.historyJobId,
+            status: existing.status,
+            lookupQueueId: existing.queueId
+          }
+        };
+      }
+    }
+    const currentProvider = selectProviderForAgent(currentState, input.providerId);
+    normalizeTargetGalleryFolderId(currentState, input.targetGalleryFolderId);
+    validateAgentRunJobRequest(request, currentProvider);
+    return {
+      state: upsertJobInState(currentState, job),
+      queue: appendQueueItem(queue, queueItem),
+      result: {
+        created: true,
+        duplicate: false,
+        idempotencyKey,
+        queueId: queueItem.queueId,
+        historyJobId: job.id,
+        status: queueItem.status,
+        lookupQueueId: queueItem.queueId
+      }
+    };
+  });
+  const { lookupQueueId, ...result } = transaction.result;
   return {
-    created: true,
-    duplicate: false,
-    idempotencyKey,
-    queueId: queueItem.queueId,
-    historyJobId: job.id,
-    status: queueItem.status,
-    job: buildCliJobStatus(queue, await readExistingStateForCli(), queueItem.queueId)
+    ...result,
+    job: buildCliJobStatus(transaction.queue, transaction.state, lookupQueueId)
   };
 }
 

@@ -56,7 +56,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
-async function readQueueFile(queuePath: string): Promise<GenerationQueueFile> {
+export async function readQueueFile(queuePath: string): Promise<GenerationQueueFile> {
   try {
     const raw = JSON.parse(await fs.readFile(queuePath, "utf8")) as Partial<GenerationQueueFile>;
     return normalizeQueueFile(raw);
@@ -68,14 +68,14 @@ async function readQueueFile(queuePath: string): Promise<GenerationQueueFile> {
   }
 }
 
-async function writeQueueFile(queuePath: string, queue: GenerationQueueFile): Promise<void> {
+export async function writeQueueFile(queuePath: string, queue: GenerationQueueFile): Promise<void> {
   await fs.mkdir(path.dirname(queuePath), { recursive: true });
   const tmpPath = `${queuePath}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmpPath, `${JSON.stringify(queue, null, 2)}\n`, "utf8");
   await fs.rename(tmpPath, queuePath);
 }
 
-function normalizeQueueFile(raw: Partial<GenerationQueueFile> | null | undefined): GenerationQueueFile {
+export function normalizeQueueFile(raw: Partial<GenerationQueueFile> | null | undefined): GenerationQueueFile {
   return {
     schemaVersion: 1,
     updatedAt: typeof raw?.updatedAt === "string" ? raw.updatedAt : new Date(0).toISOString(),
