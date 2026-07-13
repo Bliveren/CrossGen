@@ -8,7 +8,7 @@ const allowedStatuses = new Set(["pending", "passed", "failed", "blocked"]);
 // driven by its own `required` flag in the evidence file, not by this list.
 // macOS signing and notarization are tracked separately so a Developer ID signed
 // artifact is not misreported as Apple-notarized.
-const knownGateIds = [
+const baseGateIds = [
   "real-openai-api",
   "real-gemini-api",
   "macos-signed",
@@ -17,7 +17,17 @@ const knownGateIds = [
   "linux-native-release",
   "update-manifest-assets"
 ];
-const checklistGuards = [
+
+const v031GateIds = [
+  "build-and-mock-verifiers",
+  "cli-mcp-packaged-smoke",
+  "agent-integration-smoke",
+  "queue-concurrency-smoke",
+  "gallery-mutation-smoke",
+  "image-core-regression"
+];
+
+const v030ChecklistGuards = [
   {
     file: "docs/release/v0.3.0-preflight.md",
     text: "Build signed macOS assets.",
@@ -81,7 +91,137 @@ const checklistGuards = [
       "linux-native-release",
       "update-manifest-assets"
     ]
+  }
+];
+
+const v031ChecklistGuards = [
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Run `pnpm build` from the v0.3.1 release branch.",
+    gateIds: ["build-and-mock-verifiers"]
   },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Run `pnpm verify:mock-api`, `pnpm verify:mock-gemini-api`, and `pnpm verify:mock-model-discovery`.",
+    gateIds: ["build-and-mock-verifiers"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Run packaged CLI and MCP smoke against the packaged app.",
+    gateIds: ["cli-mcp-packaged-smoke"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Run agent integration smoke for Codex, Claude Code, and Cursor configuration output.",
+    gateIds: ["agent-integration-smoke"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Run queue concurrency smoke for default concurrency 1, explicit bounded concurrency 2, and two-host claim safety.",
+    gateIds: ["queue-concurrency-smoke"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Run Gallery mutation smoke for folder, asset, export, path-confirmation, duplicate, and concurrent mutation behavior.",
+    gateIds: ["gallery-mutation-smoke"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Run the image core regression checklist for generation, edit, inpaint, partial streaming, provider switching, Gallery, and editor workflows.",
+    gateIds: ["image-core-regression"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Complete real OpenAI-compatible GPT Image acceptance.",
+    gateIds: ["real-openai-api"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Complete real Gemini-compatible image acceptance.",
+    gateIds: ["real-gemini-api"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Build and verify Developer ID signed macOS release assets.",
+    gateIds: ["macos-signed"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Record Apple notarization status from actual notarization output.",
+    gateIds: ["macos-notarized"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Produce and validate native Windows release assets.",
+    gateIds: ["windows-native-release"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Produce and validate Linux release assets through CI.",
+    gateIds: ["linux-native-release"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Update public release assets and `docs/updates/latest.json` from exact artifact hashes and sizes.",
+    gateIds: ["update-manifest-assets"]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Run `pnpm verify:release-evidence -- --require-complete` on the final v0.3.1 release branch.",
+    gateIds: [
+      "real-openai-api",
+      "real-gemini-api",
+      "macos-signed",
+      "windows-native-release",
+      "linux-native-release",
+      "update-manifest-assets",
+      "build-and-mock-verifiers",
+      "cli-mcp-packaged-smoke",
+      "agent-integration-smoke",
+      "queue-concurrency-smoke",
+      "gallery-mutation-smoke",
+      "image-core-regression"
+    ]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Create and push `v0.3.1` tag.",
+    gateIds: [
+      "real-openai-api",
+      "real-gemini-api",
+      "macos-signed",
+      "windows-native-release",
+      "linux-native-release",
+      "update-manifest-assets",
+      "build-and-mock-verifiers",
+      "cli-mcp-packaged-smoke",
+      "agent-integration-smoke",
+      "queue-concurrency-smoke",
+      "gallery-mutation-smoke",
+      "image-core-regression"
+    ]
+  },
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Create GitHub Release with assets matching the update manifest.",
+    gateIds: [
+      "real-openai-api",
+      "real-gemini-api",
+      "macos-signed",
+      "windows-native-release",
+      "linux-native-release",
+      "update-manifest-assets",
+      "build-and-mock-verifiers",
+      "cli-mcp-packaged-smoke",
+      "agent-integration-smoke",
+      "queue-concurrency-smoke",
+      "gallery-mutation-smoke",
+      "image-core-regression"
+    ]
+  }
+];
+
+const commonChecklistGuards = [
   {
     file: "CHECKLIST.md",
     text: "仅输入 prompt 生成一张图（需真实 API Key）",
@@ -154,18 +294,54 @@ const checklistGuards = [
   }
 ];
 
+function parseVersion(value) {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(value);
+  if (!match) return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3])
+  };
+}
+
+function isAtLeastVersion(value, minimum) {
+  const current = parseVersion(value);
+  const target = parseVersion(minimum);
+  if (!current || !target) return false;
+  for (const key of ["major", "minor", "patch"]) {
+    if (current[key] > target[key]) return true;
+    if (current[key] < target[key]) return false;
+  }
+  return true;
+}
+
+function knownGateIdsForRelease(releaseVersion) {
+  if (isAtLeastVersion(releaseVersion, "0.3.1")) {
+    return [...baseGateIds, ...v031GateIds];
+  }
+  return baseGateIds;
+}
+
+function checklistGuardsForRelease(releaseVersion) {
+  if (isAtLeastVersion(releaseVersion, "0.3.1")) {
+    return [...v031ChecklistGuards, ...commonChecklistGuards];
+  }
+  return [...v030ChecklistGuards, ...commonChecklistGuards];
+}
+
 function usage() {
   return [
     "Usage:",
-    "  node scripts/verify-release-evidence.mjs [--file <path>] [--require-complete]",
+    "  node scripts/verify-release-evidence.mjs [--file <path>] [--expected-version <version>] [--require-complete]",
     "",
     "Validates docs/release/evidence.json. By default pending required gates are allowed.",
+    "When --expected-version is omitted, package.json version is required.",
     "Use --require-complete before publishing a release."
   ].join("\n");
 }
 
 function parseArgs(argv) {
-  const args = { file: defaultEvidenceFile, requireComplete: false };
+  const args = { file: defaultEvidenceFile, expectedVersion: null, requireComplete: false };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--") continue;
@@ -179,6 +355,15 @@ function parseArgs(argv) {
         throw new Error(`Missing value for --file.\n${usage()}`);
       }
       args.file = value;
+      index += 1;
+      continue;
+    }
+    if (arg === "--expected-version") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error(`Missing value for --expected-version.\n${usage()}`);
+      }
+      args.expectedVersion = value;
       index += 1;
       continue;
     }
@@ -341,20 +526,22 @@ function validateEvidence(evidence, label, status) {
   }
 }
 
-function validateLedger(ledger, packageJson, { requireComplete }) {
+function validateLedger(ledger, expectedVersion, { requireComplete }) {
   assertObject(ledger, "release evidence");
   if (ledger.schemaVersion !== 1) {
     throw new Error("release evidence schemaVersion must be 1.");
   }
   assertNonEmptyString(ledger.releaseVersion, "release evidence releaseVersion");
-  if (ledger.releaseVersion !== packageJson.version) {
-    throw new Error(`release evidence releaseVersion ${ledger.releaseVersion} does not match package version ${packageJson.version}.`);
+  assertNonEmptyString(expectedVersion, "expected release version");
+  if (ledger.releaseVersion !== expectedVersion) {
+    throw new Error(`release evidence releaseVersion ${ledger.releaseVersion} does not match expected version ${expectedVersion}.`);
   }
   assertIsoTimestamp(ledger.lastUpdated, "release evidence lastUpdated");
   if (!Array.isArray(ledger.gates)) {
     throw new Error("release evidence gates must be an array.");
   }
 
+  const knownGateIds = knownGateIdsForRelease(ledger.releaseVersion);
   const gatesById = new Map();
   for (const [index, gate] of ledger.gates.entries()) {
     const label = `release evidence gates[${index}]`;
@@ -396,8 +583,9 @@ function validateLedger(ledger, packageJson, { requireComplete }) {
   };
 }
 
-async function validateChecklistAlignment(gatesById) {
+async function validateChecklistAlignment(gatesById, releaseVersion) {
   const fileCache = new Map();
+  const checklistGuards = checklistGuardsForRelease(releaseVersion);
   for (const guard of checklistGuards) {
     if (!fileCache.has(guard.file)) {
       fileCache.set(guard.file, await readFile(path.resolve(guard.file), "utf8"));
@@ -431,9 +619,10 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const evidencePath = path.resolve(args.file);
   const packageJson = await readJson(path.resolve("package.json"));
+  const expectedVersion = args.expectedVersion ?? packageJson.version;
   const ledger = await readJson(evidencePath);
-  const result = validateLedger(ledger, packageJson, { requireComplete: args.requireComplete });
-  await validateChecklistAlignment(result.gatesById);
+  const result = validateLedger(ledger, expectedVersion, { requireComplete: args.requireComplete });
+  await validateChecklistAlignment(result.gatesById, ledger.releaseVersion);
 
   console.log(`Release evidence validated: ${result.passedRequiredCount}/${result.requiredCount} required gate(s) passed.`);
   if (result.incompleteRequiredGates.length > 0) {

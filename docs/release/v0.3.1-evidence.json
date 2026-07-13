@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "releaseVersion": "0.3.1",
+  "lastUpdated": "2026-07-14T00:00:00.000Z",
+  "gates": [
+    {
+      "id": "real-openai-api",
+      "title": "Real OpenAI-compatible GPT Image 2 acceptance",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Model discovery confirms gpt-image-2 is available to the tested key on the v0.3.1 release branch.",
+        "GPT Image 2 text-to-image generation succeeds through the app-supported route.",
+        "GPT Image 2 reference-image editing succeeds through the app-supported route.",
+        "GPT Image 2 guided-region editing with a source image and mask-like reference succeeds through the app-supported route.",
+        "The tested endpoint returns savable image artifacts within the user-configured timeout.",
+        "The release evidence records the selected provider route without exposing API keys or private base URLs."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "Real OpenAI GPT Image 2 external acceptance tracker",
+            "url": "https://github.com/Bliveren/CrossGen/issues/1"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 real OpenAI-compatible GPT Image 2 acceptance."
+      }
+    },
+    {
+      "id": "real-gemini-api",
+      "title": "Real Gemini-compatible image acceptance",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Model discovery confirms a Gemini-compatible image model is available to the tested key on the v0.3.1 release branch.",
+        "Gemini-compatible text-to-image generation succeeds through the app-supported route.",
+        "Gemini-compatible reference-image editing succeeds through the app-supported route.",
+        "Gemini-compatible guided-region editing succeeds and is not described as exact-mask inpainting unless the provider proves exact mask support.",
+        "The tested endpoint returns savable image artifacts within the user-configured timeout.",
+        "The release evidence records the selected provider route without exposing API keys or private base URLs."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "Real Gemini image external acceptance tracker",
+            "url": "https://github.com/Bliveren/CrossGen/issues/102"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 real Gemini-compatible image acceptance."
+      }
+    },
+    {
+      "id": "macos-signed",
+      "title": "Developer ID signed macOS release package",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Developer ID signing is performed without exposing secret values.",
+        "macOS artifacts are built from the v0.3.1 release commit.",
+        "codesign verification passes against the signed app extracted from the release artifact.",
+        "macOS release verification passes against the signed artifact.",
+        "Apple notarization status is tracked separately in the macos-notarized gate."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "Developer ID signed macOS distribution tracker",
+            "url": "https://github.com/Bliveren/CrossGen/issues/3"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 Developer ID signed macOS package evidence."
+      }
+    },
+    {
+      "id": "macos-notarized",
+      "title": "Apple notarized macOS release package",
+      "required": false,
+      "status": "blocked",
+      "acceptanceCriteria": [
+        "Apple notarization credentials are available without exposing secret values.",
+        "macOS artifacts are submitted to Apple notary service successfully.",
+        "Notarization is stapled to the distributed DMG or app artifact.",
+        "spctl verification reports an accepted notarized Developer ID source."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "Apple notarized macOS distribution tracker",
+            "url": "https://github.com/Bliveren/CrossGen/issues/3"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Blocked until Apple notarization credentials are available in the release environment. Keep this gate separate from Developer ID signing so a signed artifact is not misreported as notarized."
+      }
+    },
+    {
+      "id": "windows-native-release",
+      "title": "Native Windows release package validation",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Windows package verifier runs against the v0.3.1 artifact.",
+        "NSIS silent install, installed app launch, main-window detection, and silent uninstall pass in full-install evidence.",
+        "Packaged app can configure mock OpenAI-compatible and Gemini-compatible endpoints.",
+        "Download and open-folder behavior are checked on native Windows."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "Native Windows release validation tracker",
+            "url": "https://github.com/Bliveren/CrossGen/issues/4"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 native Windows release package validation."
+      }
+    },
+    {
+      "id": "linux-native-release",
+      "title": "CI Linux package and AppImage validation",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Linux release verifier runs in the GitHub Actions Linux package job against the v0.3.1 AppImage and unpacked Linux artifact.",
+        "Direct AppImage execution is best-effort when FUSE support is available; AppImage extraction and extracted app smoke verification cover CI environments without direct AppImage support.",
+        "The Linux package job runs the packaged CLI/MCP smoke against the packaged app.",
+        "Linux-specific release coverage focuses on package creation, AppImage verification, Linux launch smoke, and packaged command-mode behavior."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "Linux package and AppImage validation tracker",
+            "url": "https://github.com/Bliveren/CrossGen/issues/4"
+          },
+          {
+            "label": "CI workflow",
+            "url": "https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 CI Linux package, AppImage, launch, and packaged CLI/MCP evidence."
+      }
+    },
+    {
+      "id": "update-manifest-assets",
+      "title": "Formal update manifest distribution assets",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Distribution artifacts are uploaded to a public HTTPS v0.3.1 release URL.",
+        "docs/updates/latest.json contains matching asset URL, fileName, sha256, and sizeBytes metadata for v0.3.1.",
+        "Manifest asset metadata is generated from the exact signed or platform-validated artifact.",
+        "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "Formal update manifest distribution asset tracker",
+            "url": "https://github.com/Bliveren/CrossGen/issues/103"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 public release asset upload and update manifest evidence."
+      }
+    },
+    {
+      "id": "build-and-mock-verifiers",
+      "title": "Build and mock API verifier gate",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "pnpm build passes on the v0.3.1 release branch.",
+        "Mock OpenAI-compatible API verifier passes.",
+        "Mock Gemini-compatible API verifier passes.",
+        "Mock model discovery verifier passes.",
+        "The CI build job records the same verifier set for the final release commit."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "v0.3.1 plan",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.1-plan.md"
+          },
+          {
+            "label": "CI workflow",
+            "url": "https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 build and mock API verifier evidence."
+      }
+    },
+    {
+      "id": "cli-mcp-packaged-smoke",
+      "title": "Packaged CLI and MCP smoke gate",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Packaged app command mode reports CLI version and doctor output.",
+        "Packaged CLI can list models, reject async generation without a live worker, run queue-backed generate --wait, return idempotent generation results, and report job status.",
+        "Packaged CLI can list Gallery assets, require explicit path confirmation, and export an asset.",
+        "Packaged MCP registers readonly/write/generate tools only in the requested modes.",
+        "Packaged MCP can run generate_image, edit_image, Gallery listing, and asset export against isolated mock data."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "CLI and MCP documentation",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/cli-mcp.md"
+          },
+          {
+            "label": "CI workflow",
+            "url": "https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 packaged CLI and MCP smoke evidence."
+      }
+    },
+    {
+      "id": "agent-integration-smoke",
+      "title": "Agent integration smoke gate",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "crossgen mcp config emits usable snippets for Codex, Claude Code, and Cursor.",
+        "Readonly mode exposes inspection tools without write or generation tools.",
+        "Write mode exposes local Gallery mutation tools without generation tools.",
+        "Generate mode exposes generation tools only when explicit generate mode is requested.",
+        "Agent-facing JSON outputs preserve schemaVersion, requestId, data-or-error, stable error codes, and no secret or path leakage beyond explicit confirmation."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "CLI and MCP documentation",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/cli-mcp.md"
+          },
+          {
+            "label": "v0.3.1 plan",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.1-plan.md"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 Codex, Claude Code, and Cursor agent integration smoke evidence."
+      }
+    },
+    {
+      "id": "queue-concurrency-smoke",
+      "title": "Durable queue concurrency smoke gate",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Default queue concurrency remains 1.",
+        "Explicit bounded concurrency 2 is honored.",
+        "Two worker hosts cannot claim the same queue item.",
+        "Stale running items recover to interrupted instead of blind retry.",
+        "Cancel and retry update queue and history consistently."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "v0.3.1 plan",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.1-plan.md"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 durable queue concurrency smoke evidence."
+      }
+    },
+    {
+      "id": "gallery-mutation-smoke",
+      "title": "Gallery mutation smoke gate",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Folder create, rename, move, delete, and disk sync remain safe under the shared lock.",
+        "Asset import, update, move, remove, replace, and export remain safe under the shared lock.",
+        "Path traversal, symlink, illegal filename, and Windows reserved-name guards remain enforced.",
+        "Local path disclosure requires explicit confirmation.",
+        "Concurrent Gallery mutation smoke proves file mutation and matching state write happen in one critical section."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "v0.3.1 plan",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.1-plan.md"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 Gallery mutation smoke evidence."
+      }
+    },
+    {
+      "id": "image-core-regression",
+      "title": "Desktop image workflow regression gate",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Desktop text-to-image generation remains functional.",
+        "Desktop image-to-image editing and guided-region editing remain functional.",
+        "OpenAI-compatible partial streaming remains available as a per-generation parameter and defaults off.",
+        "Gemini-compatible reference images remain functional.",
+        "Provider switching, Gallery import/move/download, and image editor save/download flows do not regress.",
+        "Manual checklist evidence records failures, blockers, and exact visible error text without secrets."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "v0.3.1 plan",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.1-plan.md"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Pending v0.3.1 desktop image workflow regression evidence."
+      }
+    }
+  ]
+}

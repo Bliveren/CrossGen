@@ -8,7 +8,12 @@ import { describe, expect, it } from "vitest";
 
 const scriptPath = path.resolve("scripts/verify-release-evidence.mjs");
 const execFileAsync = promisify(execFile);
-const checklistFiles = ["CHECKLIST.md", "MULTI_MODEL_CHECKLIST.md", "docs/release/v0.3.0-preflight.md"];
+const checklistFiles = [
+  "CHECKLIST.md",
+  "MULTI_MODEL_CHECKLIST.md",
+  "docs/release/v0.3.0-preflight.md",
+  "docs/release/v0.3.1-preflight.md"
+];
 
 async function run(args, options = {}) {
   try {
@@ -122,6 +127,31 @@ describe("release evidence verifier", () => {
     }
   });
 
+  it("validates the v0.3.1 candidate evidence ledger against the target version", async () => {
+    const result = await run(["--file", "docs/release/v0.3.1-evidence.json", "--expected-version", "0.3.1"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Release evidence validated: 0/12 required gate(s) passed.");
+    expect(result.stdout).toContain("Pending required gate(s):");
+    expect(result.stdout).toContain("cli-mcp-packaged-smoke");
+    expect(result.stdout).toContain("image-core-regression");
+  });
+
+  it("fails --require-complete for the pending v0.3.1 candidate evidence ledger", async () => {
+    const result = await run([
+      "--file",
+      "docs/release/v0.3.1-evidence.json",
+      "--expected-version",
+      "0.3.1",
+      "--require-complete"
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Required release evidence gates are not passed");
+    expect(result.stderr).toContain("build-and-mock-verifiers");
+    expect(result.stderr).toContain("gallery-mutation-smoke");
+  });
+
   it("rejects secret-looking values in evidence", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "image2tools-release-evidence-"));
     try {
@@ -181,6 +211,45 @@ describe("release evidence verifier", () => {
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("Record Apple notarization status from actual notarization output.");
       expect(result.stderr).toContain("macos-notarized");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects v0.3.1 preflight completion before matching candidate evidence passes", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "image2tools-release-evidence-"));
+    try {
+      await copyChecklistFixture(tempRoot);
+      await copyFile(path.resolve("package.json"), path.join(tempRoot, "package.json"));
+      const scriptsDir = path.join(tempRoot, "scripts");
+      await mkdir(scriptsDir, { recursive: true });
+      await copyFile(scriptPath, path.join(scriptsDir, "verify-release-evidence.mjs"));
+
+      const docsReleaseDir = path.join(tempRoot, "docs", "release");
+      await mkdir(docsReleaseDir, { recursive: true });
+      await copyFile(
+        path.resolve("docs/release/v0.3.1-evidence.json"),
+        path.join(docsReleaseDir, "v0.3.1-evidence.json")
+      );
+
+      const checklistPath = path.join(tempRoot, "docs", "release", "v0.3.1-preflight.md");
+      const checklist = await readFile(checklistPath, "utf8");
+      await writeFile(
+        checklistPath,
+        checklist.replace(
+          "- [ ] Run packaged CLI and MCP smoke against the packaged app.",
+          "- [x] Run packaged CLI and MCP smoke against the packaged app."
+        )
+      );
+
+      const result = await run(
+        ["--file", "docs/release/v0.3.1-evidence.json", "--expected-version", "0.3.1"],
+        { cwd: tempRoot }
+      );
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Run packaged CLI and MCP smoke against the packaged app.");
+      expect(result.stderr).toContain("cli-mcp-packaged-smoke");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
