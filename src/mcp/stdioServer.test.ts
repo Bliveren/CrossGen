@@ -30,10 +30,11 @@ function readers(): ReadonlyMcpReaders {
     modelsList: async () => ({ providers: [] }),
     queueStatus: async () => ({ totalItems: 0 }),
     queueConfig: async () => ({ config: { maxGlobalRunning: 1, providerConcurrency: {} } }),
-    jobList: async () => ({ jobs: [] }),
+    jobList: async (options) => ({ filters: options ?? {}, jobs: options?.status ? [{ queueId: "queue-filtered", status: options.status }] : [] }),
     jobStatus: async (jobId) => (jobId === "queue-1" ? { lookupId: "queue-1", queueItem: { queueId: "queue-1", status: "running" } } : null),
     folderList: async () => ({ folders: [] }),
-    galleryList: async () => ({ assets: [] }),
+    folderTree: async () => ({ folders: [{ id: "folder-root", children: [] }] }),
+    galleryList: async (options) => ({ filters: options ?? {}, assets: options?.folderId ? [{ id: "asset-filtered", folderId: options.folderId }] : [] }),
     assetInspect: async (assetId) => (assetId === "asset-1" ? { id: "asset-1", originalName: "sample.png" } : null)
   };
 }
@@ -144,6 +145,7 @@ describe("readonly MCP stdio server", () => {
     expect(toolNames).toContain("crossgen_config_status");
     expect(toolNames).toContain("crossgen_job_status");
     expect(toolNames).toContain("crossgen_queue_config_get");
+    expect(toolNames).toContain("crossgen_folder_tree");
     expect(toolNames).not.toContain("crossgen_folder_create");
     expect(toolNames).not.toContain("crossgen_queue_config_set");
     expect(toolNames).not.toContain("crossgen_job_cancel");
@@ -189,6 +191,44 @@ describe("readonly MCP stdio server", () => {
               queueItem: { queueId: "queue-1", status: "running" }
             }
           }
+        }
+      }
+    });
+  });
+
+  it("filters readonly job and gallery list tools", async () => {
+    const { output } = await runServer(
+      [
+        JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "crossgen_job_list", arguments: { status: "failed" } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "crossgen_gallery_list", arguments: { folderId: "folder-1", tags: ["Generated"], query: "hero" } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "crossgen_folder_tree", arguments: {} } })
+      ].join("\n")
+    );
+
+    const responses = lineResponses(output);
+    expect(responses[0]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: {
+            jobs: [{ queueId: "queue-filtered", status: ["failed"] }]
+          }
+        }
+      }
+    });
+    expect(responses[1]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: {
+            filters: { folderId: "folder-1", tags: ["Generated"], query: "hero" },
+            assets: [{ id: "asset-filtered", folderId: "folder-1" }]
+          }
+        }
+      }
+    });
+    expect(responses[2]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: { folders: [{ id: "folder-root", children: [] }] }
         }
       }
     });

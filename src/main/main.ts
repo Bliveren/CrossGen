@@ -39,6 +39,7 @@ import type {
   InputAsset,
   ImageParams,
   ImageQuality,
+  JobStatus,
   JobProgressEvent,
   OpenAIImageRoute,
   OpenAIImageRouteProbe,
@@ -121,6 +122,7 @@ import {
   buildCliAssetInspect,
   buildCliConfigStatus,
   buildCliFolderList,
+  buildCliFolderTree,
   buildCliGalleryList,
   buildCliJobList,
   buildCliJobStatus,
@@ -3570,9 +3572,11 @@ function getCliPositionalsAfter(args: string[], token: string): string[] {
     "--provider",
     "--provider-concurrency",
     "--quality",
+    "--query",
     "--request-id",
     "--resolution",
     "--size",
+    "--status",
     "--tag",
     "--timeout-ms",
     "--to",
@@ -3728,6 +3732,37 @@ function parseQueueRuntimeConfigPatchFromCli(args: string[]): QueueRuntimeConfig
     maxGlobalRunning: maxGlobalRunningValue === undefined ? undefined : parseCliQueueConcurrencyValue(maxGlobalRunningValue, "--max-global-running"),
     providerConcurrency: parseProviderConcurrencyAssignments(providerConcurrencyValues),
     clearProviderIds
+  };
+}
+
+function parseCliJobStatuses(args: string[]): JobStatus[] | undefined {
+  const statuses = getCliOptions(args, "--status").flatMap((value) => value.split(",")).map((value) => value.trim()).filter(Boolean);
+  if (statuses.length === 0) return undefined;
+  const validStatuses = new Set<JobStatus>(["queued", "running", "succeeded", "failed", "cancelled", "interrupted"]);
+  const parsed: JobStatus[] = [];
+  for (const status of statuses) {
+    if (!validStatuses.has(status as JobStatus)) {
+      throwCliCommandError("INVALID_ARGUMENT", `Unsupported job status filter: ${status}.`, [
+        "Use one of queued, running, succeeded, failed, cancelled, interrupted."
+      ]);
+    }
+    parsed.push(status as JobStatus);
+  }
+  return [...new Set(parsed)];
+}
+
+function parseCliNullableFolderOption(value: string | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const normalized = value.trim();
+  if (!normalized || normalized.toLowerCase() === "null" || normalized.toLowerCase() === "uncategorized") return null;
+  return normalized;
+}
+
+function parseCliGalleryListOptions(args: string[]) {
+  return {
+    folderId: parseCliNullableFolderOption(getCliOption(args, "--folder")),
+    tags: getCliOptions(args, "--tag"),
+    query: getCliOption(args, "--query")
   };
 }
 
@@ -4196,10 +4231,11 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
       modelsList: async () => buildCliModelsList(await readExistingStateForCli()),
       queueStatus: async () => buildCliQueueStatus(await readExistingQueueForCli(), await readQueueRuntimeConfigForCli()),
       queueConfig: async () => ({ config: await readQueueRuntimeConfigForCli() }),
-      jobList: async () => buildCliJobList(await readExistingQueueForCli()),
+      jobList: async (options) => buildCliJobList(await readExistingQueueForCli(), options),
       jobStatus: async (jobId) => buildCliJobStatus(await readExistingQueueForCli(), await readExistingStateForCli(), jobId),
       folderList: async () => buildCliFolderList(await readExistingStateForCli()),
-      galleryList: async () => buildCliGalleryList(await readExistingStateForCli()),
+      folderTree: async () => buildCliFolderTree(await readExistingStateForCli()),
+      galleryList: async (options) => buildCliGalleryList(await readExistingStateForCli(), options),
       assetInspect: async (assetId) => buildCliAssetInspect(await readExistingStateForCli(), assetId)
     },
     writers: requestedMode === "readonly" ? undefined : {
@@ -4582,7 +4618,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
     }
 
     if (command === "job" && subcommand === "list") {
-      writeCliJson(cliSuccess(requestId, correlationId, buildCliJobList(await readExistingQueueForCli())));
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliJobList(await readExistingQueueForCli(), { status: parseCliJobStatuses(args) })));
       return 0;
     }
 
@@ -4652,8 +4688,13 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       return 0;
     }
 
+    if (command === "folder" && subcommand === "tree") {
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliFolderTree(await readExistingStateForCli())));
+      return 0;
+    }
+
     if (command === "gallery" && subcommand === "list") {
-      writeCliJson(cliSuccess(requestId, correlationId, buildCliGalleryList(await readExistingStateForCli())));
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliGalleryList(await readExistingStateForCli(), parseCliGalleryListOptions(args))));
       return 0;
     }
 
@@ -4877,11 +4918,12 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       "Use --cli queue status --json.",
       "Use --cli queue config get --json.",
       "Use --cli queue config set --max-global-running <number> [--provider-concurrency <provider-id>=<number>] --yes --json.",
-      "Use --cli job list --json.",
+      "Use --cli job list [--status queued|running|succeeded|failed|cancelled|interrupted] --json.",
       "Use --cli job status <queue-id-or-history-job-id> --json.",
       "Use --cli job cancel <queue-id> --yes --json.",
       "Use --cli job retry <queue-id-or-history-job-id> --yes --json.",
-      "Use --cli gallery list --json.",
+      "Use --cli folder tree --json.",
+      "Use --cli gallery list [--folder <id|null>] [--tag <tag>] [--query <text>] --json.",
       "Use --cli folder create <name> --json.",
       "Use --cli asset import <path...> --json.",
       "Use --cli asset export <id> --to <path> --yes --json.",
