@@ -47,6 +47,9 @@ jobs:
       - name: Verify mock model discovery
         run: pnpm verify:mock-model-discovery
 
+      - name: Verify CLI and MCP smoke
+        run: pnpm verify:cli-mcp-smoke
+
   mac-package:
     name: macOS package
     runs-on: macos-latest

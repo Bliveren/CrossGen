@@ -33,6 +33,7 @@
     "verify:mock-gemini-api": "node scripts/verify-mock-gemini-api.mjs",
     "verify:mock-model-discovery": "node scripts/verify-mock-model-discovery.mjs",
     "verify:mock-api": "node scripts/verify-mock-api.mjs",
+    "verify:cli-mcp-smoke": "pnpm build:main && node scripts/verify-cli-mcp-smoke.mjs",
     "verify:release:linux": "node scripts/verify-linux-release.mjs",
     "verify:release:mac": "node scripts/verify-mac-release.mjs",
     "verify:release:windows": "node scripts/verify-windows-release.mjs",
