@@ -34,9 +34,14 @@ export interface ReadonlyMcpReaders {
   modelsList(): Promise<unknown>;
   queueStatus(): Promise<unknown>;
   jobList(): Promise<unknown>;
+  jobStatus(jobId: string): Promise<unknown | null>;
   folderList(): Promise<unknown>;
   galleryList(): Promise<unknown>;
   assetInspect(assetId: string): Promise<unknown | null>;
+}
+
+export interface GenerationMcpControllers {
+  jobCancel(args: { queueId: string; confirm: boolean }): Promise<unknown | null>;
 }
 
 export interface GalleryMcpWriters {
@@ -57,6 +62,7 @@ export interface ReadonlyMcpStdioServerOptions {
   serverVersion: string;
   readers: ReadonlyMcpReaders;
   writers?: GalleryMcpWriters;
+  jobControllers?: GenerationMcpControllers;
   input?: Readable;
   output?: Writable;
   sanitizeError?: (error: unknown) => string;
@@ -105,6 +111,20 @@ function assetInspectSchema(): JsonRpcObject {
       }
     },
     required: ["assetId"],
+    additionalProperties: false
+  };
+}
+
+function jobStatusSchema(): JsonRpcObject {
+  return {
+    type: "object",
+    properties: {
+      jobId: {
+        type: "string",
+        description: "Generation queue id or completed history job id from crossgen_job_list or crossgen_job_status."
+      }
+    },
+    required: ["jobId"],
     additionalProperties: false
   };
 }
@@ -222,6 +242,24 @@ function makeReadonlyTools(readers: ReadonlyMcpReaders): ReadonlyMcpTool[] {
       handler: () => readers.jobList()
     },
     {
+      name: "crossgen_job_status",
+      title: "CrossGen Job Status",
+      description: "Inspect one durable queue item or completed history job without exposing local output paths.",
+      inputSchema: jobStatusSchema(),
+      annotations: readonlyAnnotations(),
+      handler: async (args) => {
+        const jobId = typeof args.jobId === "string" ? args.jobId.trim() : "";
+        if (!jobId) {
+          return toolError("INVALID_ARGUMENT", "Missing required string argument jobId.", ["Call crossgen_job_list first to find queue ids."]);
+        }
+        const job = await readers.jobStatus(jobId);
+        if (!job) {
+          return toolError("JOB_NOT_FOUND", "Generation job not found.", ["Call crossgen_job_list first to find current queue ids."]);
+        }
+        return { job };
+      }
+    },
+    {
       name: "crossgen_folder_list",
       title: "CrossGen Folder List",
       description: "List CrossGen Gallery folders by id and display metadata.",
@@ -253,6 +291,33 @@ function makeReadonlyTools(readers: ReadonlyMcpReaders): ReadonlyMcpTool[] {
           return toolError("ASSET_NOT_FOUND", "Gallery asset not found.", ["Call crossgen_gallery_list first to find current asset ids."]);
         }
         return { asset };
+      }
+    }
+  ];
+}
+
+function makeGenerationControlTools(controllers: GenerationMcpControllers): ReadonlyMcpTool[] {
+  return [
+    {
+      name: "crossgen_job_cancel",
+      title: "CrossGen Job Cancel",
+      description: "Request cancellation for a queued or running durable generation queue item.",
+      inputSchema: objectSchema({
+        queueId: stringProperty("Durable generation queue id."),
+        confirm: confirmProperty("Must be true to request cancellation.")
+      }, ["queueId", "confirm"]),
+      annotations: writeAnnotations(true),
+      handler: (args) => {
+        const confirmationError = requireConfirmed(args, "Job cancellation requires confirm: true.");
+        if (confirmationError) return confirmationError;
+        const queueId = requiredString(args, "queueId");
+        if (typeof queueId !== "string") return queueId;
+        return controllers.jobCancel({ queueId, confirm: true }).then((result) => {
+          if (!result) {
+            return toolError("JOB_NOT_FOUND", "Generation queue item not found.", ["Call crossgen_job_list first to find current queue ids."]);
+          }
+          return result;
+        });
       }
     }
   ];
@@ -530,10 +595,16 @@ function extractJsonMessages(pending: Buffer): { messages: string[]; rest: Buffe
 export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerOptions): Promise<number> {
   const input = options.input ?? process.stdin;
   const output = options.output ?? process.stdout;
-  const effectiveMode = options.mode === "readonly" || !options.writers ? "readonly" : "write";
+  const effectiveMode: ReadonlyMcpMode =
+    options.mode === "generate" && options.jobControllers
+      ? "generate"
+      : options.mode !== "readonly" && options.writers
+      ? "write"
+      : "readonly";
   const tools = [
     ...makeReadonlyTools(options.readers),
-    ...(effectiveMode === "write" && options.writers ? makeWriteTools(options.writers) : [])
+    ...(effectiveMode !== "readonly" && options.writers ? makeWriteTools(options.writers) : []),
+    ...(effectiveMode === "generate" && options.jobControllers ? makeGenerationControlTools(options.jobControllers) : [])
   ];
   const toolMap = new Map(tools.map((tool) => [tool.name, tool]));
   const sanitizeError = options.sanitizeError ?? ((error: unknown) => (error instanceof Error ? error.message : String(error)));
@@ -606,18 +677,22 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
           instructions:
             effectiveMode === "readonly"
               ? "CrossGen MCP is running in readonly mode. It can inspect configuration, providers, models, queue state, and Gallery metadata without exposing local asset paths."
-              : "CrossGen MCP is running in write mode. It can inspect CrossGen state and manage Gallery folders/assets. Generation tools are reserved for later v0.3.1 phases.",
+              : effectiveMode === "write"
+              ? "CrossGen MCP is running in write mode. It can inspect CrossGen state and manage Gallery folders/assets. Generation tools are reserved for later v0.3.1 phases."
+              : "CrossGen MCP is running in generate mode. It can inspect CrossGen state, manage Gallery folders/assets, and request durable queue cancellation. Image generation submission tools are reserved for later v0.3.1 phases.",
           crossgen: {
             requestedMode: options.mode,
             effectiveMode,
             permissions: {
               readonly: true,
-              write: effectiveMode === "write",
-              generate: false
+              write: effectiveMode === "write" || effectiveMode === "generate",
+              generate: effectiveMode === "generate"
             },
             generateModeWarning:
-              options.mode === "generate"
-                ? "Generation MCP tools are not implemented yet; this process exposes write-mode Gallery tools only."
+              effectiveMode === "generate"
+                ? "Image generation submit/edit tools are not implemented yet; generate mode currently exposes queue cancellation controls."
+                : options.mode === "generate"
+                ? "Generate mode was requested, but queue cancellation controls were not available in this process."
                 : undefined
           }
         })

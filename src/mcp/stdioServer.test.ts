@@ -1,6 +1,12 @@
 import { PassThrough, Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { runReadonlyMcpStdioServer, type GalleryMcpWriters, type ReadonlyMcpMode, type ReadonlyMcpReaders } from "./stdioServer";
+import {
+  runReadonlyMcpStdioServer,
+  type GalleryMcpWriters,
+  type GenerationMcpControllers,
+  type ReadonlyMcpMode,
+  type ReadonlyMcpReaders
+} from "./stdioServer";
 
 function captureOutput() {
   const chunks: Buffer[] = [];
@@ -23,6 +29,7 @@ function readers(): ReadonlyMcpReaders {
     modelsList: async () => ({ providers: [] }),
     queueStatus: async () => ({ totalItems: 0 }),
     jobList: async () => ({ jobs: [] }),
+    jobStatus: async (jobId) => (jobId === "queue-1" ? { lookupId: "queue-1", queueItem: { queueId: "queue-1", status: "running" } } : null),
     folderList: async () => ({ folders: [] }),
     galleryList: async () => ({ assets: [] }),
     assetInspect: async (assetId) => (assetId === "asset-1" ? { id: "asset-1", originalName: "sample.png" } : null)
@@ -44,7 +51,13 @@ function writers(): GalleryMcpWriters {
   };
 }
 
-async function runServer(inputText: string, options: { mode?: ReadonlyMcpMode; withWriters?: boolean } = {}) {
+function controllers(): GenerationMcpControllers {
+  return {
+    jobCancel: async ({ queueId }) => (queueId === "missing" ? null : { action: "cancel_requested", queueId, status: "running", cancelRequested: true })
+  };
+}
+
+async function runServer(inputText: string, options: { mode?: ReadonlyMcpMode; withWriters?: boolean; withControllers?: boolean } = {}) {
   const input = new PassThrough();
   const captured = captureOutput();
   const run = runReadonlyMcpStdioServer({
@@ -52,6 +65,7 @@ async function runServer(inputText: string, options: { mode?: ReadonlyMcpMode; w
     serverVersion: "0.3.0-test",
     readers: readers(),
     writers: options.withWriters ? writers() : undefined,
+    jobControllers: options.withControllers ? controllers() : undefined,
     input,
     output: captured.output
   });
@@ -95,14 +109,17 @@ describe("readonly MCP stdio server", () => {
     expect(responses[1]).toMatchObject({ id: 2 });
     const toolNames = (responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name);
     expect(toolNames).toContain("crossgen_config_status");
+    expect(toolNames).toContain("crossgen_job_status");
     expect(toolNames).not.toContain("crossgen_folder_create");
+    expect(toolNames).not.toContain("crossgen_job_cancel");
   });
 
   it("returns structured content for tool calls and tool errors", async () => {
     const { output } = await runServer(
       [
         JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "crossgen_config_status", arguments: {} } }),
-        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "crossgen_asset_inspect", arguments: {} } })
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "crossgen_asset_inspect", arguments: {} } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "crossgen_job_status", arguments: { jobId: "queue-1" } } })
       ].join("\n")
     );
 
@@ -123,6 +140,20 @@ describe("readonly MCP stdio server", () => {
         structuredContent: {
           schemaVersion: 1,
           error: { code: "INVALID_ARGUMENT" }
+        }
+      }
+    });
+    expect(responses[2]).toMatchObject({
+      id: 3,
+      result: {
+        structuredContent: {
+          schemaVersion: 1,
+          data: {
+            job: {
+              lookupId: "queue-1",
+              queueItem: { queueId: "queue-1", status: "running" }
+            }
+          }
         }
       }
     });
@@ -149,6 +180,7 @@ describe("readonly MCP stdio server", () => {
       }
     });
     expect((responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name)).toContain("crossgen_folder_create");
+    expect((responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name)).not.toContain("crossgen_job_cancel");
     expect(responses[2]).toMatchObject({
       result: {
         structuredContent: {
@@ -161,6 +193,59 @@ describe("readonly MCP stdio server", () => {
         isError: true,
         structuredContent: {
           error: { code: "CONFIRMATION_REQUIRED" }
+        }
+      }
+    });
+  });
+
+  it("registers job cancellation only in generate mode", async () => {
+    const { output } = await runServer(
+      [
+        JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
+        JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "crossgen_job_cancel", arguments: { queueId: "queue-1" } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "crossgen_job_cancel", arguments: { queueId: "queue-1", confirm: true } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "crossgen_job_cancel", arguments: { queueId: "missing", confirm: true } } })
+      ].join("\n"),
+      { mode: "generate", withWriters: true, withControllers: true }
+    );
+
+    const responses = lineResponses(output);
+    expect(responses[0]).toMatchObject({
+      result: {
+        crossgen: {
+          effectiveMode: "generate",
+          permissions: { readonly: true, write: true, generate: true }
+        }
+      }
+    });
+    const toolNames = (responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name);
+    expect(toolNames).toContain("crossgen_folder_create");
+    expect(toolNames).toContain("crossgen_job_cancel");
+    expect(responses[2]).toMatchObject({
+      result: {
+        isError: true,
+        structuredContent: {
+          error: { code: "CONFIRMATION_REQUIRED" }
+        }
+      }
+    });
+    expect(responses[3]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: {
+            action: "cancel_requested",
+            queueId: "queue-1",
+            cancelRequested: true
+          }
+        }
+      }
+    });
+    expect(responses[4]).toMatchObject({
+      result: {
+        isError: true,
+        structuredContent: {
+          error: { code: "JOB_NOT_FOUND" }
         }
       }
     });
