@@ -99,7 +99,7 @@ import {
   type GalleryDuplicateAction,
   type GalleryMutationContext
 } from "../core/gallery.js";
-import { recordGenerationQueuePartialOutput, requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion } from "../core/generationQueue.js";
+import { recordGenerationQueuePartialOutput, requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion, runNextGenerationQueueItem } from "../core/generationQueue.js";
 import { getProviderEnvKeyNames } from "../core/keyring.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
 import { createJsonStateStore, type JsonStateStore } from "../core/stateStore.js";
@@ -188,6 +188,9 @@ const RENDERER_PERF_RESULT_PATH_ENV = "CROSSGEN_RENDERER_PERF_RESULT_PATH";
 const THEME_SOURCE_ENV = "CROSSGEN_THEME_SOURCE";
 const RENDERER_SCREENSHOT_DIR_ENV = "CROSSGEN_RENDERER_SCREENSHOT_DIR";
 const CLI_SCHEMA_VERSION = 1;
+const DESKTOP_QUEUE_WORKER_INTERVAL_MS = 5000;
+const DESKTOP_QUEUE_WORKER_RECHECK_MS = 250;
+const DESKTOP_QUEUE_WORKER_LEASE_MS = 30000;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -223,6 +226,9 @@ let stateWriteCount = 0;
 let appStateStore: JsonStateStore<AppStateFile> | null = null;
 let generationQueueStore: QueueStore | null = null;
 const desktopWorkerHostId = `desktop_${process.pid}_${randomUUID()}`;
+let desktopQueueWorkerTimer: NodeJS.Timeout | null = null;
+let desktopQueueWorkerRunning = false;
+let desktopQueueWorkerStopped = false;
 const runningJobControllers = new Map<string, AbortController>();
 const runningQueueControllers = new Map<string, AbortController>();
 const backgroundQueueRuns = new Map<string, Promise<unknown>>();
@@ -2462,6 +2468,22 @@ async function clearQueueWorkerHost(hostId: string): Promise<void> {
   }));
 }
 
+function trackQueuedGenerationStart(item: GenerationQueueItem, controller: AbortController): void {
+  runningQueueControllers.set(item.queueId, controller);
+  if (item.historyJobId) {
+    runningJobControllers.set(item.historyJobId, controller);
+    queuedJobIds.set(item.historyJobId, item.queueId);
+  }
+}
+
+function trackQueuedGenerationFinish(item: GenerationQueueItem): void {
+  runningQueueControllers.delete(item.queueId);
+  if (item.historyJobId) {
+    runningJobControllers.delete(item.historyJobId);
+    queuedJobIds.delete(item.historyJobId);
+  }
+}
+
 async function runQueuedGenerationForAgent(
   queueId: string,
   hostKind: GenerationQueueWorkerHost["kind"],
@@ -2476,21 +2498,14 @@ async function runQueuedGenerationForAgent(
     maxGlobalRunning: 1,
     waitTimeoutMs,
     executeItem: executeGenerationQueueItem,
-    onStarted: (item, controller) => {
-      runningQueueControllers.set(item.queueId, controller);
-      if (item.historyJobId) {
-        runningJobControllers.set(item.historyJobId, controller);
-        queuedJobIds.set(item.historyJobId, item.queueId);
-      }
-    },
-    onFinished: (item) => {
-      runningQueueControllers.delete(item.queueId);
-      if (item.historyJobId) {
-        runningJobControllers.delete(item.historyJobId);
-        queuedJobIds.delete(item.historyJobId);
-      }
+    onStarted: trackQueuedGenerationStart,
+    onFinished: trackQueuedGenerationFinish
+  }).finally(() => {
+    if (hostKind !== "desktop" || desktopQueueWorkerStopped) {
+      return clearQueueWorkerHost(host.hostId).catch(() => undefined);
     }
-  }).finally(() => clearQueueWorkerHost(host.hostId).catch(() => undefined));
+    return undefined;
+  });
   const job = await buildQueuedGenerationJobStatus(queueId);
   const status = job?.queueItem?.status ?? result.item?.status ?? null;
   const terminal = Boolean(job?.terminal);
@@ -2516,6 +2531,78 @@ function startBackgroundQueuedGeneration(queueId: string, hostKind: GenerationQu
   });
   backgroundQueueRuns.set(queueId, run);
   return true;
+}
+
+async function registerDesktopQueueWorkerHeartbeat(): Promise<void> {
+  const now = Date.now();
+  await getGenerationQueueStore().registerWorkerHeartbeat({
+    hostId: desktopWorkerHostId,
+    kind: "desktop",
+    processId: process.pid,
+    mode: "generate",
+    heartbeatAt: new Date(now).toISOString(),
+    leaseExpiresAt: new Date(now + DESKTOP_QUEUE_WORKER_LEASE_MS).toISOString()
+  });
+}
+
+async function runNextDesktopQueuedGeneration(): Promise<boolean> {
+  const result = await runNextGenerationQueueItem<GenerationJob>({
+    queueStore: getGenerationQueueStore(),
+    host: { hostId: desktopWorkerHostId, kind: "desktop", processId: process.pid },
+    maxGlobalRunning: 1,
+    leaseMs: DESKTOP_QUEUE_WORKER_LEASE_MS,
+    executeItem: executeGenerationQueueItem,
+    onStarted: trackQueuedGenerationStart,
+    onFinished: trackQueuedGenerationFinish
+  });
+  return result.claimed;
+}
+
+function scheduleDesktopQueueWorker(delayMs: number): void {
+  if (desktopQueueWorkerStopped) return;
+  if (desktopQueueWorkerTimer) clearTimeout(desktopQueueWorkerTimer);
+  desktopQueueWorkerTimer = setTimeout(() => {
+    desktopQueueWorkerTimer = null;
+    void desktopQueueWorkerTick();
+  }, delayMs);
+  desktopQueueWorkerTimer.unref?.();
+}
+
+async function desktopQueueWorkerTick(): Promise<void> {
+  if (desktopQueueWorkerStopped) return;
+  if (desktopQueueWorkerRunning) {
+    scheduleDesktopQueueWorker(DESKTOP_QUEUE_WORKER_RECHECK_MS);
+    return;
+  }
+
+  desktopQueueWorkerRunning = true;
+  let claimed = false;
+  try {
+    await registerDesktopQueueWorkerHeartbeat();
+    claimed = await runNextDesktopQueuedGeneration();
+  } catch (error) {
+    console.warn("[CrossGen] Desktop queue worker failed.", sanitizeError(error));
+  } finally {
+    desktopQueueWorkerRunning = false;
+    scheduleDesktopQueueWorker(claimed ? DESKTOP_QUEUE_WORKER_RECHECK_MS : DESKTOP_QUEUE_WORKER_INTERVAL_MS);
+  }
+}
+
+function startDesktopQueueWorker(): void {
+  desktopQueueWorkerStopped = false;
+  scheduleDesktopQueueWorker(0);
+}
+
+function stopDesktopQueueWorker(): void {
+  desktopQueueWorkerStopped = true;
+  if (desktopQueueWorkerTimer) {
+    clearTimeout(desktopQueueWorkerTimer);
+    desktopQueueWorkerTimer = null;
+  }
+  for (const controller of runningQueueControllers.values()) {
+    controller.abort();
+  }
+  void clearQueueWorkerHost(desktopWorkerHostId).catch(() => undefined);
 }
 
 async function waitForQueuedGenerationStatus(queueId: string, waitMs: number) {
@@ -4736,6 +4823,7 @@ app.whenReady().then(async () => {
     return;
   }
   void startGalleryWatcher();
+  startDesktopQueueWorker();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -4751,5 +4839,6 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  stopDesktopQueueWorker();
   stopGalleryWatcher();
 });
