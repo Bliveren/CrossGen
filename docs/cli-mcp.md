@@ -21,6 +21,8 @@ The packaged npm binary is `crossgen`. It launches CrossGen through the first av
 
 Use `--data-dir <path>` when an agent needs an isolated CrossGen data directory. The wrapper maps it to both `CROSSGEN_DATA_DIR` and `CROSSGEN_USER_DATA_DIR`.
 
+CI or other constrained Linux runners can set `CROSSGEN_APP_EXTRA_ARGS="--no-sandbox"` when launching a packaged app. The value is prepended to the Electron runtime arguments and is not enabled by default.
+
 ## Agent Checks
 
 ```bash

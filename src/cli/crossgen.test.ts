@@ -71,6 +71,35 @@ describe("crossgen binary launcher", () => {
     });
   });
 
+  it("passes explicit runtime args before the CLI sentinel for installed apps", () => {
+    const plan = buildCrossGenCliLaunchPlan({
+      argv: ["models", "list", "--json"],
+      env: {
+        CROSSGEN_APP_EXECUTABLE: "/Applications/CrossGen.app/Contents/MacOS/CrossGen",
+        CROSSGEN_APP_EXTRA_ARGS: "--no-sandbox"
+      },
+      platform: "linux",
+      packageRoot,
+      fileExists: existsAt([localElectron])
+    });
+
+    expect(plan.args).toEqual(["--no-sandbox", "--cli", "models", "list", "--json"]);
+  });
+
+  it("parses JSON runtime args for local Electron command mode", () => {
+    const plan = buildCrossGenCliLaunchPlan({
+      argv: ["--version", "--json"],
+      env: {
+        CROSSGEN_APP_EXTRA_ARGS: "[\"--no-sandbox\",\"--disable-gpu\"]"
+      },
+      platform: "linux",
+      packageRoot,
+      fileExists: existsAt([localElectron])
+    });
+
+    expect(plan.args).toEqual(["--no-sandbox", "--disable-gpu", packageRoot, "--cli", "--version", "--json"]);
+  });
+
   it("uses CROSSGEN_ELECTRON_BIN before repository and installed app discovery", () => {
     const plan = buildCrossGenCliLaunchPlan({
       argv: ["config", "status", "--json"],

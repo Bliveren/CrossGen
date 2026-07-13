@@ -73,12 +73,26 @@ function installedAppCommands(env: NodeJS.ProcessEnv, platform: NodeJS.Platform)
   return ["/usr/bin/crossgen", "/usr/local/bin/crossgen", "/opt/CrossGen/crossgen"].filter((candidate) => candidate !== process.argv[1]);
 }
 
+function parseExtraRuntimeArgs(env: NodeJS.ProcessEnv): string[] {
+  const raw = env.CROSSGEN_APP_EXTRA_ARGS?.trim();
+  if (!raw) return [];
+  if (raw.startsWith("[")) {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string" && item.trim())) {
+      throw new Error("CROSSGEN_APP_EXTRA_ARGS JSON value must be an array of non-empty strings.");
+    }
+    return parsed.map((item) => item.trim());
+  }
+  return raw.split(/\s+/).filter(Boolean);
+}
+
 export function buildCrossGenCliLaunchPlan(options: CrossGenCliLaunchOptions): CrossGenCliLaunchPlan {
   const env = { ...(options.env ?? process.env) };
   const platform = options.platform ?? process.platform;
   const packageRoot = options.packageRoot ?? defaultPackageRoot();
   const fileExists = options.fileExists ?? existsSync;
   const parsed = parseCrossGenArgs(options.argv);
+  const extraRuntimeArgs = parseExtraRuntimeArgs(env);
   if (parsed.dataDir) {
     env.CROSSGEN_DATA_DIR = parsed.dataDir;
     env.CROSSGEN_USER_DATA_DIR = parsed.dataDir;
@@ -88,7 +102,7 @@ export function buildCrossGenCliLaunchPlan(options: CrossGenCliLaunchOptions): C
   if (env.CROSSGEN_APP_EXECUTABLE?.trim()) {
     return {
       command: env.CROSSGEN_APP_EXECUTABLE.trim(),
-      args: forwardedArgs,
+      args: [...extraRuntimeArgs, ...forwardedArgs],
       env,
       source: "env-app"
     };
@@ -96,7 +110,7 @@ export function buildCrossGenCliLaunchPlan(options: CrossGenCliLaunchOptions): C
   if (env.CROSSGEN_ELECTRON_BIN?.trim()) {
     return {
       command: env.CROSSGEN_ELECTRON_BIN.trim(),
-      args: [packageRoot, ...forwardedArgs],
+      args: [...extraRuntimeArgs, packageRoot, ...forwardedArgs],
       env,
       source: "env-electron"
     };
@@ -106,7 +120,7 @@ export function buildCrossGenCliLaunchPlan(options: CrossGenCliLaunchOptions): C
   if (electron) {
     return {
       command: electron,
-      args: [packageRoot, ...forwardedArgs],
+      args: [...extraRuntimeArgs, packageRoot, ...forwardedArgs],
       env,
       source: "local-electron"
     };
@@ -116,7 +130,7 @@ export function buildCrossGenCliLaunchPlan(options: CrossGenCliLaunchOptions): C
     if (commandIfExists(candidate, fileExists)) {
       return {
         command: candidate,
-        args: forwardedArgs,
+        args: [...extraRuntimeArgs, ...forwardedArgs],
         env,
         source: "installed-app"
       };
