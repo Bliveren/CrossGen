@@ -20,6 +20,8 @@ export type QueueSource = "desktop" | "cli" | "mcp";
 
 export type QueueExecutionKind = "sync-provider" | "remote-poll" | "local-cpu";
 
+export type QueueErrorCategory = "transient" | "auth" | "quota" | "safety" | "cancelled" | "unsupported" | "unknown";
+
 export type QueueStage =
   | "queued"
   | "claiming"
@@ -360,9 +362,13 @@ export interface GenerationQueueItem {
   startedAt?: string;
   updatedAt: string;
   completedAt?: string;
+  nextRunAt?: string;
   lastError?: string;
+  lastErrorCategory?: QueueErrorCategory;
+  lastErrorRetryable?: boolean;
   historyJobId?: string;
   outputAssetIds: string[];
+  partialAssetIds: string[];
   cancelRequested: boolean;
   costConfirmed: boolean;
   workerHostId?: string;

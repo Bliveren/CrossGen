@@ -39,6 +39,7 @@ function queueItem(patch: Partial<GenerationQueueItem> = {}): GenerationQueueIte
     createdAt: now,
     updatedAt: now,
     outputAssetIds: [],
+    partialAssetIds: [],
     cancelRequested: false,
     costConfirmed: true,
     executionKind: "sync-provider",
@@ -136,6 +137,30 @@ describe("queueStore", () => {
     const queue = await store.read();
     expect(queue.items.find((item) => item.queueId === "queue-old")?.status).toBe("queued");
     expect(queue.items.find((item) => item.queueId === "queue-target")?.status).toBe("running");
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("does not claim items before nextRunAt", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({
+      queuePath,
+      lockPath: `${queuePath}.lock`,
+      now: () => Date.parse("2026-07-13T00:00:00.000Z")
+    });
+
+    await store.appendItem(queueItem({
+      queueId: "queue-later",
+      nextRunAt: "2026-07-13T00:01:00.000Z"
+    }));
+    await store.appendItem(queueItem({ queueId: "queue-now" }));
+
+    const claimed = await store.claimRunnableItems({
+      host: { hostId: "host-1", kind: "desktop", processId: process.pid },
+      limit: 2
+    });
+    expect(claimed.map((item) => item.queueId)).toEqual(["queue-now"]);
 
     await rm(tempDir, { recursive: true, force: true });
   });
