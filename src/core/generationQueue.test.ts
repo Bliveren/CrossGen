@@ -190,6 +190,7 @@ describe("generationQueue", () => {
       historyJobId: "job-1"
     });
     await store.appendItem(item);
+    let cancelRequestSettled: Promise<void> = Promise.resolve();
 
     const result = await runNextGenerationQueueItem({
       queueStore: store,
@@ -197,9 +198,11 @@ describe("generationQueue", () => {
       host: { hostId: "host-1", kind: "desktop", processId: process.pid },
       leaseMs: 150,
       onStarted: () => {
-        setTimeout(() => {
-          void requestGenerationQueueItemCancel(store, item.queueId);
-        }, 20);
+        cancelRequestSettled = new Promise((resolve, reject) => {
+          setTimeout(() => {
+            void requestGenerationQueueItemCancel(store, item.queueId).then(() => resolve(), reject);
+          }, 20);
+        });
       },
       executeItem: async (_item, signal) => {
         await new Promise<void>((resolve, reject) => {
@@ -231,6 +234,7 @@ describe("generationQueue", () => {
       workerHeartbeatAt: undefined,
       workerLeaseExpiresAt: undefined
     });
+    await cancelRequestSettled;
 
     await rm(tempDir, { recursive: true, force: true });
   });
