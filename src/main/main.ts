@@ -74,6 +74,7 @@ import {
   normalizeModelId
 } from "../shared/modelCatalog.js";
 import { compareVersions, isAllowedUpdateUrl, parseUpdateManifest, safeUpdateFileName, selectUpdateAsset } from "../shared/updateManifest.js";
+import { resolveDataDirs, resolveUserDataDir } from "../core/dataDirs.js";
 import { buildEndpoint, fetchWithTimeout } from "./services/openaiImageAdapter.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
@@ -267,7 +268,14 @@ function createWindow(): BrowserWindow {
 
 function preserveLegacyUserDataPath(): void {
   const userDataOverride = process.env[USER_DATA_DIR_ENV] || process.env[LEGACY_USER_DATA_DIR_ENV];
-  app.setPath("userData", userDataOverride ? path.resolve(userDataOverride) : path.join(app.getPath("appData"), LEGACY_USER_DATA_NAME));
+  app.setPath(
+    "userData",
+    resolveUserDataDir({
+      appDataDir: app.getPath("appData"),
+      userDataDir: userDataOverride,
+      legacyUserDataName: LEGACY_USER_DATA_NAME
+    })
+  );
 }
 
 function registerAssetProtocol(): void {
@@ -326,19 +334,19 @@ function registerAssetProtocol(): void {
 }
 
 function getStatePath(): string {
-  return path.join(app.getPath("userData"), "image2tools-state.v1.json");
+  return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).statePath;
 }
 
 function getBackupStatePath(): string {
-  return `${getStatePath()}.bak`;
+  return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).backupStatePath;
 }
 
 function getDefaultImagesDir(): string {
-  return path.join(app.getPath("userData"), "images");
+  return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).imagesDir;
 }
 
 function getDefaultGalleryDir(): string {
-  return path.join(app.getPath("userData"), "gallery");
+  return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).galleryDir;
 }
 
 function getStorageSettings(state?: AppStateFile | null): StorageSettings {
@@ -357,14 +365,14 @@ function getGalleryDir(state?: AppStateFile | null): string {
 }
 
 function getGalleryThumbnailCacheDir(): string {
-  return path.join(app.getPath("userData"), "gallery-thumbnails");
+  return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).galleryThumbnailCacheDir;
 }
 
 function getHistoryImageRoots(state?: AppStateFile | null): string[] {
+  const dirs = resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") });
   const roots = [
     getImagesDir(state),
-    path.join(app.getPath("appData"), "image2tools", "images"),
-    path.join(app.getPath("appData"), LEGACY_USER_DATA_NAME, "images")
+    ...dirs.legacyImageRoots
   ];
   return [...new Set(roots.map((root) => path.resolve(root)))];
 }
