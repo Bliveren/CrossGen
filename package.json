@@ -38,6 +38,7 @@
     "verify:release:mac": "node scripts/verify-mac-release.mjs",
     "verify:release:windows": "node scripts/verify-windows-release.mjs",
     "verify:release-evidence": "node scripts/verify-release-evidence.mjs",
+    "verify:release-evidence:v0.3.1": "node scripts/verify-release-evidence.mjs --file docs/release/v0.3.1-evidence.json --expected-version 0.3.1",
     "verify:real-aihub-api": "node scripts/verify-real-aihub-api.mjs",
     "verify:real-api": "node scripts/verify-real-api.mjs",
     "verify:real-gemini-api": "node scripts/verify-real-gemini-api.mjs",
