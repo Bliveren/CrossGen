@@ -3,8 +3,10 @@ import type {
   GalleryAsset,
   GalleryFolder,
   GenerationJob,
+  GenerationQueueItem,
   GenerationQueueFile,
   ImageQuality,
+  JobStatus,
   OpenAIImageRouting,
   ProviderConfig,
   ProviderKind,
@@ -95,6 +97,86 @@ function liveWorkerHosts(queue: GenerationQueueFile, now = Date.now()): number {
   return queue.workerHosts.filter((host) => Date.parse(host.leaseExpiresAt) > now).length;
 }
 
+function publicQueueJob(item: GenerationQueueItem) {
+  return {
+    queueId: item.queueId,
+    source: item.source,
+    providerId: item.providerId,
+    status: item.status,
+    priority: item.priority,
+    attempt: item.attempt,
+    maxAttempts: item.maxAttempts,
+    mode: item.request.mode,
+    promptPreview: promptPreview(item.request.prompt),
+    inputCount: item.request.inputPaths.length,
+    hasMask: Boolean(item.request.maskPath || item.request.maskDataUrl),
+    createdAt: item.createdAt,
+    startedAt: item.startedAt,
+    updatedAt: item.updatedAt,
+    completedAt: item.completedAt,
+    nextRunAt: item.nextRunAt,
+    lastError: item.lastError,
+    lastErrorCategory: item.lastErrorCategory,
+    lastErrorRetryable: item.lastErrorRetryable,
+    historyJobId: item.historyJobId,
+    outputAssetIds: item.outputAssetIds,
+    partialAssetIds: item.partialAssetIds,
+    cancelRequested: item.cancelRequested,
+    workerHostId: item.workerHostId,
+    workerProcessId: item.workerProcessId,
+    workerHeartbeatAt: item.workerHeartbeatAt,
+    workerLeaseExpiresAt: item.workerLeaseExpiresAt,
+    executionKind: item.executionKind,
+    stage: item.stage,
+    remoteProviderStatus: item.remoteProviderStatus,
+    lastPollAt: item.lastPollAt,
+    localStep: item.localStep,
+    outputMediaKinds: item.outputMediaKinds,
+    sourceAssetIds: item.sourceAssetIds,
+    requestId: item.requestId,
+    correlationId: item.correlationId
+  };
+}
+
+function publicHistoryJob(job: GenerationJob) {
+  return {
+    id: job.id,
+    name: job.name,
+    tags: job.tags,
+    providerKind: job.providerKind,
+    providerId: job.providerId,
+    launchId: job.launchId,
+    modelId: job.modelId,
+    modelDisplayName: job.modelDisplayName,
+    mode: job.mode,
+    promptPreview: promptPreview(job.prompt),
+    inputCount: job.inputAssets.length,
+    hasMask: Boolean(job.maskAsset),
+    status: job.status,
+    durationMs: job.durationMs,
+    error: job.error,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    outputCount: job.outputs.length,
+    outputs: job.outputs.map((output) => ({
+      id: output.id,
+      fileName: output.fileName,
+      mimeType: output.mimeType,
+      kind: output.kind ?? "image",
+      width: output.width,
+      height: output.height,
+      sourceType: output.sourceType,
+      createdAt: output.createdAt
+    })),
+    usage: job.usage,
+    hasProviderMetadata: Boolean(job.providerMetadata)
+  };
+}
+
+function isTerminalStatus(status: JobStatus): boolean {
+  return status === "succeeded" || status === "failed" || status === "cancelled" || status === "interrupted";
+}
+
 export function buildCliConfigStatus(state: ReadonlyAppState | null, queue: GenerationQueueFile) {
   const provider = state ? activeProvider(state) : undefined;
   return {
@@ -150,35 +232,22 @@ export function buildCliQueueStatus(queue: GenerationQueueFile) {
 
 export function buildCliJobList(queue: GenerationQueueFile) {
   return {
-    jobs: queue.items.map((item) => ({
-      queueId: item.queueId,
-      source: item.source,
-      providerId: item.providerId,
-      status: item.status,
-      priority: item.priority,
-      attempt: item.attempt,
-      maxAttempts: item.maxAttempts,
-      mode: item.request.mode,
-      promptPreview: promptPreview(item.request.prompt),
-      createdAt: item.createdAt,
-      startedAt: item.startedAt,
-      updatedAt: item.updatedAt,
-      completedAt: item.completedAt,
-      nextRunAt: item.nextRunAt,
-      lastError: item.lastError,
-      lastErrorCategory: item.lastErrorCategory,
-      lastErrorRetryable: item.lastErrorRetryable,
-      historyJobId: item.historyJobId,
-      outputAssetIds: item.outputAssetIds,
-      partialAssetIds: item.partialAssetIds,
-      cancelRequested: item.cancelRequested,
-      workerHostId: item.workerHostId,
-      executionKind: item.executionKind,
-      stage: item.stage,
-      outputMediaKinds: item.outputMediaKinds,
-      requestId: item.requestId,
-      correlationId: item.correlationId
-    }))
+    jobs: queue.items.map(publicQueueJob)
+  };
+}
+
+export function buildCliJobStatus(queue: GenerationQueueFile, state: ReadonlyAppState | null, jobId: string) {
+  const lookupId = jobId.trim();
+  const queueItem = queue.items.find((item) => item.queueId === lookupId || item.historyJobId === lookupId);
+  const historyJob = state?.history.find((job) => job.id === lookupId || job.id === queueItem?.historyJobId);
+  if (!queueItem && !historyJob) return null;
+  return {
+    lookupId,
+    source: queueItem ? "queue" : "history",
+    queueItem: queueItem ? publicQueueJob(queueItem) : null,
+    historyJob: historyJob ? publicHistoryJob(historyJob) : null,
+    canCancel: queueItem ? queueItem.status === "queued" || queueItem.status === "running" : false,
+    terminal: queueItem ? isTerminalStatus(queueItem.status) : historyJob ? isTerminalStatus(historyJob.status) : false
   };
 }
 
@@ -252,7 +321,7 @@ export function buildCliAssetInspect(state: ReadonlyAppState | null, assetId: st
 
 export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMode; command: string }) {
   const args = ["--mcp"];
-  const effectiveMode: McpMode = options.mode === "generate" ? "write" : options.mode;
+  const effectiveMode: McpMode = options.mode;
   return {
     client: options.client,
     requestedMode: options.mode,
@@ -265,15 +334,13 @@ export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMod
     },
     permissions: {
       readonly: true,
-      write: effectiveMode === "write",
-      generate: false
+      write: effectiveMode === "write" || effectiveMode === "generate",
+      generate: effectiveMode === "generate"
     },
-    supportedModes: ["readonly", "write"],
-    unsupportedModeWarning:
+    supportedModes: ["readonly", "write", "generate"],
+    generateModeWarning:
       options.mode === "generate"
-        ? "This build currently exposes readonly and Gallery write MCP tools only. Generation MCP tools are reserved for later v0.3.1 phases."
-        : options.mode === effectiveMode
-        ? undefined
-        : "This build currently exposes readonly and Gallery write MCP tools only."
+        ? "Generate mode currently exposes queue status and cancellation controls. Image generation submission tools are reserved for later v0.3.1 phases."
+        : undefined
   };
 }

@@ -99,6 +99,7 @@ import {
   buildCliFolderList,
   buildCliGalleryList,
   buildCliJobList,
+  buildCliJobStatus,
   buildCliMcpConfig,
   buildCliModelsList,
   buildCliProviderList,
@@ -3332,6 +3333,37 @@ async function readExistingQueueForCli() {
   return getGenerationQueueStore().read();
 }
 
+async function cancelGenerationQueueItemForCli(queueId: string) {
+  const queue = await readExistingQueueForCli();
+  const before = queue.items.find((item) => item.queueId === queueId);
+  if (!before) return null;
+
+  await requestGenerationQueueItemCancel(getGenerationQueueStore(), queueId);
+  const afterQueue = await readExistingQueueForCli();
+  const job = buildCliJobStatus(afterQueue, await readExistingStateForCli(), queueId);
+  if (!job) return null;
+
+  const action =
+    before.status === "queued"
+      ? "cancelled"
+      : before.status === "running"
+      ? "cancel_requested"
+      : "already_terminal";
+
+  return {
+    action,
+    queueId,
+    status: job.queueItem?.status ?? before.status,
+    cancelRequested: job.queueItem?.cancelRequested ?? before.cancelRequested,
+    providerRequestAborted: false,
+    note:
+      action === "cancel_requested"
+        ? "Cancel was recorded in the durable queue. A running provider request may continue until the active worker observes cancellation or returns."
+        : undefined,
+    job
+  };
+}
+
 function normalizeCliDuplicateAction(value: string | undefined): GalleryDuplicateAction {
   return value === "replace" || value === "copy" ? value : "cancel";
 }
@@ -3383,6 +3415,7 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
       modelsList: async () => buildCliModelsList(await readExistingStateForCli()),
       queueStatus: async () => buildCliQueueStatus(await readExistingQueueForCli()),
       jobList: async () => buildCliJobList(await readExistingQueueForCli()),
+      jobStatus: async (jobId) => buildCliJobStatus(await readExistingQueueForCli(), await readExistingStateForCli(), jobId),
       folderList: async () => buildCliFolderList(await readExistingStateForCli()),
       galleryList: async () => buildCliGalleryList(await readExistingStateForCli()),
       assetInspect: async (assetId) => buildCliAssetInspect(await readExistingStateForCli(), assetId)
@@ -3471,6 +3504,9 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
         };
       }
     },
+    jobControllers: requestedMode === "generate" ? {
+      jobCancel: async ({ queueId }) => cancelGenerationQueueItemForCli(queueId)
+    } : undefined,
     sanitizeError: (error) => redactLikelySecrets(normalizeError(error))
   });
 }
@@ -3559,9 +3595,9 @@ async function runCliCommandMode(args: string[]): Promise<number> {
           pathDisclosureRequiresConfirmation: true
         },
         knownLimitations: [
-          "v0.3.1 CLI/MCP command mode currently exposes readonly discovery and Gallery asset management tools.",
-          "The desktop generation path uses the durable queue foundation; CLI/MCP generation tools are not implemented yet.",
-          "Agent generation tools are still in later v0.3.1 phases."
+          "v0.3.1 CLI/MCP command mode currently exposes readonly discovery, queue inspection/cancellation, and Gallery asset management tools.",
+          "The desktop generation path uses the durable queue foundation; CLI/MCP generation submission tools are not implemented yet.",
+          "Agent generation submit/edit tools are still in later v0.3.1 phases."
         ]
       };
       writeCliJson(cliSuccess(requestId, correlationId, data));
@@ -3590,6 +3626,40 @@ async function runCliCommandMode(args: string[]): Promise<number> {
 
     if (command === "job" && subcommand === "list") {
       writeCliJson(cliSuccess(requestId, correlationId, buildCliJobList(await readExistingQueueForCli())));
+      return 0;
+    }
+
+    if (command === "job" && subcommand === "status") {
+      const [jobId] = getCliPositionalsAfter(args, subcommand);
+      if (!jobId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing job id.", ["Use job status <queue-id-or-history-job-id>."]));
+        return 2;
+      }
+      const job = buildCliJobStatus(await readExistingQueueForCli(), await readExistingStateForCli(), jobId);
+      if (!job) {
+        writeCliJson(cliFailure(requestId, correlationId, "JOB_NOT_FOUND", "Generation job not found.", ["Run crossgen --cli job list --json to find queue ids."]));
+        return 4;
+      }
+      writeCliJson(cliSuccess(requestId, correlationId, { job }));
+      return 0;
+    }
+
+    if (command === "job" && subcommand === "cancel") {
+      const [queueId] = getCliPositionalsAfter(args, subcommand);
+      if (!queueId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing queue id.", ["Use job cancel <queue-id> --yes."]));
+        return 2;
+      }
+      if (!hasCliFlag(args, "--yes")) {
+        writeCliJson(cliFailure(requestId, correlationId, "CONFIRMATION_REQUIRED", "Job cancellation requires --yes.", ["Re-run with --yes if you intend to cancel this queued or running generation job."]));
+        return 3;
+      }
+      const result = await cancelGenerationQueueItemForCli(queueId);
+      if (!result) {
+        writeCliJson(cliFailure(requestId, correlationId, "JOB_NOT_FOUND", "Generation queue item not found.", ["Run crossgen --cli job list --json to find queue ids."]));
+        return 4;
+      }
+      writeCliJson(cliSuccess(requestId, correlationId, result));
       return 0;
     }
 
@@ -3819,6 +3889,8 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       "Use --cli models list --json.",
       "Use --cli queue status --json.",
       "Use --cli job list --json.",
+      "Use --cli job status <queue-id-or-history-job-id> --json.",
+      "Use --cli job cancel <queue-id> --yes --json.",
       "Use --cli gallery list --json.",
       "Use --cli folder create <name> --json.",
       "Use --cli asset import <path...> --json.",

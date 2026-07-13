@@ -417,6 +417,7 @@ export type CrossGenJsonErrorCode =
   | "LOCK_TIMEOUT"
   | "PATH_NOT_ALLOWED"
   | "ASSET_NOT_FOUND"
+  | "JOB_NOT_FOUND"
   | "INVALID_ARGUMENT"
   | "UNKNOWN_ERROR";
 
