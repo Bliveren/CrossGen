@@ -15,8 +15,8 @@
       "platform": "win32",
       "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-Setup.exe",
       "fileName": "CrossGen-Setup.exe",
-      "sha256": "17c5927ac2a8c4482e5626d5a016903bd10299fcbb5df795901102977fac9e15",
-      "sizeBytes": 98828812,
+      "sha256": "5c7781c761888fbf9828c4947fa0be7fc330149c8fbf344912f583f7616ccd53",
+      "sizeBytes": 98758475,
       "arch": "x64"
     }
   ]

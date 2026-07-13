@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.0",
-  "lastUpdated": "2026-07-12T15:56:23.000Z",
+  "lastUpdated": "2026-07-13T10:46:40.885Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -199,13 +199,14 @@
         "Download and open-folder behavior are checked on native Windows."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-12T14:17:21.868Z",
-        "commit": "519586eb325453f5b26f541e9fac70e583109441",
+        "verifiedAt": "2026-07-13T10:46:40.885Z",
+        "commit": "fe50393b1b711617acd4373af5c05ff733a9ac56",
         "environment": "Native Windows 11 Pro 10.0.26100 x64 shell; package version 0.3.0; local unsigned NSIS artifact built from release/v0.3.0-mainline.",
         "commands": [
           "pnpm install --frozen-lockfile",
           "pnpm package:win",
-          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; pnpm verify:release:windows",
+          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='package-smoke'; pnpm verify:release:windows",
+          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; $env:IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS='/S'; pnpm verify:release:windows",
           "pnpm verify:mock-api",
           "pnpm verify:mock-gemini-api",
           "pnpm verify:mock-model-discovery",
@@ -223,16 +224,16 @@
             "kind": "windows-nsis-installer",
             "path": "release/CrossGen-Setup.exe",
             "public": false,
-            "description": "Local v0.3.0 Windows NSIS installer validated in full-install mode. SHA256 40452D26FBFEC6558183988BE05EBE706B6FB9F2396FEA82752A50EEE4F1A990; 98758670 bytes; ProductVersion 0.3.0; Authenticode status NotSigned."
+            "description": "Local v0.3.0 Windows NSIS installer validated in package-smoke and full-install mode. SHA256 5C7781C761888FBF9828C4947FA0BE7FC330149C8FBF344912F583F7616CCD53; 98758475 bytes; ProductVersion 0.3.0; Authenticode status NotSigned."
           },
           {
             "kind": "windows-unpacked-executable",
             "path": "release/win-unpacked/CrossGen.exe",
             "public": false,
-            "description": "Local v0.3.0 unpacked Windows executable validated by the Windows verifier before installer validation. SHA256 0B21EF0735A1A7D66A8BA3A2C87C6D995DCCF51C586B1428ABC4C091653B08AB; 210949632 bytes; ProductVersion 0.3.0.0; Authenticode status NotSigned."
+            "description": "Local v0.3.0 unpacked Windows executable validated by the Windows verifier before installer validation. SHA256 B747F778429BCBACA0E7BF9AB207B653CD2BD6B8836637EEA1FCCC05A06AF7F8; 210949632 bytes; ProductVersion 0.3.0.0; Authenticode status NotSigned."
           }
         ],
-        "summary": "v0.3.0 Windows package was rebuilt from commit 519586eb325453f5b26f541e9fac70e583109441 on native Windows. pnpm package:win completed successfully, including TypeScript checks, Vitest with 273 passed and 4 skipped tests, renderer build, main build, and NSIS packaging. pnpm verify:release:windows passed in full-install mode: installer and unpacked PE checks passed, the unpacked app launched and showed a main window, NSIS silent install succeeded, the installed app launched and showed a main window, and silent uninstall passed. Mock OpenAI, mock Gemini, and mock model discovery verifiers also passed for the same commit. Public Windows manifest asset metadata is recorded in the update-manifest-assets gate."
+        "summary": "v0.3.0 Windows package was rebuilt from commit fe50393b1b711617acd4373af5c05ff733a9ac56 on native Windows to fix updater launch behavior. pnpm package:win completed successfully, including TypeScript checks, Vitest with 273 passed and 4 skipped tests, renderer build, main build, and NSIS packaging. pnpm verify:release:windows passed in package-smoke mode, and also passed in full-install mode when run with IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS='/S': installer and unpacked PE checks passed, the unpacked app launched and showed a main window, NSIS silent install succeeded, the installed app launched and showed a main window, and silent uninstall passed. Mock OpenAI, mock Gemini, and mock model discovery verifiers also passed for the same commit. Public Windows manifest asset metadata is recorded in the update-manifest-assets gate."
       }
     },
     {
@@ -306,19 +307,14 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-12T15:56:23.000Z",
-        "commit": "5d3994c8a203cd3d25e1d3abcdc31ec96fd0402e",
-        "environment": "macOS 26.0 local release finalization shell; package version 0.3.0; public release URLs prepared for GitHub release tag v0.3.0; generated assets under release/ with hashes and byte sizes computed before manifest update.",
+        "verifiedAt": "2026-07-13T10:46:40.885Z",
+        "commit": "fe50393b1b711617acd4373af5c05ff733a9ac56",
+        "environment": "Windows 11 Pro 10.0.26100 x64 hotfix shell for the published v0.3.0 release; package version 0.3.0; public GitHub release tag v0.3.0 already exists and the Windows asset metadata is being refreshed to match the rebuilt installer from commit fe50393b1b711617acd4373af5c05ff733a9ac56.",
         "commands": [
-          "pnpm build",
-          "pnpm exec node scripts/electron-builder-pnpm.mjs --mac -c.mac.identity=\"Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)\" -c.mac.notarize=false",
-          "pnpm verify:release:mac",
           "pnpm package:win",
-          "pnpm exec node scripts/electron-builder-pnpm.mjs --win --x64",
-          "node scripts/update-manifest-asset.mjs --file release/CrossGen-0.3.0-mac-arm64.dmg --platform darwin --arch arm64 --url https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
           "node scripts/update-manifest-asset.mjs --file release/CrossGen-Setup.exe --platform win32 --arch x64 --url https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-Setup.exe",
-          "shasum -a 256 release/CrossGen-0.3.0-mac-arm64.dmg release/CrossGen-Setup.exe",
-          "wc -c release/CrossGen-0.3.0-mac-arm64.dmg release/CrossGen-Setup.exe",
+          "Get-FileHash -Algorithm SHA256 .\\release\\CrossGen-Setup.exe, .\\release\\CrossGen-Setup.exe.blockmap",
+          "(Get-Item .\\release\\CrossGen-Setup.exe).Length",
           "pnpm verify:release-evidence -- --require-complete"
         ],
         "references": [
@@ -348,10 +344,10 @@
             "kind": "windows-nsis-installer",
             "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-Setup.exe",
             "public": true,
-            "description": "CrossGen-Setup.exe Windows x64 NSIS installer; SHA256 17c5927ac2a8c4482e5626d5a016903bd10299fcbb5df795901102977fac9e15; 98828812 bytes; Windows native full-install release gate is recorded separately in windows-native-release."
+            "description": "CrossGen-Setup.exe Windows x64 NSIS installer hotfix rebuild for updater launch stability; SHA256 5c7781c761888fbf9828c4947fa0be7fc330149c8fbf344912f583f7616ccd53; 98758475 bytes; Windows native full-install release gate is recorded separately in windows-native-release."
           }
         ],
-        "summary": "v0.3.0 update manifest assets are prepared with exact public GitHub Release download URLs, SHA256 hashes, and byte sizes for macOS arm64 and Windows x64. The macOS DMG is Developer ID signed and passed pnpm verify:release:mac. The Windows manifest entry points to a CrossGen x64 NSIS installer generated for the final release line; native Windows full-install validation for v0.3.0 is recorded in the windows-native-release gate. The app update downloader verifies both sizeBytes and sha256 before opening an installer."
+        "summary": "The published v0.3.0 update manifest is being refreshed so its Windows entry matches the hotfix-rebuilt CrossGen x64 NSIS installer from commit fe50393b1b711617acd4373af5c05ff733a9ac56. The macOS DMG entry remains unchanged. The Windows manifest entry now records SHA256 5c7781c761888fbf9828c4947fa0be7fc330149c8fbf344912f583f7616ccd53 and 98758475 bytes, which match the rebuilt installer that passed native Windows package-smoke and full-install verification. The app update downloader continues to verify both sizeBytes and sha256 before opening an installer."
       }
     }
   ]
