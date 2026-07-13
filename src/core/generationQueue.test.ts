@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createGenerationQueueItem } from "./generation";
 import {
+  completeGenerationQueueItemInQueue,
   recordGenerationQueuePartialOutput,
   requestGenerationQueueItemCancel,
   retryGenerationQueueItem,
@@ -91,6 +92,53 @@ describe("generationQueue", () => {
       status: "succeeded",
       historyJobId: "job-1",
       outputAssetIds: ["asset-1"],
+      workerHostId: undefined
+    });
+
+    await removeTempDir(tempDir);
+  });
+
+  it("delegates terminal completion to an injected committer", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({ queuePath, lockPath: `${queuePath}.lock` });
+    const item = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      historyJobId: "job-1"
+    });
+    await store.appendItem(item);
+
+    const result = await runNextGenerationQueueItem({
+      queueStore: store,
+      queueId: item.queueId,
+      host: { hostId: "host-1", kind: "desktop", processId: process.pid },
+      executeItem: async () => ({
+        status: "succeeded",
+        historyJobId: "job-1",
+        outputAssetIds: ["asset-1"]
+      }),
+      completeItem: async (claimed, execution, nowMs) => {
+        const queue = await store.mutate((current) => completeGenerationQueueItemInQueue(current, claimed, {
+          ...execution,
+          galleryAssetIds: ["gallery-1"]
+        }, nowMs).queue);
+        return queue.items.find((candidate) => candidate.queueId === claimed.queueId) ?? claimed;
+      }
+    });
+
+    expect(result.item).toMatchObject({
+      status: "succeeded",
+      outputAssetIds: ["asset-1"],
+      galleryAssetIds: ["gallery-1"]
+    });
+    const queue = await store.read();
+    expect(queue.items[0]).toMatchObject({
+      status: "succeeded",
+      outputAssetIds: ["asset-1"],
+      galleryAssetIds: ["gallery-1"],
       workerHostId: undefined
     });
 

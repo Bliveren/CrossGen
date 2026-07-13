@@ -1,4 +1,4 @@
-import type { GenerationQueueItem, GenerationQueueWorkerHost, JobStatus, QueueErrorCategory } from "../shared/types.js";
+import type { GenerationQueueFile, GenerationQueueItem, GenerationQueueWorkerHost, JobStatus, QueueErrorCategory } from "../shared/types.js";
 import type { QueueHostIdentity, QueueStore } from "./queueStore.js";
 
 export interface GenerationQueueFailureClassification {
@@ -38,6 +38,7 @@ export interface RunNextGenerationQueueItemOptions<TValue = unknown> {
   createAbortController?: () => AbortController;
   onStarted?: (item: GenerationQueueItem, controller: AbortController) => void;
   onFinished?: (item: GenerationQueueItem) => void;
+  completeItem?: (item: GenerationQueueItem, result: GenerationQueueExecutionResult<TValue>, nowMs: number) => Promise<GenerationQueueItem>;
 }
 
 export interface GenerationQueueRunResult<TValue = unknown> {
@@ -177,16 +178,64 @@ async function claimedItemCancelRequested(queueStore: QueueStore, item: Generati
   return Boolean(current?.cancelRequested);
 }
 
-function cancelledExecution<TValue = unknown>(item: GenerationQueueItem, error = "Generation cancelled."): GenerationQueueExecutionResult<TValue> {
+function cancelledExecution<TValue = unknown>(
+  item: GenerationQueueItem,
+  error = "Generation cancelled.",
+  result?: GenerationQueueExecutionResult<TValue>
+): GenerationQueueExecutionResult<TValue> {
   return {
+    ...result,
     status: "cancelled",
     error,
     errorCategory: "cancelled",
     retryable: false,
-    historyJobId: item.historyJobId,
-    outputAssetIds: item.outputAssetIds,
-    partialAssetIds: item.partialAssetIds,
-    galleryAssetIds: item.galleryAssetIds
+    historyJobId: result?.historyJobId ?? item.historyJobId,
+    outputAssetIds: result?.outputAssetIds ?? item.outputAssetIds,
+    partialAssetIds: result?.partialAssetIds ?? item.partialAssetIds,
+    galleryAssetIds: result?.galleryAssetIds ?? item.galleryAssetIds
+  };
+}
+
+export function completeGenerationQueueItemInQueue(
+  queue: GenerationQueueFile,
+  item: GenerationQueueItem,
+  result: GenerationQueueExecutionResult,
+  nowMs: number
+): { queue: GenerationQueueFile; item: GenerationQueueItem } {
+  let completed: GenerationQueueItem | undefined;
+  const nowIso = iso(nowMs);
+  const nextQueue = {
+    ...queue,
+    updatedAt: nowIso,
+    items: queue.items.map((current) => {
+      if (current.queueId !== item.queueId) return current;
+      const status = normalizeTerminalStatus(result.status);
+      completed = {
+        ...current,
+        status,
+        stage: "finalizing",
+        completedAt: nowIso,
+        nextRunAt: undefined,
+        updatedAt: nowIso,
+        lastError: result.error,
+        lastErrorCategory: result.errorCategory,
+        lastErrorRetryable: result.retryable,
+        historyJobId: result.historyJobId ?? current.historyJobId,
+        outputAssetIds: result.outputAssetIds ?? current.outputAssetIds,
+        partialAssetIds: result.partialAssetIds ?? current.partialAssetIds,
+        galleryAssetIds: result.galleryAssetIds ?? current.galleryAssetIds,
+        cancelRequested: status === "cancelled" ? true : current.cancelRequested,
+        workerHostId: undefined,
+        workerProcessId: undefined,
+        workerHeartbeatAt: undefined,
+        workerLeaseExpiresAt: undefined
+      };
+      return completed;
+    })
+  };
+  return {
+    queue: nextQueue,
+    item: completed ?? item
   };
 }
 
@@ -198,38 +247,23 @@ async function completeClaimedItem(
 ): Promise<GenerationQueueItem> {
   let completed: GenerationQueueItem | undefined;
   await queueStore.mutate((queue) => {
-    const next = {
-      ...queue,
-      updatedAt: iso(nowMs),
-      items: queue.items.map((current) => {
-        if (current.queueId !== item.queueId) return current;
-        const status = normalizeTerminalStatus(result.status);
-        completed = {
-          ...current,
-          status,
-          stage: "finalizing",
-          completedAt: iso(nowMs),
-          nextRunAt: undefined,
-          updatedAt: iso(nowMs),
-          lastError: result.error,
-          lastErrorCategory: result.errorCategory,
-          lastErrorRetryable: result.retryable,
-          historyJobId: result.historyJobId ?? current.historyJobId,
-          outputAssetIds: result.outputAssetIds ?? current.outputAssetIds,
-          partialAssetIds: result.partialAssetIds ?? current.partialAssetIds,
-          galleryAssetIds: result.galleryAssetIds ?? current.galleryAssetIds,
-          cancelRequested: status === "cancelled" ? true : current.cancelRequested,
-          workerHostId: undefined,
-          workerProcessId: undefined,
-          workerHeartbeatAt: undefined,
-          workerLeaseExpiresAt: undefined
-        };
-        return completed;
-      })
-    };
-    return next;
+    const next = completeGenerationQueueItemInQueue(queue, item, result, nowMs);
+    completed = next.item;
+    return next.queue;
   });
   return completed ?? item;
+}
+
+async function completeClaimedItemWithOptions<TValue>(
+  options: RunNextGenerationQueueItemOptions<TValue>,
+  item: GenerationQueueItem,
+  result: GenerationQueueExecutionResult<TValue>,
+  nowMs: number
+): Promise<GenerationQueueItem> {
+  if (options.completeItem) {
+    return options.completeItem(item, result, nowMs);
+  }
+  return completeClaimedItem(options.queueStore, item, result, nowMs);
 }
 
 async function scheduleRetry(
@@ -269,29 +303,14 @@ async function scheduleRetry(
 }
 
 async function failClaimedItem<TValue = unknown>(
-  queueStore: QueueStore,
+  options: RunNextGenerationQueueItemOptions<TValue>,
   item: GenerationQueueItem,
   error: unknown,
   nowMs: number,
   classification: GenerationQueueFailureClassification
-): Promise<GenerationQueueExecutionResult<TValue>> {
+): Promise<{ item: GenerationQueueItem; execution: GenerationQueueExecutionResult<TValue> }> {
   const message = error instanceof Error ? error.message : String(error);
-  await completeClaimedItem(
-    queueStore,
-    item,
-    {
-      status: "failed",
-      error: message,
-      errorCategory: classification.category,
-      retryable: classification.retryable,
-      historyJobId: item.historyJobId,
-      outputAssetIds: item.outputAssetIds,
-      partialAssetIds: item.partialAssetIds,
-      galleryAssetIds: item.galleryAssetIds
-    },
-    nowMs
-  );
-  return {
+  const execution: GenerationQueueExecutionResult<TValue> = {
     status: "failed",
     error: message,
     errorCategory: classification.category,
@@ -301,6 +320,13 @@ async function failClaimedItem<TValue = unknown>(
     partialAssetIds: item.partialAssetIds,
     galleryAssetIds: item.galleryAssetIds
   };
+  const completed = await completeClaimedItemWithOptions(
+    options,
+    item,
+    execution,
+    nowMs
+  );
+  return { item: completed, execution };
 }
 
 export async function runNextGenerationQueueItem<TValue = unknown>(
@@ -325,7 +351,7 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
     await markClaimedItemStage(options.queueStore, item.queueId, now());
     let execution = await options.executeItem(item, controller.signal);
     if (execution.status !== "cancelled" && (await claimedItemCancelRequested(options.queueStore, item))) {
-      execution = cancelledExecution(item, execution.error ?? "Generation cancelled.");
+      execution = cancelledExecution(item, execution.error ?? "Generation cancelled.", execution);
     }
     if (execution.status === "failed") {
       const classification = options.classifyFailure?.({ item, result: execution }) ?? defaultFailureClassification();
@@ -351,12 +377,12 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
       execution.errorCategory = execution.errorCategory ?? classification.category;
       execution.retryable = execution.retryable ?? classification.retryable;
     }
-    const completed = await completeClaimedItem(options.queueStore, item, execution, now());
+    const completed = await completeClaimedItemWithOptions(options, item, execution, now());
     return { claimed: true, item: completed, execution };
   } catch (error) {
     if (await claimedItemCancelRequested(options.queueStore, item)) {
       const execution = cancelledExecution<TValue>(item, error instanceof Error ? error.message : "Generation cancelled.");
-      const completed = await completeClaimedItem(options.queueStore, item, execution, now());
+      const completed = await completeClaimedItemWithOptions(options, item, execution, now());
       return { claimed: true, item: completed, execution };
     }
     const classification = options.classifyFailure?.({ item, error }) ?? defaultFailureClassification();
@@ -385,8 +411,8 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
         }
       };
     }
-    const execution = await failClaimedItem<TValue>(options.queueStore, item, error, now(), classification);
-    return { claimed: true, item, execution };
+    const failed = await failClaimedItem<TValue>(options, item, error, now(), classification);
+    return { claimed: true, item: failed.item, execution: failed.execution };
   } finally {
     stopHeartbeat();
     options.onFinished?.(item);

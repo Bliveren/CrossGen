@@ -102,11 +102,13 @@ import {
   type GalleryMutationContext
 } from "../core/gallery.js";
 import {
+  completeGenerationQueueItemInQueue,
   recordGenerationQueuePartialOutput,
   requestGenerationQueueItemCancel,
   retryGenerationQueueItem,
   runGenerationQueueItemToCompletion,
-  runNextGenerationQueueItem
+  runNextGenerationQueueItem,
+  type GenerationQueueExecutionResult
 } from "../core/generationQueue.js";
 import { getProviderEnvKeyNames } from "../core/keyring.js";
 import {
@@ -2404,30 +2406,136 @@ async function getOrCreateHistoryJobForQueueItem(
   return job;
 }
 
-async function importGenerationResultOutputsToGallery(job: GenerationJob, item: GenerationQueueItem): Promise<GalleryAsset[]> {
-  if (item.targetGalleryFolderId === undefined) return [];
+function mergeStringIds(...groups: Array<string[] | undefined>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of groups.flatMap((group) => group ?? [])) {
+    if (!value.trim() || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+
+async function importGenerationResultOutputsToGalleryState(
+  state: AppStateFile,
+  job: GenerationJob,
+  item: GenerationQueueItem
+): Promise<{ state: AppStateFile; galleryAssets: GalleryAsset[] }> {
+  if (item.targetGalleryFolderId === undefined) return { state, galleryAssets: [] };
   const outputs = job.outputs.filter((asset) => asset.sourceType === "result");
-  if (outputs.length === 0) return [];
+  if (outputs.length === 0) return { state, galleryAssets: [] };
 
   const importedAssets: GalleryAsset[] = [];
-  const nextState = await getAppStateStore().mutate(async (state) => {
-    let nextStateForImport = state;
-    const context = galleryMutationContext(state, { duplicateAction: "copy" });
-    for (const output of outputs) {
-      const outcome = await importCoreGalleryAssets(nextStateForImport, context, [output.path], item.targetGalleryFolderId ?? null, {
-        source: "result",
-        sourceJobId: job.id,
-        sourceAssetId: output.id,
-        tags: job.tags
-      });
-      importedAssets.push(...outcome.result.assets);
-      nextStateForImport = mergeGalleryState(nextStateForImport, outcome.state);
+  let nextState = state;
+  const context = galleryMutationContext(state, { duplicateAction: "copy" });
+  for (const output of outputs) {
+    const outcome = await importCoreGalleryAssets(nextState, context, [output.path], item.targetGalleryFolderId ?? null, {
+      source: "result",
+      sourceJobId: job.id,
+      sourceAssetId: output.id,
+      tags: job.tags
+    });
+    importedAssets.push(...outcome.result.assets);
+    nextState = mergeGalleryState(nextState, outcome.state);
+  }
+  return { state: nextState, galleryAssets: importedAssets };
+}
+
+function terminalJobForQueueExecution(job: GenerationJob, execution: GenerationQueueExecutionResult<GenerationJob>, nowIso: string): GenerationJob {
+  if (execution.status === "cancelled" && job.status !== "cancelled") {
+    return {
+      ...job,
+      status: "cancelled",
+      error: execution.error ?? job.error ?? "任务已终止。",
+      updatedAt: nowIso
+    };
+  }
+  if (execution.status === "failed" && job.status !== "failed") {
+    return {
+      ...job,
+      status: "failed",
+      error: execution.error ?? job.error ?? "任务失败。",
+      updatedAt: nowIso
+    };
+  }
+  return job;
+}
+
+async function completeGenerationQueueItemWithState(
+  item: GenerationQueueItem,
+  execution: GenerationQueueExecutionResult<GenerationJob>,
+  nowMs: number
+): Promise<GenerationQueueItem> {
+  let eventJob: GenerationJob | undefined;
+  let importedGalleryAssets: GalleryAsset[] = [];
+  const transaction = await mutateStateAndQueue<GenerationQueueItem>(async (currentState, queue) => {
+    const nowIso = new Date(nowMs).toISOString();
+    let nextState = currentState;
+    let nextExecution: GenerationQueueExecutionResult<GenerationJob> = execution;
+    const executionJob = execution.value;
+
+    if (executionJob) {
+      let jobToPersist = terminalJobForQueueExecution(executionJob, execution, nowIso);
+      let galleryAssetIds = execution.galleryAssetIds ?? item.galleryAssetIds;
+
+      if (jobToPersist.status === "succeeded") {
+        try {
+          const imported = await importGenerationResultOutputsToGalleryState(nextState, jobToPersist, item);
+          nextState = imported.state;
+          importedGalleryAssets = imported.galleryAssets;
+          galleryAssetIds = mergeStringIds(galleryAssetIds, imported.galleryAssets.map((asset) => asset.id));
+        } catch (error) {
+          const message = normalizeError(error);
+          jobToPersist = {
+            ...jobToPersist,
+            status: "failed",
+            error: message,
+            updatedAt: nowIso
+          };
+          nextExecution = {
+            ...nextExecution,
+            status: "failed",
+            error: message,
+            errorCategory: "unknown",
+            retryable: false
+          };
+          galleryAssetIds = item.galleryAssetIds;
+          importedGalleryAssets = [];
+        }
+      }
+
+      eventJob = jobToPersist;
+      nextState = upsertJobInState(nextState, jobToPersist);
+      nextExecution = {
+        ...nextExecution,
+        historyJobId: jobToPersist.id,
+        outputAssetIds: mergeStringIds(nextExecution.outputAssetIds, jobToPersist.outputs.map((asset) => asset.id)),
+        partialAssetIds: mergeStringIds(nextExecution.partialAssetIds, jobToPersist.outputs.filter((asset) => asset.sourceType === "partial").map((asset) => asset.id)),
+        galleryAssetIds
+      };
     }
-    return mergeGalleryState(state, nextStateForImport);
+
+    const completed = completeGenerationQueueItemInQueue(queue, item, nextExecution, nowMs);
+    return {
+      state: nextState,
+      queue: completed.queue,
+      result: completed.item
+    };
   });
-  stateCache = nextState;
-  if (importedAssets.length > 0) sendGalleryEvent(nextState, "mutation");
-  return importedAssets;
+
+  if (importedGalleryAssets.length > 0) {
+    sendGalleryEvent(transaction.state, "mutation");
+  }
+  if (eventJob) {
+    if (eventJob.status === "succeeded") {
+      sendJobEvent({ jobId: eventJob.id, queueId: item.queueId, type: "completed" });
+    } else {
+      sendJobEvent({ jobId: eventJob.id, queueId: item.queueId, type: "failed", error: eventJob.error });
+    }
+  }
+
+  return transaction.result;
 }
 
 async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal: AbortSignal) {
@@ -2474,36 +2582,28 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       durationMs: Date.now() - startedAt,
       updatedAt: new Date().toISOString()
     };
-    await upsertJob(job);
-    const galleryAssets = job.status === "succeeded" ? await importGenerationResultOutputsToGallery(job, item) : [];
-    if (job.status === "succeeded") {
-      sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "completed" });
-    } else {
-      sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "failed", error: job.error });
-    }
     return {
       status: job.status === "succeeded" ? "succeeded" as const : "failed" as const,
       value: job,
       historyJobId: job.id,
       outputAssetIds: job.outputs.map((asset) => asset.id),
-      galleryAssetIds: galleryAssets.map((asset) => asset.id),
+      galleryAssetIds: item.galleryAssetIds,
       partialAssetIds: job.outputs.filter((asset) => asset.sourceType === "partial").map((asset) => asset.id),
       error: job.status === "failed" ? job.error : undefined
     };
   } catch (error) {
     const message = abortSignal.aborted ? "任务已终止。" : normalizeError(error);
+    const status = abortSignal.aborted ? "cancelled" as const : "failed" as const;
     job = {
       ...job,
-      status: "failed",
+      status,
       durationMs: Date.now() - startedAt,
       error: message,
       outputs: mergeImageAssets(job.outputs, partialAssets),
       updatedAt: new Date().toISOString()
     };
-    await upsertJob(job);
-    sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "failed", error: message });
     return {
-      status: "failed" as const,
+      status,
       value: job,
       historyJobId: job.id,
       outputAssetIds: job.outputs.map((asset) => asset.id),
@@ -2562,6 +2662,7 @@ async function runQueuedGenerationForAgent(
     providerConcurrency: queueConfig.providerConcurrency,
     waitTimeoutMs,
     executeItem: executeGenerationQueueItem,
+    completeItem: completeGenerationQueueItemWithState,
     onStarted: trackQueuedGenerationStart,
     onFinished: trackQueuedGenerationFinish
   }).finally(() => {
@@ -2618,6 +2719,7 @@ async function runNextDesktopQueuedGeneration(): Promise<boolean> {
     providerConcurrency: queueConfig.providerConcurrency,
     leaseMs: DESKTOP_QUEUE_WORKER_LEASE_MS,
     executeItem: executeGenerationQueueItem,
+    completeItem: completeGenerationQueueItemWithState,
     onStarted: trackQueuedGenerationStart,
     onFinished: trackQueuedGenerationFinish
   });
