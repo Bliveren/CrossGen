@@ -104,8 +104,11 @@ async function runCli(dataDir, args, options = {}) {
   const result = await runProcess(process.execPath, [cliPath, "--data-dir", dataDir, ...args], options);
   assertNoSecret(result.stdout, `CLI ${args.join(" ")} stdout`);
   assertNoSecret(result.stderr, `CLI ${args.join(" ")} stderr`);
-  const payload = parseJsonLine(result.stdout, `CLI ${args.join(" ")}`);
   const expectedCode = options.expectedCode ?? 0;
+  if (result.code !== expectedCode && !result.stdout.trim().startsWith("{")) {
+    throw new Error(`CLI ${args.join(" ")} exited ${result.code}, expected ${expectedCode}, without JSON stdout.\nstderr:\n${result.stderr}`);
+  }
+  const payload = parseJsonLine(result.stdout, `CLI ${args.join(" ")}`);
   assert(result.code === expectedCode, `CLI ${args.join(" ")} exited ${result.code}, expected ${expectedCode}.\nstderr:\n${result.stderr}\nstdout:\n${result.stdout}`);
   return payload;
 }
