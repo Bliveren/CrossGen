@@ -40,6 +40,20 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function removeTempDir(tempDir: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      await rm(tempDir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      await sleep(25);
+    }
+  }
+  throw lastError;
+}
+
 describe("generationQueue", () => {
   it("claims, executes, and completes an item", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
@@ -80,7 +94,7 @@ describe("generationQueue", () => {
       workerHostId: undefined
     });
 
-    await rm(tempDir, { recursive: true, force: true });
+    await removeTempDir(tempDir);
   });
 
   it("refreshes running item heartbeat during long executions", async () => {
@@ -114,7 +128,7 @@ describe("generationQueue", () => {
       }
     });
 
-    await rm(tempDir, { recursive: true, force: true });
+    await removeTempDir(tempDir);
   });
 
   it("marks thrown executions as failed", async () => {
@@ -143,7 +157,7 @@ describe("generationQueue", () => {
     const queue = await store.read();
     expect(queue.items[0]).toMatchObject({ status: "failed", lastError: "provider failed" });
 
-    await rm(tempDir, { recursive: true, force: true });
+    await removeTempDir(tempDir);
   });
 
   it("records queued and running cancel requests", async () => {
@@ -175,7 +189,7 @@ describe("generationQueue", () => {
     expect(requested?.status).toBe("running");
     expect(requested?.cancelRequested).toBe(true);
 
-    await rm(tempDir, { recursive: true, force: true });
+    await removeTempDir(tempDir);
   });
 
   it("aborts running workers when durable cancel is requested", async () => {
@@ -236,7 +250,7 @@ describe("generationQueue", () => {
     });
     await cancelRequestSettled;
 
-    await rm(tempDir, { recursive: true, force: true });
+    await removeTempDir(tempDir);
   });
 
   it("requeues retryable failures until maxAttempts is reached", async () => {
@@ -277,7 +291,7 @@ describe("generationQueue", () => {
       outputAssetIds: ["asset-final"]
     });
 
-    await rm(tempDir, { recursive: true, force: true });
+    await removeTempDir(tempDir);
   });
 
   it("does not retry non-retryable failures", async () => {
@@ -311,7 +325,7 @@ describe("generationQueue", () => {
       lastErrorRetryable: false
     });
 
-    await rm(tempDir, { recursive: true, force: true });
+    await removeTempDir(tempDir);
   });
 
   it("records partial outputs without duplicating asset ids", async () => {
@@ -331,7 +345,7 @@ describe("generationQueue", () => {
     expect(queue.items[0].partialAssetIds).toEqual(["partial-1", "partial-2"]);
     expect(queue.items[0].outputAssetIds).toEqual(["partial-1", "partial-2"]);
 
-    await rm(tempDir, { recursive: true, force: true });
+    await removeTempDir(tempDir);
   });
 
   it("requeues retryable terminal items and clears stale execution state", async () => {
@@ -391,7 +405,7 @@ describe("generationQueue", () => {
     expect(result.item?.workerHeartbeatAt).toBeUndefined();
     expect(result.item?.workerLeaseExpiresAt).toBeUndefined();
 
-    await rm(tempDir, { recursive: true, force: true });
+    await removeTempDir(tempDir);
   });
 
   it("does not retry non-terminal or succeeded items", async () => {
@@ -429,6 +443,6 @@ describe("generationQueue", () => {
     expect(succeededResult).toMatchObject({ action: "not_retryable", item: { queueId: succeeded.queueId, status: "succeeded" } });
     expect(missingResult).toEqual({ action: "not_found" });
 
-    await rm(tempDir, { recursive: true, force: true });
+    await removeTempDir(tempDir);
   });
 });
