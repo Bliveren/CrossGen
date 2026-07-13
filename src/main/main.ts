@@ -1216,14 +1216,22 @@ function sendGalleryEvent(state: AppStateFile, reason: "disk" | "mutation"): voi
   }
 }
 
-async function readGalleryMutationState(): Promise<AppStateFile> {
-  stateCache = applyStartupRecovery(await getAppStateStore().read());
-  return syncGalleryWithDisk(stateCache);
-}
-
-async function commitGalleryMutationState<TResult>(state: AppStateFile, result: TResult): Promise<TResult> {
-  await writeState(state);
-  sendGalleryEvent(state, "mutation");
+async function mutateDesktopGalleryState<TResult>(
+  operation: (state: AppStateFile) => Promise<{ state: AppStateFile; result: TResult; changed?: boolean }>
+): Promise<TResult> {
+  let result: TResult | undefined;
+  let shouldNotify = false;
+  const nextState = await getAppStateStore().mutate(async (state) => {
+    const synced = await buildGalleryDiskSyncedState(state, undefined, { useStateCache: false });
+    const outcome = await operation(synced.state);
+    result = outcome.result;
+    shouldNotify = outcome.changed !== false;
+    return persistentStatePayload(outcome.state);
+  });
+  stateWriteCount += 1;
+  stateCache = nextState;
+  if (result === undefined) throw new Error("Gallery 操作没有返回结果。");
+  if (shouldNotify) sendGalleryEvent(nextState, "mutation");
   return result;
 }
 
@@ -1716,12 +1724,16 @@ function applyGalleryAssetCreateResult(state: AppStateFile, result: GalleryAsset
   };
 }
 
-async function syncGalleryWithDisk(inputState: AppStateFile, changedRelPaths?: string[]): Promise<AppStateFile> {
+async function buildGalleryDiskSyncedState(
+  inputState: AppStateFile,
+  changedRelPaths?: string[],
+  options: { useStateCache?: boolean } = {}
+): Promise<{ state: AppStateFile; changed: boolean }> {
   const galleryDir = getGalleryDir(inputState);
   await ensureDir(galleryDir);
 
   const now = new Date().toISOString();
-  const baseState = stateCache ?? inputState;
+  const baseState = options.useStateCache === false ? inputState : stateCache ?? inputState;
   const hasIncrementalChanges = Boolean(changedRelPaths?.length);
   const disk = await scanGalleryDisk(galleryDir, hasIncrementalChanges ? { rootRelPaths: changedRelPaths } : undefined);
   const reconcileOptions = {
@@ -1732,12 +1744,17 @@ async function syncGalleryWithDisk(inputState: AppStateFile, changedRelPaths?: s
   const result = hasIncrementalChanges
     ? reconcileGalleryDiskChangesWithResult(baseState, disk, changedRelPaths ?? [], reconcileOptions)
     : reconcileGalleryDiskStateWithResult(baseState, disk, reconcileOptions);
+  return result;
+}
+
+async function syncGalleryWithDisk(inputState: AppStateFile, changedRelPaths?: string[]): Promise<AppStateFile> {
+  const result = await buildGalleryDiskSyncedState(inputState, changedRelPaths);
   if (result.changed) {
     await writeState(result.state, { updateBackup: false });
     return result.state;
   }
 
-  return baseState;
+  return result.state;
 }
 
 function isGalleryWatchCurrentForState(state: AppStateFile): boolean {
@@ -1867,108 +1884,147 @@ function normalizeGalleryFolderParentId(state: AppStateFile, parentId?: unknown,
 }
 
 async function handleCreateGalleryFolder(_event: IpcMainInvokeEvent, input: GalleryFolderInput): Promise<GalleryFolder> {
-  const state = await readGalleryMutationState();
-  const { name, color } = normalizeGalleryFolderInput(input);
-  const parentId = normalizeGalleryFolderParentId(state, input?.parentId);
-  if (state.galleryFolders.some((folder) => (folder.parentId ?? null) === parentId && folder.name.toLowerCase() === name.toLowerCase())) {
-    throw new Error("Gallery 文件夹名称已存在。");
-  }
-  const now = new Date().toISOString();
-  const folder: GalleryFolder = {
-    id: `gallery_folder_${randomUUID()}`,
-    name,
-    parentId,
-    color,
-    createdAt: now,
-    updatedAt: now
-  };
-  const nextState = { ...state, galleryFolders: [folder, ...state.galleryFolders] };
-  await ensureDir(galleryFolderAbsolutePath(nextState, folder));
-  return commitGalleryMutationState(nextState, folder);
+  return mutateDesktopGalleryState(async (state) => {
+    const { name, color } = normalizeGalleryFolderInput(input);
+    const parentId = normalizeGalleryFolderParentId(state, input?.parentId);
+    if (state.galleryFolders.some((folder) => (folder.parentId ?? null) === parentId && folder.name.toLowerCase() === name.toLowerCase())) {
+      throw new Error("Gallery 文件夹名称已存在。");
+    }
+    const now = new Date().toISOString();
+    const folder: GalleryFolder = {
+      id: `gallery_folder_${randomUUID()}`,
+      name,
+      parentId,
+      color,
+      createdAt: now,
+      updatedAt: now
+    };
+    const nextState = { ...state, galleryFolders: [folder, ...state.galleryFolders] };
+    await ensureDir(galleryFolderAbsolutePath(nextState, folder));
+    return { state: nextState, result: folder };
+  });
 }
 
 async function handleRenameGalleryFolder(_event: IpcMainInvokeEvent, id: string, input: GalleryFolderInput): Promise<GalleryFolder> {
-  const state = await readGalleryMutationState();
-  const folder = state.galleryFolders.find((item) => item.id === id);
-  if (!folder) throw new Error("Gallery 文件夹不存在。");
-  const { name, color, hasColor } = normalizeGalleryFolderInput(input);
-  const parentId = Object.prototype.hasOwnProperty.call(input ?? {}, "parentId")
-    ? normalizeGalleryFolderParentId(state, input?.parentId, id)
-    : folder.parentId ?? null;
-  if (state.galleryFolders.some((item) => item.id !== id && (item.parentId ?? null) === parentId && item.name.toLowerCase() === name.toLowerCase())) {
-    throw new Error("Gallery 文件夹名称已存在。");
-  }
-  const updated: GalleryFolder = {
-    ...folder,
-    name,
-    parentId,
-    color: hasColor ? color : folder.color,
-    updatedAt: new Date().toISOString()
-  };
-  const galleryDir = getGalleryDir(state);
-  const oldDir = galleryFolderAbsolutePath(state, folder);
-  const nextState = { ...state, galleryFolders: state.galleryFolders.map((item) => item.id === id ? updated : item) };
-  const newDir = galleryFolderAbsolutePath(nextState, updated);
-  if (!sameResolvedPath(oldDir, newDir)) {
-    await ensureDir(path.dirname(newDir));
-    if (await pathExists(oldDir)) {
-      await fs.rename(oldDir, newDir);
-    } else {
-      await ensureDir(newDir);
+  return mutateDesktopGalleryState(async (state) => {
+    const folder = state.galleryFolders.find((item) => item.id === id);
+    if (!folder) throw new Error("Gallery 文件夹不存在。");
+    const { name, color, hasColor } = normalizeGalleryFolderInput(input);
+    const parentId = Object.prototype.hasOwnProperty.call(input ?? {}, "parentId")
+      ? normalizeGalleryFolderParentId(state, input?.parentId, id)
+      : folder.parentId ?? null;
+    if (state.galleryFolders.some((item) => item.id !== id && (item.parentId ?? null) === parentId && item.name.toLowerCase() === name.toLowerCase())) {
+      throw new Error("Gallery 文件夹名称已存在。");
     }
-  }
-  const subtreeIds = galleryFolderSubtreeIds(state, id);
-  const galleryAssets = state.galleryAssets.map((asset) => {
-    if (!asset.folderId || !subtreeIds.has(asset.folderId)) return asset;
-    return {
-      ...asset,
-      fileName: normalizeGalleryRelativePath(path.posix.join(galleryFolderRelativePathForId(nextState, asset.folderId), galleryAssetBaseName(asset))),
-      updatedAt: updated.updatedAt
+    const updated: GalleryFolder = {
+      ...folder,
+      name,
+      parentId,
+      color: hasColor ? color : folder.color,
+      updatedAt: new Date().toISOString()
     };
+    const oldDir = galleryFolderAbsolutePath(state, folder);
+    const nextState = { ...state, galleryFolders: state.galleryFolders.map((item) => item.id === id ? updated : item) };
+    const newDir = galleryFolderAbsolutePath(nextState, updated);
+    if (!sameResolvedPath(oldDir, newDir)) {
+      await ensureDir(path.dirname(newDir));
+      if (await pathExists(oldDir)) {
+        await fs.rename(oldDir, newDir);
+      } else {
+        await ensureDir(newDir);
+      }
+    }
+    const subtreeIds = galleryFolderSubtreeIds(state, id);
+    const galleryAssets = state.galleryAssets.map((asset) => {
+      if (!asset.folderId || !subtreeIds.has(asset.folderId)) return asset;
+      return {
+        ...asset,
+        fileName: normalizeGalleryRelativePath(path.posix.join(galleryFolderRelativePathForId(nextState, asset.folderId), galleryAssetBaseName(asset))),
+        updatedAt: updated.updatedAt
+      };
+    });
+    const writtenState = {
+      ...state,
+      galleryFolders: nextState.galleryFolders,
+      galleryAssets
+    };
+    return { state: writtenState, result: updated };
   });
-  const writtenState = {
-    ...state,
-    galleryFolders: nextState.galleryFolders,
-    galleryAssets
-  };
-  return commitGalleryMutationState(writtenState, updated);
 }
 
 async function handleMoveGalleryFolder(_event: IpcMainInvokeEvent, id: string, parentId: string | null): Promise<GalleryFolder> {
-  const state = await readGalleryMutationState();
-  const folder = state.galleryFolders.find((item) => item.id === id);
-  if (!folder) throw new Error("Gallery 文件夹不存在。");
-  return handleRenameGalleryFolder(_event, id, { name: folder.name, color: folder.color, parentId });
+  return mutateDesktopGalleryState(async (state) => {
+    const folder = state.galleryFolders.find((item) => item.id === id);
+    if (!folder) throw new Error("Gallery 文件夹不存在。");
+    const normalizedParentId = normalizeGalleryFolderParentId(state, parentId, id);
+    if (state.galleryFolders.some((item) => item.id !== id && (item.parentId ?? null) === normalizedParentId && item.name.toLowerCase() === folder.name.toLowerCase())) {
+      throw new Error("Gallery 文件夹名称已存在。");
+    }
+    const updated: GalleryFolder = {
+      ...folder,
+      parentId: normalizedParentId,
+      updatedAt: new Date().toISOString()
+    };
+    const oldDir = galleryFolderAbsolutePath(state, folder);
+    const nextState = { ...state, galleryFolders: state.galleryFolders.map((item) => item.id === id ? updated : item) };
+    const newDir = galleryFolderAbsolutePath(nextState, updated);
+    if (!sameResolvedPath(oldDir, newDir)) {
+      await ensureDir(path.dirname(newDir));
+      if (await pathExists(oldDir)) {
+        await fs.rename(oldDir, newDir);
+      } else {
+        await ensureDir(newDir);
+      }
+    }
+    const subtreeIds = galleryFolderSubtreeIds(state, id);
+    const galleryAssets = state.galleryAssets.map((asset) => {
+      if (!asset.folderId || !subtreeIds.has(asset.folderId)) return asset;
+      return {
+        ...asset,
+        fileName: normalizeGalleryRelativePath(path.posix.join(galleryFolderRelativePathForId(nextState, asset.folderId), galleryAssetBaseName(asset))),
+        updatedAt: updated.updatedAt
+      };
+    });
+    return {
+      state: {
+        ...state,
+        galleryFolders: nextState.galleryFolders,
+        galleryAssets
+      },
+      result: updated
+    };
+  });
 }
 
 async function handleDeleteGalleryFolder(_event: IpcMainInvokeEvent, id: string): Promise<GalleryFolderDeleteResult> {
-  const state = await readGalleryMutationState();
-  const folder = state.galleryFolders.find((item) => item.id === id);
-  if (!folder) {
-    throw new Error("Gallery 文件夹不存在。");
-  }
-  const now = new Date().toISOString();
-  const subtreeIds = galleryFolderSubtreeIds(state, id);
-  const movedAssets: GalleryAsset[] = [];
-  for (const asset of state.galleryAssets) {
-    movedAssets.push(asset.folderId && subtreeIds.has(asset.folderId) ? await moveGalleryAssetFileToFolder(state, asset, null) : asset);
-  }
-  const nextState: AppStateFile = {
-    ...state,
-    galleryFolders: state.galleryFolders.filter((folder) => !subtreeIds.has(folder.id)),
-    galleryAssets: movedAssets.map((asset) => asset.folderId && subtreeIds.has(asset.folderId) ? { ...asset, folderId: null, updatedAt: now } : asset)
-  };
-  const result = await commitGalleryMutationState(nextState, {
-    folders: nextState.galleryFolders,
-    assets: nextState.galleryAssets
+  return mutateDesktopGalleryState(async (state) => {
+    const folder = state.galleryFolders.find((item) => item.id === id);
+    if (!folder) {
+      throw new Error("Gallery 文件夹不存在。");
+    }
+    const now = new Date().toISOString();
+    const subtreeIds = galleryFolderSubtreeIds(state, id);
+    const movedAssets: GalleryAsset[] = [];
+    for (const asset of state.galleryAssets) {
+      movedAssets.push(asset.folderId && subtreeIds.has(asset.folderId) ? await moveGalleryAssetFileToFolder(state, asset, null) : asset);
+    }
+    const nextState: AppStateFile = {
+      ...state,
+      galleryFolders: state.galleryFolders.filter((candidate) => !subtreeIds.has(candidate.id)),
+      galleryAssets: movedAssets.map((asset) => asset.folderId && subtreeIds.has(asset.folderId) ? { ...asset, folderId: null, updatedAt: now } : asset)
+    };
+    await fs.rm(galleryFolderAbsolutePath(state, folder), { recursive: true, force: true }).catch(() => undefined);
+    return {
+      state: nextState,
+      result: {
+        folders: nextState.galleryFolders,
+        assets: nextState.galleryAssets
+      }
+    };
   });
-  await fs.rm(galleryFolderAbsolutePath(state, folder), { recursive: true, force: true }).catch(() => undefined);
-  return result;
 }
 
 async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[], folderId?: string | null): Promise<GalleryAsset[]> {
-  let state = await readGalleryMutationState();
-  const targetFolderId = normalizeGalleryFolderId(state, folderId);
   let sourcePaths = Array.isArray(paths) ? paths : [];
   if (sourcePaths.length === 0) {
     const result = await dialog.showOpenDialog({
@@ -1979,38 +2035,42 @@ async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[
     if (result.canceled) return [];
     sourcePaths = result.filePaths;
   }
-  const now = new Date().toISOString();
-  const imported: GalleryAsset[] = [];
-  for (const sourcePath of sourcePaths) {
-    if (typeof sourcePath !== "string") continue;
-    if (!IMAGE_EXTENSIONS.has(path.extname(sourcePath).toLowerCase())) continue;
-    const result = await createGalleryAssetFromFile(state, sourcePath, "import", now, targetFolderId);
-    if (!result.asset) continue;
-    imported.push(result.asset);
-    state = applyGalleryAssetCreateResult(state, result);
-  }
-  if (imported.length === 0) return [];
-  const nextState = state;
-  return commitGalleryMutationState(nextState, imported);
+  return mutateDesktopGalleryState(async (state) => {
+    const targetFolderId = normalizeGalleryFolderId(state, folderId);
+    const now = new Date().toISOString();
+    const imported: GalleryAsset[] = [];
+    let nextState = state;
+    for (const sourcePath of sourcePaths) {
+      if (typeof sourcePath !== "string") continue;
+      if (!IMAGE_EXTENSIONS.has(path.extname(sourcePath).toLowerCase())) continue;
+      const result = await createGalleryAssetFromFile(nextState, sourcePath, "import", now, targetFolderId);
+      if (!result.asset) continue;
+      imported.push(result.asset);
+      nextState = applyGalleryAssetCreateResult(nextState, result);
+    }
+    return { state: nextState, result: imported, changed: imported.length > 0 };
+  });
 }
 
 async function handleAddHistoryAssetToGallery(_event: IpcMainInvokeEvent, assetPath: string, folderId?: string | null, tags?: string[]): Promise<GalleryAsset | null> {
-  const state = await readGalleryMutationState();
-  const targetFolderId = normalizeGalleryFolderId(state, folderId);
-  const sourcePath = await assertKnownHistoryRegularAsset(state, assetPath);
-  const result = await createGalleryAssetFromFile(state, sourcePath, "result", new Date().toISOString(), targetFolderId, historySourceMetadata(state, sourcePath, tags));
-  if (!result.asset) return null;
-  const nextState = applyGalleryAssetCreateResult(state, result);
-  return commitGalleryMutationState(nextState, result.asset);
+  return mutateDesktopGalleryState(async (state) => {
+    const targetFolderId = normalizeGalleryFolderId(state, folderId);
+    const sourcePath = await assertKnownHistoryRegularAsset(state, assetPath);
+    const result = await createGalleryAssetFromFile(state, sourcePath, "result", new Date().toISOString(), targetFolderId, historySourceMetadata(state, sourcePath, tags));
+    if (!result.asset) return { state, result: null, changed: false };
+    const nextState = applyGalleryAssetCreateResult(state, result);
+    return { state: nextState, result: result.asset };
+  });
 }
 
 async function handleAddEditedImageToGallery(_event: IpcMainInvokeEvent, input: EditedGalleryImageInput): Promise<GalleryAsset | null> {
-  const state = await readGalleryMutationState();
-  const targetFolderId = normalizeGalleryFolderId(state, input?.folderId);
-  const result = await createGalleryAssetFromDataUrl(state, input, "result", new Date().toISOString(), targetFolderId);
-  if (!result.asset) return null;
-  const nextState = applyGalleryAssetCreateResult(state, result);
-  return commitGalleryMutationState(nextState, result.asset);
+  return mutateDesktopGalleryState(async (state) => {
+    const targetFolderId = normalizeGalleryFolderId(state, input?.folderId);
+    const result = await createGalleryAssetFromDataUrl(state, input, "result", new Date().toISOString(), targetFolderId);
+    if (!result.asset) return { state, result: null, changed: false };
+    const nextState = applyGalleryAssetCreateResult(state, result);
+    return { state: nextState, result: result.asset };
+  });
 }
 
 async function handleReplaceGalleryAssetImage(_event: IpcMainInvokeEvent, id: string, input: EditedGalleryImageInput): Promise<GalleryAsset> {
@@ -2022,51 +2082,53 @@ async function handleReplaceGalleryAssetImage(_event: IpcMainInvokeEvent, id: st
   const buffer = Buffer.from(dataUrlToBase64(input.dataUrl), "base64");
   if (buffer.length === 0) throw new Error("Gallery 图片内容为空。");
 
-  const state = await readGalleryMutationState();
-  const asset = state.galleryAssets.find((item) => item.id === id);
-  if (!asset) throw new Error("Gallery 资源不存在。");
-  const galleryDir = getGalleryDir(state);
-  const targetPath = await assertManagedRegularFile(galleryDir, resolveManagedFileName(galleryDir, asset.fileName));
-  await fs.writeFile(targetPath, buffer);
-  const stat = await fs.stat(targetPath);
-  const updated: GalleryAsset = {
-    ...asset,
-    mimeType: mimeMatch[1],
-    sizeBytes: stat.size,
-    tags: input.tags ? normalizeTemplateTags(input.tags) : asset.tags,
-    source: "result",
-    updatedAt: new Date().toISOString(),
-    modifiedAt: stat.mtime.toISOString(),
-    contentHash: createHash("sha256").update(buffer).digest("hex"),
-    sourcePathHash: undefined,
-    sourceJobId: undefined,
-    sourceAssetId: undefined
-  };
-  const nextState = { ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) };
-  return commitGalleryMutationState(nextState, updated);
+  return mutateDesktopGalleryState(async (state) => {
+    const asset = state.galleryAssets.find((item) => item.id === id);
+    if (!asset) throw new Error("Gallery 资源不存在。");
+    const galleryDir = getGalleryDir(state);
+    const targetPath = await assertManagedRegularFile(galleryDir, resolveManagedFileName(galleryDir, asset.fileName));
+    await fs.writeFile(targetPath, buffer);
+    const stat = await fs.stat(targetPath);
+    const updated: GalleryAsset = {
+      ...asset,
+      mimeType: mimeMatch[1],
+      sizeBytes: stat.size,
+      tags: input.tags ? normalizeTemplateTags(input.tags) : asset.tags,
+      source: "result",
+      updatedAt: new Date().toISOString(),
+      modifiedAt: stat.mtime.toISOString(),
+      contentHash: createHash("sha256").update(buffer).digest("hex"),
+      sourcePathHash: undefined,
+      sourceJobId: undefined,
+      sourceAssetId: undefined
+    };
+    const nextState = { ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) };
+    return { state: nextState, result: updated };
+  });
 }
 
 async function handleUpdateGalleryAsset(_event: IpcMainInvokeEvent, id: string, patch: GalleryAssetPatch = {}): Promise<GalleryAsset> {
   const normalizedPatch = patch && typeof patch === "object" ? patch : {};
-  const state = await readGalleryMutationState();
-  const asset = state.galleryAssets.find((item) => item.id === id);
-  if (!asset) throw new Error("Gallery 资源不存在。");
-  const hasTagsPatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "tags");
-  const hasFolderPatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "folderId");
-  const hasNamePatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "originalName");
-  const movedAsset = hasFolderPatch
-    ? await moveGalleryAssetFileToFolder(state, asset, normalizeGalleryFolderId(state, normalizedPatch.folderId))
-    : asset;
-  const renamedAsset = hasNamePatch
-    ? await renameGalleryAssetFile(state, movedAsset, normalizedPatch.originalName)
-    : movedAsset;
-  const updated: GalleryAsset = {
-    ...renamedAsset,
-    tags: hasTagsPatch ? normalizeTemplateTags(normalizedPatch.tags) : renamedAsset.tags,
-    updatedAt: new Date().toISOString()
-  };
-  const nextState = { ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) };
-  return commitGalleryMutationState(nextState, updated);
+  return mutateDesktopGalleryState(async (state) => {
+    const asset = state.galleryAssets.find((item) => item.id === id);
+    if (!asset) throw new Error("Gallery 资源不存在。");
+    const hasTagsPatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "tags");
+    const hasFolderPatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "folderId");
+    const hasNamePatch = Object.prototype.hasOwnProperty.call(normalizedPatch, "originalName");
+    const movedAsset = hasFolderPatch
+      ? await moveGalleryAssetFileToFolder(state, asset, normalizeGalleryFolderId(state, normalizedPatch.folderId))
+      : asset;
+    const renamedAsset = hasNamePatch
+      ? await renameGalleryAssetFile(state, movedAsset, normalizedPatch.originalName)
+      : movedAsset;
+    const updated: GalleryAsset = {
+      ...renamedAsset,
+      tags: hasTagsPatch ? normalizeTemplateTags(normalizedPatch.tags) : renamedAsset.tags,
+      updatedAt: new Date().toISOString()
+    };
+    const nextState = { ...state, galleryAssets: state.galleryAssets.map((item) => item.id === id ? updated : item) };
+    return { state: nextState, result: updated };
+  });
 }
 
 async function handleMoveGalleryAsset(_event: IpcMainInvokeEvent, id: string, folderId: string | null): Promise<GalleryAsset> {
@@ -2074,16 +2136,16 @@ async function handleMoveGalleryAsset(_event: IpcMainInvokeEvent, id: string, fo
 }
 
 async function handleRemoveGalleryAsset(_event: IpcMainInvokeEvent, id: string): Promise<GalleryAsset[]> {
-  const state = await readGalleryMutationState();
-  const asset = state.galleryAssets.find((item) => item.id === id);
-  const galleryAssets = state.galleryAssets.filter((item) => item.id !== id);
-  const nextState = { ...state, galleryAssets };
-  const result = await commitGalleryMutationState(nextState, galleryAssets);
-  if (asset) {
-    const filePath = resolveManagedFileName(getGalleryDir(state), asset.fileName);
-    await fs.unlink(filePath).catch(() => undefined);
-  }
-  return result;
+  return mutateDesktopGalleryState(async (state) => {
+    const asset = state.galleryAssets.find((item) => item.id === id);
+    const galleryAssets = state.galleryAssets.filter((item) => item.id !== id);
+    const nextState = { ...state, galleryAssets };
+    if (asset) {
+      const filePath = resolveManagedFileName(getGalleryDir(state), asset.fileName);
+      await fs.unlink(filePath).catch(() => undefined);
+    }
+    return { state: nextState, result: galleryAssets, changed: Boolean(asset) };
+  });
 }
 
 async function handlePickGalleryAsset(_event: IpcMainInvokeEvent, id: string): Promise<InputAsset> {
