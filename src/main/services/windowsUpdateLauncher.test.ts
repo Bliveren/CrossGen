@@ -1,60 +1,59 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { buildWindowsUpdatePowerShellCommand, launchWindowsInstallerAndRestart } from "./windowsUpdateLauncher";
+import { launchWindowsInstaller } from "./windowsUpdateLauncher";
 
 describe("Windows update launcher", () => {
-  it("waits for the current app process before running the NSIS installer", () => {
-    const command = buildWindowsUpdatePowerShellCommand({
-      currentPid: 1234,
-      executablePath: "C:\\Program Files\\CrossGen\\CrossGen.exe",
-      installerPath: "C:\\Users\\Ada\\AppData\\Roaming\\CrossGen\\updates\\CrossGen-Setup.exe",
-      waitSeconds: 45
-    });
-
-    expect(command).toContain("Wait-Process -Id 1234 -Timeout 45");
-    expect(command).toContain("$installer = 'C:\\Users\\Ada\\AppData\\Roaming\\CrossGen\\updates\\CrossGen-Setup.exe'");
-    expect(command).toContain("Get-CimInstance Win32_Process");
-    expect(command).toContain("$_.ExecutablePath -and $_.ExecutablePath -ieq $app");
-    expect(command).toContain("Start-Process -FilePath $installer -ArgumentList @('/S', '--updated')");
-    expect(command).toContain("Start-Process -FilePath $app");
-  });
-
-  it("quotes single quotes in paths for PowerShell", () => {
-    const command = buildWindowsUpdatePowerShellCommand({
-      currentPid: 1234,
-      executablePath: "C:\\Apps\\CrossGen\\CrossGen.exe",
-      installerPath: "C:\\Users\\O'Brien\\updates\\CrossGen-Setup.exe"
-    });
-
-    expect(command).toContain("$installer = 'C:\\Users\\O''Brien\\updates\\CrossGen-Setup.exe'");
-  });
-
-  it("spawns a detached hidden PowerShell helper and then quits the app", () => {
-    const unref = vi.fn();
-    const spawnImpl = vi.fn(() => ({ unref })) as unknown as typeof import("node:child_process").spawn;
-    const appQuit = vi.fn();
-    const setTimeoutImpl = vi.fn((callback: () => void) => {
-      callback();
-      return 1;
-    });
-
-    launchWindowsInstallerAndRestart("C:\\updates\\CrossGen-Setup.exe", {
-      appQuit,
-      currentPid: 5678,
-      executablePath: "C:\\Apps\\CrossGen\\CrossGen.exe",
+  it("opens the installer visibly without quitting the current app", async () => {
+    const child = mockChildProcess();
+    const spawnImpl = vi.fn(() => child) as unknown as typeof import("node:child_process").spawn;
+    const pending = launchWindowsInstaller("C:\\updates\\CrossGen-Setup.exe", {
       helperCwd: "C:\\Temp",
-      spawnImpl,
-      setTimeoutImpl
+      spawnImpl
     });
+
+    child.emit("spawn");
+    await pending;
 
     expect(spawnImpl).toHaveBeenCalledWith(
-      "powershell.exe",
-      expect.arrayContaining(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command"]),
-      { cwd: "C:\\Temp", detached: true, stdio: "ignore", windowsHide: true }
+      "C:\\updates\\CrossGen-Setup.exe",
+      [],
+      { cwd: "C:\\Temp", detached: true, stdio: "ignore", windowsHide: false }
     );
-    const args = spawnImpl.mock.calls[0][1] as string[];
-    expect(args.at(-1)).toContain("Wait-Process -Id 5678");
-    expect(unref).toHaveBeenCalled();
-    expect(setTimeoutImpl).toHaveBeenCalledWith(expect.any(Function), 50);
-    expect(appQuit).toHaveBeenCalled();
+    expect(child.unref).toHaveBeenCalled();
+  });
+
+  it("passes optional installer arguments to the visible installer", async () => {
+    const child = mockChildProcess();
+    const spawnImpl = vi.fn(() => child) as unknown as typeof import("node:child_process").spawn;
+    const pending = launchWindowsInstaller("C:\\updates\\CrossGen-Setup.exe", {
+      installerArgs: ["/currentuser"],
+      spawnImpl
+    });
+
+    child.emit("spawn");
+    await pending;
+
+    expect(spawnImpl).toHaveBeenCalledWith(
+      "C:\\updates\\CrossGen-Setup.exe",
+      ["/currentuser"],
+      expect.objectContaining({ detached: true, windowsHide: false })
+    );
+  });
+
+  it("rejects when Windows cannot start the installer", async () => {
+    const child = mockChildProcess();
+    const spawnImpl = vi.fn(() => child) as unknown as typeof import("node:child_process").spawn;
+    const pending = launchWindowsInstaller("C:\\updates\\CrossGen-Setup.exe", { spawnImpl });
+
+    child.emit("error", new Error("blocked by policy"));
+
+    await expect(pending).rejects.toThrow("blocked by policy");
+    expect(child.unref).not.toHaveBeenCalled();
   });
 });
+
+function mockChildProcess() {
+  const child = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> };
+  child.unref = vi.fn();
+  return child;
+}

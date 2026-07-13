@@ -1,75 +1,52 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 
 interface LaunchWindowsInstallerOptions {
-  appQuit?: () => void;
-  currentPid?: number;
-  executablePath?: string;
   helperCwd?: string;
-  powerShellPath?: string;
+  installerArgs?: string[];
   spawnImpl?: typeof spawn;
-  setTimeoutImpl?: (callback: () => void, ms: number) => unknown;
-  waitSeconds?: number;
 }
 
-interface WindowsUpdateCommandOptions {
-  currentPid: number;
-  executablePath: string;
-  installerPath: string;
-  waitSeconds?: number;
-}
-
-const DEFAULT_PROCESS_EXIT_WAIT_SECONDS = 120;
-
-export function buildWindowsUpdatePowerShellCommand({
-  currentPid,
-  executablePath,
-  installerPath,
-  waitSeconds = DEFAULT_PROCESS_EXIT_WAIT_SECONDS
-}: WindowsUpdateCommandOptions): string {
-  return [
-    "$ErrorActionPreference = 'SilentlyContinue'",
-    `Wait-Process -Id ${currentPid} -Timeout ${waitSeconds}`,
-    `$installer = ${quotePowerShellString(installerPath)}`,
-    `$app = ${quotePowerShellString(executablePath)}`,
-    `$deadline = (Get-Date).AddSeconds(${waitSeconds})`,
-    "do {",
-    "  $running = @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -ieq $app })",
-    "  if ($running.Count -eq 0) { break }",
-    "  Start-Sleep -Milliseconds 500",
-    "} while ((Get-Date) -lt $deadline)",
-    "$process = Start-Process -FilePath $installer -ArgumentList @('/S', '--updated') -WindowStyle Hidden -Wait -PassThru",
-    "Start-Process -FilePath $app"
-  ].join("; ");
-}
-
-export function launchWindowsInstallerAndRestart(installerPath: string, options: LaunchWindowsInstallerOptions = {}): void {
+export async function launchWindowsInstaller(installerPath: string, options: LaunchWindowsInstallerOptions = {}): Promise<void> {
   const spawnImpl = options.spawnImpl ?? spawn;
-  const setTimeoutImpl = options.setTimeoutImpl ?? setTimeout;
-  const appQuit = options.appQuit;
-  const command = buildWindowsUpdatePowerShellCommand({
-    installerPath,
-    executablePath: options.executablePath ?? process.execPath,
-    currentPid: options.currentPid ?? process.pid,
-    waitSeconds: options.waitSeconds
-  });
+  const installerArgs = options.installerArgs ?? [];
+  let child: ChildProcess;
 
-  const child = spawnImpl(
-    options.powerShellPath ?? "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", command],
-    {
+  try {
+    child = spawnImpl(installerPath, installerArgs, {
       cwd: options.helperCwd ?? process.env.TEMP ?? process.env.SystemRoot,
       detached: true,
       stdio: "ignore",
-      windowsHide: true
-    }
-  );
-  child.unref();
+      windowsHide: false
+    });
+  } catch (error) {
+    throw new Error(`无法启动 Windows 更新安装程序：${errorMessage(error)}`);
+  }
 
-  setTimeoutImpl(() => {
-    appQuit?.();
-  }, 50);
+  await waitForChildProcessSpawn(child);
+  child.unref();
 }
 
-function quotePowerShellString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+function waitForChildProcessSpawn(child: ChildProcess): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      child.off("spawn", handleSpawn);
+      child.off("error", handleError);
+    };
+    const settle = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
+    const handleSpawn = () => settle(resolve);
+    const handleError = (error: Error) => settle(() => reject(new Error(`无法启动 Windows 更新安装程序：${errorMessage(error)}`)));
+
+    child.once("spawn", handleSpawn);
+    child.once("error", handleError);
+  });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -89,7 +89,7 @@ import { DEFAULT_GALLERY_THUMBNAIL_SIZE, galleryThumbnailCachePath } from "./ser
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
 import { verifyUpdateAssetBytes } from "./services/updateInstallerVerification.js";
-import { launchWindowsInstallerAndRestart } from "./services/windowsUpdateLauncher.js";
+import { launchWindowsInstaller } from "./services/windowsUpdateLauncher.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAX_HISTORY = 100;
@@ -2579,11 +2579,11 @@ async function handleDownloadAndInstallUpdate(): Promise<UpdateInstallResult> {
   }
 
   if (process.platform === "win32") {
-    launchWindowsInstallerAndRestart(filePath, { appQuit: () => app.quit() });
+    await launchWindowsInstaller(filePath);
     return {
       version: update.latestVersion,
       filePath,
-      message: "更新包已下载并启动静默安装，应用将关闭并在安装完成后重新打开。"
+      message: "更新包已下载并打开安装程序，请按安装器提示完成更新。"
     };
   }
 
