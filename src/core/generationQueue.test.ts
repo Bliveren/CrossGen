@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createGenerationQueueItem } from "./generation";
-import { requestGenerationQueueItemCancel, runNextGenerationQueueItem } from "./generationQueue";
+import { recordGenerationQueuePartialOutput, requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion, runNextGenerationQueueItem } from "./generationQueue";
 import { createQueueStore } from "./queueStore";
 
 function request() {
@@ -130,6 +130,101 @@ describe("generationQueue", () => {
     const requested = await requestGenerationQueueItemCancel(store, running.queueId);
     expect(requested?.status).toBe("running");
     expect(requested?.cancelRequested).toBe(true);
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("requeues retryable failures until maxAttempts is reached", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({ queuePath, lockPath: `${queuePath}.lock` });
+    const item = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      historyJobId: "job-1",
+      maxAttempts: 2
+    });
+    await store.appendItem(item);
+
+    let calls = 0;
+    const result = await runGenerationQueueItemToCompletion({
+      queueStore: store,
+      queueId: item.queueId,
+      host: { hostId: "host-1", kind: "desktop", processId: process.pid },
+      pollIntervalMs: 0,
+      classifyFailure: () => ({ category: "transient", retryable: true }),
+      retryBackoffMs: () => 0,
+      executeItem: async () => {
+        calls += 1;
+        if (calls === 1) return { status: "failed", error: "rate limited" };
+        return { status: "succeeded", historyJobId: "job-1", outputAssetIds: ["asset-final"], value: { ok: true } };
+      }
+    });
+
+    expect(result.item?.status).toBe("succeeded");
+    expect(calls).toBe(2);
+    const queue = await store.read();
+    expect(queue.items[0]).toMatchObject({
+      status: "succeeded",
+      attempt: 2,
+      outputAssetIds: ["asset-final"]
+    });
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("does not retry non-retryable failures", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({ queuePath, lockPath: `${queuePath}.lock` });
+    const item = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      maxAttempts: 3
+    });
+    await store.appendItem(item);
+
+    const result = await runNextGenerationQueueItem({
+      queueStore: store,
+      queueId: item.queueId,
+      host: { hostId: "host-1", kind: "desktop", processId: process.pid },
+      classifyFailure: () => ({ category: "auth", retryable: false }),
+      executeItem: async () => ({ status: "failed", error: "unauthorized" })
+    });
+
+    expect(result.item?.status).toBe("failed");
+    const queue = await store.read();
+    expect(queue.items[0]).toMatchObject({
+      status: "failed",
+      attempt: 1,
+      lastError: "unauthorized",
+      lastErrorCategory: "auth",
+      lastErrorRetryable: false
+    });
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("records partial outputs without duplicating asset ids", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({ queuePath, lockPath: `${queuePath}.lock` });
+    const item = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true
+    });
+    await store.appendItem(item);
+
+    await recordGenerationQueuePartialOutput(store, item.queueId, ["partial-1", "partial-1", "partial-2"]);
+    const queue = await store.read();
+    expect(queue.items[0].partialAssetIds).toEqual(["partial-1", "partial-2"]);
+    expect(queue.items[0].outputAssetIds).toEqual(["partial-1", "partial-2"]);
 
     await rm(tempDir, { recursive: true, force: true });
   });

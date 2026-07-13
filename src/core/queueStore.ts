@@ -5,6 +5,7 @@ import type {
   GenerationQueueFile,
   GenerationQueueItem,
   GenerationQueueWorkerHost,
+  QueueErrorCategory,
   JobStatus,
   QueueExecutionKind,
   QueueStage
@@ -98,9 +99,13 @@ function normalizeQueueItem(raw: Partial<GenerationQueueItem>): GenerationQueueI
     startedAt: typeof raw.startedAt === "string" ? raw.startedAt : undefined,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : createdAt,
     completedAt: typeof raw.completedAt === "string" ? raw.completedAt : undefined,
+    nextRunAt: typeof raw.nextRunAt === "string" ? raw.nextRunAt : undefined,
     lastError: typeof raw.lastError === "string" ? raw.lastError : undefined,
+    lastErrorCategory: normalizeQueueErrorCategory(raw.lastErrorCategory),
+    lastErrorRetryable: typeof raw.lastErrorRetryable === "boolean" ? raw.lastErrorRetryable : undefined,
     historyJobId: typeof raw.historyJobId === "string" ? raw.historyJobId : undefined,
     outputAssetIds: Array.isArray(raw.outputAssetIds) ? raw.outputAssetIds.filter((value): value is string => typeof value === "string") : [],
+    partialAssetIds: Array.isArray(raw.partialAssetIds) ? raw.partialAssetIds.filter((value): value is string => typeof value === "string") : [],
     cancelRequested: Boolean(raw.cancelRequested),
     costConfirmed: Boolean(raw.costConfirmed),
     workerHostId: typeof raw.workerHostId === "string" ? raw.workerHostId : undefined,
@@ -148,6 +153,18 @@ function normalizeQueueStage(value: unknown): QueueStage {
   return value === "claiming" || value === "calling_provider" || value === "awaiting_remote" || value === "downloading" || value === "postprocessing" || value === "finalizing"
     ? value
     : "queued";
+}
+
+function normalizeQueueErrorCategory(value: unknown): QueueErrorCategory | undefined {
+  return value === "transient" ||
+    value === "auth" ||
+    value === "quota" ||
+    value === "safety" ||
+    value === "cancelled" ||
+    value === "unsupported" ||
+    value === "unknown"
+    ? value
+    : undefined;
 }
 
 function isMediaKind(value: unknown): value is "image" | "animated-gif" | "video" {
@@ -199,7 +216,12 @@ function claimItems(queue: GenerationQueueFile, options: ClaimRunnableItemsOptio
   }
 
   const eligible = queue.items
-    .filter((item) => item.status === "queued" && !item.cancelRequested && (!options.queueId || item.queueId === options.queueId))
+    .filter((item) => {
+      if (item.status !== "queued" || item.cancelRequested) return false;
+      if (options.queueId && item.queueId !== options.queueId) return false;
+      const nextRunAt = item.nextRunAt ? Date.parse(item.nextRunAt) : Number.NaN;
+      return !Number.isFinite(nextRunAt) || nextRunAt <= nowMs;
+    })
     .sort((a, b) => a.priority - b.priority || Date.parse(a.createdAt) - Date.parse(b.createdAt));
 
   const claimed: GenerationQueueItem[] = [];

@@ -1,12 +1,26 @@
-import type { GenerationQueueItem, GenerationQueueWorkerHost, JobStatus } from "../shared/types.js";
+import type { GenerationQueueItem, GenerationQueueWorkerHost, JobStatus, QueueErrorCategory } from "../shared/types.js";
 import type { QueueHostIdentity, QueueStore } from "./queueStore.js";
+
+export interface GenerationQueueFailureClassification {
+  category: QueueErrorCategory;
+  retryable: boolean;
+}
 
 export interface GenerationQueueExecutionResult<TValue = unknown> {
   status?: Extract<JobStatus, "succeeded" | "failed" | "cancelled">;
   value?: TValue;
   historyJobId?: string;
   outputAssetIds?: string[];
+  partialAssetIds?: string[];
   error?: string;
+  errorCategory?: QueueErrorCategory;
+  retryable?: boolean;
+}
+
+export interface ClassifyGenerationQueueFailureInput {
+  item: GenerationQueueItem;
+  error?: unknown;
+  result?: GenerationQueueExecutionResult;
 }
 
 export interface RunNextGenerationQueueItemOptions<TValue = unknown> {
@@ -18,6 +32,8 @@ export interface RunNextGenerationQueueItemOptions<TValue = unknown> {
   providerConcurrency?: Record<string, number>;
   leaseMs?: number;
   now?: () => number;
+  classifyFailure?: (input: ClassifyGenerationQueueFailureInput) => GenerationQueueFailureClassification;
+  retryBackoffMs?: (item: GenerationQueueItem, classification: GenerationQueueFailureClassification) => number;
   createAbortController?: () => AbortController;
   onStarted?: (item: GenerationQueueItem, controller: AbortController) => void;
   onFinished?: (item: GenerationQueueItem) => void;
@@ -46,6 +62,18 @@ function iso(now: number): string {
 
 function normalizeTerminalStatus(status: GenerationQueueExecutionResult["status"] | undefined): Extract<JobStatus, "succeeded" | "failed" | "cancelled"> {
   return status === "failed" || status === "cancelled" ? status : "succeeded";
+}
+
+function defaultFailureClassification(): GenerationQueueFailureClassification {
+  return { category: "unknown", retryable: false };
+}
+
+function defaultRetryBackoffMs(item: GenerationQueueItem): number {
+  return Math.min(30000, 1000 * 2 ** Math.max(0, item.attempt - 1));
+}
+
+function mergeUnique(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim().length > 0))];
 }
 
 function makeWorkerHost(host: QueueHostIdentity, nowMs: number, leaseMs: number): GenerationQueueWorkerHost {
@@ -94,10 +122,14 @@ async function completeClaimedItem(
           status,
           stage: "finalizing",
           completedAt: iso(nowMs),
+          nextRunAt: undefined,
           updatedAt: iso(nowMs),
           lastError: result.error,
+          lastErrorCategory: result.errorCategory,
+          lastErrorRetryable: result.retryable,
           historyJobId: result.historyJobId ?? current.historyJobId,
           outputAssetIds: result.outputAssetIds ?? current.outputAssetIds,
+          partialAssetIds: result.partialAssetIds ?? current.partialAssetIds,
           cancelRequested: status === "cancelled" ? true : current.cancelRequested,
           workerHostId: undefined,
           workerProcessId: undefined,
@@ -112,11 +144,48 @@ async function completeClaimedItem(
   return completed ?? item;
 }
 
+async function scheduleRetry(
+  queueStore: QueueStore,
+  item: GenerationQueueItem,
+  message: string,
+  classification: GenerationQueueFailureClassification,
+  retryBackoffMs: number,
+  nowMs: number
+): Promise<GenerationQueueItem | undefined> {
+  if (!classification.retryable || item.cancelRequested || item.attempt >= item.maxAttempts) return undefined;
+  let requeued: GenerationQueueItem | undefined;
+  await queueStore.mutate((queue) => ({
+    ...queue,
+    updatedAt: iso(nowMs),
+    items: queue.items.map((current) => {
+      if (current.queueId !== item.queueId) return current;
+      requeued = {
+        ...current,
+        status: "queued",
+        stage: "queued",
+        nextRunAt: iso(nowMs + Math.max(0, retryBackoffMs)),
+        updatedAt: iso(nowMs),
+        lastError: message,
+        lastErrorCategory: classification.category,
+        lastErrorRetryable: classification.retryable,
+        completedAt: undefined,
+        workerHostId: undefined,
+        workerProcessId: undefined,
+        workerHeartbeatAt: undefined,
+        workerLeaseExpiresAt: undefined
+      };
+      return requeued;
+    })
+  }));
+  return requeued;
+}
+
 async function failClaimedItem<TValue = unknown>(
   queueStore: QueueStore,
   item: GenerationQueueItem,
   error: unknown,
-  nowMs: number
+  nowMs: number,
+  classification: GenerationQueueFailureClassification
 ): Promise<GenerationQueueExecutionResult<TValue>> {
   const message = error instanceof Error ? error.message : String(error);
   await completeClaimedItem(
@@ -125,12 +194,23 @@ async function failClaimedItem<TValue = unknown>(
     {
       status: "failed",
       error: message,
+      errorCategory: classification.category,
+      retryable: classification.retryable,
       historyJobId: item.historyJobId,
-      outputAssetIds: item.outputAssetIds
+      outputAssetIds: item.outputAssetIds,
+      partialAssetIds: item.partialAssetIds
     },
     nowMs
   );
-  return { status: "failed", error: message, historyJobId: item.historyJobId, outputAssetIds: item.outputAssetIds };
+  return {
+    status: "failed",
+    error: message,
+    errorCategory: classification.category,
+    retryable: classification.retryable,
+    historyJobId: item.historyJobId,
+    outputAssetIds: item.outputAssetIds,
+    partialAssetIds: item.partialAssetIds
+  };
 }
 
 export async function runNextGenerationQueueItem<TValue = unknown>(
@@ -153,10 +233,59 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
   try {
     await markClaimedItemStage(options.queueStore, item.queueId, now());
     const execution = await options.executeItem(item, controller.signal);
+    if (execution.status === "failed") {
+      const classification = options.classifyFailure?.({ item, result: execution }) ?? defaultFailureClassification();
+      const retryItem = await scheduleRetry(
+        options.queueStore,
+        item,
+        execution.error ?? "Generation failed.",
+        classification,
+        (options.retryBackoffMs ?? defaultRetryBackoffMs)(item, classification),
+        now()
+      );
+      if (retryItem) {
+        return {
+          claimed: true,
+          item: retryItem,
+          execution: {
+            ...execution,
+            errorCategory: classification.category,
+            retryable: classification.retryable
+          }
+        };
+      }
+      execution.errorCategory = execution.errorCategory ?? classification.category;
+      execution.retryable = execution.retryable ?? classification.retryable;
+    }
     const completed = await completeClaimedItem(options.queueStore, item, execution, now());
     return { claimed: true, item: completed, execution };
   } catch (error) {
-    const execution = await failClaimedItem<TValue>(options.queueStore, item, error, now());
+    const classification = options.classifyFailure?.({ item, error }) ?? defaultFailureClassification();
+    const message = error instanceof Error ? error.message : String(error);
+    const retryItem = await scheduleRetry(
+      options.queueStore,
+      item,
+      message,
+      classification,
+      (options.retryBackoffMs ?? defaultRetryBackoffMs)(item, classification),
+      now()
+    );
+    if (retryItem) {
+      return {
+        claimed: true,
+        item: retryItem,
+        execution: {
+          status: "failed",
+          error: message,
+          errorCategory: classification.category,
+          retryable: classification.retryable,
+          historyJobId: item.historyJobId,
+          outputAssetIds: item.outputAssetIds,
+          partialAssetIds: item.partialAssetIds
+        }
+      };
+    }
+    const execution = await failClaimedItem<TValue>(options.queueStore, item, error, now(), classification);
     return { claimed: true, item, execution };
   } finally {
     options.onFinished?.(item);
@@ -170,6 +299,10 @@ export async function runGenerationQueueItemToCompletion<TValue = unknown>(
   const pollIntervalMs = options.pollIntervalMs ?? 100;
   while (true) {
     const result = await runNextGenerationQueueItem(options);
+    if (result.claimed && result.item && !TERMINAL_STATUSES.has(result.item.status)) {
+      await sleep(pollIntervalMs);
+      continue;
+    }
     if (result.claimed) return result;
 
     const queue = await options.queueStore.read();
@@ -181,6 +314,30 @@ export async function runGenerationQueueItemToCompletion<TValue = unknown>(
     }
     await sleep(pollIntervalMs);
   }
+}
+
+export async function recordGenerationQueuePartialOutput(queueStore: QueueStore, queueId: string, assetIds: string[], now = Date.now): Promise<GenerationQueueItem | undefined> {
+  const incoming = mergeUnique(assetIds);
+  if (incoming.length === 0) return undefined;
+  let updated: GenerationQueueItem | undefined;
+  await queueStore.mutate((queue) => {
+    const nowIso = iso(now());
+    return {
+      ...queue,
+      updatedAt: nowIso,
+      items: queue.items.map((item) => {
+        if (item.queueId !== queueId) return item;
+        updated = {
+          ...item,
+          updatedAt: nowIso,
+          partialAssetIds: mergeUnique([...item.partialAssetIds, ...incoming]),
+          outputAssetIds: mergeUnique([...item.outputAssetIds, ...incoming])
+        };
+        return updated;
+      })
+    };
+  });
+  return updated;
 }
 
 export async function requestGenerationQueueItemCancel(queueStore: QueueStore, queueId: string, now = Date.now): Promise<GenerationQueueItem | undefined> {

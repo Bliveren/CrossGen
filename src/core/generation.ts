@@ -32,6 +32,7 @@ export function createGenerationQueueItem(input: CreateGenerationQueueItemInput)
     updatedAt: now,
     historyJobId: input.historyJobId,
     outputAssetIds: [],
+    partialAssetIds: [],
     cancelRequested: false,
     costConfirmed: input.costConfirmed,
     executionKind: "sync-provider",

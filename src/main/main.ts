@@ -76,7 +76,7 @@ import {
 import { compareVersions, isAllowedUpdateUrl, parseUpdateManifest, safeUpdateFileName, selectUpdateAsset } from "../shared/updateManifest.js";
 import { resolveDataDirs, resolveUserDataDir } from "../core/dataDirs.js";
 import { createGenerationQueueItem } from "../core/generation.js";
-import { requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion } from "../core/generationQueue.js";
+import { recordGenerationQueuePartialOutput, requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion } from "../core/generationQueue.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
 import { buildEndpoint, fetchWithTimeout } from "./services/openaiImageAdapter.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
@@ -1059,6 +1059,14 @@ function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAs
 function defaultHistoryJobName(job: GenerationJob): string {
   const result = job.outputs.find((asset) => asset.sourceType === "result") ?? job.outputs[job.outputs.length - 1];
   return result?.fileName ? path.basename(result.fileName) : job.name.trim() || `${job.modelDisplayName || job.modelId || "image"}-${job.id.slice(-8)}.png`;
+}
+
+function mergeImageAssets(...groups: ImageAsset[][]): ImageAsset[] {
+  const byId = new Map<string, ImageAsset>();
+  for (const asset of groups.flat()) {
+    byId.set(asset.id, asset);
+  }
+  return [...byId.values()];
 }
 
 async function upsertJob(job: GenerationJob): Promise<void> {
@@ -2299,7 +2307,14 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     waitTimeoutMs: normalizedRequest.params.timeoutMs,
     executeItem: async (_item, abortSignal) => {
       const startedAt = Date.now();
-      const sendQueuedJobEvent = (event: JobProgressEvent) => sendJobEvent({ ...event, queueId: queueItem.queueId });
+      const partialAssets: ImageAsset[] = [];
+      const sendQueuedJobEvent = (event: JobProgressEvent) => {
+        if (event.type === "partial" && event.image) {
+          partialAssets.push(event.image);
+          void recordGenerationQueuePartialOutput(getGenerationQueueStore(), queueItem.queueId, [event.image.id]);
+        }
+        sendJobEvent({ ...event, queueId: queueItem.queueId });
+      };
       job = {
         ...job,
         status: "running",
@@ -2333,6 +2348,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
           value: job,
           historyJobId: job.id,
           outputAssetIds: job.outputs.map((asset) => asset.id),
+          partialAssetIds: job.outputs.filter((asset) => asset.sourceType === "partial").map((asset) => asset.id),
           error: job.status === "failed" ? job.error : undefined
         };
       } catch (error) {
@@ -2342,6 +2358,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
           status: "failed",
           durationMs: Date.now() - startedAt,
           error: message,
+          outputs: mergeImageAssets(job.outputs, partialAssets),
           updatedAt: new Date().toISOString()
         };
         await upsertJob(job);
@@ -2351,6 +2368,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
           value: job,
           historyJobId: job.id,
           outputAssetIds: job.outputs.map((asset) => asset.id),
+          partialAssetIds: partialAssets.map((asset) => asset.id),
           error: message
         };
       }
