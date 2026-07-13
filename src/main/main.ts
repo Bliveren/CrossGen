@@ -1748,13 +1748,15 @@ async function buildGalleryDiskSyncedState(
 }
 
 async function syncGalleryWithDisk(inputState: AppStateFile, changedRelPaths?: string[]): Promise<AppStateFile> {
-  const result = await buildGalleryDiskSyncedState(inputState, changedRelPaths);
-  if (result.changed) {
-    await writeState(result.state, { updateBackup: false });
-    return result.state;
-  }
-
-  return result.state;
+  let syncedState = inputState;
+  const nextState = await getAppStateStore().mutate(async (state) => {
+    const result = await buildGalleryDiskSyncedState(state, changedRelPaths, { useStateCache: false });
+    syncedState = result.state;
+    return result.changed ? persistentStatePayload(result.state) : persistentStatePayload(state);
+  });
+  stateWriteCount += 1;
+  stateCache = nextState;
+  return syncedState;
 }
 
 function isGalleryWatchCurrentForState(state: AppStateFile): boolean {
@@ -3161,7 +3163,7 @@ async function migrateHistoryStorage(state: AppStateFile, nextDir: string): Prom
 }
 
 async function migrateGalleryStorage(state: AppStateFile, nextDir: string): Promise<AppStateFile> {
-  const syncedState = await syncGalleryWithDisk(state);
+  const syncedState = (await buildGalleryDiskSyncedState(state, undefined, { useStateCache: false })).state;
   const storage = getStorageSettings(syncedState);
   const oldDir = storage.galleryDir;
   const resolvedNextDir = path.resolve(nextDir);
@@ -3220,13 +3222,22 @@ async function handleChooseStorageFolder(_event: IpcMainInvokeEvent, kindInput: 
   if (result.canceled || !result.filePaths[0]) return snapshotFromState(currentState);
 
   const nextDir = result.filePaths[0];
-  const migratedState = options.syncBoth
-    ? await migrateGalleryStorage(await migrateHistoryStorage(currentState, nextDir), nextDir)
-    : kind === "history"
-      ? await migrateHistoryStorage(currentState, nextDir)
-      : await migrateGalleryStorage(currentState, nextDir);
-  await writeState(migratedState);
-  const nextState = kind === "gallery" || options.syncBoth ? await syncGalleryWithDisk(migratedState) : migratedState;
+  const nextState = await getAppStateStore().mutate(async (state) => {
+    const baseState = kind === "gallery" || options.syncBoth
+      ? (await buildGalleryDiskSyncedState(state, undefined, { useStateCache: false })).state
+      : state;
+    const migratedState = options.syncBoth
+      ? await migrateGalleryStorage(await migrateHistoryStorage(baseState, nextDir), nextDir)
+      : kind === "history"
+        ? await migrateHistoryStorage(baseState, nextDir)
+        : await migrateGalleryStorage(baseState, nextDir);
+    const finalState = kind === "gallery" || options.syncBoth
+      ? (await buildGalleryDiskSyncedState(migratedState, undefined, { useStateCache: false })).state
+      : migratedState;
+    return persistentStatePayload(finalState);
+  });
+  stateWriteCount += 1;
+  stateCache = nextState;
   if (kind === "gallery" || options.syncBoth) {
     await startGalleryWatcherForState(nextState);
     sendGalleryEvent(nextState, "mutation");
