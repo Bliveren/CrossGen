@@ -29,6 +29,9 @@ export interface QueueHostIdentity {
 export interface ClaimRunnableItemsOptions {
   host: QueueHostIdentity;
   limit: number;
+  queueId?: string;
+  maxGlobalRunning?: number;
+  providerConcurrency?: Record<string, number>;
 }
 
 export interface QueueStore {
@@ -177,14 +180,37 @@ function markStaleRunning(queue: GenerationQueueFile, nowMs: number, staleRunnin
   return next;
 }
 
+function activeRunningItems(queue: GenerationQueueFile): GenerationQueueItem[] {
+  return queue.items.filter((item) => item.status === "running");
+}
+
 function claimItems(queue: GenerationQueueFile, options: ClaimRunnableItemsOptions, nowMs: number, leaseMs: number): GenerationQueueItem[] {
+  const runningItems = activeRunningItems(queue);
+  const globalCapacity =
+    typeof options.maxGlobalRunning === "number"
+      ? Math.max(0, options.maxGlobalRunning - runningItems.length)
+      : Number.POSITIVE_INFINITY;
+  const claimLimit = Math.min(Math.max(0, options.limit), globalCapacity);
+  if (claimLimit <= 0) return [];
+
+  const runningByProvider = new Map<string, number>();
+  for (const item of runningItems) {
+    runningByProvider.set(item.providerId, (runningByProvider.get(item.providerId) ?? 0) + 1);
+  }
+
   const eligible = queue.items
-    .filter((item) => item.status === "queued" && !item.cancelRequested)
+    .filter((item) => item.status === "queued" && !item.cancelRequested && (!options.queueId || item.queueId === options.queueId))
     .sort((a, b) => a.priority - b.priority || Date.parse(a.createdAt) - Date.parse(b.createdAt));
 
   const claimed: GenerationQueueItem[] = [];
-  for (const item of eligible.slice(0, Math.max(0, options.limit))) {
+  for (const item of eligible) {
+    if (claimed.length >= claimLimit) break;
+    const providerLimit = options.providerConcurrency?.[item.providerId];
+    const providerRunning = runningByProvider.get(item.providerId) ?? 0;
+    if (typeof providerLimit === "number" && providerRunning >= providerLimit) continue;
+
     item.status = "running";
+    item.attempt += 1;
     item.startedAt = item.startedAt ?? new Date(nowMs).toISOString();
     item.updatedAt = new Date(nowMs).toISOString();
     item.workerHostId = options.host.hostId;
@@ -192,6 +218,7 @@ function claimItems(queue: GenerationQueueFile, options: ClaimRunnableItemsOptio
     item.workerHeartbeatAt = new Date(nowMs).toISOString();
     item.workerLeaseExpiresAt = new Date(nowMs + leaseMs).toISOString();
     item.stage = "claiming";
+    runningByProvider.set(item.providerId, providerRunning + 1);
     claimed.push(structuredClone(item));
   }
   if (claimed.length > 0) {
@@ -266,13 +293,13 @@ export function createQueueStore(options: QueueStoreOptions): QueueStore {
         { timeoutMs, staleLockMs }
       );
     },
-    async claimRunnableItems({ host, limit }: ClaimRunnableItemsOptions): Promise<GenerationQueueItem[]> {
+    async claimRunnableItems(claimOptions: ClaimRunnableItemsOptions): Promise<GenerationQueueItem[]> {
       return withExclusiveFileLock(
         options.lockPath,
         async () => {
           const current = await readQueueFile(options.queuePath);
           const recovered = markStaleRunning(current, now(), staleRunningAfterMs);
-          const claimed = claimItems(recovered, { host, limit }, now(), leaseMs);
+          const claimed = claimItems(recovered, claimOptions, now(), leaseMs);
           await writeQueueFile(options.queuePath, recovered);
           return claimed;
         },
