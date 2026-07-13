@@ -383,10 +383,20 @@ export interface GenerationQueueItem {
   correlationId?: string;
 }
 
+export interface GenerationQueueWorkerHost {
+  hostId: string;
+  kind: "desktop" | "mcp" | "cli-worker";
+  processId: number;
+  mode: "generate";
+  heartbeatAt: string;
+  leaseExpiresAt: string;
+}
+
 export interface GenerationQueueFile {
   schemaVersion: 1;
   updatedAt: string;
   items: GenerationQueueItem[];
+  workerHosts: GenerationQueueWorkerHost[];
 }
 
 export type CrossGenJsonErrorCode =
