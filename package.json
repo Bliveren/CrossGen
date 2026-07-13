@@ -34,6 +34,8 @@
     "verify:mock-model-discovery": "node scripts/verify-mock-model-discovery.mjs",
     "verify:mock-api": "node scripts/verify-mock-api.mjs",
     "verify:cli-mcp-smoke": "pnpm build:main && node scripts/verify-cli-mcp-smoke.mjs",
+    "verify:queue-concurrency-smoke": "vitest run src/core/queueStore.test.ts src/core/generationQueue.test.ts",
+    "verify:gallery-mutation-smoke": "vitest run src/core/gallery.test.ts src/core/stateQueueTransaction.test.ts src/main/services/galleryDiskSync.test.ts",
     "verify:release:linux": "node scripts/verify-linux-release.mjs",
     "verify:release:mac": "node scripts/verify-mac-release.mjs",
     "verify:release:windows": "node scripts/verify-windows-release.mjs",

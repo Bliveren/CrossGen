@@ -1,14 +1,20 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { importGalleryAssets } from "./gallery";
 import { createQueueStore } from "./queueStore";
 import { withStateQueueTransaction } from "./stateQueueTransaction";
-import type { GenerationQueueItem } from "../shared/types";
+import type { GalleryAsset, GalleryFolder, GenerationQueueItem } from "../shared/types";
 
 interface TestState {
   version: number;
   history: string[];
+}
+
+interface GallerySmokeState {
+  galleryFolders: GalleryFolder[];
+  galleryAssets: GalleryAsset[];
 }
 
 function queueItem(queueId: string): GenerationQueueItem {
@@ -147,6 +153,74 @@ describe("stateQueueTransaction", () => {
     await transaction;
     await append;
     expect((await queueStore.read()).items.map((item) => item.queueId)).toEqual(["queue-after"]);
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("serializes concurrent Gallery mutations without losing state or files", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-gallery-tx-"));
+    const statePath = path.join(tempDir, "state.json");
+    const queuePath = path.join(tempDir, "queue.json");
+    const lockPath = path.join(tempDir, ".crossgen-state.lock");
+    const galleryDir = path.join(tempDir, "gallery");
+    const sourceOne = path.join(tempDir, "source-one.png");
+    const sourceTwo = path.join(tempDir, "source-two.png");
+    await writeFile(sourceOne, "image-one");
+    await writeFile(sourceTwo, "image-two");
+
+    const transactionOptions = {
+      lockPath,
+      queuePath,
+      state: {
+        statePath,
+        backupPath: `${statePath}.bak`,
+        defaultState: { galleryFolders: [], galleryAssets: [] },
+        normalize: (value: unknown) => {
+          const raw = value as Partial<GallerySmokeState> | null | undefined;
+          return {
+            galleryFolders: Array.isArray(raw?.galleryFolders) ? raw.galleryFolders : [],
+            galleryAssets: Array.isArray(raw?.galleryAssets) ? raw.galleryAssets : []
+          };
+        }
+      }
+    };
+
+    async function importInsideTransaction(sourcePath: string, assetId: string, contentLabel: string): Promise<string> {
+      const transaction = await withStateQueueTransaction<GallerySmokeState, string>(
+        transactionOptions,
+        async (context) => {
+          const imported = await importGalleryAssets(
+            context.state,
+            {
+              galleryDir,
+              now: () => "2026-07-14T00:00:00.000Z",
+              createAssetId: () => assetId
+            },
+            [sourcePath],
+            null,
+            { tags: [contentLabel] }
+          );
+          context.setState(imported.state);
+          return imported.result.assets[0]?.id ?? "";
+        }
+      );
+      return transaction.result;
+    }
+
+    const [assetOne, assetTwo] = await Promise.all([
+      importInsideTransaction(sourceOne, "asset-one", "one"),
+      importInsideTransaction(sourceTwo, "asset-two", "two")
+    ]);
+
+    expect([assetOne, assetTwo].sort()).toEqual(["asset-one", "asset-two"]);
+    const final = await withStateQueueTransaction<GallerySmokeState, GallerySmokeState>(
+      transactionOptions,
+      (context) => context.state
+    );
+    expect(final.state.galleryAssets.map((asset) => asset.id).sort()).toEqual(["asset-one", "asset-two"]);
+    expect(final.state.galleryAssets.map((asset) => asset.originalName).sort()).toEqual(["source-one.png", "source-two.png"]);
+    await expect(readFile(path.join(galleryDir, "source-one.png"), "utf8")).resolves.toBe("image-one");
+    await expect(readFile(path.join(galleryDir, "source-two.png"), "utf8")).resolves.toBe("image-two");
 
     await rm(tempDir, { recursive: true, force: true });
   });
