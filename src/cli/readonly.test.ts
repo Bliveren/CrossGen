@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCliJobStatus, buildCliMcpConfig } from "./readonly";
+import { buildCliConfigStatus, buildCliJobStatus, buildCliMcpConfig, buildCliQueueConfig, buildCliQueueStatus } from "./readonly";
 
 function request() {
   return {
@@ -26,6 +26,35 @@ function request() {
 }
 
 describe("readonly CLI builders", () => {
+  it("reports queue config in config and queue status", () => {
+    const queue = {
+      schemaVersion: 1 as const,
+      updatedAt: "2026-07-14T00:00:00.000Z",
+      workerHosts: [],
+      items: []
+    };
+    const state = {
+      providers: [],
+      activeProviderId: "",
+      galleryFolders: [],
+      galleryAssets: [],
+      history: [],
+      queueConfig: {
+        maxGlobalRunning: 3,
+        providerConcurrency: { "provider-1": 2 }
+      }
+    };
+
+    expect(buildCliQueueConfig(state)).toEqual({ maxGlobalRunning: 3, providerConcurrency: { "provider-1": 2 } });
+    expect(buildCliConfigStatus(state, queue)).toMatchObject({
+      queueConfig: { maxGlobalRunning: 3, providerConcurrency: { "provider-1": 2 } }
+    });
+    expect(buildCliQueueStatus(queue, state.queueConfig)).toMatchObject({
+      config: { maxGlobalRunning: 3, providerConcurrency: { "provider-1": 2 } },
+      totalItems: 0
+    });
+  });
+
   it("builds job status without disclosing local output paths", () => {
     const queue = {
       schemaVersion: 1 as const,

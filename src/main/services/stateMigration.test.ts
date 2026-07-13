@@ -127,6 +127,41 @@ describe("state migration", () => {
 
     expect(migrated.galleryAssets).toEqual([]);
     expect(migrated.galleryFolders).toEqual([]);
+    expect(migrated.queueConfig).toEqual({ maxGlobalRunning: 1, providerConcurrency: {} });
+  });
+
+  it("normalizes queue concurrency config in v3 state", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "default",
+      providers: [{
+        id: "default",
+        baseURL: "https://api.openai.com/v1",
+        defaultModel: "gpt-image-2",
+        defaultSize: "auto",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        updatedAt: "2026-01-02T03:04:05.000Z",
+        encryption: "none"
+      }],
+      history: [],
+      queueConfig: {
+        maxGlobalRunning: 99,
+        providerConcurrency: {
+          " provider-1 ": 2,
+          "provider-2": 0,
+          "": 4
+        }
+      }
+    });
+
+    expect(migrated.queueConfig).toEqual({
+      maxGlobalRunning: 8,
+      providerConcurrency: {
+        "provider-1": 2,
+        "provider-2": 1
+      }
+    });
   });
 
   it("preserves OpenAI image route probes in v3 provider state", () => {

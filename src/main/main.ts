@@ -107,6 +107,13 @@ import {
   runNextGenerationQueueItem
 } from "../core/generationQueue.js";
 import { getProviderEnvKeyNames } from "../core/keyring.js";
+import {
+  MAX_QUEUE_CONCURRENCY,
+  MIN_QUEUE_CONCURRENCY,
+  applyQueueRuntimeConfigPatch,
+  normalizeQueueRuntimeConfig,
+  type QueueRuntimeConfigPatch
+} from "../core/queueConfig.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
 import { createJsonStateStore, type JsonStateStore } from "../core/stateStore.js";
 import { parseGenerationPromptFile, type GenerationPromptFileEntry } from "../cli/generationBatch.js";
@@ -120,6 +127,7 @@ import {
   buildCliMcpConfig,
   buildCliModelsList,
   buildCliProviderList,
+  buildCliQueueConfig,
   buildCliQueueStatus,
   type McpClientName,
   type McpMode
@@ -567,6 +575,7 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
     promptTemplates: state.promptTemplates,
     galleryFolders: state.galleryFolders,
     galleryAssets: state.galleryAssets,
+    queueConfig: normalizeQueueRuntimeConfig(state.queueConfig),
     storage: state.storage,
     draft: state.draft
   };
@@ -2497,11 +2506,13 @@ async function runQueuedGenerationForAgent(
 ) {
   const startedAt = Date.now();
   const host = { hostId: queueWorkerHostId(hostKind), kind: hostKind, processId: process.pid };
+  const queueConfig = await readQueueRuntimeConfigForCli();
   const result = await runGenerationQueueItemToCompletion<GenerationJob>({
     queueStore: getGenerationQueueStore(),
     queueId,
     host,
-    maxGlobalRunning: 1,
+    maxGlobalRunning: queueConfig.maxGlobalRunning,
+    providerConcurrency: queueConfig.providerConcurrency,
     waitTimeoutMs,
     executeItem: executeGenerationQueueItem,
     onStarted: trackQueuedGenerationStart,
@@ -2552,10 +2563,12 @@ async function registerDesktopQueueWorkerHeartbeat(): Promise<void> {
 }
 
 async function runNextDesktopQueuedGeneration(): Promise<boolean> {
+  const queueConfig = await readQueueRuntimeConfigForCli();
   const result = await runNextGenerationQueueItem<GenerationJob>({
     queueStore: getGenerationQueueStore(),
     host: { hostId: desktopWorkerHostId, kind: "desktop", processId: process.pid },
-    maxGlobalRunning: 1,
+    maxGlobalRunning: queueConfig.maxGlobalRunning,
+    providerConcurrency: queueConfig.providerConcurrency,
     leaseMs: DESKTOP_QUEUE_WORKER_LEASE_MS,
     executeItem: executeGenerationQueueItem,
     onStarted: trackQueuedGenerationStart,
@@ -3539,6 +3552,7 @@ function getCliPositionalsAfter(args: string[], token: string): string[] {
     "--asset-id",
     "--aspect-ratio",
     "--client",
+    "--clear-provider-concurrency",
     "--correlation-id",
     "--duplicate",
     "--folder",
@@ -3546,6 +3560,7 @@ function getCliPositionalsAfter(args: string[], token: string): string[] {
     "--input",
     "--mask",
     "--max-attempts",
+    "--max-global-running",
     "--mode",
     "--model",
     "--name",
@@ -3553,6 +3568,7 @@ function getCliPositionalsAfter(args: string[], token: string): string[] {
     "--prompt",
     "--prompt-file",
     "--provider",
+    "--provider-concurrency",
     "--quality",
     "--request-id",
     "--resolution",
@@ -3658,6 +3674,61 @@ async function readExistingStateForCli(): Promise<AppStateFile | null> {
 
 async function readExistingQueueForCli() {
   return getGenerationQueueStore().read();
+}
+
+async function readQueueRuntimeConfigForCli() {
+  return buildCliQueueConfig(await readExistingStateForCli());
+}
+
+async function setQueueRuntimeConfigForCli(patch: QueueRuntimeConfigPatch) {
+  const nextState = await getAppStateStore().mutate((state) => ({
+    ...state,
+    queueConfig: applyQueueRuntimeConfigPatch(normalizeQueueRuntimeConfig(state.queueConfig), patch)
+  }));
+  stateCache = nextState;
+  return {
+    config: normalizeQueueRuntimeConfig(nextState.queueConfig)
+  };
+}
+
+function parseProviderConcurrencyAssignments(values: string[]): Record<string, number> {
+  const providerConcurrency: Record<string, number> = {};
+  for (const value of values) {
+    const separatorIndex = value.indexOf("=");
+    if (separatorIndex <= 0 || separatorIndex === value.length - 1) {
+      throwCliCommandError("INVALID_ARGUMENT", "Provider concurrency must use providerId=number.", ["Use --provider-concurrency <provider-id>=<number>."]);
+    }
+    const providerId = value.slice(0, separatorIndex).trim();
+    if (!providerId) {
+      throwCliCommandError("INVALID_ARGUMENT", "Provider id cannot be empty.", ["Use --provider-concurrency <provider-id>=<number>."]);
+    }
+    providerConcurrency[providerId] = parseCliQueueConcurrencyValue(value.slice(separatorIndex + 1), "--provider-concurrency");
+  }
+  return providerConcurrency;
+}
+
+function parseCliQueueConcurrencyValue(value: string, name: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < MIN_QUEUE_CONCURRENCY || parsed > MAX_QUEUE_CONCURRENCY) {
+    throwCliCommandError(
+      "INVALID_ARGUMENT",
+      `${name} must be an integer from ${MIN_QUEUE_CONCURRENCY} to ${MAX_QUEUE_CONCURRENCY}.`,
+      [`Use ${name} <number> within ${MIN_QUEUE_CONCURRENCY}-${MAX_QUEUE_CONCURRENCY}.`]
+    );
+  }
+  return parsed;
+}
+
+function parseQueueRuntimeConfigPatchFromCli(args: string[]): QueueRuntimeConfigPatch | null {
+  const maxGlobalRunningValue = getCliOption(args, "--max-global-running");
+  const providerConcurrencyValues = getCliOptions(args, "--provider-concurrency");
+  const clearProviderIds = getCliOptions(args, "--clear-provider-concurrency").map((providerId) => providerId.trim()).filter(Boolean);
+  if (maxGlobalRunningValue === undefined && providerConcurrencyValues.length === 0 && clearProviderIds.length === 0) return null;
+  return {
+    maxGlobalRunning: maxGlobalRunningValue === undefined ? undefined : parseCliQueueConcurrencyValue(maxGlobalRunningValue, "--max-global-running"),
+    providerConcurrency: parseProviderConcurrencyAssignments(providerConcurrencyValues),
+    clearProviderIds
+  };
 }
 
 async function cancelGenerationQueueItemForCli(queueId: string) {
@@ -4123,7 +4194,8 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
       configStatus: async () => buildCliConfigStatus(await readExistingStateForCli(), await readExistingQueueForCli()),
       providerList: async () => buildCliProviderList(await readExistingStateForCli()),
       modelsList: async () => buildCliModelsList(await readExistingStateForCli()),
-      queueStatus: async () => buildCliQueueStatus(await readExistingQueueForCli()),
+      queueStatus: async () => buildCliQueueStatus(await readExistingQueueForCli(), await readQueueRuntimeConfigForCli()),
+      queueConfig: async () => ({ config: await readQueueRuntimeConfigForCli() }),
       jobList: async () => buildCliJobList(await readExistingQueueForCli()),
       jobStatus: async (jobId) => buildCliJobStatus(await readExistingQueueForCli(), await readExistingStateForCli(), jobId),
       folderList: async () => buildCliFolderList(await readExistingStateForCli()),
@@ -4213,6 +4285,10 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
           replaced: result.replaced
         };
       }
+    },
+    queueControllers: requestedMode === "readonly" ? undefined : {
+      queueConfigSet: async ({ maxGlobalRunning, providerConcurrency, clearProviderIds }) =>
+        setQueueRuntimeConfigForCli({ maxGlobalRunning, providerConcurrency, clearProviderIds })
     },
     jobControllers: requestedMode === "generate" ? {
       generationSubmit: async ({
@@ -4329,6 +4405,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
 
     if (command === "doctor" && hasCliFlag(args, "--agent")) {
       const state = await readExistingStateForCli();
+      const queueConfig = buildCliQueueConfig(state);
       const activeProvider = state ? state.providers.find((provider) => provider.id === state.activeProviderId) ?? state.providers[0] : undefined;
       const data = {
         appVersion: getAppVersion(),
@@ -4351,6 +4428,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
           : null,
         apiKeyAvailable: activeProvider ? envApiKeyAvailable(activeProvider.kind) || savedApiKeyPresentForCli(activeProvider) : false,
         liveWorkerHost: false,
+        queueConfig,
         permissions: {
           cliMode: "readonly",
           mcpDefaultMode: "readonly",
@@ -4476,7 +4554,30 @@ async function runCliCommandMode(args: string[]): Promise<number> {
     }
 
     if (command === "queue" && subcommand === "status") {
-      writeCliJson(cliSuccess(requestId, correlationId, buildCliQueueStatus(await readExistingQueueForCli())));
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliQueueStatus(await readExistingQueueForCli(), await readQueueRuntimeConfigForCli())));
+      return 0;
+    }
+
+    if (command === "queue" && subcommand === "config" && getCliPositionalsAfter(args, "config")[0] === "get") {
+      writeCliJson(cliSuccess(requestId, correlationId, { config: await readQueueRuntimeConfigForCli() }));
+      return 0;
+    }
+
+    if (command === "queue" && subcommand === "config" && getCliPositionalsAfter(args, "config")[0] === "set") {
+      if (!hasCliFlag(args, "--yes")) {
+        writeCliJson(cliFailure(requestId, correlationId, "CONFIRMATION_REQUIRED", "Queue configuration changes require --yes.", [
+          "Re-run with --yes if you intend to change generation concurrency limits."
+        ]));
+        return 3;
+      }
+      const patch = parseQueueRuntimeConfigPatchFromCli(args);
+      if (!patch) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "No queue configuration fields were provided.", [
+          "Use --max-global-running <number>, --provider-concurrency <provider-id>=<number>, or --clear-provider-concurrency <provider-id>."
+        ]));
+        return 2;
+      }
+      writeCliJson(cliSuccess(requestId, correlationId, await setQueueRuntimeConfigForCli(patch)));
       return 0;
     }
 
@@ -4774,6 +4875,8 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       "Use --cli generate --prompt-file <jsonl> [--folder <id|null>] --yes [--wait|--async|--enqueue-only] --json.",
       "Use --cli edit --prompt <text> --input <path> [--folder <id|null>] --yes [--wait|--async|--enqueue-only] --json.",
       "Use --cli queue status --json.",
+      "Use --cli queue config get --json.",
+      "Use --cli queue config set --max-global-running <number> [--provider-concurrency <provider-id>=<number>] --yes --json.",
       "Use --cli job list --json.",
       "Use --cli job status <queue-id-or-history-job-id> --json.",
       "Use --cli job cancel <queue-id> --yes --json.",

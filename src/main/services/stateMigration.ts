@@ -10,9 +10,11 @@ import type {
   OpenAIImageParams,
   PromptTemplate,
   ProviderKind,
+  QueueRuntimeConfig,
   StorageSettings,
   WorkspaceDraft
 } from "../../shared/types.js";
+import { DEFAULT_QUEUE_RUNTIME_CONFIG, normalizeQueueRuntimeConfig } from "../../core/queueConfig.js";
 import path from "node:path";
 import {
   DEFAULT_BASE_URL,
@@ -68,6 +70,7 @@ export interface AppStateFile {
   promptTemplates: PromptTemplate[];
   galleryFolders: GalleryFolder[];
   galleryAssets: GalleryAsset[];
+  queueConfig: QueueRuntimeConfig;
   storage?: StorageSettings;
   draft?: WorkspaceDraft;
 }
@@ -99,7 +102,8 @@ export function getDefaultState(): AppStateFile {
     history: [],
     promptTemplates: [],
     galleryFolders: [],
-    galleryAssets: []
+    galleryAssets: [],
+    queueConfig: structuredClone(DEFAULT_QUEUE_RUNTIME_CONFIG)
   };
 }
 
@@ -118,6 +122,7 @@ export function normalizeState(parsed: unknown): AppStateFile {
       promptTemplates: normalizePromptTemplates(parsed.promptTemplates),
       galleryFolders,
       galleryAssets: normalizeGalleryAssets(parsed.galleryAssets, galleryFolders),
+      queueConfig: normalizeQueueRuntimeConfig(parsed.queueConfig),
       storage: normalizeStorageSettings(parsed.storage),
       draft: normalizeWorkspaceDraft(parsed.draft)
     };
@@ -140,6 +145,7 @@ export function normalizeState(parsed: unknown): AppStateFile {
     promptTemplates: normalizePromptTemplates(parsed.promptTemplates),
     galleryFolders,
     galleryAssets: normalizeGalleryAssets(parsed.galleryAssets, galleryFolders),
+    queueConfig: normalizeQueueRuntimeConfig(parsed.queueConfig),
     storage: normalizeStorageSettings(parsed.storage),
     draft: normalizeWorkspaceDraft(parsed.draft)
   };
