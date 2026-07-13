@@ -145,6 +145,25 @@ Image generation depends on the availability of the upstream provider, which can
 
 ---
 
+### The uploaded reference image seems ignored — the model free-generates instead. What should I do?
+### 上传的参考图似乎检测不到，模型自己自由发挥在生成，怎么办？
+
+If generation runs but the result ignores your uploaded reference image (the model appears to generate freely without using it):
+
+1. **Update to v0.3.0 or later.** This was a known issue in earlier builds and is fixed in v0.3.0. The app now probes the OpenAI image route and uses the supported `/chat/completions` image path, so reference images reach a working edit route.
+2. Confirm you are in **edit / image-to-image mode**, not plain generation mode, when supplying a reference image.
+3. **Some third-party relays only wire up the text-to-image backend** and have no edit route — they may accept the request and silently free-generate. If updating does not help, switch to an official endpoint or a `/chat/completions`-capable aggregator, or use Gemini / Nano Banana 3 for image-to-image.
+4. Open the log panel to confirm whether the reference image is being sent and whether the provider returns an empty `data` payload.
+
+如果生成能跑通，但结果没有用到你上传的参考图（模型像是没检测到参考图、自己自由发挥在生成）：
+
+1. **升级到 v0.3.0 或更高版本。** 这是早期版本的已知问题，已在 v0.3.0 修复。新版会自动探测 OpenAI 图片路由并走产品支持的 `/chat/completions` 图片路径，参考图能正确进入编辑路由。
+2. 上传参考图时，确认当前处于 **编辑 / 图生图模式**，而不是普通生成模式。
+3. **部分第三方中转只接入了文生图后端**，没有编辑路由——这类中转可能接受请求后静默地自由生成。如果升级后仍无效，请切换到官方接口或支持 `/chat/completions` 的聚合端点，或改用 Gemini / Nano Banana 3 做图生图。
+4. 打开日志面板，确认参考图是否被发送，以及服务商是否返回了空的 `data`。
+
+---
+
 ## Other / 其他
 
 ### Where are history records and generated images stored?
