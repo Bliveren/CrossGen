@@ -35,14 +35,15 @@ export function resolveDataDirs(input: DataDirResolutionInput): ResolvedDataDirs
   const userDataDir = resolveUserDataDir({ ...input, appDataDir });
   const statePath = path.join(userDataDir, DEFAULT_STATE_FILE_NAME);
   const backupStatePath = `${statePath}.bak`;
+  const lockPath = path.join(userDataDir, ".crossgen-state.lock");
   return {
     appDataDir,
     userDataDir,
     statePath,
     backupStatePath,
-    lockPath: path.join(userDataDir, ".crossgen-state.lock"),
+    lockPath,
     queuePath: path.join(userDataDir, DEFAULT_QUEUE_FILE_NAME),
-    queueLockPath: path.join(userDataDir, ".crossgen-queue.lock"),
+    queueLockPath: lockPath,
     imagesDir: path.join(userDataDir, "images"),
     galleryDir: path.join(userDataDir, "gallery"),
     galleryThumbnailCacheDir: path.join(userDataDir, "gallery-thumbnails"),

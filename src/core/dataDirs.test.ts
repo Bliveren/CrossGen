@@ -12,7 +12,7 @@ describe("dataDirs", () => {
     expect(dirs.statePath).toBe(path.join(path.resolve("/tmp/app-data"), DEFAULT_LEGACY_USER_DATA_NAME, DEFAULT_STATE_FILE_NAME));
     expect(dirs.lockPath).toBe(path.join(expectedUserDataDir, ".crossgen-state.lock"));
     expect(dirs.queuePath).toBe(path.join(expectedUserDataDir, "crossgen-queue.v1.json"));
-    expect(dirs.queueLockPath).toBe(path.join(expectedUserDataDir, ".crossgen-queue.lock"));
+    expect(dirs.queueLockPath).toBe(dirs.lockPath);
     expect(dirs.legacyImageRoots).toContain(path.join(expectedUserDataDir, "images"));
   });
 
