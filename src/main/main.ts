@@ -103,6 +103,7 @@ import { recordGenerationQueuePartialOutput, requestGenerationQueueItemCancel, r
 import { getProviderEnvKeyNames } from "../core/keyring.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
 import { createJsonStateStore, type JsonStateStore } from "../core/stateStore.js";
+import { parseGenerationPromptFile, type GenerationPromptFileEntry } from "../cli/generationBatch.js";
 import {
   buildCliAssetInspect,
   buildCliConfigStatus,
@@ -3436,7 +3437,8 @@ function getCliPositionalsAfter(args: string[], token: string): string[] {
     "--size",
     "--tag",
     "--timeout-ms",
-    "--to"
+    "--to",
+    "--wait-ms"
   ]);
   const result: string[] = [];
   for (let cursor = index + 1; cursor < args.length; cursor += 1) {
@@ -3749,17 +3751,166 @@ function readGenerationPromptFromCli(args: string[], command: string): string {
   const prompt = getCliOption(args, "--prompt");
   if (prompt !== undefined) return prompt;
   const promptFile = getCliOption(args, "--prompt-file");
-  if (promptFile) return readFileSync(promptFile, "utf8");
+  if (promptFile && command !== "generate") return readFileSync(promptFile, "utf8");
   if (command === "generate") {
     return getCliPositionalsAfter(args, command).join(" ");
   }
   return "";
 }
 
+function readGenerationPromptFileEntriesFromCli(args: string[]): { path: string; entries: GenerationPromptFileEntry[] } | null {
+  const promptFile = getCliOption(args, "--prompt-file");
+  if (!promptFile) return null;
+  try {
+    return {
+      path: promptFile,
+      entries: parseGenerationPromptFile(readFileSync(promptFile, "utf8"))
+    };
+  } catch (error) {
+    throwCliCommandError("INVALID_ARGUMENT", error instanceof Error ? error.message : String(error), ["Use one prompt per line, or JSONL objects such as {\"prompt\":\"...\",\"model\":\"...\"}."]);
+  }
+}
+
 function getCliGenerationInputPaths(args: string[], command: string): string[] {
   const explicit = getCliOptions(args, "--input");
   if (explicit.length > 0) return explicit;
   return command === "edit" ? getCliPositionalsAfter(args, command) : [];
+}
+
+function cliCommandErrorPayload(error: CliCommandModeError) {
+  return {
+    code: error.code,
+    message: redactLikelySecrets(error.message),
+    nextActions: error.nextActions
+  };
+}
+
+function batchIdempotencyKey(globalKey: string | undefined, entry: GenerationPromptFileEntry, index: number): string | undefined {
+  if (entry.idempotencyKey) return entry.idempotencyKey;
+  const normalized = globalKey?.trim();
+  return normalized ? `${normalized}:${index + 1}` : undefined;
+}
+
+type CliGenerationEnqueueResult = Awaited<ReturnType<typeof enqueueGenerationForAgent>>;
+type CliGenerationWaitExecution = Awaited<ReturnType<typeof runQueuedGenerationForAgent>>;
+type CliGenerationQueuedExecution = {
+  mode: "enqueue-only" | "async";
+  queueId: string;
+  pendingLiveWorker: boolean;
+  liveWorkerAvailable: boolean;
+  job: Awaited<ReturnType<typeof buildQueuedGenerationJobStatus>>;
+};
+type CliGenerationBatchExecution = CliGenerationWaitExecution | CliGenerationQueuedExecution;
+type CliCommandErrorPayload = ReturnType<typeof cliCommandErrorPayload>;
+
+type CliGeneratePromptFileBatchSuccess = CliGenerationEnqueueResult & {
+  ok: true;
+  index: number;
+  line: number;
+  promptPreview: string;
+  execution: CliGenerationBatchExecution;
+};
+
+interface CliGeneratePromptFileBatchFailure {
+  ok: false;
+  index: number;
+  line: number;
+  promptPreview: string;
+  error: CliCommandErrorPayload;
+}
+
+type CliGeneratePromptFileBatchItem = CliGeneratePromptFileBatchSuccess | CliGeneratePromptFileBatchFailure;
+
+function isCliGeneratePromptFileBatchSuccess(item: CliGeneratePromptFileBatchItem): item is CliGeneratePromptFileBatchSuccess {
+  return item.ok === true;
+}
+
+async function runCliGeneratePromptFileBatch(input: {
+  args: string[];
+  requestId: string;
+  correlationId: string;
+  promptFile: string;
+  entries: GenerationPromptFileEntry[];
+  enqueueOnly: boolean;
+  asyncRequested: boolean;
+  waitRequested: boolean;
+  waitMs?: number;
+  globalMaxAttempts?: number;
+  globalTimeoutMs?: number;
+}) {
+  const providerId = getCliOption(input.args, "--provider");
+  const model = getCliOption(input.args, "--model");
+  const globalIdempotencyKey = getCliOption(input.args, "--idempotency-key");
+  const size = getCliOption(input.args, "--size");
+  const quality = getCliOption(input.args, "--quality");
+  const aspectRatio = getCliOption(input.args, "--aspect-ratio");
+  const resolution = getCliOption(input.args, "--resolution");
+  const items: CliGeneratePromptFileBatchItem[] = [];
+
+  for (let index = 0; index < input.entries.length; index += 1) {
+    const entry = input.entries[index];
+    try {
+      const result = await enqueueGenerationForAgent({
+        source: "cli",
+        mode: "generate",
+        prompt: entry.prompt,
+        inputPaths: [],
+        providerId: entry.providerId ?? providerId,
+        model: entry.model ?? model,
+        costConfirmed: true,
+        idempotencyKey: batchIdempotencyKey(globalIdempotencyKey, entry, index),
+        requestId: `${input.requestId}:${index + 1}`,
+        correlationId: input.correlationId,
+        maxAttempts: entry.maxAttempts ?? input.globalMaxAttempts,
+        timeoutMs: entry.timeoutMs ?? input.globalTimeoutMs,
+        size: entry.size ?? size,
+        quality: entry.quality ?? quality,
+        aspectRatio: entry.aspectRatio ?? aspectRatio,
+        resolution: entry.resolution ?? resolution
+      });
+      const execution: CliGenerationBatchExecution = input.waitRequested
+        ? await runQueuedGenerationForAgent(result.queueId, "cli-worker", input.waitMs)
+        : {
+            mode: input.enqueueOnly ? "enqueue-only" : "async",
+            queueId: result.queueId,
+            pendingLiveWorker: input.asyncRequested,
+            liveWorkerAvailable: input.asyncRequested,
+            job: await buildQueuedGenerationJobStatus(result.queueId)
+          };
+      items.push({
+        ok: true,
+        index,
+        line: entry.line,
+        promptPreview: entry.prompt.replace(/\s+/g, " ").trim().slice(0, 180),
+        ...result,
+        execution
+      });
+    } catch (error) {
+      if (error instanceof CliCommandModeError) {
+        items.push({
+          ok: false,
+          index,
+          line: entry.line,
+          promptPreview: entry.prompt.replace(/\s+/g, " ").trim().slice(0, 180),
+          error: cliCommandErrorPayload(error)
+        });
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  return {
+    batch: true,
+    mode: "generate",
+    promptFile: input.promptFile,
+    total: input.entries.length,
+    submitted: items.filter(isCliGeneratePromptFileBatchSuccess).length,
+    failedToSubmit: items.filter((item) => !isCliGeneratePromptFileBatchSuccess(item)).length,
+    executionMode: input.waitRequested ? "wait" : input.enqueueOnly ? "enqueue-only" : "async",
+    queueIds: items.filter(isCliGeneratePromptFileBatchSuccess).map((item) => item.queueId),
+    items
+  };
 }
 
 function normalizeCliDuplicateAction(value: string | undefined): GalleryDuplicateAction {
@@ -4055,8 +4206,9 @@ async function runCliCommandMode(args: string[]): Promise<number> {
     }
 
     if (command === "generate" || command === "edit") {
+      const promptFileBatch = command === "generate" ? readGenerationPromptFileEntriesFromCli(args) : null;
       const prompt = readGenerationPromptFromCli(args, command);
-      if (!prompt.trim()) {
+      if (!promptFileBatch && !prompt.trim()) {
         writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing prompt.", ["Use --prompt <text> or --prompt-file <path>."]));
         return 2;
       }
@@ -4066,7 +4218,8 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       }
       const enqueueOnly = hasCliFlag(args, "--enqueue-only");
       const asyncRequested = hasCliFlag(args, "--async");
-      const waitRequested = hasCliFlag(args, "--wait") || hasCliFlag(args, "--wait-ms") || (!enqueueOnly && !asyncRequested);
+      const explicitWaitRequested = hasCliFlag(args, "--wait") || hasCliFlag(args, "--wait-ms");
+      const waitRequested = explicitWaitRequested || (!promptFileBatch && !enqueueOnly && !asyncRequested);
       if (asyncRequested && waitRequested) {
         writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Use either --async or --wait, not both.", ["Use --enqueue-only if you only want to write a durable queue item."]));
         return 2;
@@ -4075,7 +4228,9 @@ async function runCliCommandMode(args: string[]): Promise<number> {
         writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Use either --async or --enqueue-only, not both."));
         return 2;
       }
-      if (asyncRequested && !(await hasLiveGenerationWorkerHost())) {
+      const batchDefaultsToAsync = Boolean(promptFileBatch);
+      const effectiveAsyncRequested = asyncRequested || (batchDefaultsToAsync && !waitRequested && !enqueueOnly);
+      if (effectiveAsyncRequested && !(await hasLiveGenerationWorkerHost())) {
         writeCliJson(cliFailure(requestId, correlationId, "NO_LIVE_QUEUE_WORKER", "No live CrossGen generation worker is available for --async.", [
           "Open CrossGen desktop, start MCP generate mode, run a queue worker, or use --wait so this CLI process executes the job.",
           "Use --enqueue-only only if you intentionally want to leave a pending durable queue item."
@@ -4084,6 +4239,30 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       }
       const timeoutMs = parsePositiveIntegerOption(getCliOption(args, "--timeout-ms"), "--timeout-ms");
       const waitMs = parsePositiveIntegerOption(getCliOption(args, "--wait-ms"), "--wait-ms");
+      const maxAttempts = parsePositiveIntegerOption(getCliOption(args, "--max-attempts"), "--max-attempts");
+      if (promptFileBatch) {
+        const result = await runCliGeneratePromptFileBatch({
+          args,
+          requestId,
+          correlationId,
+          promptFile: promptFileBatch.path,
+          entries: promptFileBatch.entries,
+          enqueueOnly,
+          asyncRequested: effectiveAsyncRequested,
+          waitRequested,
+          waitMs,
+          globalMaxAttempts: maxAttempts,
+          globalTimeoutMs: timeoutMs
+        });
+        const firstItem = result.items[0];
+        if (result.submitted === 0 && firstItem && !isCliGeneratePromptFileBatchSuccess(firstItem)) {
+          const firstError = firstItem.error;
+          writeCliJson(cliFailure(requestId, correlationId, firstError.code, firstError.message, firstError.nextActions));
+          return 1;
+        }
+        writeCliJson(cliSuccess(requestId, correlationId, result));
+        return 0;
+      }
       const result = await enqueueGenerationForAgent({
         source: "cli",
         mode: command,
@@ -4096,7 +4275,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
         idempotencyKey: getCliOption(args, "--idempotency-key"),
         requestId,
         correlationId,
-        maxAttempts: parsePositiveIntegerOption(getCliOption(args, "--max-attempts"), "--max-attempts"),
+        maxAttempts,
         timeoutMs,
         size: getCliOption(args, "--size"),
         quality: getCliOption(args, "--quality"),
@@ -4400,6 +4579,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       "Use --cli provider list --json.",
       "Use --cli models list --json.",
       "Use --cli generate --prompt <text> --yes [--wait|--async|--enqueue-only] --json.",
+      "Use --cli generate --prompt-file <jsonl> --yes [--wait|--async|--enqueue-only] --json.",
       "Use --cli edit --prompt <text> --input <path> --yes [--wait|--async|--enqueue-only] --json.",
       "Use --cli queue status --json.",
       "Use --cli job list --json.",
