@@ -7,7 +7,9 @@ import {
   completeGenerationQueueItemInQueue,
   recordGenerationQueuePartialOutput,
   requestGenerationQueueItemCancel,
+  requestGenerationQueueItemCancelInQueue,
   retryGenerationQueueItem,
+  retryGenerationQueueItemInQueue,
   runGenerationQueueItemToCompletion,
   runNextGenerationQueueItem
 } from "./generationQueue";
@@ -240,6 +242,32 @@ describe("generationQueue", () => {
     await removeTempDir(tempDir);
   });
 
+  it("builds queued cancel mutations without owning the queue lock", () => {
+    const item = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      historyJobId: "job-1"
+    });
+    const now = Date.parse("2026-01-01T00:00:00.000Z");
+    const result = requestGenerationQueueItemCancelInQueue({
+      schemaVersion: 1,
+      updatedAt: new Date(0).toISOString(),
+      workerHosts: [],
+      items: [item]
+    }, item.queueId, now);
+
+    expect(result.item).toMatchObject({
+      queueId: item.queueId,
+      historyJobId: "job-1",
+      status: "cancelled",
+      cancelRequested: true,
+      completedAt: "2026-01-01T00:00:00.000Z"
+    });
+    expect(result.queue.items[0]).toEqual(result.item);
+  });
+
   it("aborts running workers when durable cancel is requested", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
     const queuePath = path.join(tempDir, "queue.json");
@@ -454,6 +482,49 @@ describe("generationQueue", () => {
     expect(result.item?.workerLeaseExpiresAt).toBeUndefined();
 
     await removeTempDir(tempDir);
+  });
+
+  it("builds retry mutations without owning the queue lock", () => {
+    const item = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      historyJobId: "job-1"
+    });
+    const now = Date.parse("2026-01-01T00:02:00.000Z");
+    const result = retryGenerationQueueItemInQueue({
+      schemaVersion: 1,
+      updatedAt: new Date(0).toISOString(),
+      workerHosts: [],
+      items: [{
+        ...item,
+        status: "failed",
+        stage: "finalizing",
+        attempt: 2,
+        completedAt: "2026-01-01T00:00:10.000Z",
+        outputAssetIds: ["asset-old"],
+        partialAssetIds: ["partial-old"],
+        galleryAssetIds: ["gallery-old"],
+        cancelRequested: true
+      }]
+    }, "job-1", now);
+
+    expect(result.result).toMatchObject({
+      action: "retried",
+      item: {
+        queueId: item.queueId,
+        historyJobId: "job-1",
+        status: "queued",
+        attempt: 0,
+        outputAssetIds: [],
+        partialAssetIds: [],
+        galleryAssetIds: [],
+        cancelRequested: false,
+        updatedAt: "2026-01-01T00:02:00.000Z"
+      }
+    });
+    expect(result.queue.items[0]).toEqual(result.result.item);
   });
 
   it("does not retry non-terminal or succeeded items", async () => {
