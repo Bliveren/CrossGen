@@ -197,6 +197,7 @@ const UPDATE_CHECK_TIMEOUT_MS = 30000;
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 600000; // 10 minutes for large installer downloads
 const BRAND_NAME = "CrossGen";
 const LEGACY_USER_DATA_NAME = "Image2Tools";
+const DATA_DIR_ENV = "CROSSGEN_DATA_DIR";
 const USER_DATA_DIR_ENV = "CROSSGEN_USER_DATA_DIR";
 const LEGACY_USER_DATA_DIR_ENV = "IMAGE2TOOLS_USER_DATA_DIR";
 const PERF_RESULT_PATH_ENV = "CROSSGEN_PERF_RESULT_PATH";
@@ -339,7 +340,7 @@ function createWindow(): BrowserWindow {
 }
 
 function preserveLegacyUserDataPath(): void {
-  const userDataOverride = process.env[USER_DATA_DIR_ENV] || process.env[LEGACY_USER_DATA_DIR_ENV];
+  const userDataOverride = process.env[USER_DATA_DIR_ENV] || process.env[DATA_DIR_ENV] || process.env[LEGACY_USER_DATA_DIR_ENV];
   app.setPath(
     "userData",
     resolveUserDataDir({

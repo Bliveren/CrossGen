@@ -17,6 +17,16 @@
     "jsx": "react-jsx",
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src/core", "src/renderer", "src/shared", "src/core/**/*.test.ts", "src/shared/**/*.test.ts", "src/renderer/**/*.test.ts", "src/renderer/**/*.test.tsx"],
+  "include": [
+    "src/cli",
+    "src/core",
+    "src/renderer",
+    "src/shared",
+    "src/cli/**/*.test.ts",
+    "src/core/**/*.test.ts",
+    "src/shared/**/*.test.ts",
+    "src/renderer/**/*.test.ts",
+    "src/renderer/**/*.test.tsx"
+  ],
   "references": []
 }

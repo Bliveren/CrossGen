@@ -9,6 +9,7 @@ describe("package release configuration", () => {
     expect(packageJson.description).toContain("One-stop AI image generation manager");
     expect(packageJson.description).toContain("API access");
     expect(packageJson.description).toContain("Gallery/history reuse");
+    expect(packageJson.bin?.crossgen).toBe("dist/cli/crossgen.js");
     expect(packageJson.build.appId).toBe("com.bliveren.crossgen");
     expect(packageJson.build.productName).toBe("CrossGen");
     expect(packageJson.build.copyright).toContain("Nowo");
