@@ -252,19 +252,26 @@ export function buildCliAssetInspect(state: ReadonlyAppState | null, assetId: st
 
 export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMode; command: string }) {
   const args = ["--mcp"];
+  const effectiveMode: McpMode = "readonly";
   return {
     client: options.client,
-    mode: options.mode,
+    requestedMode: options.mode,
+    mode: effectiveMode,
     transport: "stdio",
     command: options.command,
     args,
     env: {
-      CROSSGEN_MCP_MODE: options.mode
+      CROSSGEN_MCP_MODE: effectiveMode
     },
     permissions: {
       readonly: true,
-      write: options.mode === "write" || options.mode === "generate",
-      generate: options.mode === "generate"
-    }
+      write: false,
+      generate: false
+    },
+    supportedModes: [effectiveMode],
+    unsupportedModeWarning:
+      options.mode === effectiveMode
+        ? undefined
+        : "This build currently exposes readonly MCP tools only. Write and generation MCP modes are reserved for later v0.3.1 phases."
   };
 }

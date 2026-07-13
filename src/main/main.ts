@@ -91,6 +91,7 @@ import {
   type McpClientName,
   type McpMode
 } from "../cli/readonly.js";
+import { runReadonlyMcpStdioServer } from "../mcp/stdioServer.js";
 import { buildEndpoint, fetchWithTimeout } from "./services/openaiImageAdapter.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
@@ -3196,6 +3197,12 @@ function getCliCommandArgs(): string[] | null {
   return process.argv.slice(cliIndex + 1);
 }
 
+function getMcpCommandArgs(): string[] | null {
+  const mcpIndex = process.argv.indexOf("--mcp");
+  if (mcpIndex < 0) return null;
+  return process.argv.slice(mcpIndex + 1);
+}
+
 function hasCliFlag(args: string[], flag: string): boolean {
   return args.includes(flag);
 }
@@ -3280,6 +3287,25 @@ async function readExistingQueueForCli() {
   return getGenerationQueueStore().read();
 }
 
+async function runMcpCommandMode(args: string[]): Promise<number> {
+  const requestedMode = normalizeCliMcpMode(getCliOption(args, "--mode") ?? process.env.CROSSGEN_MCP_MODE);
+  return runReadonlyMcpStdioServer({
+    mode: requestedMode,
+    serverVersion: getAppVersion(),
+    readers: {
+      configStatus: async () => buildCliConfigStatus(await readExistingStateForCli(), await readExistingQueueForCli()),
+      providerList: async () => buildCliProviderList(await readExistingStateForCli()),
+      modelsList: async () => buildCliModelsList(await readExistingStateForCli()),
+      queueStatus: async () => buildCliQueueStatus(await readExistingQueueForCli()),
+      jobList: async () => buildCliJobList(await readExistingQueueForCli()),
+      folderList: async () => buildCliFolderList(await readExistingStateForCli()),
+      galleryList: async () => buildCliGalleryList(await readExistingStateForCli()),
+      assetInspect: async (assetId) => buildCliAssetInspect(await readExistingStateForCli(), assetId)
+    },
+    sanitizeError: (error) => redactLikelySecrets(normalizeError(error))
+  });
+}
+
 function normalizeCliMcpClient(value: string | undefined): McpClientName {
   return value === "claude-code" || value === "cursor" ? value : "codex";
 }
@@ -3356,7 +3382,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
         apiKeyAvailable: activeProvider ? envApiKeyAvailable(activeProvider.kind) || savedApiKeyPresentForCli(activeProvider) : false,
         liveWorkerHost: false,
         permissions: {
-          cliMode: "readonly-spike",
+          cliMode: "readonly",
           mcpDefaultMode: "readonly",
           writeModeRequiresExplicitEnable: true,
           generateModeRequiresExplicitEnable: true,
@@ -3364,9 +3390,9 @@ async function runCliCommandMode(args: string[]): Promise<number> {
           pathDisclosureRequiresConfirmation: true
         },
         knownLimitations: [
-          "v0.3.1 command mode is still readonly.",
+          "v0.3.1 CLI/MCP command mode currently exposes readonly discovery tools.",
           "The desktop generation path uses the durable queue foundation; CLI/MCP generation tools are not implemented yet.",
-          "MCP stdio server, Gallery write tools, and agent generation tools are still in later v0.3.1 phases."
+          "Gallery write tools and agent generation tools are still in later v0.3.1 phases."
         ]
       };
       writeCliJson(cliSuccess(requestId, correlationId, data));
@@ -3503,6 +3529,12 @@ app.whenReady().then(async () => {
   const cliCommandArgs = getCliCommandArgs();
   if (cliCommandArgs) {
     const exitCode = await runCliCommandMode(cliCommandArgs);
+    app.exit(exitCode);
+    return;
+  }
+  const mcpCommandArgs = getMcpCommandArgs();
+  if (mcpCommandArgs) {
+    const exitCode = await runMcpCommandMode(mcpCommandArgs);
     app.exit(exitCode);
     return;
   }

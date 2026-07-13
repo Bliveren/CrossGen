@@ -51,7 +51,10 @@
       "output": "release"
     },
     "files": [
+      "dist/cli/**/*",
+      "dist/core/**/*",
       "dist/main/**/*",
+      "dist/mcp/**/*",
       "dist/preload/**/*",
       "dist/shared/**/*",
       "dist-renderer/**/*",

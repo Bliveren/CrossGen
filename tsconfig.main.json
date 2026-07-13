@@ -14,6 +14,6 @@
     "sourceMap": true,
     "declaration": false
   },
-  "include": ["src/cli", "src/core", "src/main", "src/preload", "src/shared"],
+  "include": ["src/cli", "src/core", "src/main", "src/mcp", "src/preload", "src/shared"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }
