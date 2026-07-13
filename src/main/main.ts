@@ -2336,6 +2336,32 @@ async function getOrCreateHistoryJobForQueueItem(
   return job;
 }
 
+async function importGenerationResultOutputsToGallery(job: GenerationJob, item: GenerationQueueItem): Promise<GalleryAsset[]> {
+  if (item.targetGalleryFolderId === undefined) return [];
+  const outputs = job.outputs.filter((asset) => asset.sourceType === "result");
+  if (outputs.length === 0) return [];
+
+  const importedAssets: GalleryAsset[] = [];
+  const nextState = await getAppStateStore().mutate(async (state) => {
+    let nextStateForImport = state;
+    const context = galleryMutationContext(state, { duplicateAction: "copy" });
+    for (const output of outputs) {
+      const outcome = await importCoreGalleryAssets(nextStateForImport, context, [output.path], item.targetGalleryFolderId ?? null, {
+        source: "result",
+        sourceJobId: job.id,
+        sourceAssetId: output.id,
+        tags: job.tags
+      });
+      importedAssets.push(...outcome.result.assets);
+      nextStateForImport = mergeGalleryState(nextStateForImport, outcome.state);
+    }
+    return mergeGalleryState(state, nextStateForImport);
+  });
+  stateCache = nextState;
+  if (importedAssets.length > 0) sendGalleryEvent(nextState, "mutation");
+  return importedAssets;
+}
+
 async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal: AbortSignal) {
   const state = await readState();
   const provider = selectProviderForQueueItem(state, item);
@@ -2381,6 +2407,7 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       updatedAt: new Date().toISOString()
     };
     await upsertJob(job);
+    const galleryAssets = job.status === "succeeded" ? await importGenerationResultOutputsToGallery(job, item) : [];
     if (job.status === "succeeded") {
       sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "completed" });
     } else {
@@ -2391,6 +2418,7 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       value: job,
       historyJobId: job.id,
       outputAssetIds: job.outputs.map((asset) => asset.id),
+      galleryAssetIds: galleryAssets.map((asset) => asset.id),
       partialAssetIds: job.outputs.filter((asset) => asset.sourceType === "partial").map((asset) => asset.id),
       error: job.status === "failed" ? job.error : undefined
     };
@@ -2411,6 +2439,7 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       value: job,
       historyJobId: job.id,
       outputAssetIds: job.outputs.map((asset) => asset.id),
+      galleryAssetIds: item.galleryAssetIds,
       partialAssetIds: partialAssets.map((asset) => asset.id),
       error: message
     };
@@ -3581,6 +3610,7 @@ interface AgentGenerationEnqueueInput {
   prompt: string;
   inputPaths: string[];
   maskPath?: string;
+  targetGalleryFolderId?: string | null;
   providerId?: string;
   model?: string;
   costConfirmed: boolean;
@@ -3614,6 +3644,17 @@ function selectProviderForAgent(state: AppStateFile, providerId?: string): Store
     throwCliCommandError("CONFIG_NOT_FOUND", "Provider configuration is disabled.", ["Enable or switch provider in CrossGen before submitting generation jobs."], 4);
   }
   return provider;
+}
+
+function normalizeTargetGalleryFolderId(state: AppStateFile, folderId: string | null | undefined): string | null | undefined {
+  if (folderId === undefined) return undefined;
+  if (folderId === null) return null;
+  const normalized = folderId.trim();
+  if (!normalized || normalized === "null") return null;
+  if (!state.galleryFolders.some((folder) => folder.id === normalized)) {
+    throwCliCommandError("ASSET_NOT_FOUND", "Gallery folder not found.", ["Run crossgen --cli gallery list --json to find folder ids."]);
+  }
+  return normalized;
 }
 
 function activeProviderModel(provider: StoredProviderConfig, override?: string): string {
@@ -3717,6 +3758,7 @@ async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
 
   const state = await readState();
   const provider = selectProviderForAgent(state, input.providerId);
+  const targetGalleryFolderId = normalizeTargetGalleryFolderId(state, input.targetGalleryFolderId);
   const request = validateAgentRunJobRequest(buildAgentRunJobRequest(provider, input), provider);
   const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
   const job = createJob(request, provider, inputs, mask);
@@ -3728,6 +3770,7 @@ async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
     costConfirmed: true,
     historyJobId: job.id,
     maxAttempts: input.maxAttempts,
+    targetGalleryFolderId,
     sourceAssetIds: [...inputs.map((asset) => asset.id), ...(mask ? [mask.id] : [])],
     outputMediaKinds: ["image"],
     idempotencyKey,
@@ -3845,6 +3888,7 @@ async function runCliGeneratePromptFileBatch(input: {
   const quality = getCliOption(input.args, "--quality");
   const aspectRatio = getCliOption(input.args, "--aspect-ratio");
   const resolution = getCliOption(input.args, "--resolution");
+  const targetGalleryFolderId = getCliOption(input.args, "--folder");
   const items: CliGeneratePromptFileBatchItem[] = [];
 
   for (let index = 0; index < input.entries.length; index += 1) {
@@ -3855,6 +3899,7 @@ async function runCliGeneratePromptFileBatch(input: {
         mode: "generate",
         prompt: entry.prompt,
         inputPaths: [],
+        targetGalleryFolderId: entry.folderId ?? targetGalleryFolderId,
         providerId: entry.providerId ?? providerId,
         model: entry.model ?? model,
         costConfirmed: true,
@@ -4059,6 +4104,7 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
         prompt,
         inputPaths,
         maskPath,
+        folderId,
         providerId,
         model,
         idempotencyKey,
@@ -4077,6 +4123,7 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
             prompt,
             inputPaths,
             maskPath,
+            targetGalleryFolderId: folderId,
             providerId,
             model,
             costConfirmed: confirm,
@@ -4269,6 +4316,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
         prompt,
         inputPaths: getCliGenerationInputPaths(args, command),
         maskPath: getCliOption(args, "--mask"),
+        targetGalleryFolderId: getCliOption(args, "--folder"),
         providerId: getCliOption(args, "--provider"),
         model: getCliOption(args, "--model"),
         costConfirmed: true,
@@ -4578,9 +4626,9 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       "Use --cli config status --json.",
       "Use --cli provider list --json.",
       "Use --cli models list --json.",
-      "Use --cli generate --prompt <text> --yes [--wait|--async|--enqueue-only] --json.",
-      "Use --cli generate --prompt-file <jsonl> --yes [--wait|--async|--enqueue-only] --json.",
-      "Use --cli edit --prompt <text> --input <path> --yes [--wait|--async|--enqueue-only] --json.",
+      "Use --cli generate --prompt <text> [--folder <id|null>] --yes [--wait|--async|--enqueue-only] --json.",
+      "Use --cli generate --prompt-file <jsonl> [--folder <id|null>] --yes [--wait|--async|--enqueue-only] --json.",
+      "Use --cli edit --prompt <text> --input <path> [--folder <id|null>] --yes [--wait|--async|--enqueue-only] --json.",
       "Use --cli queue status --json.",
       "Use --cli job list --json.",
       "Use --cli job status <queue-id-or-history-job-id> --json.",

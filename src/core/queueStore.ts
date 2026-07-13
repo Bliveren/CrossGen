@@ -106,6 +106,8 @@ function normalizeQueueItem(raw: Partial<GenerationQueueItem>): GenerationQueueI
     historyJobId: typeof raw.historyJobId === "string" ? raw.historyJobId : undefined,
     outputAssetIds: Array.isArray(raw.outputAssetIds) ? raw.outputAssetIds.filter((value): value is string => typeof value === "string") : [],
     partialAssetIds: Array.isArray(raw.partialAssetIds) ? raw.partialAssetIds.filter((value): value is string => typeof value === "string") : [],
+    galleryAssetIds: Array.isArray(raw.galleryAssetIds) ? raw.galleryAssetIds.filter((value): value is string => typeof value === "string") : [],
+    targetGalleryFolderId: typeof raw.targetGalleryFolderId === "string" ? raw.targetGalleryFolderId : raw.targetGalleryFolderId === null ? null : undefined,
     cancelRequested: Boolean(raw.cancelRequested),
     costConfirmed: Boolean(raw.costConfirmed),
     workerHostId: typeof raw.workerHostId === "string" ? raw.workerHostId : undefined,

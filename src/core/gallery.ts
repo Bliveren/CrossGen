@@ -24,6 +24,13 @@ export interface GalleryImportResult {
   replacedAssetIds: string[];
 }
 
+export interface GalleryImportOptions {
+  source?: GalleryAsset["source"];
+  tags?: string[];
+  sourceJobId?: string;
+  sourceAssetId?: string;
+}
+
 export interface GalleryPathResult {
   asset: GalleryAsset;
   path: string;
@@ -446,7 +453,8 @@ async function createGalleryAssetFromFile(
   state: GalleryStateSlice,
   context: GalleryMutationContext,
   sourcePath: string,
-  folderId: string | null
+  folderId: string | null,
+  options: GalleryImportOptions = {}
 ): Promise<{ asset: GalleryAsset | null; replacedAssetId?: string; skipped?: { reason: string; existingAssetId?: string } }> {
   if (!isImagePath(sourcePath)) {
     return { asset: null, skipped: { reason: "unsupported_file_type" } };
@@ -457,6 +465,8 @@ async function createGalleryAssetFromFile(
   const originalName = path.basename(sourcePath);
   const contentHash = await fileContentHash(sourcePath);
   const sourcePathHash = filePathHash(sourcePath);
+  const source = options.source ?? "import";
+  const tags = normalizeTags(options.tags);
   const duplicate = await findDuplicateGalleryAsset(state, context, folderId, contentHash, sourcePathHash);
   if (duplicate) {
     const duplicateAction = context.duplicateAction ?? "cancel";
@@ -475,12 +485,13 @@ async function createGalleryAssetFromFile(
           originalName,
           mimeType: mimeTypeForFile(sourcePath),
           sizeBytes: nextStat.size,
-          source: "import",
+          tags: mergeTags(duplicate.tags, tags),
+          source,
           updatedAt: nowIso(context),
           contentHash,
           sourcePathHash,
-          sourceJobId: undefined,
-          sourceAssetId: undefined,
+          sourceJobId: options.sourceJobId,
+          sourceAssetId: options.sourceAssetId,
           modifiedAt: nextStat.mtime.toISOString()
         }
       };
@@ -502,12 +513,14 @@ async function createGalleryAssetFromFile(
       mimeType: mimeTypeForFile(sourcePath),
       sizeBytes: stat.size,
       folderId,
-      tags: [],
-      source: "import",
+      tags,
+      source,
       createdAt: nowIso(context),
       updatedAt: nowIso(context),
       contentHash,
       sourcePathHash,
+      sourceJobId: options.sourceJobId,
+      sourceAssetId: options.sourceAssetId,
       modifiedAt: stat.mtime.toISOString()
     }
   };
@@ -612,7 +625,13 @@ export async function deleteGalleryFolder(state: GalleryStateSlice, context: Gal
   };
 }
 
-export async function importGalleryAssets(state: GalleryStateSlice, context: GalleryMutationContext, sourcePaths: string[], folderId?: string | null): Promise<{ state: GalleryStateSlice; result: GalleryImportResult }> {
+export async function importGalleryAssets(
+  state: GalleryStateSlice,
+  context: GalleryMutationContext,
+  sourcePaths: string[],
+  folderId?: string | null,
+  options: GalleryImportOptions = {}
+): Promise<{ state: GalleryStateSlice; result: GalleryImportResult }> {
   let nextState = state;
   const targetFolderId = normalizeGalleryFolderId(state, folderId);
   const result: GalleryImportResult = {
@@ -623,7 +642,7 @@ export async function importGalleryAssets(state: GalleryStateSlice, context: Gal
 
   for (const sourcePath of sourcePaths) {
     if (typeof sourcePath !== "string" || !sourcePath.trim()) continue;
-    const created = await createGalleryAssetFromFile(nextState, context, path.resolve(sourcePath), targetFolderId);
+    const created = await createGalleryAssetFromFile(nextState, context, path.resolve(sourcePath), targetFolderId, options);
     if (created.skipped) {
       result.skipped.push({ path: sourcePath, reason: created.skipped.reason, existingAssetId: created.skipped.existingAssetId });
       continue;

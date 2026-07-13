@@ -369,6 +369,8 @@ export interface GenerationQueueItem {
   historyJobId?: string;
   outputAssetIds: string[];
   partialAssetIds: string[];
+  galleryAssetIds: string[];
+  targetGalleryFolderId?: string | null;
   cancelRequested: boolean;
   costConfirmed: boolean;
   workerHostId?: string;

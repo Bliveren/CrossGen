@@ -46,6 +46,8 @@ describe("readonly CLI builders", () => {
           historyJobId: "history-1",
           outputAssetIds: ["asset-1"],
           partialAssetIds: ["asset-partial"],
+          galleryAssetIds: ["gallery-1"],
+          targetGalleryFolderId: "folder-1",
           cancelRequested: false,
           costConfirmed: true,
           executionKind: "sync-provider" as const,
@@ -105,7 +107,9 @@ describe("readonly CLI builders", () => {
         historyJobId: "history-1",
         status: "running",
         inputCount: 1,
-        outputAssetIds: ["asset-1"]
+        outputAssetIds: ["asset-1"],
+        galleryAssetIds: ["gallery-1"],
+        targetGalleryFolderId: "folder-1"
       },
       historyJob: {
         id: "history-1",
