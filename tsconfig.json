@@ -17,6 +17,6 @@
     "jsx": "react-jsx",
     "types": ["vitest/globals"]
   },
-  "include": ["src/renderer", "src/shared", "src/shared/**/*.test.ts", "src/renderer/**/*.test.ts", "src/renderer/**/*.test.tsx"],
+  "include": ["src/core", "src/renderer", "src/shared", "src/core/**/*.test.ts", "src/shared/**/*.test.ts", "src/renderer/**/*.test.ts", "src/renderer/**/*.test.tsx"],
   "references": []
 }

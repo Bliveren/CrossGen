@@ -18,6 +18,9 @@ import { fileURLToPath } from "node:url";
 import type {
   AppSnapshot,
   ConnectionTestResult,
+  CrossGenJsonErrorCode,
+  CrossGenJsonFailure,
+  CrossGenJsonResponse,
   DownloadRequest,
   EditedImageDownloadRequest,
   EditedGalleryImageInput,
@@ -139,6 +142,7 @@ const PERF_RESULT_PATH_ENV = "CROSSGEN_PERF_RESULT_PATH";
 const RENDERER_PERF_RESULT_PATH_ENV = "CROSSGEN_RENDERER_PERF_RESULT_PATH";
 const THEME_SOURCE_ENV = "CROSSGEN_THEME_SOURCE";
 const RENDERER_SCREENSHOT_DIR_ENV = "CROSSGEN_RENDERER_SCREENSHOT_DIR";
+const CLI_SCHEMA_VERSION = 1;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -587,7 +591,11 @@ function sanitizeError(error: unknown): string {
 }
 
 function redactLikelySecrets(value: string): string {
-  return value.replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-...redacted");
+  return value
+    .replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-...redacted")
+    .replace(/AIza[A-Za-z0-9_-]{8,}/g, "AIza...redacted")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, "Bearer ...redacted")
+    .replace(/([?&]key=)[^&\s]+/gi, "$1...redacted");
 }
 
 function getUpdatesDir(): string {
@@ -3054,6 +3062,169 @@ async function runRendererPerformanceCapture(window: BrowserWindow, resultPath: 
   );
 }
 
+function getCliCommandArgs(): string[] | null {
+  const cliIndex = process.argv.indexOf("--cli");
+  if (cliIndex < 0) return null;
+  return process.argv.slice(cliIndex + 1);
+}
+
+function hasCliFlag(args: string[], flag: string): boolean {
+  return args.includes(flag);
+}
+
+function getCliOption(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index < 0) return undefined;
+  const value = args[index + 1];
+  return value && !value.startsWith("--") ? value : undefined;
+}
+
+function getCliRequestId(args: string[]): string {
+  return getCliOption(args, "--request-id")?.trim() || `req_${randomUUID()}`;
+}
+
+function getCliCorrelationId(args: string[], requestId: string): string {
+  return getCliOption(args, "--correlation-id")?.trim() || requestId;
+}
+
+function getCliCommand(args: string[]): string | undefined {
+  return args.find((arg) => !arg.startsWith("--"));
+}
+
+function writeCliJson(response: CrossGenJsonResponse): void {
+  process.stdout.write(`${JSON.stringify(response)}\n`);
+}
+
+function cliSuccess(requestId: string, correlationId: string, data: Record<string, unknown>): CrossGenJsonResponse<Record<string, unknown>> {
+  return {
+    ok: true,
+    schemaVersion: CLI_SCHEMA_VERSION,
+    requestId,
+    correlationId,
+    data
+  };
+}
+
+function cliFailure(
+  requestId: string,
+  correlationId: string,
+  code: CrossGenJsonErrorCode,
+  message: string,
+  nextActions: string[] = []
+): CrossGenJsonFailure {
+  return {
+    ok: false,
+    schemaVersion: CLI_SCHEMA_VERSION,
+    requestId,
+    correlationId,
+    error: {
+      code,
+      message: redactLikelySecrets(message),
+      retryable: false,
+      nextActions
+    }
+  };
+}
+
+async function readExistingStateForCli(): Promise<AppStateFile | null> {
+  try {
+    return normalizeState(await readStateFile(getStatePath()));
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function envApiKeyAvailable(kind: StoredProviderConfig["kind"]): boolean {
+  const providerSpecific = kind === "gemini" ? "CROSSGEN_GEMINI_API_KEY" : kind === "custom" ? "CROSSGEN_CUSTOM_API_KEY" : "CROSSGEN_OPENAI_API_KEY";
+  return Boolean(process.env[providerSpecific]?.trim() || process.env.CROSSGEN_API_KEY?.trim());
+}
+
+function savedApiKeyPresentForCli(config: StoredProviderConfig): boolean {
+  return Boolean(config.encryptedApiKey);
+}
+
+async function runCliCommandMode(args: string[]): Promise<number> {
+  const requestId = getCliRequestId(args);
+  const correlationId = getCliCorrelationId(args, requestId);
+  const json = hasCliFlag(args, "--json");
+  const command = getCliCommand(args);
+
+  try {
+    if (hasCliFlag(args, "--version") || command === "version") {
+      const data = {
+        appName: BRAND_NAME,
+        appVersion: getAppVersion(),
+        schemaVersion: CLI_SCHEMA_VERSION,
+        commandMode: "electron",
+        userDataDir: app.getPath("userData")
+      };
+      if (json) {
+        writeCliJson(cliSuccess(requestId, correlationId, data));
+      } else {
+        process.stdout.write(`${BRAND_NAME} ${getAppVersion()}\n`);
+      }
+      return 0;
+    }
+
+    if (command === "doctor" && hasCliFlag(args, "--agent")) {
+      const state = await readExistingStateForCli();
+      const activeProvider = state ? state.providers.find((provider) => provider.id === state.activeProviderId) ?? state.providers[0] : undefined;
+      const data = {
+        appVersion: getAppVersion(),
+        cliExecutable: process.execPath,
+        packagedExecutable: app.isPackaged ? process.execPath : null,
+        mcpCommand: process.execPath,
+        recommendedArgs: ["--mcp"],
+        dataDir: app.getPath("userData"),
+        statePath: getStatePath(),
+        stateFound: Boolean(state),
+        activeProvider: activeProvider
+          ? {
+              id: activeProvider.id,
+              kind: activeProvider.kind,
+              name: activeProvider.name,
+              enabled: activeProvider.enabled,
+              activeLaunchId: activeProvider.activeLaunchId,
+              activeModelId: activeProvider.activeModelId
+            }
+          : null,
+        apiKeyAvailable: activeProvider ? envApiKeyAvailable(activeProvider.kind) || savedApiKeyPresentForCli(activeProvider) : false,
+        liveWorkerHost: false,
+        permissions: {
+          cliMode: "readonly-spike",
+          mcpDefaultMode: "readonly",
+          writeModeRequiresExplicitEnable: true,
+          generateModeRequiresExplicitEnable: true,
+          paidGenerationRequiresConfirmation: true,
+          pathDisclosureRequiresConfirmation: true
+        },
+        knownLimitations: [
+          "v0.3.1 command mode is in Phase 0 spike state.",
+          "Durable queue, MCP stdio server, Gallery write tools, and generation tools are not implemented yet.",
+          "Use the desktop app for production image generation until the v0.3.1 queue path lands."
+        ]
+      };
+      writeCliJson(cliSuccess(requestId, correlationId, data));
+      return 0;
+    }
+
+    const response = cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Unsupported CrossGen CLI command.", [
+      "Use --cli --version --json.",
+      "Use --cli doctor --agent --json."
+    ]);
+    if (json) {
+      writeCliJson(response);
+    } else {
+      process.stderr.write(`${response.error.message}\n`);
+    }
+    return 2;
+  } catch (error) {
+    writeCliJson(cliFailure(requestId, correlationId, "UNKNOWN_ERROR", normalizeError(error)));
+    return 1;
+  }
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle("app:getSnapshot", () => runGalleryOperation(handleGetSnapshot));
   ipcMain.handle("config:save", handleSaveConfig);
@@ -3108,6 +3279,12 @@ app.whenReady().then(async () => {
     nativeTheme.themeSource = themeSource;
   }
   preserveLegacyUserDataPath();
+  const cliCommandArgs = getCliCommandArgs();
+  if (cliCommandArgs) {
+    const exitCode = await runCliCommandMode(cliCommandArgs);
+    app.exit(exitCode);
+    return;
+  }
   registerIpcHandlers();
   registerAssetProtocol();
   const performanceResultPath = process.env[PERF_RESULT_PATH_ENV];

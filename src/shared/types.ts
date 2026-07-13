@@ -12,7 +12,38 @@ export type ImageBackground = "auto" | "opaque";
 
 export type ModerationMode = "auto" | "low";
 
-export type JobStatus = "queued" | "running" | "succeeded" | "failed";
+export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
+
+export type MediaKind = "image" | "animated-gif" | "video";
+
+export type QueueSource = "desktop" | "cli" | "mcp";
+
+export type QueueExecutionKind = "sync-provider" | "remote-poll" | "local-cpu";
+
+export type QueueStage =
+  | "queued"
+  | "claiming"
+  | "calling_provider"
+  | "awaiting_remote"
+  | "downloading"
+  | "postprocessing"
+  | "finalizing";
+
+export type ImageCapabilityContractKind =
+  | "openai-image"
+  | "gemini-generate-content"
+  | "openai-compatible-minimal"
+  | "provider-native"
+  | "local-workflow";
+
+export type ImageCapabilityConfidence = "verified" | "discovered" | "assumed" | "unknown";
+
+export type VideoRouteStrategy =
+  | "openai-videos"
+  | "openai-compatible-video-generations"
+  | "provider-native"
+  | "none"
+  | "unknown";
 
 export interface ImageModelCapabilities {
   generate: boolean;
@@ -27,6 +58,22 @@ export interface ImageModelCapabilities {
   configurableResolution: "openai-size" | "gemini-resolution-aspect" | "none";
   supportsThinking: boolean;
   supportsSearchGrounding: boolean;
+}
+
+export interface ImageModelCapabilityContract extends ImageModelCapabilities {
+  asyncJob: boolean;
+  mediaKinds: MediaKind[];
+  outputAssetKinds: MediaKind[];
+  requiresPublicUrl: boolean;
+  supportsBase64Input: boolean;
+  maxInputImageBytes?: number;
+  estimatedCostSignals: boolean;
+  supportsLocalRuntime: boolean;
+  animatedGif: boolean;
+  video: boolean;
+  videoRouteStrategy: VideoRouteStrategy;
+  contract: ImageCapabilityContractKind;
+  confidence: ImageCapabilityConfidence;
 }
 
 export interface FocusedModelDefinition {
@@ -165,6 +212,7 @@ export interface ImageAsset {
   path: string;
   fileName: string;
   mimeType: string;
+  kind?: MediaKind;
   width?: number;
   height?: number;
   sourceType: "result" | "partial" | "input" | "mask";
@@ -179,6 +227,7 @@ export interface GalleryAsset {
   fileName: string;
   originalName: string;
   mimeType: string;
+  kind?: MediaKind;
   sizeBytes: number;
   width?: number;
   height?: number;
@@ -297,6 +346,88 @@ export interface RunJobRequest {
   maskDataUrl?: string;
   params: ImageParams;
 }
+
+export interface GenerationQueueItem {
+  queueId: string;
+  source: QueueSource;
+  providerId: string;
+  request: RunJobRequest;
+  status: JobStatus;
+  priority: number;
+  attempt: number;
+  maxAttempts: number;
+  createdAt: string;
+  startedAt?: string;
+  updatedAt: string;
+  completedAt?: string;
+  lastError?: string;
+  historyJobId?: string;
+  outputAssetIds: string[];
+  cancelRequested: boolean;
+  costConfirmed: boolean;
+  workerHostId?: string;
+  workerProcessId?: number;
+  workerHeartbeatAt?: string;
+  workerLeaseExpiresAt?: string;
+  executionKind: QueueExecutionKind;
+  stage: QueueStage;
+  remoteJobHandle?: string;
+  remoteProviderStatus?: string;
+  remoteExpiresAt?: string;
+  lastPollAt?: string;
+  localStep?: string;
+  sourceAssetIds: string[];
+  outputMediaKinds: MediaKind[];
+  idempotencyKey?: string;
+  requestId?: string;
+  correlationId?: string;
+}
+
+export interface GenerationQueueFile {
+  schemaVersion: 1;
+  updatedAt: string;
+  items: GenerationQueueItem[];
+}
+
+export type CrossGenJsonErrorCode =
+  | "CONFIG_NOT_FOUND"
+  | "API_KEY_MISSING"
+  | "CONFIRMATION_REQUIRED"
+  | "NO_LIVE_QUEUE_WORKER"
+  | "CAPABILITY_UNSUPPORTED"
+  | "UNSUPPORTED_IN_THIS_VERSION"
+  | "RATE_LIMITED"
+  | "PROVIDER_ERROR"
+  | "LOCK_TIMEOUT"
+  | "PATH_NOT_ALLOWED"
+  | "ASSET_NOT_FOUND"
+  | "INVALID_ARGUMENT"
+  | "UNKNOWN_ERROR";
+
+export interface CrossGenJsonError {
+  code: CrossGenJsonErrorCode;
+  message: string;
+  retryable: boolean;
+  nextActions: string[];
+}
+
+export interface CrossGenJsonSuccess<TData = unknown> {
+  ok: true;
+  schemaVersion: 1;
+  requestId: string;
+  correlationId?: string;
+  data: TData;
+}
+
+export interface CrossGenJsonFailure {
+  ok: false;
+  schemaVersion: 1;
+  requestId: string;
+  correlationId?: string;
+  error: CrossGenJsonError;
+}
+
+export type CrossGenJsonResponse<TData = unknown> = CrossGenJsonSuccess<TData> | CrossGenJsonFailure;
 
 export interface JobProgressEvent {
   jobId: string;
