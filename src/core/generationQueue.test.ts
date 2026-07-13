@@ -178,6 +178,63 @@ describe("generationQueue", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
+  it("aborts running workers when durable cancel is requested", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({ queuePath, lockPath: `${queuePath}.lock` });
+    const item = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      historyJobId: "job-1"
+    });
+    await store.appendItem(item);
+
+    const result = await runNextGenerationQueueItem({
+      queueStore: store,
+      queueId: item.queueId,
+      host: { hostId: "host-1", kind: "desktop", processId: process.pid },
+      leaseMs: 150,
+      onStarted: () => {
+        setTimeout(() => {
+          void requestGenerationQueueItemCancel(store, item.queueId);
+        }, 20);
+      },
+      executeItem: async (_item, signal) => {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("cancel was not observed")), 1000);
+          signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timeout);
+              resolve();
+            },
+            { once: true }
+          );
+        });
+        throw new Error("provider aborted");
+      }
+    });
+
+    expect(result.execution).toMatchObject({
+      status: "cancelled",
+      error: "provider aborted",
+      errorCategory: "cancelled",
+      retryable: false
+    });
+    const queue = await store.read();
+    expect(queue.items[0]).toMatchObject({
+      status: "cancelled",
+      cancelRequested: true,
+      workerHostId: undefined,
+      workerHeartbeatAt: undefined,
+      workerLeaseExpiresAt: undefined
+    });
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
   it("requeues retryable failures until maxAttempts is reached", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
     const queuePath = path.join(tempDir, "queue.json");

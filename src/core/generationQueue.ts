@@ -116,7 +116,8 @@ async function refreshClaimedItemHeartbeat(
   host: QueueHostIdentity,
   nowMs: number,
   leaseMs: number
-): Promise<void> {
+): Promise<boolean> {
+  let cancelRequested = false;
   await queueStore.mutate((queue) => {
     const heartbeatAt = iso(nowMs);
     const leaseExpiresAt = iso(nowMs + leaseMs);
@@ -136,18 +137,19 @@ async function refreshClaimedItemHeartbeat(
       ...queue,
       updatedAt: heartbeatAt,
       workerHosts,
-      items: queue.items.map((current) =>
-        current.queueId === item.queueId && current.status === "running" && current.workerHostId === host.hostId
-          ? {
-              ...current,
-              updatedAt: heartbeatAt,
-              workerHeartbeatAt: heartbeatAt,
-              workerLeaseExpiresAt: leaseExpiresAt
-            }
-          : current
-      )
+      items: queue.items.map((current) => {
+        if (current.queueId !== item.queueId || current.status !== "running" || current.workerHostId !== host.hostId) return current;
+        cancelRequested = current.cancelRequested;
+        return {
+          ...current,
+          updatedAt: heartbeatAt,
+          workerHeartbeatAt: heartbeatAt,
+          workerLeaseExpiresAt: leaseExpiresAt
+        };
+      })
     };
   });
+  return cancelRequested;
 }
 
 function startClaimedItemHeartbeat(
@@ -155,13 +157,37 @@ function startClaimedItemHeartbeat(
   item: GenerationQueueItem,
   host: QueueHostIdentity,
   leaseMs: number,
-  now: () => number
+  now: () => number,
+  onCancelRequested?: () => void
 ): () => void {
   const intervalMs = Math.max(50, Math.floor(leaseMs / 3));
   const timer = setInterval(() => {
-    void refreshClaimedItemHeartbeat(queueStore, item, host, now(), leaseMs).catch(() => undefined);
+    void refreshClaimedItemHeartbeat(queueStore, item, host, now(), leaseMs)
+      .then((cancelRequested) => {
+        if (cancelRequested) onCancelRequested?.();
+      })
+      .catch(() => undefined);
   }, intervalMs);
   return () => clearInterval(timer);
+}
+
+async function claimedItemCancelRequested(queueStore: QueueStore, item: GenerationQueueItem): Promise<boolean> {
+  const queue = await queueStore.read();
+  const current = queue.items.find((candidate) => candidate.queueId === item.queueId);
+  return Boolean(current?.cancelRequested);
+}
+
+function cancelledExecution<TValue = unknown>(item: GenerationQueueItem, error = "Generation cancelled."): GenerationQueueExecutionResult<TValue> {
+  return {
+    status: "cancelled",
+    error,
+    errorCategory: "cancelled",
+    retryable: false,
+    historyJobId: item.historyJobId,
+    outputAssetIds: item.outputAssetIds,
+    partialAssetIds: item.partialAssetIds,
+    galleryAssetIds: item.galleryAssetIds
+  };
 }
 
 async function completeClaimedItem(
@@ -294,10 +320,13 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
 
   const controller = options.createAbortController?.() ?? new AbortController();
   options.onStarted?.(item, controller);
-  const stopHeartbeat = startClaimedItemHeartbeat(options.queueStore, item, options.host, leaseMs, now);
+  const stopHeartbeat = startClaimedItemHeartbeat(options.queueStore, item, options.host, leaseMs, now, () => controller.abort());
   try {
     await markClaimedItemStage(options.queueStore, item.queueId, now());
-    const execution = await options.executeItem(item, controller.signal);
+    let execution = await options.executeItem(item, controller.signal);
+    if (execution.status !== "cancelled" && (await claimedItemCancelRequested(options.queueStore, item))) {
+      execution = cancelledExecution(item, execution.error ?? "Generation cancelled.");
+    }
     if (execution.status === "failed") {
       const classification = options.classifyFailure?.({ item, result: execution }) ?? defaultFailureClassification();
       const retryItem = await scheduleRetry(
@@ -325,6 +354,11 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
     const completed = await completeClaimedItem(options.queueStore, item, execution, now());
     return { claimed: true, item: completed, execution };
   } catch (error) {
+    if (await claimedItemCancelRequested(options.queueStore, item)) {
+      const execution = cancelledExecution<TValue>(item, error instanceof Error ? error.message : "Generation cancelled.");
+      const completed = await completeClaimedItem(options.queueStore, item, execution, now());
+      return { claimed: true, item: completed, execution };
+    }
     const classification = options.classifyFailure?.({ item, error }) ?? defaultFailureClassification();
     const message = error instanceof Error ? error.message : String(error);
     const retryItem = await scheduleRetry(
