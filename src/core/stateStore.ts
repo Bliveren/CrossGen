@@ -19,6 +19,13 @@ export interface JsonStateStore<TState> {
   withLock<T>(operation: () => Promise<T>): Promise<T>;
 }
 
+export interface JsonStateFileAccessOptions<TState> {
+  statePath: string;
+  backupPath: string;
+  defaultState: TState;
+  normalize: (value: unknown) => TState;
+}
+
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
@@ -34,28 +41,45 @@ async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
   await fs.rename(tmpPath, filePath);
 }
 
+export async function readJsonStateFile<TState>(options: JsonStateFileAccessOptions<TState>): Promise<TState> {
+  try {
+    return options.normalize(await readJsonFile(options.statePath));
+  } catch (error) {
+    if (!isNodeError(error) || error.code !== "ENOENT") {
+      try {
+        return options.normalize(await readJsonFile(options.backupPath));
+      } catch {
+        return structuredClone(options.defaultState);
+      }
+    }
+    try {
+      return options.normalize(await readJsonFile(options.backupPath));
+    } catch {
+      return structuredClone(options.defaultState);
+    }
+  }
+}
+
+export async function writeJsonStateFile<TState>(
+  options: JsonStateFileAccessOptions<TState>,
+  state: TState,
+  writeOptions: { updateBackup?: boolean } = {}
+): Promise<void> {
+  if (writeOptions.updateBackup !== false) {
+    await fs.copyFile(options.statePath, options.backupPath).catch((error: unknown) => {
+      if (!isNodeError(error) || error.code !== "ENOENT") throw error;
+    });
+  }
+  await writeJsonFile(options.statePath, state);
+}
+
 export function createJsonStateStore<TState>(options: JsonStateStoreOptions<TState>): JsonStateStore<TState> {
   const { statePath, backupPath, lockPath, normalize, defaultState } = options;
   const timeoutMs = options.timeoutMs ?? 5000;
   const staleLockMs = options.staleLockMs ?? 30000;
 
   async function readFromDisk(): Promise<TState> {
-    try {
-      return normalize(await readJsonFile(statePath));
-    } catch (error) {
-      if (!isNodeError(error) || error.code !== "ENOENT") {
-        try {
-          return normalize(await readJsonFile(backupPath));
-        } catch {
-          return structuredClone(defaultState);
-        }
-      }
-      try {
-        return normalize(await readJsonFile(backupPath));
-      } catch {
-        return structuredClone(defaultState);
-      }
-    }
+    return readJsonStateFile({ statePath, backupPath, normalize, defaultState });
   }
 
   return {
@@ -66,12 +90,7 @@ export function createJsonStateStore<TState>(options: JsonStateStoreOptions<TSta
       await withExclusiveFileLock(
         lockPath,
         async () => {
-          if (writeOptions.updateBackup !== false) {
-            await fs.copyFile(statePath, backupPath).catch((error: unknown) => {
-              if (!isNodeError(error) || error.code !== "ENOENT") throw error;
-            });
-          }
-          await writeJsonFile(statePath, state);
+          await writeJsonStateFile({ statePath, backupPath, normalize, defaultState }, state, writeOptions);
         },
         { timeoutMs, staleLockMs }
       );
@@ -81,10 +100,7 @@ export function createJsonStateStore<TState>(options: JsonStateStoreOptions<TSta
         lockPath,
         async () => {
           const next = await mutator(await readFromDisk());
-          await fs.copyFile(statePath, backupPath).catch((error: unknown) => {
-            if (!isNodeError(error) || error.code !== "ENOENT") throw error;
-          });
-          await writeJsonFile(statePath, next);
+          await writeJsonStateFile({ statePath, backupPath, normalize, defaultState }, next);
           return next;
         },
         { timeoutMs, staleLockMs }
