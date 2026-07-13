@@ -470,78 +470,108 @@ export async function recordGenerationQueuePartialOutput(queueStore: QueueStore,
 export async function requestGenerationQueueItemCancel(queueStore: QueueStore, queueId: string, now = Date.now): Promise<GenerationQueueItem | undefined> {
   let updated: GenerationQueueItem | undefined;
   await queueStore.mutate((queue) => {
-    const nowIso = iso(now());
-    return {
-      ...queue,
-      updatedAt: nowIso,
-      items: queue.items.map((item) => {
-        if (item.queueId !== queueId) return item;
-        if (item.status === "queued") {
-          updated = {
-            ...item,
-            status: "cancelled",
-            cancelRequested: true,
-            completedAt: nowIso,
-            updatedAt: nowIso
-          };
-          return updated;
-        }
-        if (item.status === "running") {
-          updated = {
-            ...item,
-            cancelRequested: true,
-            updatedAt: nowIso
-          };
-          return updated;
-        }
-        updated = item;
-        return item;
-      })
-    };
+    const next = requestGenerationQueueItemCancelInQueue(queue, queueId, now());
+    updated = next.item;
+    return next.queue;
   });
   return updated;
+}
+
+export function requestGenerationQueueItemCancelInQueue(
+  queue: GenerationQueueFile,
+  queueId: string,
+  nowMs: number
+): { queue: GenerationQueueFile; item?: GenerationQueueItem } {
+  let updated: GenerationQueueItem | undefined;
+  const nowIso = iso(nowMs);
+  const nextQueue = {
+    ...queue,
+    updatedAt: nowIso,
+    items: queue.items.map((item) => {
+      if (item.queueId !== queueId) return item;
+      if (item.status === "queued") {
+        updated = {
+          ...item,
+          status: "cancelled",
+          cancelRequested: true,
+          completedAt: nowIso,
+          updatedAt: nowIso
+        };
+        return updated;
+      }
+      if (item.status === "running") {
+        updated = {
+          ...item,
+          cancelRequested: true,
+          updatedAt: nowIso
+        };
+        return updated;
+      }
+      updated = item;
+      return item;
+    })
+  };
+  return { queue: nextQueue, item: updated };
 }
 
 export async function retryGenerationQueueItem(queueStore: QueueStore, lookupId: string, now = Date.now): Promise<GenerationQueueRetryResult> {
   const normalizedLookupId = lookupId.trim();
   if (!normalizedLookupId) return { action: "not_found" };
+  let result: GenerationQueueRetryResult = { action: "not_found" };
+  await queueStore.mutate((queue) => {
+    const next = retryGenerationQueueItemInQueue(queue, normalizedLookupId, now());
+    result = next.result;
+    return next.queue;
+  });
+  return result;
+}
+
+export function retryGenerationQueueItemInQueue(
+  queue: GenerationQueueFile,
+  lookupId: string,
+  nowMs: number
+): { queue: GenerationQueueFile; result: GenerationQueueRetryResult } {
+  const normalizedLookupId = lookupId.trim();
+  if (!normalizedLookupId) {
+    return { queue, result: { action: "not_found" } };
+  }
+
   let found: GenerationQueueItem | undefined;
   let retried: GenerationQueueItem | undefined;
-  await queueStore.mutate((queue) => {
-    const nowIso = iso(now());
-    return {
-      ...queue,
-      updatedAt: nowIso,
-      items: queue.items.map((item) => {
-        if (item.queueId !== normalizedLookupId && item.historyJobId !== normalizedLookupId) return item;
-        found = item;
-        if (!RETRYABLE_TERMINAL_STATUSES.has(item.status)) return item;
-        retried = {
-          ...item,
-          status: "queued",
-          stage: "queued",
-          attempt: 0,
-          startedAt: undefined,
-          completedAt: undefined,
-          nextRunAt: undefined,
-          lastError: undefined,
-          lastErrorCategory: undefined,
-          lastErrorRetryable: undefined,
-          outputAssetIds: [],
-          partialAssetIds: [],
-          galleryAssetIds: [],
-          cancelRequested: false,
-          workerHostId: undefined,
-          workerProcessId: undefined,
-          workerHeartbeatAt: undefined,
-          workerLeaseExpiresAt: undefined,
-          updatedAt: nowIso
-        };
-        return retried;
-      })
-    };
-  });
-  if (retried) return { action: "retried", item: retried };
-  if (found) return { action: "not_retryable", item: found };
-  return { action: "not_found" };
+  const nowIso = iso(nowMs);
+  const nextQueue = {
+    ...queue,
+    updatedAt: nowIso,
+    items: queue.items.map((item) => {
+      if (item.queueId !== normalizedLookupId && item.historyJobId !== normalizedLookupId) return item;
+      found = item;
+      if (!RETRYABLE_TERMINAL_STATUSES.has(item.status)) return item;
+      retried = {
+        ...item,
+        status: "queued",
+        stage: "queued",
+        attempt: 0,
+        startedAt: undefined,
+        completedAt: undefined,
+        nextRunAt: undefined,
+        lastError: undefined,
+        lastErrorCategory: undefined,
+        lastErrorRetryable: undefined,
+        outputAssetIds: [],
+        partialAssetIds: [],
+        galleryAssetIds: [],
+        cancelRequested: false,
+        workerHostId: undefined,
+        workerProcessId: undefined,
+        workerHeartbeatAt: undefined,
+        workerLeaseExpiresAt: undefined,
+        updatedAt: nowIso
+      };
+      return retried;
+    })
+  };
+
+  if (retried) return { queue: nextQueue, result: { action: "retried", item: retried } };
+  if (found) return { queue: nextQueue, result: { action: "not_retryable", item: found } };
+  return { queue: nextQueue, result: { action: "not_found" } };
 }

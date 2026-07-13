@@ -104,8 +104,8 @@ import {
 import {
   completeGenerationQueueItemInQueue,
   recordGenerationQueuePartialOutput,
-  requestGenerationQueueItemCancel,
-  retryGenerationQueueItem,
+  requestGenerationQueueItemCancelInQueue,
+  retryGenerationQueueItemInQueue,
   runGenerationQueueItemToCompletion,
   runNextGenerationQueueItem,
   type GenerationQueueExecutionResult
@@ -2538,6 +2538,90 @@ async function completeGenerationQueueItemWithState(
   return transaction.result;
 }
 
+function updateHistoryJobForQueueItem(
+  state: AppStateFile,
+  item: GenerationQueueItem,
+  updater: (job: GenerationJob) => GenerationJob
+): AppStateFile {
+  if (!item.historyJobId) return state;
+  const existing = state.history.find((job) => job.id === item.historyJobId);
+  if (!existing) return state;
+  return upsertJobInState(state, updater(existing));
+}
+
+function cancelledHistoryJob(job: GenerationJob, item: GenerationQueueItem): GenerationJob {
+  return {
+    ...job,
+    status: "cancelled",
+    error: job.error ?? "任务已取消。",
+    updatedAt: item.updatedAt
+  };
+}
+
+function queuedHistoryJobForRetry(job: GenerationJob, item: GenerationQueueItem): GenerationJob {
+  const { error: _error, durationMs: _durationMs, ...rest } = job;
+  return {
+    ...rest,
+    status: "queued",
+    updatedAt: item.updatedAt
+  };
+}
+
+async function cancelGenerationQueueItemWithState(queueId: string) {
+  const nowMs = Date.now();
+  const transaction = await mutateStateAndQueue<GenerationQueueItem | undefined>((currentState, queue) => {
+    const next = requestGenerationQueueItemCancelInQueue(queue, queueId, nowMs);
+    const cancelledItem = next.item?.status === "cancelled" ? next.item : undefined;
+    const nextState =
+      cancelledItem
+        ? updateHistoryJobForQueueItem(currentState, cancelledItem, (job) => cancelledHistoryJob(job, cancelledItem))
+        : currentState;
+    return {
+      state: nextState,
+      queue: next.queue,
+      result: next.item
+    };
+  });
+  return {
+    item: transaction.result,
+    state: transaction.state,
+    queue: transaction.queue
+  };
+}
+
+async function cancelGenerationQueueItemAndUpsertJob(queueId: string, job: GenerationJob): Promise<void> {
+  const nowMs = Date.now();
+  await mutateStateAndQueue((currentState, queue) => {
+    const next = requestGenerationQueueItemCancelInQueue(queue, queueId, nowMs);
+    return {
+      state: upsertJobInState(currentState, job),
+      queue: next.queue,
+      result: null
+    };
+  });
+}
+
+async function retryGenerationQueueItemWithState(jobId: string) {
+  const nowMs = Date.now();
+  const transaction = await mutateStateAndQueue((currentState, queue) => {
+    const next = retryGenerationQueueItemInQueue(queue, jobId, nowMs);
+    const retriedItem = next.result.action === "retried" ? next.result.item : undefined;
+    const nextState = retriedItem
+      ? updateHistoryJobForQueueItem(currentState, retriedItem, (job) => queuedHistoryJobForRetry(job, retriedItem))
+      : currentState;
+    return {
+      state: nextState,
+      queue: next.queue,
+      result: next.result
+    };
+  });
+  return {
+    ...transaction.result,
+    state: transaction.state,
+    queue: transaction.queue
+  };
+}
+
 async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal: AbortSignal) {
   const state = await readState();
   const provider = selectProviderForQueueItem(state, item);
@@ -2866,7 +2950,6 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   }
 
   const message = result.status === "cancelled" ? "任务已终止。" : "任务等待超时。";
-  await requestGenerationQueueItemCancel(getGenerationQueueStore(), queueItem.queueId);
   job = {
     ...job,
     status: "failed",
@@ -2874,23 +2957,26 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     error: message,
     updatedAt: new Date().toISOString()
   };
-  await upsertJob(job);
+  await cancelGenerationQueueItemAndUpsertJob(queueItem.queueId, job);
   sendJobEvent({ jobId: job.id, queueId: queueItem.queueId, type: "failed", error: message });
   queuedJobIds.delete(job.id);
   return job;
 }
 
-function handleCancelJob(jobId: string): boolean {
+async function handleCancelJob(jobId: string): Promise<boolean> {
   if (typeof jobId !== "string" || !jobId.trim()) return false;
   const queueId = queuedJobIds.get(jobId);
   const controller = runningJobControllers.get(jobId);
-  if (controller) {
-    if (queueId) void requestGenerationQueueItemCancel(getGenerationQueueStore(), queueId);
-    controller.abort();
-    return true;
-  }
   if (!queueId) return false;
-  void requestGenerationQueueItemCancel(getGenerationQueueStore(), queueId);
+  const result = await cancelGenerationQueueItemWithState(queueId);
+  if (!result.item) return false;
+  if (controller) {
+    controller.abort();
+  }
+  if (result.item.status === "cancelled") {
+    queuedJobIds.delete(jobId);
+    sendJobEvent({ jobId, queueId, type: "failed", error: "任务已取消。" });
+  }
   return true;
 }
 
@@ -3929,7 +4015,7 @@ async function cancelGenerationQueueItemForCli(queueId: string) {
   const before = queue.items.find((item) => item.queueId === queueId);
   if (!before) return null;
 
-  await requestGenerationQueueItemCancel(getGenerationQueueStore(), queueId);
+  await cancelGenerationQueueItemWithState(queueId);
   const controller = runningQueueControllers.get(queueId);
   if (controller) {
     controller.abort();
@@ -3962,11 +4048,11 @@ async function cancelGenerationQueueItemForCli(queueId: string) {
 }
 
 async function retryGenerationQueueItemForCli(jobId: string) {
-  const result = await retryGenerationQueueItem(getGenerationQueueStore(), jobId);
+  const result = await retryGenerationQueueItemWithState(jobId);
   if (result.action === "not_found") return { action: "not_found" as const };
 
   const lookupId = result.item?.queueId ?? jobId;
-  const job = buildCliJobStatus(await readExistingQueueForCli(), await readExistingStateForCli(), lookupId);
+  const job = buildCliJobStatus(result.queue, result.state, lookupId);
   if (result.action === "not_retryable") {
     return {
       action: "not_retryable" as const,
