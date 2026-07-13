@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Bliveren/image2tools/releases"><img alt="release" src="https://img.shields.io/github/v/release/Bliveren/image2tools?include_prereleases&color=F37021" /></a>
-  <a href="https://github.com/Bliveren/image2tools/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Bliveren/image2tools/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://github.com/Bliveren/CrossGen/releases"><img alt="release" src="https://img.shields.io/github/v/release/Bliveren/CrossGen?include_prereleases&color=F37021" /></a>
+  <a href="https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-1f6f61" /></a>
   <img alt="platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-102f3f" />
   <img alt="stack" src="https://img.shields.io/badge/stack-Electron%20%2B%20React%20%2B%20Tailwind-0f766e" />
@@ -129,7 +129,7 @@ CrossGen 0.3.0 将 API 配置从“技术配置项”变成日常可用的工作
 
 ## 下载安装
 
-CrossGen 提供 release 安装包。到 [GitHub Releases](https://github.com/Bliveren/image2tools/releases/latest) 下载对应平台安装包，安装后打开应用，填写 API Key 即可使用。
+CrossGen 提供 release 安装包。到 [GitHub Releases](https://github.com/Bliveren/CrossGen/releases/latest) 下载对应平台安装包，安装后打开应用，填写 API Key 即可使用。
 
 | 平台 | 安装包 |
 | --- | --- |

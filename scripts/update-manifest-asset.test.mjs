@@ -42,14 +42,14 @@ describe("update manifest asset helper", () => {
         "--arch",
         "arm64",
         "--url",
-        "https://github.com/Bliveren/image2tools/releases/download/v0.2.0/CrossGen-0.2.0-mac-arm64.dmg"
+        "https://github.com/Bliveren/CrossGen/releases/download/v0.2.0/CrossGen-0.2.0-mac-arm64.dmg"
       ]);
 
       expect(result.exitCode).toBe(0);
       expect(JSON.parse(result.stdout)).toEqual({
         platform: "darwin",
         arch: "arm64",
-        url: "https://github.com/Bliveren/image2tools/releases/download/v0.2.0/CrossGen-0.2.0-mac-arm64.dmg",
+        url: "https://github.com/Bliveren/CrossGen/releases/download/v0.2.0/CrossGen-0.2.0-mac-arm64.dmg",
         fileName: "CrossGen-0.2.0-mac-arm64.dmg",
         sha256: createHash("sha256").update(bytes).digest("hex"),
         sizeBytes: bytes.length

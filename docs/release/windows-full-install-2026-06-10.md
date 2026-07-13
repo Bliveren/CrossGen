@@ -7,7 +7,7 @@ Windows evidence in
 
 ## Source
 
-- Repository: `https://github.com/Bliveren/image2tools`
+- Repository: `https://github.com/Bliveren/CrossGen`
 - Branch / commit tested: `main` / `e6587d2e3e2bff7d586164b4dd4294aed026c953`
 - Package version: `0.2.0`
 - Primary artifact: `release\Image2Tools-Setup.exe`

@@ -4,7 +4,7 @@ This note records external evidence for the `linux-native-release` gate.
 
 ## Source
 
-- Repository: `https://github.com/Bliveren/image2tools`
+- Repository: `https://github.com/Bliveren/CrossGen`
 - Branch / commit tested: `main` /
   `c4eed447fcbfd14a19c4f58ff9eab5dbd125d33c`
 - Package version: `0.2.0`

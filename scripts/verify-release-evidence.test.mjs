@@ -32,7 +32,7 @@ function passedEvidence(summary) {
     commit: "d40a84ebf7e66fe2509546d4fff7fe8cdbe972f9",
     environment: "CI fixture",
     commands: ["pnpm verify:mock-api"],
-    references: [{ label: "GitHub Actions run", url: "https://github.com/Bliveren/image2tools/actions/runs/1" }],
+    references: [{ label: "GitHub Actions run", url: "https://github.com/Bliveren/CrossGen/actions/runs/1" }],
     artifacts: [{ kind: "local-directory", path: "real-api-artifacts/", public: false, description: "Ignored verifier output." }],
     summary
   };
@@ -90,7 +90,7 @@ describe("release evidence verifier", () => {
         commit: null,
         environment: null,
         commands: [],
-        references: [{ label: "tracker", url: "https://github.com/Bliveren/image2tools/issues/1" }],
+        references: [{ label: "tracker", url: "https://github.com/Bliveren/CrossGen/issues/1" }],
         artifacts: [],
         summary: "Pending real API acceptance."
       };
@@ -160,7 +160,7 @@ describe("release evidence verifier", () => {
         commit: null,
         environment: null,
         commands: [],
-        references: [{ label: "tracker", url: "https://github.com/Bliveren/image2tools/issues/3" }],
+        references: [{ label: "tracker", url: "https://github.com/Bliveren/CrossGen/issues/3" }],
         artifacts: [],
         summary: "Pending signing and notarization."
       };

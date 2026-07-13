@@ -38,9 +38,10 @@ async function runElectronBuilder(args) {
   const cscName = process.env.CSC_NAME;
   const isNotarize = args.includes("-c.mac.notarize=true");
   const identity = cscName ? cscName.replace(/^Developer ID Application:\s*/i, "") : null;
-  const finalArgs = (isNotarize && identity && !args.some(a => a.startsWith("-c.mac.identity")))
-    ? [...args, `-c.mac.identity=${identity}`]
-    : [...args];
+  const normalizedArgs = args.map((arg) => arg.replace(/^-c\.mac\.identity=Developer ID Application:\s*/i, "-c.mac.identity="));
+  const finalArgs = (isNotarize && identity && !normalizedArgs.some(a => a.startsWith("-c.mac.identity")))
+    ? [...normalizedArgs, `-c.mac.identity=${identity}`]
+    : [...normalizedArgs];
 
   // Use shell:false on macOS so special chars (spaces, parens) in identity are passed safely.
   // Windows still needs shell:true because electron-builder is a .cmd file.

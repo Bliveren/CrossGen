@@ -24,13 +24,13 @@ External gate trackers:
 
 | Gate | Tracker |
 | --- | --- |
-| Real OpenAI GPT Image 2 API acceptance | https://github.com/Bliveren/image2tools/issues/1 |
-| Real Gemini / Nano Banana 3 API acceptance | https://github.com/Bliveren/image2tools/issues/102 |
-| Developer ID signed macOS release package | https://github.com/Bliveren/image2tools/issues/3 |
-| Apple notarized macOS release package | https://github.com/Bliveren/image2tools/issues/3 |
-| Native Windows release package validation | https://github.com/Bliveren/image2tools/issues/4 |
-| CI Linux package and AppImage validation | https://github.com/Bliveren/image2tools/issues/4 |
-| Formal update manifest distribution assets | https://github.com/Bliveren/image2tools/issues/103 |
+| Real OpenAI GPT Image 2 API acceptance | https://github.com/Bliveren/CrossGen/issues/1 |
+| Real Gemini / Nano Banana 3 API acceptance | https://github.com/Bliveren/CrossGen/issues/102 |
+| Developer ID signed macOS release package | https://github.com/Bliveren/CrossGen/issues/3 |
+| Apple notarized macOS release package | https://github.com/Bliveren/CrossGen/issues/3 |
+| Native Windows release package validation | https://github.com/Bliveren/CrossGen/issues/4 |
+| CI Linux package and AppImage validation | https://github.com/Bliveren/CrossGen/issues/4 |
+| Formal update manifest distribution assets | https://github.com/Bliveren/CrossGen/issues/103 |
 
 Release-specific preparation:
 

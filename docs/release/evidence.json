@@ -26,11 +26,11 @@
         "references": [
           {
             "label": "Real OpenAI GPT Image 2 external acceptance tracker",
-            "url": "https://github.com/Bliveren/image2tools/issues/1"
+            "url": "https://github.com/Bliveren/CrossGen/issues/1"
           },
           {
             "label": "v0.3.0 closeout evidence",
-            "url": "https://github.com/Bliveren/image2tools/tree/main/docs/release"
+            "url": "https://github.com/Bliveren/CrossGen/tree/main/docs/release"
           }
         ],
         "artifacts": [
@@ -78,11 +78,11 @@
         "references": [
           {
             "label": "Real Gemini / Nano Banana 3 external acceptance tracker",
-            "url": "https://github.com/Bliveren/image2tools/issues/102"
+            "url": "https://github.com/Bliveren/CrossGen/issues/102"
           },
           {
             "label": "v0.3.0 closeout evidence",
-            "url": "https://github.com/Bliveren/image2tools/tree/main/docs/release"
+            "url": "https://github.com/Bliveren/CrossGen/tree/main/docs/release"
           }
         ],
         "artifacts": [
@@ -137,23 +137,23 @@
         "references": [
           {
             "label": "Developer ID signed macOS distribution tracker",
-            "url": "https://github.com/Bliveren/image2tools/issues/3"
+            "url": "https://github.com/Bliveren/CrossGen/issues/3"
           },
           {
             "label": "v0.3.0 GitHub Release",
-            "url": "https://github.com/Bliveren/image2tools/releases/tag/v0.3.0"
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.0"
           }
         ],
         "artifacts": [
           {
             "kind": "macos-dmg",
-            "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
+            "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
             "public": true,
             "description": "Developer ID signed CrossGen-0.3.0-mac-arm64.dmg; SHA256 3e379ea62c849c949b2d756c4dc60c0c1ef1b4f78b82506a9b47213fb31c3d30; 103573862 bytes."
           },
           {
             "kind": "macos-zip",
-            "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.zip",
+            "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.zip",
             "public": true,
             "description": "Developer ID signed CrossGen-0.3.0-mac-arm64.zip; SHA256 db3a152802903d72ab664aff379e07f026a7a72b0baecdc418d807162e5341d7; 99277843 bytes."
           }
@@ -180,7 +180,7 @@
         "references": [
           {
             "label": "Apple notarized macOS distribution tracker",
-            "url": "https://github.com/Bliveren/image2tools/issues/3"
+            "url": "https://github.com/Bliveren/CrossGen/issues/3"
           }
         ],
         "artifacts": [],
@@ -215,7 +215,7 @@
         "references": [
           {
             "label": "Native Windows release validation tracker",
-            "url": "https://github.com/Bliveren/image2tools/issues/4"
+            "url": "https://github.com/Bliveren/CrossGen/issues/4"
           }
         ],
         "artifacts": [
@@ -262,31 +262,31 @@
         "references": [
           {
             "label": "Linux package and AppImage validation tracker",
-            "url": "https://github.com/Bliveren/image2tools/issues/4"
+            "url": "https://github.com/Bliveren/CrossGen/issues/4"
           },
           {
             "label": "GitHub Actions CI run 29103953982",
-            "url": "https://github.com/Bliveren/image2tools/actions/runs/29103953982"
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29103953982"
           },
           {
             "label": "GitHub Actions Linux package job 86399623518",
-            "url": "https://github.com/Bliveren/image2tools/actions/runs/29103953982/job/86399623518"
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29103953982/job/86399623518"
           },
           {
             "label": "GitHub Actions build and mock API verifier job 86399623556",
-            "url": "https://github.com/Bliveren/image2tools/actions/runs/29103953982/job/86399623556"
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29103953982/job/86399623556"
           }
         ],
         "artifacts": [
           {
             "kind": "github-actions-job",
-            "url": "https://github.com/Bliveren/image2tools/actions/runs/29103953982/job/86399623518",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29103953982/job/86399623518",
             "public": true,
             "description": "Successful v0.3.0 Linux package job on commit 519586eb325453f5b26f541e9fac70e583109441. The job packaged the Linux app and ran pnpm verify:release:linux."
           },
           {
             "kind": "github-actions-job",
-            "url": "https://github.com/Bliveren/image2tools/actions/runs/29103953982/job/86399623556",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29103953982/job/86399623556",
             "public": true,
             "description": "Successful v0.3.0 build and mock API verifier job on commit 519586eb325453f5b26f541e9fac70e583109441. The job ran pnpm build plus mock OpenAI, mock Gemini, and mock model discovery verifiers."
           }
@@ -315,8 +315,8 @@
           "pnpm verify:release:mac",
           "pnpm package:win",
           "pnpm exec node scripts/electron-builder-pnpm.mjs --win --x64",
-          "node scripts/update-manifest-asset.mjs --file release/CrossGen-0.3.0-mac-arm64.dmg --platform darwin --arch arm64 --url https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
-          "node scripts/update-manifest-asset.mjs --file release/CrossGen-Setup.exe --platform win32 --arch x64 --url https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-Setup.exe",
+          "node scripts/update-manifest-asset.mjs --file release/CrossGen-0.3.0-mac-arm64.dmg --platform darwin --arch arm64 --url https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
+          "node scripts/update-manifest-asset.mjs --file release/CrossGen-Setup.exe --platform win32 --arch x64 --url https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-Setup.exe",
           "shasum -a 256 release/CrossGen-0.3.0-mac-arm64.dmg release/CrossGen-Setup.exe",
           "wc -c release/CrossGen-0.3.0-mac-arm64.dmg release/CrossGen-Setup.exe",
           "pnpm verify:release-evidence -- --require-complete"
@@ -324,11 +324,11 @@
         "references": [
           {
             "label": "Formal update manifest distribution asset tracker",
-            "url": "https://github.com/Bliveren/image2tools/issues/103"
+            "url": "https://github.com/Bliveren/CrossGen/issues/103"
           },
           {
             "label": "v0.3.0 GitHub Release",
-            "url": "https://github.com/Bliveren/image2tools/releases/tag/v0.3.0"
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.0"
           }
         ],
         "artifacts": [
@@ -340,13 +340,13 @@
           },
           {
             "kind": "macos-dmg",
-            "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
+            "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
             "public": true,
             "description": "Developer ID signed CrossGen-0.3.0-mac-arm64.dmg; SHA256 3e379ea62c849c949b2d756c4dc60c0c1ef1b4f78b82506a9b47213fb31c3d30; 103573862 bytes; local macOS release verifier passed."
           },
           {
             "kind": "windows-nsis-installer",
-            "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-Setup.exe",
+            "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-Setup.exe",
             "public": true,
             "description": "CrossGen-Setup.exe Windows x64 NSIS installer; SHA256 17c5927ac2a8c4482e5626d5a016903bd10299fcbb5df795901102977fac9e15; 98828812 bytes; Windows native full-install release gate is recorded separately in windows-native-release."
           }

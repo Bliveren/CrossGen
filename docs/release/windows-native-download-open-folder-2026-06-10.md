@@ -5,7 +5,7 @@ This note records follow-up external evidence completing the
 
 ## Source
 
-- Repository: `https://github.com/Bliveren/image2tools`
+- Repository: `https://github.com/Bliveren/CrossGen`
 - Branch / commit tested: `main` /
   `4b4dd18ff4255fcb4bfb2a25fadde7bbf788eafd`
 - Package version: `0.2.0`

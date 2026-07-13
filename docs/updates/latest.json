@@ -5,7 +5,7 @@
   "assets": [
     {
       "platform": "darwin",
-      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
       "fileName": "CrossGen-0.3.0-mac-arm64.dmg",
       "sha256": "3e379ea62c849c949b2d756c4dc60c0c1ef1b4f78b82506a9b47213fb31c3d30",
       "sizeBytes": 103573862,
@@ -13,7 +13,7 @@
     },
     {
       "platform": "win32",
-      "url": "https://github.com/Bliveren/image2tools/releases/download/v0.3.0/CrossGen-Setup.exe",
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-Setup.exe",
       "fileName": "CrossGen-Setup.exe",
       "sha256": "17c5927ac2a8c4482e5626d5a016903bd10299fcbb5df795901102977fac9e15",
       "sizeBytes": 98828812,

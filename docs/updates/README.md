@@ -5,7 +5,7 @@ This directory contains the update manifest consumed by the desktop app.
 Default manifest URL used by packaged apps:
 
 ```text
-https://raw.githubusercontent.com/Bliveren/image2tools/main/docs/updates/latest.json
+https://raw.githubusercontent.com/Bliveren/CrossGen/main/docs/updates/latest.json
 ```
 
 GitHub Pages can also serve this directory from `docs/` once Pages is enabled
@@ -30,7 +30,7 @@ Example asset:
 {
   "platform": "win32",
   "arch": "x64",
-  "url": "https://github.com/Bliveren/image2tools/releases/download/v0.2.0/CrossGen-0.2.0-win-x64.exe",
+  "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.2.0/CrossGen-0.2.0-win-x64.exe",
   "fileName": "CrossGen-0.2.0-win-x64.exe",
   "sha256": "64-char-lowercase-sha256",
   "sizeBytes": 12345678
