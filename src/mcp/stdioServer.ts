@@ -59,6 +59,7 @@ export interface GenerationMcpControllers {
     resolution?: string;
   }): Promise<unknown>;
   jobCancel(args: { queueId: string; confirm: boolean }): Promise<unknown | null>;
+  jobRetry(args: { jobId: string; confirm: boolean }): Promise<unknown>;
 }
 
 export interface GalleryMcpWriters {
@@ -429,6 +430,32 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
           return result;
         });
       }
+    },
+    {
+      name: "crossgen_job_retry",
+      title: "CrossGen Job Retry",
+      description: "Requeue a failed, cancelled, or interrupted durable generation job.",
+      inputSchema: objectSchema({
+        jobId: stringProperty("Durable generation queue id or history job id."),
+        confirm: confirmProperty("Must be true to retry the job.")
+      }, ["jobId", "confirm"]),
+      annotations: writeAnnotations(),
+      handler: (args) => {
+        const confirmationError = requireConfirmed(args, "Job retry requires confirm: true.");
+        if (confirmationError) return confirmationError;
+        const jobId = requiredString(args, "jobId");
+        if (typeof jobId !== "string") return jobId;
+        return controllers.jobRetry({ jobId, confirm: true }).then((result) => {
+          const action = asRecord(result).action;
+          if (action === "not_found") {
+            return toolError("JOB_NOT_FOUND", "Generation job not found.", ["Call crossgen_job_list first to find current queue ids."]);
+          }
+          if (action === "not_retryable") {
+            return toolError("INVALID_ARGUMENT", "Generation job is not retryable.", ["Only failed, cancelled, or interrupted generation jobs can be retried."]);
+          }
+          return result;
+        });
+      }
     }
   ];
 }
@@ -789,7 +816,7 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
               ? "CrossGen MCP is running in readonly mode. It can inspect configuration, providers, models, queue state, and Gallery metadata without exposing local asset paths."
               : effectiveMode === "write"
               ? "CrossGen MCP is running in write mode. It can inspect CrossGen state and manage Gallery folders/assets. Generation tools require generate mode."
-              : "CrossGen MCP is running in generate mode. It can inspect CrossGen state, manage Gallery folders/assets, submit image generation/edit requests to the durable queue, start queue execution, wait briefly with waitMs, and request queue cancellation.",
+              : "CrossGen MCP is running in generate mode. It can inspect CrossGen state, manage Gallery folders/assets, submit image generation/edit requests to the durable queue, start queue execution, wait briefly with waitMs, and request queue cancellation or retry.",
           crossgen: {
             requestedMode: options.mode,
             effectiveMode,

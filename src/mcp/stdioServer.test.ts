@@ -66,7 +66,12 @@ function controllers(): GenerationMcpControllers {
         queueItem: { queueId: `queue-${mode}`, mode, promptPreview: prompt, inputCount: inputPaths.length, status: "queued" }
       }
     }),
-    jobCancel: async ({ queueId }) => (queueId === "missing" ? null : { action: "cancel_requested", queueId, status: "running", cancelRequested: true })
+    jobCancel: async ({ queueId }) => (queueId === "missing" ? null : { action: "cancel_requested", queueId, status: "running", cancelRequested: true }),
+    jobRetry: async ({ jobId }) => {
+      if (jobId === "missing") return { action: "not_found" };
+      if (jobId === "queued") return { action: "not_retryable", queueId: "queued", status: "queued" };
+      return { action: "retried", queueId: jobId, status: "queued", job: { lookupId: jobId, queueItem: { queueId: jobId, status: "queued" } } };
+    }
   };
 }
 
@@ -237,6 +242,7 @@ describe("readonly MCP stdio server", () => {
     expect(toolNames).toContain("crossgen_generate_image");
     expect(toolNames).toContain("crossgen_edit_image");
     expect(toolNames).toContain("crossgen_job_cancel");
+    expect(toolNames).toContain("crossgen_job_retry");
     expect(responses[2]).toMatchObject({
       result: {
         isError: true,
@@ -257,6 +263,55 @@ describe("readonly MCP stdio server", () => {
       }
     });
     expect(responses[4]).toMatchObject({
+      result: {
+        isError: true,
+        structuredContent: {
+          error: { code: "JOB_NOT_FOUND" }
+        }
+      }
+    });
+  });
+
+  it("retries jobs only after confirmation", async () => {
+    const { output } = await runServer(
+      [
+        JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "crossgen_job_retry", arguments: { jobId: "queue-1" } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "crossgen_job_retry", arguments: { jobId: "queue-1", confirm: true } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "crossgen_job_retry", arguments: { jobId: "queued", confirm: true } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "crossgen_job_retry", arguments: { jobId: "missing", confirm: true } } })
+      ].join("\n"),
+      { mode: "generate", withWriters: true, withControllers: true }
+    );
+
+    const responses = lineResponses(output);
+    expect(responses[0]).toMatchObject({
+      result: {
+        isError: true,
+        structuredContent: {
+          error: { code: "CONFIRMATION_REQUIRED" }
+        }
+      }
+    });
+    expect(responses[1]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: {
+            action: "retried",
+            queueId: "queue-1",
+            status: "queued"
+          }
+        }
+      }
+    });
+    expect(responses[2]).toMatchObject({
+      result: {
+        isError: true,
+        structuredContent: {
+          error: { code: "INVALID_ARGUMENT" }
+        }
+      }
+    });
+    expect(responses[3]).toMatchObject({
       result: {
         isError: true,
         structuredContent: {
