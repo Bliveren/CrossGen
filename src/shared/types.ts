@@ -22,6 +22,11 @@ export type QueueExecutionKind = "sync-provider" | "remote-poll" | "local-cpu";
 
 export type QueueErrorCategory = "transient" | "auth" | "quota" | "safety" | "cancelled" | "unsupported" | "unknown";
 
+export interface QueueRuntimeConfig {
+  maxGlobalRunning: number;
+  providerConcurrency: Record<string, number>;
+}
+
 export type QueueStage =
   | "queued"
   | "claiming"

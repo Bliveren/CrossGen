@@ -4,6 +4,7 @@ import {
   runReadonlyMcpStdioServer,
   type GalleryMcpWriters,
   type GenerationMcpControllers,
+  type QueueMcpControllers,
   type ReadonlyMcpMode,
   type ReadonlyMcpReaders
 } from "./stdioServer";
@@ -28,6 +29,7 @@ function readers(): ReadonlyMcpReaders {
     providerList: async () => ({ providers: [{ id: "default", name: "OpenAI" }] }),
     modelsList: async () => ({ providers: [] }),
     queueStatus: async () => ({ totalItems: 0 }),
+    queueConfig: async () => ({ config: { maxGlobalRunning: 1, providerConcurrency: {} } }),
     jobList: async () => ({ jobs: [] }),
     jobStatus: async (jobId) => (jobId === "queue-1" ? { lookupId: "queue-1", queueItem: { queueId: "queue-1", status: "running" } } : null),
     folderList: async () => ({ folders: [] }),
@@ -75,6 +77,18 @@ function controllers(): GenerationMcpControllers {
   };
 }
 
+function queueControllers(): QueueMcpControllers {
+  return {
+    queueConfigSet: async ({ maxGlobalRunning, providerConcurrency, clearProviderIds }) => ({
+      config: {
+        maxGlobalRunning: maxGlobalRunning ?? 1,
+        providerConcurrency: providerConcurrency ?? {},
+        clearProviderIds: clearProviderIds ?? []
+      }
+    })
+  };
+}
+
 async function runServer(inputText: string, options: { mode?: ReadonlyMcpMode; withWriters?: boolean; withControllers?: boolean } = {}) {
   const input = new PassThrough();
   const captured = captureOutput();
@@ -83,6 +97,7 @@ async function runServer(inputText: string, options: { mode?: ReadonlyMcpMode; w
     serverVersion: "0.3.0-test",
     readers: readers(),
     writers: options.withWriters ? writers() : undefined,
+    queueControllers: options.withWriters ? queueControllers() : undefined,
     jobControllers: options.withControllers ? controllers() : undefined,
     input,
     output: captured.output
@@ -128,7 +143,9 @@ describe("readonly MCP stdio server", () => {
     const toolNames = (responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name);
     expect(toolNames).toContain("crossgen_config_status");
     expect(toolNames).toContain("crossgen_job_status");
+    expect(toolNames).toContain("crossgen_queue_config_get");
     expect(toolNames).not.toContain("crossgen_folder_create");
+    expect(toolNames).not.toContain("crossgen_queue_config_set");
     expect(toolNames).not.toContain("crossgen_job_cancel");
   });
 
@@ -198,6 +215,7 @@ describe("readonly MCP stdio server", () => {
       }
     });
     expect((responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name)).toContain("crossgen_folder_create");
+    expect((responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name)).toContain("crossgen_queue_config_set");
     expect((responses[1].result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name)).not.toContain("crossgen_job_cancel");
     expect(responses[2]).toMatchObject({
       result: {
@@ -211,6 +229,60 @@ describe("readonly MCP stdio server", () => {
         isError: true,
         structuredContent: {
           error: { code: "CONFIRMATION_REQUIRED" }
+        }
+      }
+    });
+  });
+
+  it("gets and sets queue config through MCP tools", async () => {
+    const { output } = await runServer(
+      [
+        JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "crossgen_queue_config_get", arguments: {} } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "crossgen_queue_config_set", arguments: { maxGlobalRunning: 2 } } }),
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 3,
+          method: "tools/call",
+          params: {
+            name: "crossgen_queue_config_set",
+            arguments: {
+              maxGlobalRunning: 2,
+              providerConcurrency: { "provider-1": 1 },
+              clearProviderIds: ["provider-old"],
+              confirm: true
+            }
+          }
+        })
+      ].join("\n"),
+      { mode: "write", withWriters: true }
+    );
+
+    const responses = lineResponses(output);
+    expect(responses[0]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: { config: { maxGlobalRunning: 1, providerConcurrency: {} } }
+        }
+      }
+    });
+    expect(responses[1]).toMatchObject({
+      result: {
+        isError: true,
+        structuredContent: {
+          error: { code: "CONFIRMATION_REQUIRED" }
+        }
+      }
+    });
+    expect(responses[2]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: {
+            config: {
+              maxGlobalRunning: 2,
+              providerConcurrency: { "provider-1": 1 },
+              clearProviderIds: ["provider-old"]
+            }
+          }
         }
       }
     });

@@ -33,6 +33,7 @@ export interface ReadonlyMcpReaders {
   providerList(): Promise<unknown>;
   modelsList(): Promise<unknown>;
   queueStatus(): Promise<unknown>;
+  queueConfig(): Promise<unknown>;
   jobList(): Promise<unknown>;
   jobStatus(jobId: string): Promise<unknown | null>;
   folderList(): Promise<unknown>;
@@ -62,6 +63,15 @@ export interface GenerationMcpControllers {
   jobRetry(args: { jobId: string; confirm: boolean }): Promise<unknown>;
 }
 
+export interface QueueMcpControllers {
+  queueConfigSet(args: {
+    maxGlobalRunning?: number;
+    providerConcurrency?: Record<string, number>;
+    clearProviderIds?: string[];
+    confirm: boolean;
+  }): Promise<unknown>;
+}
+
 export interface GalleryMcpWriters {
   folderCreate(args: { name: string; parentId?: string | null }): Promise<unknown>;
   folderRename(args: { folderId: string; name: string; parentId?: string | null }): Promise<unknown>;
@@ -80,6 +90,7 @@ export interface ReadonlyMcpStdioServerOptions {
   serverVersion: string;
   readers: ReadonlyMcpReaders;
   writers?: GalleryMcpWriters;
+  queueControllers?: QueueMcpControllers;
   jobControllers?: GenerationMcpControllers;
   input?: Readable;
   output?: Writable;
@@ -109,6 +120,10 @@ function toolError(code: string, message: string, nextActions: string[] = []): T
     content: [{ type: "text", text: `${code}: ${message}` }],
     structuredContent
   };
+}
+
+function isToolCallResult(value: unknown): value is ToolCallResult {
+  return Boolean(value && typeof value === "object" && Array.isArray((value as ToolCallResult).content));
 }
 
 function emptyObjectSchema(): JsonRpcObject {
@@ -179,6 +194,10 @@ function confirmProperty(description: string): JsonRpcObject {
 
 function numberProperty(description: string): JsonRpcObject {
   return { type: "number", description };
+}
+
+function stringArrayProperty(description: string): JsonRpcObject {
+  return { type: "array", items: { type: "string" }, description };
 }
 
 function objectSchema(properties: JsonRpcObject, required: string[] = []): JsonRpcObject {
@@ -254,6 +273,14 @@ function makeReadonlyTools(readers: ReadonlyMcpReaders): ReadonlyMcpTool[] {
       inputSchema: emptyObjectSchema(),
       annotations: readonlyAnnotations(),
       handler: () => readers.queueStatus()
+    },
+    {
+      name: "crossgen_queue_config_get",
+      title: "CrossGen Queue Config Get",
+      description: "Read CrossGen queue concurrency limits.",
+      inputSchema: emptyObjectSchema(),
+      annotations: readonlyAnnotations(),
+      handler: () => readers.queueConfig()
     },
     {
       name: "crossgen_job_list",
@@ -454,6 +481,69 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
             return toolError("INVALID_ARGUMENT", "Generation job is not retryable.", ["Only failed, cancelled, or interrupted generation jobs can be retried."]);
           }
           return result;
+        });
+      }
+    }
+  ];
+}
+
+function queueConfigProviderConcurrency(args: JsonRpcObject): Record<string, number> | ToolCallResult | undefined {
+  const raw = args.providerConcurrency;
+  if (raw === undefined) return undefined;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return toolError("INVALID_ARGUMENT", "providerConcurrency must be an object keyed by provider id.");
+  }
+  const providerConcurrency: Record<string, number> = {};
+  for (const [providerId, value] of Object.entries(raw as JsonRpcObject)) {
+    const normalizedProviderId = providerId.trim();
+    if (!normalizedProviderId || typeof value !== "number" || !Number.isSafeInteger(value)) {
+      return toolError("INVALID_ARGUMENT", "providerConcurrency values must be integer numbers keyed by non-empty provider ids.");
+    }
+    providerConcurrency[normalizedProviderId] = value;
+  }
+  return providerConcurrency;
+}
+
+function optionalStringArray(args: JsonRpcObject, name: string): string[] | ToolCallResult | undefined {
+  const value = args[name];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return toolError("INVALID_ARGUMENT", `${name} must be an array of strings.`);
+  return value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim());
+}
+
+function makeQueueConfigWriteTools(controllers: QueueMcpControllers): ReadonlyMcpTool[] {
+  return [
+    {
+      name: "crossgen_queue_config_set",
+      title: "CrossGen Queue Config Set",
+      description: "Update CrossGen queue concurrency limits.",
+      inputSchema: objectSchema({
+        maxGlobalRunning: numberProperty("Optional max number of globally running generation jobs."),
+        providerConcurrency: {
+          type: "object",
+          additionalProperties: { type: "number" },
+          description: "Optional provider-specific concurrency map keyed by provider id."
+        },
+        clearProviderIds: stringArrayProperty("Optional provider ids to remove from provider-specific concurrency limits."),
+        confirm: confirmProperty("Must be true to update queue concurrency limits.")
+      }, ["confirm"]),
+      annotations: writeAnnotations(),
+      handler: (args) => {
+        const confirmationError = requireConfirmed(args, "Queue configuration changes require confirm: true.");
+        if (confirmationError) return confirmationError;
+        const providerConcurrency = queueConfigProviderConcurrency(args);
+        if (isToolCallResult(providerConcurrency)) return providerConcurrency;
+        const clearProviderIds = optionalStringArray(args, "clearProviderIds");
+        if (isToolCallResult(clearProviderIds)) return clearProviderIds;
+        const maxGlobalRunning = typeof args.maxGlobalRunning === "number" ? args.maxGlobalRunning : undefined;
+        if (maxGlobalRunning === undefined && providerConcurrency === undefined && clearProviderIds === undefined) {
+          return toolError("INVALID_ARGUMENT", "No queue configuration fields were provided.");
+        }
+        return controllers.queueConfigSet({
+          maxGlobalRunning,
+          providerConcurrency,
+          clearProviderIds,
+          confirm: true
         });
       }
     }
@@ -741,6 +831,7 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
   const tools = [
     ...makeReadonlyTools(options.readers),
     ...(effectiveMode !== "readonly" && options.writers ? makeWriteTools(options.writers) : []),
+    ...(effectiveMode !== "readonly" && options.queueControllers ? makeQueueConfigWriteTools(options.queueControllers) : []),
     ...(effectiveMode === "generate" && options.jobControllers ? makeGenerationControlTools(options.jobControllers) : [])
   ];
   const toolMap = new Map(tools.map((tool) => [tool.name, tool]));

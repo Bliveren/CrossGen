@@ -1,4 +1,5 @@
 import { listProviderModelCapabilitySummaries } from "../core/modelCapabilities.js";
+import { DEFAULT_QUEUE_RUNTIME_CONFIG, normalizeQueueRuntimeConfig } from "../core/queueConfig.js";
 import type {
   GalleryAsset,
   GalleryFolder,
@@ -10,6 +11,7 @@ import type {
   OpenAIImageRouting,
   ProviderConfig,
   ProviderKind,
+  QueueRuntimeConfig,
   StorageSettings
 } from "../shared/types.js";
 import type { FocusedLaunchId } from "../shared/types.js";
@@ -41,6 +43,7 @@ interface ReadonlyAppState {
   history: GenerationJob[];
   galleryFolders: GalleryFolder[];
   galleryAssets: GalleryAsset[];
+  queueConfig?: QueueRuntimeConfig;
   storage?: StorageSettings;
 }
 
@@ -95,6 +98,10 @@ function promptPreview(prompt: string, maxLength = 180): string {
 
 function liveWorkerHosts(queue: GenerationQueueFile, now = Date.now()): number {
   return queue.workerHosts.filter((host) => Date.parse(host.leaseExpiresAt) > now).length;
+}
+
+export function buildCliQueueConfig(state: ReadonlyAppState | null) {
+  return normalizeQueueRuntimeConfig(state?.queueConfig ?? DEFAULT_QUEUE_RUNTIME_CONFIG);
 }
 
 function publicQueueJob(item: GenerationQueueItem) {
@@ -190,6 +197,7 @@ export function buildCliConfigStatus(state: ReadonlyAppState | null, queue: Gene
     galleryAssetCount: state?.galleryAssets.length ?? 0,
     queueItemCount: queue.items.length,
     queueStatusCounts: queueStatusCounts(queue),
+    queueConfig: buildCliQueueConfig(state),
     liveWorkerHosts: liveWorkerHosts(queue),
     storageConfigured: {
       historyDir: Boolean(state?.storage?.historyDir),
@@ -214,10 +222,11 @@ export function buildCliModelsList(state: ReadonlyAppState | null) {
   };
 }
 
-export function buildCliQueueStatus(queue: GenerationQueueFile) {
+export function buildCliQueueStatus(queue: GenerationQueueFile, queueConfig: QueueRuntimeConfig = DEFAULT_QUEUE_RUNTIME_CONFIG) {
   return {
     schemaVersion: queue.schemaVersion,
     updatedAt: queue.updatedAt,
+    config: normalizeQueueRuntimeConfig(queueConfig),
     totalItems: queue.items.length,
     statusCounts: queueStatusCounts(queue),
     liveWorkerHosts: liveWorkerHosts(queue),
