@@ -293,6 +293,7 @@
       "required": true,
       "status": "pending",
       "acceptanceCriteria": [
+        "pnpm verify:queue-concurrency-smoke passes on the v0.3.1 release branch.",
         "Default queue concurrency remains 1.",
         "Explicit bounded concurrency 2 is honored.",
         "Two worker hosts cannot claim the same queue item.",
@@ -320,6 +321,7 @@
       "required": true,
       "status": "pending",
       "acceptanceCriteria": [
+        "pnpm verify:gallery-mutation-smoke passes on the v0.3.1 release branch.",
         "Folder create, rename, move, delete, and disk sync remain safe under the shared lock.",
         "Asset import, update, move, remove, replace, and export remain safe under the shared lock.",
         "Path traversal, symlink, illegal filename, and Windows reserved-name guards remain enforced.",

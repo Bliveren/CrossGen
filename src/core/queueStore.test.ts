@@ -119,6 +119,81 @@ describe("queueStore", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
+  it("keeps release default concurrency at one claim", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({
+      queuePath,
+      lockPath: `${queuePath}.lock`,
+      now: () => Date.parse("2026-07-13T00:00:00.000Z"),
+      staleRunningAfterMs: 30000,
+      leaseMs: 30000
+    });
+
+    await store.appendItem(queueItem({ queueId: "queue-1", providerId: "provider-1" }));
+    await store.appendItem(queueItem({ queueId: "queue-2", providerId: "provider-2" }));
+
+    const claimed = await store.claimRunnableItems({
+      host: { hostId: "host-1", kind: "desktop", processId: process.pid },
+      limit: 2,
+      maxGlobalRunning: 1
+    });
+
+    expect(claimed.map((item) => item.queueId)).toEqual(["queue-1"]);
+    const queue = await store.read();
+    expect(queue.items.map((item) => [item.queueId, item.status])).toEqual([
+      ["queue-1", "running"],
+      ["queue-2", "queued"]
+    ]);
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("serializes concurrent claims so two hosts cannot claim the same item", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({
+      queuePath,
+      lockPath: `${queuePath}.lock`,
+      now: () => Date.parse("2026-07-13T00:00:00.000Z"),
+      staleRunningAfterMs: 30000,
+      leaseMs: 30000
+    });
+
+    await store.appendItem(queueItem({ queueId: "queue-shared", providerId: "provider-1" }));
+
+    const [hostOne, hostTwo] = await Promise.all([
+      store.claimRunnableItems({
+        host: { hostId: "host-1", kind: "desktop", processId: process.pid },
+        limit: 1,
+        queueId: "queue-shared",
+        maxGlobalRunning: 2
+      }),
+      store.claimRunnableItems({
+        host: { hostId: "host-2", kind: "mcp", processId: process.pid },
+        limit: 1,
+        queueId: "queue-shared",
+        maxGlobalRunning: 2
+      })
+    ]);
+
+    const claimed = [...hostOne, ...hostTwo];
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0].queueId).toBe("queue-shared");
+    expect(["host-1", "host-2"]).toContain(claimed[0].workerHostId);
+
+    const queue = await store.read();
+    expect(queue.items).toHaveLength(1);
+    expect(queue.items[0]).toMatchObject({
+      queueId: "queue-shared",
+      status: "running",
+      attempt: 1
+    });
+    expect(["host-1", "host-2"]).toContain(queue.items[0].workerHostId);
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
   it("can claim a specific queued item by id", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-queue-"));
     const queuePath = path.join(tempDir, "queue.json");

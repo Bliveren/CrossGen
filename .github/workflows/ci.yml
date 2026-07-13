@@ -47,6 +47,12 @@ jobs:
       - name: Verify mock model discovery
         run: pnpm verify:mock-model-discovery
 
+      - name: Verify queue concurrency smoke
+        run: pnpm verify:queue-concurrency-smoke
+
+      - name: Verify Gallery mutation smoke
+        run: pnpm verify:gallery-mutation-smoke
+
   mac-package:
     name: macOS package
     runs-on: macos-latest
