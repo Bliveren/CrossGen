@@ -133,5 +133,11 @@ jobs:
       - name: Package Linux app
         run: pnpm package
 
+      - name: Verify CLI and MCP smoke
+        run: |
+          app_executable="$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)"
+          test -n "$app_executable"
+          CROSSGEN_APP_EXECUTABLE="$app_executable" CROSSGEN_APP_EXTRA_ARGS="--no-sandbox" xvfb-run -a node scripts/verify-cli-mcp-smoke.mjs
+
       - name: Verify Linux package
         run: pnpm verify:release:linux

@@ -21,6 +21,8 @@ The packaged npm binary is `crossgen`. It launches CrossGen through the first av
 
 Use `--data-dir <path>` when an agent needs an isolated CrossGen data directory. The wrapper maps it to both `CROSSGEN_DATA_DIR` and `CROSSGEN_USER_DATA_DIR`.
 
+CI or other constrained Linux runners can set `CROSSGEN_APP_EXTRA_ARGS="--no-sandbox"` when launching a packaged app. The value is prepended to the Electron runtime arguments and is not enabled by default.
+
 ## Agent Checks
 
 ```bash
@@ -72,6 +74,14 @@ crossgen asset export <asset-id> --to ./hero.png --yes --json
 ```
 
 Read-only list and inspect commands never include local absolute paths by default.
+
+## Release Smoke
+
+```bash
+pnpm verify:cli-mcp-smoke
+```
+
+The smoke verifier runs against an isolated data directory and a local mock OpenAI-compatible image API. It checks CLI discovery, `NO_LIVE_QUEUE_WORKER`, queue-backed mock generation, Gallery import/export, MCP readonly/write tool registration, and MCP generate/edit execution.
 
 ## MCP Setup
 
