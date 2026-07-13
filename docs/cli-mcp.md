@@ -79,9 +79,12 @@ Read-only list and inspect commands never include local absolute paths by defaul
 
 ```bash
 pnpm verify:cli-mcp-smoke
+pnpm verify:agent-integration-smoke
 ```
 
 The smoke verifier runs against an isolated data directory and a local mock OpenAI-compatible image API. It checks CLI discovery, `NO_LIVE_QUEUE_WORKER`, queue-backed mock generation, Gallery import/export, MCP readonly/write tool registration, and MCP generate/edit execution.
+
+The agent integration smoke checks `doctor --agent`, `mcp config` output for Codex, Claude Code, and Cursor, MCP mode-specific tool registration, confirmation-required errors, and secret/path redaction for agent-facing outputs that should not disclose local asset paths.
 
 ## MCP Setup
 

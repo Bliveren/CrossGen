@@ -262,6 +262,7 @@
       "required": true,
       "status": "pending",
       "acceptanceCriteria": [
+        "pnpm verify:agent-integration-smoke passes on the v0.3.1 release branch.",
         "crossgen mcp config emits usable snippets for Codex, Claude Code, and Cursor.",
         "Readonly mode exposes inspection tools without write or generation tools.",
         "Write mode exposes local Gallery mutation tools without generation tools.",
