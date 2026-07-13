@@ -47,6 +47,16 @@ interface ReadonlyAppState {
   storage?: StorageSettings;
 }
 
+export interface CliJobListOptions {
+  status?: JobStatus | JobStatus[];
+}
+
+export interface CliGalleryListOptions {
+  folderId?: string | null;
+  tags?: string[];
+  query?: string;
+}
+
 export type McpClientName = "codex" | "claude-code" | "cursor";
 
 export type McpMode = "readonly" | "write" | "generate";
@@ -186,6 +196,71 @@ function isTerminalStatus(status: JobStatus): boolean {
   return status === "succeeded" || status === "failed" || status === "cancelled" || status === "interrupted";
 }
 
+function publicFolder(folder: GalleryFolder) {
+  return {
+    id: folder.id,
+    name: folder.name,
+    parentId: folder.parentId ?? null,
+    color: folder.color,
+    createdAt: folder.createdAt,
+    updatedAt: folder.updatedAt
+  };
+}
+
+type PublicFolder = ReturnType<typeof publicFolder>;
+
+interface PublicFolderTreeNode extends PublicFolder {
+  children: PublicFolderTreeNode[];
+}
+
+function publicGalleryAsset(asset: GalleryAsset) {
+  return {
+    id: asset.id,
+    originalName: asset.originalName,
+    mimeType: asset.mimeType,
+    kind: asset.kind ?? "image",
+    sizeBytes: asset.sizeBytes,
+    width: asset.width,
+    height: asset.height,
+    folderId: asset.folderId ?? null,
+    tags: asset.tags,
+    source: asset.source,
+    sourceJobId: asset.sourceJobId,
+    sourceAssetId: asset.sourceAssetId,
+    createdAt: asset.createdAt,
+    updatedAt: asset.updatedAt,
+    modifiedAt: asset.modifiedAt,
+    hasContentHash: Boolean(asset.contentHash)
+  };
+}
+
+function normalizedTags(tags: string[] | undefined): string[] {
+  return [...new Set((tags ?? []).map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
+}
+
+function galleryAssetMatches(asset: GalleryAsset, options: CliGalleryListOptions): boolean {
+  if (options.folderId !== undefined && (asset.folderId ?? null) !== options.folderId) return false;
+  const requiredTags = normalizedTags(options.tags);
+  if (requiredTags.length > 0) {
+    const assetTags = new Set(asset.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+    if (!requiredTags.every((tag) => assetTags.has(tag))) return false;
+  }
+  const query = options.query?.trim().toLowerCase();
+  if (query) {
+    const haystack = [
+      asset.originalName,
+      asset.fileName,
+      asset.mimeType,
+      asset.source,
+      asset.sourceJobId,
+      asset.sourceAssetId,
+      ...(asset.tags ?? [])
+    ].filter((value): value is string => typeof value === "string").join("\n").toLowerCase();
+    if (!haystack.includes(query)) return false;
+  }
+  return true;
+}
+
 export function buildCliConfigStatus(state: ReadonlyAppState | null, queue: GenerationQueueFile) {
   const provider = state ? activeProvider(state) : undefined;
   return {
@@ -241,9 +316,14 @@ export function buildCliQueueStatus(queue: GenerationQueueFile, queueConfig: Que
   };
 }
 
-export function buildCliJobList(queue: GenerationQueueFile) {
+export function buildCliJobList(queue: GenerationQueueFile, options: CliJobListOptions = {}) {
+  const statuses = new Set(Array.isArray(options.status) ? options.status : options.status ? [options.status] : []);
+  const items = statuses.size > 0 ? queue.items.filter((item) => statuses.has(item.status)) : queue.items;
   return {
-    jobs: queue.items.map(publicQueueJob)
+    filters: {
+      status: statuses.size > 0 ? [...statuses] : null
+    },
+    jobs: items.map(publicQueueJob)
   };
 }
 
@@ -262,47 +342,46 @@ export function buildCliJobStatus(queue: GenerationQueueFile, state: ReadonlyApp
   };
 }
 
-export function buildCliGalleryList(state: ReadonlyAppState | null) {
+export function buildCliGalleryList(state: ReadonlyAppState | null, options: CliGalleryListOptions = {}) {
+  const assets = state?.galleryAssets.filter((asset) => galleryAssetMatches(asset, options)) ?? [];
   return {
-    folders: state?.galleryFolders.map((folder) => ({
-      id: folder.id,
-      name: folder.name,
-      parentId: folder.parentId ?? null,
-      color: folder.color,
-      createdAt: folder.createdAt,
-      updatedAt: folder.updatedAt
-    })) ?? [],
-    assets: state?.galleryAssets.map((asset) => ({
-      id: asset.id,
-      originalName: asset.originalName,
-      mimeType: asset.mimeType,
-      kind: asset.kind ?? "image",
-      sizeBytes: asset.sizeBytes,
-      width: asset.width,
-      height: asset.height,
-      folderId: asset.folderId ?? null,
-      tags: asset.tags,
-      source: asset.source,
-      sourceJobId: asset.sourceJobId,
-      sourceAssetId: asset.sourceAssetId,
-      createdAt: asset.createdAt,
-      updatedAt: asset.updatedAt,
-      modifiedAt: asset.modifiedAt,
-      hasContentHash: Boolean(asset.contentHash)
-    })) ?? []
+    filters: {
+      folderId: options.folderId ?? null,
+      tags: normalizedTags(options.tags),
+      query: options.query?.trim() || null
+    },
+    folders: state?.galleryFolders.map(publicFolder) ?? [],
+    assets: assets.map(publicGalleryAsset)
   };
 }
 
 export function buildCliFolderList(state: ReadonlyAppState | null) {
   return {
-    folders: state?.galleryFolders.map((folder) => ({
-      id: folder.id,
-      name: folder.name,
-      parentId: folder.parentId ?? null,
-      color: folder.color,
-      createdAt: folder.createdAt,
-      updatedAt: folder.updatedAt
-    })) ?? []
+    folders: state?.galleryFolders.map(publicFolder) ?? []
+  };
+}
+
+export function buildCliFolderTree(state: ReadonlyAppState | null) {
+  const folders = state?.galleryFolders ?? [];
+  const nodes = new Map<string, PublicFolderTreeNode>();
+  for (const folder of folders) {
+    nodes.set(folder.id, { ...publicFolder(folder), children: [] });
+  }
+  const roots: PublicFolderTreeNode[] = [];
+  for (const folder of folders) {
+    const node = nodes.get(folder.id);
+    if (!node) continue;
+    const parent = folder.parentId ? nodes.get(folder.parentId) : undefined;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+  const sortTree = (items: PublicFolderTreeNode[]) => {
+    items.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    for (const item of items) sortTree(item.children);
+  };
+  sortTree(roots);
+  return {
+    folders: roots
   };
 }
 

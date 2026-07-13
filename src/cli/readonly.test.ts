@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildCliConfigStatus, buildCliJobStatus, buildCliMcpConfig, buildCliQueueConfig, buildCliQueueStatus } from "./readonly";
+import {
+  buildCliConfigStatus,
+  buildCliFolderTree,
+  buildCliGalleryList,
+  buildCliJobList,
+  buildCliJobStatus,
+  buildCliMcpConfig,
+  buildCliQueueConfig,
+  buildCliQueueStatus
+} from "./readonly";
 
 function request() {
   return {
@@ -53,6 +62,100 @@ describe("readonly CLI builders", () => {
       config: { maxGlobalRunning: 3, providerConcurrency: { "provider-1": 2 } },
       totalItems: 0
     });
+  });
+
+  it("filters job and gallery lists and builds folder tree", () => {
+    const queue = {
+      schemaVersion: 1 as const,
+      updatedAt: "2026-07-14T00:00:00.000Z",
+      workerHosts: [],
+      items: [
+        {
+          queueId: "queue-failed",
+          source: "cli" as const,
+          providerId: "provider-1",
+          request: request(),
+          status: "failed" as const,
+          priority: 0,
+          attempt: 1,
+          maxAttempts: 2,
+          createdAt: "2026-07-14T00:00:00.000Z",
+          updatedAt: "2026-07-14T00:00:01.000Z",
+          outputAssetIds: [],
+          partialAssetIds: [],
+          galleryAssetIds: [],
+          cancelRequested: false,
+          costConfirmed: true,
+          executionKind: "sync-provider" as const,
+          stage: "finalizing" as const,
+          sourceAssetIds: [],
+          outputMediaKinds: ["image" as const]
+        },
+        {
+          queueId: "queue-running",
+          source: "cli" as const,
+          providerId: "provider-1",
+          request: request(),
+          status: "running" as const,
+          priority: 0,
+          attempt: 1,
+          maxAttempts: 2,
+          createdAt: "2026-07-14T00:00:00.000Z",
+          updatedAt: "2026-07-14T00:00:01.000Z",
+          outputAssetIds: [],
+          partialAssetIds: [],
+          galleryAssetIds: [],
+          cancelRequested: false,
+          costConfirmed: true,
+          executionKind: "sync-provider" as const,
+          stage: "calling_provider" as const,
+          sourceAssetIds: [],
+          outputMediaKinds: ["image" as const]
+        }
+      ]
+    };
+    const state = {
+      providers: [],
+      activeProviderId: "",
+      history: [],
+      galleryFolders: [
+        { id: "root", name: "Root", parentId: null, color: "#ffffff", createdAt: "2026-07-14T00:00:00.000Z", updatedAt: "2026-07-14T00:00:00.000Z" },
+        { id: "child", name: "Child", parentId: "root", color: "#ffffff", createdAt: "2026-07-14T00:00:00.000Z", updatedAt: "2026-07-14T00:00:00.000Z" }
+      ],
+      galleryAssets: [
+        {
+          id: "asset-1",
+          fileName: "hero.png",
+          originalName: "Hero Product.png",
+          mimeType: "image/png",
+          sizeBytes: 100,
+          folderId: "child",
+          tags: ["Generated", "Product"],
+          source: "result" as const,
+          sourceJobId: "history-1",
+          createdAt: "2026-07-14T00:00:00.000Z",
+          updatedAt: "2026-07-14T00:00:00.000Z"
+        },
+        {
+          id: "asset-2",
+          fileName: "other.png",
+          originalName: "Other.png",
+          mimeType: "image/png",
+          sizeBytes: 100,
+          folderId: null,
+          tags: ["Import"],
+          source: "import" as const,
+          createdAt: "2026-07-14T00:00:00.000Z",
+          updatedAt: "2026-07-14T00:00:00.000Z"
+        }
+      ]
+    };
+
+    expect(buildCliJobList(queue, { status: "failed" }).jobs.map((job) => job.queueId)).toEqual(["queue-failed"]);
+    expect(buildCliGalleryList(state, { folderId: "child", tags: ["generated"], query: "hero" }).assets.map((asset) => asset.id)).toEqual(["asset-1"]);
+    expect(buildCliFolderTree(state).folders).toMatchObject([
+      { id: "root", children: [{ id: "child", children: [] }] }
+    ]);
   });
 
   it("builds job status without disclosing local output paths", () => {

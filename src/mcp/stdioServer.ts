@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Readable, Writable } from "node:stream";
+import type { JobStatus } from "../shared/types.js";
 
 export type ReadonlyMcpMode = "readonly" | "write" | "generate";
 
@@ -34,10 +35,11 @@ export interface ReadonlyMcpReaders {
   modelsList(): Promise<unknown>;
   queueStatus(): Promise<unknown>;
   queueConfig(): Promise<unknown>;
-  jobList(): Promise<unknown>;
+  jobList(options?: { status?: JobStatus | JobStatus[] }): Promise<unknown>;
   jobStatus(jobId: string): Promise<unknown | null>;
   folderList(): Promise<unknown>;
-  galleryList(): Promise<unknown>;
+  folderTree(): Promise<unknown>;
+  galleryList(options?: { folderId?: string | null; tags?: string[]; query?: string }): Promise<unknown>;
   assetInspect(assetId: string): Promise<unknown | null>;
 }
 
@@ -162,6 +164,30 @@ function jobStatusSchema(): JsonRpcObject {
   };
 }
 
+function jobListSchema(): JsonRpcObject {
+  return {
+    type: "object",
+    properties: {
+      status: {
+        oneOf: [
+          { type: "string" },
+          { type: "array", items: { type: "string" } }
+        ],
+        description: "Optional job status filter."
+      }
+    },
+    additionalProperties: false
+  };
+}
+
+function galleryListSchema(): JsonRpcObject {
+  return objectSchema({
+    folderId: nullableStringProperty("Optional Gallery folder id. Use null for uncategorized assets."),
+    tags: { type: "array", items: { type: "string" }, description: "Optional tags. Assets must contain all listed tags." },
+    query: stringProperty("Optional text query over asset names, tags, and source ids.")
+  });
+}
+
 function readonlyAnnotations(): JsonRpcObject {
   return {
     readOnlyHint: true,
@@ -236,6 +262,28 @@ function stringArray(args: JsonRpcObject, name: string): string[] | ToolCallResu
   return strings;
 }
 
+function optionalStringArrayForFilter(args: JsonRpcObject, name: string): string[] | ToolCallResult | undefined {
+  const value = args[name];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return toolError("INVALID_ARGUMENT", `${name} must be an array of strings.`);
+  return value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim());
+}
+
+function optionalJobStatuses(args: JsonRpcObject): JobStatus[] | ToolCallResult | undefined {
+  const value = args.status;
+  if (value === undefined) return undefined;
+  const values = Array.isArray(value) ? value : [value];
+  const validStatuses = new Set<JobStatus>(["queued", "running", "succeeded", "failed", "cancelled", "interrupted"]);
+  const statuses: JobStatus[] = [];
+  for (const item of values) {
+    if (typeof item !== "string" || !validStatuses.has(item.trim() as JobStatus)) {
+      return toolError("INVALID_ARGUMENT", "status must be one of queued, running, succeeded, failed, cancelled, interrupted.");
+    }
+    statuses.push(item.trim() as JobStatus);
+  }
+  return [...new Set(statuses)];
+}
+
 function requireConfirmed(args: JsonRpcObject, message: string): ToolCallResult | null {
   return args.confirm === true ? null : toolError("CONFIRMATION_REQUIRED", message, ["Call this tool again with confirm: true if you intend to perform this operation."]);
 }
@@ -286,9 +334,13 @@ function makeReadonlyTools(readers: ReadonlyMcpReaders): ReadonlyMcpTool[] {
       name: "crossgen_job_list",
       title: "CrossGen Job List",
       description: "List durable generation queue items, attempts, retry metadata, partial outputs, and completion status.",
-      inputSchema: emptyObjectSchema(),
+      inputSchema: jobListSchema(),
       annotations: readonlyAnnotations(),
-      handler: () => readers.jobList()
+      handler: (args) => {
+        const status = optionalJobStatuses(args);
+        if (isToolCallResult(status)) return status;
+        return readers.jobList({ status });
+      }
     },
     {
       name: "crossgen_job_status",
@@ -317,12 +369,28 @@ function makeReadonlyTools(readers: ReadonlyMcpReaders): ReadonlyMcpTool[] {
       handler: () => readers.folderList()
     },
     {
+      name: "crossgen_folder_tree",
+      title: "CrossGen Folder Tree",
+      description: "List CrossGen Gallery folders as a parent/child tree.",
+      inputSchema: emptyObjectSchema(),
+      annotations: readonlyAnnotations(),
+      handler: () => readers.folderTree()
+    },
+    {
       name: "crossgen_gallery_list",
       title: "CrossGen Gallery List",
       description: "List Gallery folders and assets without disclosing local absolute file paths.",
-      inputSchema: emptyObjectSchema(),
+      inputSchema: galleryListSchema(),
       annotations: readonlyAnnotations(),
-      handler: () => readers.galleryList()
+      handler: (args) => {
+        const tags = optionalStringArrayForFilter(args, "tags");
+        if (isToolCallResult(tags)) return tags;
+        return readers.galleryList({
+          folderId: optionalStringOrNull(args, "folderId"),
+          tags,
+          query: typeof args.query === "string" ? args.query.trim() : undefined
+        });
+      }
     },
     {
       name: "crossgen_asset_inspect",
