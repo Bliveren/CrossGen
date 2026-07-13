@@ -34,6 +34,8 @@
 
 CrossGen 0.3.0 is the release where Image2Tools becomes CrossGen: a practical desktop workspace for people who generate, edit, compare, and reuse AI images every day.
 
+<img width="1541" height="974" alt="image" src="https://github.com/user-attachments/assets/10ac6a8a-f8f6-441c-94c6-52f6e036d134" />
+
 It is built for real image-generation work, not just one-off prompting. Designers, comic and storyboarding teams, UI makers, operators, product teams, and AI image hobbyists often need the same loop:
 
 1. connect an image model with an API key,
