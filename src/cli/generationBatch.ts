@@ -1,6 +1,7 @@
 export interface GenerationPromptFileEntry {
   line: number;
   prompt: string;
+  folderId?: string;
   providerId?: string;
   model?: string;
   idempotencyKey?: string;
@@ -53,6 +54,7 @@ function parseJsonLine(line: string, lineNumber: number): GenerationPromptFileEn
   return {
     line: lineNumber,
     prompt,
+    folderId: optionalString(parsed, "folderId", "folder"),
     providerId: optionalString(parsed, "providerId", "provider"),
     model: optionalString(parsed, "model"),
     idempotencyKey: optionalString(parsed, "idempotencyKey", "idempotency_key"),

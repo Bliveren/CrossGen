@@ -121,6 +121,8 @@ function publicQueueJob(item: GenerationQueueItem) {
     historyJobId: item.historyJobId,
     outputAssetIds: item.outputAssetIds,
     partialAssetIds: item.partialAssetIds,
+    galleryAssetIds: item.galleryAssetIds,
+    targetGalleryFolderId: item.targetGalleryFolderId ?? null,
     cancelRequested: item.cancelRequested,
     workerHostId: item.workerHostId,
     workerProcessId: item.workerProcessId,

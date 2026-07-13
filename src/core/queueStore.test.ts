@@ -40,6 +40,7 @@ function queueItem(patch: Partial<GenerationQueueItem> = {}): GenerationQueueIte
     updatedAt: now,
     outputAssetIds: [],
     partialAssetIds: [],
+    galleryAssetIds: [],
     cancelRequested: false,
     costConfirmed: true,
     executionKind: "sync-provider",
@@ -62,12 +63,14 @@ describe("queueStore", () => {
       leaseMs: 10
     });
 
-    const item = queueItem();
+    const item = queueItem({ targetGalleryFolderId: "folder-1", galleryAssetIds: ["gallery-1"] });
 
     await store.appendItem(item);
     const claimed = await store.claimRunnableItems({ host: { hostId: "host-1", kind: "desktop", processId: process.pid }, limit: 1 });
     expect(claimed).toHaveLength(1);
     expect(claimed[0].attempt).toBe(1);
+    expect(claimed[0].targetGalleryFolderId).toBe("folder-1");
+    expect(claimed[0].galleryAssetIds).toEqual(["gallery-1"]);
 
     const recovered = await store.recoverStaleRunningItems(Date.now() + 1000);
     expect(recovered.items[0].status).toBe("interrupted");

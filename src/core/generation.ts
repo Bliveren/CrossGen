@@ -11,6 +11,7 @@ export interface CreateGenerationQueueItemInput {
   historyJobId?: string;
   sourceAssetIds?: string[];
   outputMediaKinds?: MediaKind[];
+  targetGalleryFolderId?: string | null;
   idempotencyKey?: string;
   requestId?: string;
   correlationId?: string;
@@ -33,6 +34,8 @@ export function createGenerationQueueItem(input: CreateGenerationQueueItemInput)
     historyJobId: input.historyJobId,
     outputAssetIds: [],
     partialAssetIds: [],
+    galleryAssetIds: [],
+    targetGalleryFolderId: input.targetGalleryFolderId,
     cancelRequested: false,
     costConfirmed: input.costConfirmed,
     executionKind: "sync-provider",

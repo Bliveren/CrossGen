@@ -62,6 +62,29 @@ describe("gallery core mutations", () => {
     await expect(readFile(managedPath, "utf8")).resolves.toBe("image-one");
   });
 
+  it("imports generated result assets with source metadata", async () => {
+    const { dir, context } = await tempContext();
+    const sourcePath = path.join(dir, "result.png");
+    await writeFile(sourcePath, Buffer.from("generated-image"));
+
+    const createdFolder = await createGalleryFolder(state(), context, { name: "Campaign" });
+    const imported = await importGalleryAssets(createdFolder.state, context, [sourcePath], createdFolder.folder.id, {
+      source: "result",
+      sourceJobId: "job_1",
+      sourceAssetId: "history_asset_1",
+      tags: ["generated", "generated"]
+    });
+
+    expect(imported.result.assets[0]).toMatchObject({
+      id: "asset_1",
+      source: "result",
+      folderId: "folder_1",
+      tags: ["generated"],
+      sourceJobId: "job_1",
+      sourceAssetId: "history_asset_1"
+    });
+  });
+
   it("handles duplicate imports with cancel, copy, and replace actions", async () => {
     const { dir, context } = await tempContext();
     const sourcePath = path.join(dir, "source.png");

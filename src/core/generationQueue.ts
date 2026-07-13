@@ -12,6 +12,7 @@ export interface GenerationQueueExecutionResult<TValue = unknown> {
   historyJobId?: string;
   outputAssetIds?: string[];
   partialAssetIds?: string[];
+  galleryAssetIds?: string[];
   error?: string;
   errorCategory?: QueueErrorCategory;
   retryable?: boolean;
@@ -184,6 +185,7 @@ async function completeClaimedItem(
           historyJobId: result.historyJobId ?? current.historyJobId,
           outputAssetIds: result.outputAssetIds ?? current.outputAssetIds,
           partialAssetIds: result.partialAssetIds ?? current.partialAssetIds,
+          galleryAssetIds: result.galleryAssetIds ?? current.galleryAssetIds,
           cancelRequested: status === "cancelled" ? true : current.cancelRequested,
           workerHostId: undefined,
           workerProcessId: undefined,
@@ -252,7 +254,8 @@ async function failClaimedItem<TValue = unknown>(
       retryable: classification.retryable,
       historyJobId: item.historyJobId,
       outputAssetIds: item.outputAssetIds,
-      partialAssetIds: item.partialAssetIds
+      partialAssetIds: item.partialAssetIds,
+      galleryAssetIds: item.galleryAssetIds
     },
     nowMs
   );
@@ -263,7 +266,8 @@ async function failClaimedItem<TValue = unknown>(
     retryable: classification.retryable,
     historyJobId: item.historyJobId,
     outputAssetIds: item.outputAssetIds,
-    partialAssetIds: item.partialAssetIds
+    partialAssetIds: item.partialAssetIds,
+    galleryAssetIds: item.galleryAssetIds
   };
 }
 
@@ -336,7 +340,8 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
           retryable: classification.retryable,
           historyJobId: item.historyJobId,
           outputAssetIds: item.outputAssetIds,
-          partialAssetIds: item.partialAssetIds
+          partialAssetIds: item.partialAssetIds,
+          galleryAssetIds: item.galleryAssetIds
         }
       };
     }

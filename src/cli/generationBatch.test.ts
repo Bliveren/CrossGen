@@ -6,7 +6,7 @@ describe("generation prompt file parser", () => {
     const entries = parseGenerationPromptFile(`
 # comment
 yellow product poster
-{"prompt":"blue hero image","model":"gpt-image-2","provider":"provider-1","idempotency_key":"idem-2","timeout_ms":"30000","max_attempts":2,"aspect_ratio":"1:1"}
+{"prompt":"blue hero image","model":"gpt-image-2","provider":"provider-1","folder":"folder-1","idempotency_key":"idem-2","timeout_ms":"30000","max_attempts":2,"aspect_ratio":"1:1"}
 `);
 
     expect(entries).toEqual([
@@ -14,6 +14,7 @@ yellow product poster
       {
         line: 4,
         prompt: "blue hero image",
+        folderId: "folder-1",
         providerId: "provider-1",
         model: "gpt-image-2",
         idempotencyKey: "idem-2",

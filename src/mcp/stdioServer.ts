@@ -46,6 +46,7 @@ export interface GenerationMcpControllers {
     prompt: string;
     inputPaths: string[];
     maskPath?: string;
+    folderId?: string | null;
     providerId?: string;
     model?: string;
     idempotencyKey?: string;
@@ -326,6 +327,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
         prompt: stringProperty("Generation prompt."),
         providerId: stringProperty("Optional provider id. Defaults to the active provider."),
         model: stringProperty("Optional model id override."),
+        folderId: nullableStringProperty("Optional Gallery folder id for generated outputs. Use null for uncategorized."),
         idempotencyKey: stringProperty("Optional key to prevent duplicate paid submissions."),
         waitMs: numberProperty("Optional short wait window in milliseconds. The MCP host still starts queue execution in generate mode."),
         timeoutMs: numberProperty("Optional request timeout in milliseconds."),
@@ -345,6 +347,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
           mode: "generate",
           prompt,
           inputPaths: [],
+          folderId: optionalStringOrNull(args, "folderId"),
           providerId: typeof args.providerId === "string" ? args.providerId.trim() : undefined,
           model: typeof args.model === "string" ? args.model.trim() : undefined,
           idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey.trim() : undefined,
@@ -366,6 +369,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
         prompt: stringProperty("Edit prompt."),
         inputPaths: { type: "array", items: { type: "string" }, description: "Local input image paths." },
         maskPath: stringProperty("Optional mask path for later inpaint-compatible flows."),
+        folderId: nullableStringProperty("Optional Gallery folder id for edited outputs. Use null for uncategorized."),
         providerId: stringProperty("Optional provider id. Defaults to the active provider."),
         model: stringProperty("Optional model id override."),
         idempotencyKey: stringProperty("Optional key to prevent duplicate paid submissions."),
@@ -390,6 +394,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
           prompt,
           inputPaths,
           maskPath: typeof args.maskPath === "string" ? args.maskPath.trim() : undefined,
+          folderId: optionalStringOrNull(args, "folderId"),
           providerId: typeof args.providerId === "string" ? args.providerId.trim() : undefined,
           model: typeof args.model === "string" ? args.model.trim() : undefined,
           idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey.trim() : undefined,
