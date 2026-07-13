@@ -32,6 +32,8 @@ import type {
   GeminiAspectRatio,
   GeminiResolution,
   GenerationJob,
+  GenerationQueueItem,
+  GenerationQueueWorkerHost,
   HistoryJobPatch,
   ImageAsset,
   InputAsset,
@@ -98,6 +100,7 @@ import {
   type GalleryMutationContext
 } from "../core/gallery.js";
 import { recordGenerationQueuePartialOutput, requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion } from "../core/generationQueue.js";
+import { getProviderEnvKeyNames } from "../core/keyring.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
 import { createJsonStateStore, type JsonStateStore } from "../core/stateStore.js";
 import {
@@ -220,6 +223,8 @@ let appStateStore: JsonStateStore<AppStateFile> | null = null;
 let generationQueueStore: QueueStore | null = null;
 const desktopWorkerHostId = `desktop_${process.pid}_${randomUUID()}`;
 const runningJobControllers = new Map<string, AbortController>();
+const runningQueueControllers = new Map<string, AbortController>();
+const backgroundQueueRuns = new Map<string, Promise<unknown>>();
 const queuedJobIds = new Map<string, string>();
 
 interface AssetProtocolPerfMetrics {
@@ -627,16 +632,19 @@ function maskApiKeyPreview(apiKey: string): string {
   return `${trimmed.slice(0, 4)}${"*".repeat(12)}${trimmed.slice(-4)}`;
 }
 
-async function getApiKeyOrThrow(): Promise<string> {
-  const state = await readState();
-  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
-  return getApiKeyForConfigOrThrow(activeProvider);
+function getEnvApiKeyForConfig(config: StoredProviderConfig): string | null {
+  const names = getProviderEnvKeyNames(config.kind);
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  return null;
 }
 
 function getApiKeyForConfigOrThrow(config: StoredProviderConfig): string {
-  const apiKey = decryptApiKey(config);
+  const apiKey = getEnvApiKeyForConfig(config) ?? decryptApiKey(config);
   if (!apiKey) {
-    throw new Error(`缺少 API Key。请先保存 ${providerDisplayName(config.kind)} API Key。`);
+    throw new Error(`缺少 API Key。请先保存 ${providerDisplayName(config.kind)} API Key，或设置 ${getProviderEnvKeyNames(config.kind).join(" / ")}。`);
   }
   const validation = validateApiKey(apiKey);
   if (!validation.ok) {
@@ -2295,6 +2303,220 @@ async function handleSelectMask(): Promise<InputAsset | null> {
   return toInputAsset(result.filePaths[0], true);
 }
 
+function selectProviderForQueueItem(state: AppStateFile, item: GenerationQueueItem): StoredProviderConfig {
+  const provider = state.providers.find((candidate) => candidate.id === item.providerId);
+  if (!provider) {
+    throw new Error("任务对应的 API 配置不存在。");
+  }
+  if (!provider.enabled) {
+    throw new Error("任务对应的 API 配置已停用。");
+  }
+  return provider;
+}
+
+async function getOrCreateHistoryJobForQueueItem(
+  state: AppStateFile,
+  item: GenerationQueueItem,
+  provider: StoredProviderConfig,
+  request: RunJobRequest
+): Promise<GenerationJob> {
+  const existing = item.historyJobId ? state.history.find((job) => job.id === item.historyJobId) : undefined;
+  if (existing) {
+    return {
+      ...existing,
+      prompt: request.prompt,
+      params: request.params
+    };
+  }
+
+  const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
+  const job = createJob(request, provider, inputs, mask);
+  await upsertJob(job);
+  return job;
+}
+
+async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal: AbortSignal) {
+  const state = await readState();
+  const provider = selectProviderForQueueItem(state, item);
+  const request = validateAgentRunJobRequest(item.request, provider);
+  const adapter = getImageProviderAdapterForRequest(request);
+  if (!adapter) {
+    throw new Error(unsupportedImageProviderMessage());
+  }
+  const apiKey = getApiKeyForConfigOrThrow(provider);
+  const imagesDir = getImagesDir(state);
+  const startedAt = Date.now();
+  const partialAssets: ImageAsset[] = [];
+  let job = await getOrCreateHistoryJobForQueueItem(state, item, provider, request);
+
+  const sendQueuedJobEvent = (event: JobProgressEvent) => {
+    if (event.type === "partial" && event.image) {
+      partialAssets.push(event.image);
+      void recordGenerationQueuePartialOutput(getGenerationQueueStore(), item.queueId, [event.image.id]);
+    }
+    sendJobEvent({ ...event, queueId: item.queueId });
+  };
+
+  job = {
+    ...job,
+    status: "running",
+    updatedAt: new Date().toISOString()
+  };
+  await upsertJob(job);
+  sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "started" });
+
+  try {
+    job = await adapter.runJob(job, apiKey, provider, {
+      fetch,
+      imagesDir,
+      ensureDir,
+      sendJobEvent: sendQueuedJobEvent,
+      abortSignal
+    });
+    job = {
+      ...job,
+      name: job.name.trim() || defaultHistoryJobName(job),
+      durationMs: Date.now() - startedAt,
+      updatedAt: new Date().toISOString()
+    };
+    await upsertJob(job);
+    if (job.status === "succeeded") {
+      sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "completed" });
+    } else {
+      sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "failed", error: job.error });
+    }
+    return {
+      status: job.status === "succeeded" ? "succeeded" as const : "failed" as const,
+      value: job,
+      historyJobId: job.id,
+      outputAssetIds: job.outputs.map((asset) => asset.id),
+      partialAssetIds: job.outputs.filter((asset) => asset.sourceType === "partial").map((asset) => asset.id),
+      error: job.status === "failed" ? job.error : undefined
+    };
+  } catch (error) {
+    const message = abortSignal.aborted ? "任务已终止。" : normalizeError(error);
+    job = {
+      ...job,
+      status: "failed",
+      durationMs: Date.now() - startedAt,
+      error: message,
+      outputs: mergeImageAssets(job.outputs, partialAssets),
+      updatedAt: new Date().toISOString()
+    };
+    await upsertJob(job);
+    sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "failed", error: message });
+    return {
+      status: "failed" as const,
+      value: job,
+      historyJobId: job.id,
+      outputAssetIds: job.outputs.map((asset) => asset.id),
+      partialAssetIds: partialAssets.map((asset) => asset.id),
+      error: message
+    };
+  }
+}
+
+async function buildQueuedGenerationJobStatus(queueId: string) {
+  return buildCliJobStatus(await readExistingQueueForCli(), await readExistingStateForCli(), queueId);
+}
+
+function queueWorkerHostId(hostKind: GenerationQueueWorkerHost["kind"]): string {
+  return hostKind === "desktop" ? desktopWorkerHostId : `${hostKind}_${process.pid}_${randomUUID()}`;
+}
+
+async function clearQueueWorkerHost(hostId: string): Promise<void> {
+  await getGenerationQueueStore().mutate((queue) => ({
+    ...queue,
+    updatedAt: new Date().toISOString(),
+    workerHosts: queue.workerHosts.filter((host) => host.hostId !== hostId)
+  }));
+}
+
+async function runQueuedGenerationForAgent(
+  queueId: string,
+  hostKind: GenerationQueueWorkerHost["kind"],
+  waitTimeoutMs?: number
+) {
+  const startedAt = Date.now();
+  const host = { hostId: queueWorkerHostId(hostKind), kind: hostKind, processId: process.pid };
+  const result = await runGenerationQueueItemToCompletion<GenerationJob>({
+    queueStore: getGenerationQueueStore(),
+    queueId,
+    host,
+    maxGlobalRunning: 1,
+    waitTimeoutMs,
+    executeItem: executeGenerationQueueItem,
+    onStarted: (item, controller) => {
+      runningQueueControllers.set(item.queueId, controller);
+      if (item.historyJobId) {
+        runningJobControllers.set(item.historyJobId, controller);
+        queuedJobIds.set(item.historyJobId, item.queueId);
+      }
+    },
+    onFinished: (item) => {
+      runningQueueControllers.delete(item.queueId);
+      if (item.historyJobId) {
+        runningJobControllers.delete(item.historyJobId);
+        queuedJobIds.delete(item.historyJobId);
+      }
+    }
+  }).finally(() => clearQueueWorkerHost(host.hostId).catch(() => undefined));
+  const job = await buildQueuedGenerationJobStatus(queueId);
+  const status = job?.queueItem?.status ?? result.item?.status ?? null;
+  const terminal = Boolean(job?.terminal);
+  return {
+    mode: "wait",
+    hostKind,
+    queueId,
+    claimed: result.claimed,
+    status,
+    terminal,
+    timedOut: Boolean(waitTimeoutMs && !terminal),
+    elapsedMs: Date.now() - startedAt,
+    job
+  };
+}
+
+function startBackgroundQueuedGeneration(queueId: string, hostKind: GenerationQueueWorkerHost["kind"]): boolean {
+  if (backgroundQueueRuns.has(queueId)) return false;
+  const run = runQueuedGenerationForAgent(queueId, hostKind).catch((error: unknown) => {
+    process.stderr.write(`CrossGen background queue worker failed: ${sanitizeError(error)}\n`);
+  }).finally(() => {
+    backgroundQueueRuns.delete(queueId);
+  });
+  backgroundQueueRuns.set(queueId, run);
+  return true;
+}
+
+async function waitForQueuedGenerationStatus(queueId: string, waitMs: number) {
+  const startedAt = Date.now();
+  const cappedWaitMs = Math.max(0, waitMs);
+  while (true) {
+    const job = await buildQueuedGenerationJobStatus(queueId);
+    const status = job?.queueItem?.status ?? job?.historyJob?.status ?? null;
+    const terminal = Boolean(job?.terminal);
+    const elapsedMs = Date.now() - startedAt;
+    if (terminal || elapsedMs >= cappedWaitMs) {
+      return {
+        mode: "waitMs",
+        queueId,
+        status,
+        terminal,
+        timedOut: !terminal,
+        elapsedMs,
+        job
+      };
+    }
+    await sleep(Math.min(100, cappedWaitMs - elapsedMs));
+  }
+}
+
+async function hasLiveGenerationWorkerHost(now = Date.now()): Promise<boolean> {
+  if (backgroundQueueRuns.size > 0) return true;
+  const queue = await readExistingQueueForCli();
+  return queue.workerHosts.some((host) => Date.parse(host.leaseExpiresAt) > now);
+}
+
 async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest): Promise<GenerationJob> {
   const validation = validateRunJobRequest(request);
   if (!validation.ok) {
@@ -2322,7 +2544,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   if (!canRunRequestWithConfig(normalizedRequest, activeProvider)) {
     throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
   }
-  const apiKey = await getApiKeyOrThrow();
+  getApiKeyForConfigOrThrow(activeProvider);
   const imagesDir = getImagesDir(state);
   const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir);
   const queuedAt = Date.now();
@@ -2340,94 +2562,14 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   queuedJobIds.set(job.id, queueItem.queueId);
   await getGenerationQueueStore().appendItem(queueItem);
 
-  const result = await runGenerationQueueItemToCompletion<GenerationJob>({
-    queueStore: getGenerationQueueStore(),
-    queueId: queueItem.queueId,
-    host: { hostId: desktopWorkerHostId, kind: "desktop", processId: process.pid },
-    maxGlobalRunning: 1,
-    waitTimeoutMs: normalizedRequest.params.timeoutMs,
-    executeItem: async (_item, abortSignal) => {
-      const startedAt = Date.now();
-      const partialAssets: ImageAsset[] = [];
-      const sendQueuedJobEvent = (event: JobProgressEvent) => {
-        if (event.type === "partial" && event.image) {
-          partialAssets.push(event.image);
-          void recordGenerationQueuePartialOutput(getGenerationQueueStore(), queueItem.queueId, [event.image.id]);
-        }
-        sendJobEvent({ ...event, queueId: queueItem.queueId });
-      };
-      job = {
-        ...job,
-        status: "running",
-        updatedAt: new Date().toISOString()
-      };
-      await upsertJob(job);
-      sendQueuedJobEvent({ jobId: job.id, type: "started" });
+  const result = await runQueuedGenerationForAgent(queueItem.queueId, "desktop", normalizedRequest.params.timeoutMs);
 
-      try {
-        job = await adapter.runJob(job, apiKey, activeProvider, {
-          fetch,
-          imagesDir,
-          ensureDir,
-          sendJobEvent: sendQueuedJobEvent,
-          abortSignal
-        });
-        job = {
-          ...job,
-          name: job.name.trim() || defaultHistoryJobName(job),
-          durationMs: Date.now() - startedAt,
-          updatedAt: new Date().toISOString()
-        };
-        await upsertJob(job);
-        if (job.status === "succeeded") {
-          sendQueuedJobEvent({ jobId: job.id, type: "completed" });
-        } else {
-          sendQueuedJobEvent({ jobId: job.id, type: "failed", error: job.error });
-        }
-        return {
-          status: job.status === "succeeded" ? "succeeded" : "failed",
-          value: job,
-          historyJobId: job.id,
-          outputAssetIds: job.outputs.map((asset) => asset.id),
-          partialAssetIds: job.outputs.filter((asset) => asset.sourceType === "partial").map((asset) => asset.id),
-          error: job.status === "failed" ? job.error : undefined
-        };
-      } catch (error) {
-        const message = abortSignal.aborted ? "任务已终止。" : normalizeError(error);
-        job = {
-          ...job,
-          status: "failed",
-          durationMs: Date.now() - startedAt,
-          error: message,
-          outputs: mergeImageAssets(job.outputs, partialAssets),
-          updatedAt: new Date().toISOString()
-        };
-        await upsertJob(job);
-        sendQueuedJobEvent({ jobId: job.id, type: "failed", error: message });
-        return {
-          status: "failed",
-          value: job,
-          historyJobId: job.id,
-          outputAssetIds: job.outputs.map((asset) => asset.id),
-          partialAssetIds: partialAssets.map((asset) => asset.id),
-          error: message
-        };
-      }
-    },
-    onStarted: (_item, controller) => {
-      runningJobControllers.set(job.id, controller);
-    },
-    onFinished: () => {
-      runningJobControllers.delete(job.id);
-      queuedJobIds.delete(job.id);
-    }
-  });
-
-  if (result.execution?.value) {
-    return result.execution.value;
+  if (result.job?.historyJob) {
+    const latest = (await readState()).history.find((item) => item.id === result.job?.historyJob?.id);
+    if (latest) return latest;
   }
 
-  const message = result.item?.status === "cancelled" ? "任务已终止。" : "任务等待超时。";
+  const message = result.status === "cancelled" ? "任务已终止。" : "任务等待超时。";
   await requestGenerationQueueItemCancel(getGenerationQueueStore(), queueItem.queueId);
   job = {
     ...job,
@@ -2444,12 +2586,13 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
 
 function handleCancelJob(jobId: string): boolean {
   if (typeof jobId !== "string" || !jobId.trim()) return false;
+  const queueId = queuedJobIds.get(jobId);
   const controller = runningJobControllers.get(jobId);
   if (controller) {
+    if (queueId) void requestGenerationQueueItemCancel(getGenerationQueueStore(), queueId);
     controller.abort();
     return true;
   }
-  const queueId = queuedJobIds.get(jobId);
   if (!queueId) return false;
   void requestGenerationQueueItemCancel(getGenerationQueueStore(), queueId);
   return true;
@@ -3399,6 +3542,10 @@ async function cancelGenerationQueueItemForCli(queueId: string) {
   if (!before) return null;
 
   await requestGenerationQueueItemCancel(getGenerationQueueStore(), queueId);
+  const controller = runningQueueControllers.get(queueId);
+  if (controller) {
+    controller.abort();
+  }
   const afterQueue = await readExistingQueueForCli();
   const job = buildCliJobStatus(afterQueue, await readExistingStateForCli(), queueId);
   if (!job) return null;
@@ -3415,10 +3562,12 @@ async function cancelGenerationQueueItemForCli(queueId: string) {
     queueId,
     status: job.queueItem?.status ?? before.status,
     cancelRequested: job.queueItem?.cancelRequested ?? before.cancelRequested,
-    providerRequestAborted: false,
+    providerRequestAborted: Boolean(controller),
     note:
       action === "cancel_requested"
-        ? "Cancel was recorded in the durable queue. A running provider request may continue until the active worker observes cancellation or returns."
+        ? controller
+          ? "Cancel was recorded in the durable queue and the current worker provider request was aborted."
+          : "Cancel was recorded in the durable queue. A running provider request may continue until the active worker observes cancellation or returns."
         : undefined,
     job
   };
@@ -3763,30 +3912,49 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
         model,
         idempotencyKey,
         confirm,
+        waitMs,
         timeoutMs,
         size,
         quality,
         aspectRatio,
         resolution
-      }) => enqueueGenerationForAgent({
-        source: "mcp",
-        mode,
-        prompt,
-        inputPaths,
-        maskPath,
-        providerId,
-        model,
-        costConfirmed: confirm,
-        idempotencyKey,
-        timeoutMs,
-        size,
-        quality,
-        aspectRatio,
-        resolution
-      }).catch((error: unknown) => {
-        if (error instanceof CliCommandModeError) return mcpToolErrorFromCli(error);
-        throw error;
-      }),
+      }) => {
+        try {
+          const result = await enqueueGenerationForAgent({
+            source: "mcp",
+            mode,
+            prompt,
+            inputPaths,
+            maskPath,
+            providerId,
+            model,
+            costConfirmed: confirm,
+            idempotencyKey,
+            timeoutMs,
+            size,
+            quality,
+            aspectRatio,
+            resolution
+          });
+          const backgroundWorkerStarted = startBackgroundQueuedGeneration(result.queueId, "mcp");
+          const normalizedWaitMs = typeof waitMs === "number" && Number.isFinite(waitMs) && waitMs > 0 ? Math.floor(waitMs) : undefined;
+          const execution = normalizedWaitMs
+            ? await waitForQueuedGenerationStatus(result.queueId, normalizedWaitMs)
+            : {
+                mode: "async",
+                queueId: result.queueId,
+                backgroundWorkerStarted,
+                job: await buildQueuedGenerationJobStatus(result.queueId)
+              };
+          return {
+            ...result,
+            execution
+          };
+        } catch (error: unknown) {
+          if (error instanceof CliCommandModeError) return mcpToolErrorFromCli(error);
+          throw error;
+        }
+      },
       jobCancel: async ({ queueId }) => cancelGenerationQueueItemForCli(queueId)
     } : undefined,
     sanitizeError: (error) => redactLikelySecrets(normalizeError(error))
@@ -3877,8 +4045,8 @@ async function runCliCommandMode(args: string[]): Promise<number> {
           pathDisclosureRequiresConfirmation: true
         },
         knownLimitations: [
-          "v0.3.1 CLI/MCP command mode currently exposes readonly discovery, queue inspection/cancellation, Gallery asset management, and generation enqueue tools.",
-          "CLI/MCP generation tools currently submit durable queue items; worker execution and wait-mode completion are still later v0.3.1 phases.",
+          "v0.3.1 CLI/MCP command mode currently exposes readonly discovery, queue inspection/cancellation, Gallery asset management, and generation/edit tools.",
+          "CLI --wait/default command mode can execute the queued job in the current process. MCP generate mode starts a background queue worker and supports waitMs.",
           "Agent generation submit/edit tools require explicit confirmation because they may create paid provider requests when a worker executes them."
         ]
       };
@@ -3896,6 +4064,26 @@ async function runCliCommandMode(args: string[]): Promise<number> {
         writeCliJson(cliFailure(requestId, correlationId, "CONFIRMATION_REQUIRED", "Generation submission requires --yes.", [`Re-run ${command} with --yes if you intend to submit this paid job.`]));
         return 3;
       }
+      const enqueueOnly = hasCliFlag(args, "--enqueue-only");
+      const asyncRequested = hasCliFlag(args, "--async");
+      const waitRequested = hasCliFlag(args, "--wait") || hasCliFlag(args, "--wait-ms") || (!enqueueOnly && !asyncRequested);
+      if (asyncRequested && waitRequested) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Use either --async or --wait, not both.", ["Use --enqueue-only if you only want to write a durable queue item."]));
+        return 2;
+      }
+      if (asyncRequested && enqueueOnly) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Use either --async or --enqueue-only, not both."));
+        return 2;
+      }
+      if (asyncRequested && !(await hasLiveGenerationWorkerHost())) {
+        writeCliJson(cliFailure(requestId, correlationId, "NO_LIVE_QUEUE_WORKER", "No live CrossGen generation worker is available for --async.", [
+          "Open CrossGen desktop, start MCP generate mode, run a queue worker, or use --wait so this CLI process executes the job.",
+          "Use --enqueue-only only if you intentionally want to leave a pending durable queue item."
+        ]));
+        return 4;
+      }
+      const timeoutMs = parsePositiveIntegerOption(getCliOption(args, "--timeout-ms"), "--timeout-ms");
+      const waitMs = parsePositiveIntegerOption(getCliOption(args, "--wait-ms"), "--wait-ms");
       const result = await enqueueGenerationForAgent({
         source: "cli",
         mode: command,
@@ -3909,13 +4097,22 @@ async function runCliCommandMode(args: string[]): Promise<number> {
         requestId,
         correlationId,
         maxAttempts: parsePositiveIntegerOption(getCliOption(args, "--max-attempts"), "--max-attempts"),
-        timeoutMs: parsePositiveIntegerOption(getCliOption(args, "--timeout-ms"), "--timeout-ms"),
+        timeoutMs,
         size: getCliOption(args, "--size"),
         quality: getCliOption(args, "--quality"),
         aspectRatio: getCliOption(args, "--aspect-ratio"),
         resolution: getCliOption(args, "--resolution")
       });
-      writeCliJson(cliSuccess(requestId, correlationId, result));
+      const execution = waitRequested
+        ? await runQueuedGenerationForAgent(result.queueId, "cli-worker", waitMs)
+        : {
+            mode: enqueueOnly ? "enqueue-only" : "async",
+            queueId: result.queueId,
+            pendingLiveWorker: asyncRequested,
+            liveWorkerAvailable: asyncRequested,
+            job: await buildQueuedGenerationJobStatus(result.queueId)
+          };
+      writeCliJson(cliSuccess(requestId, correlationId, { ...result, execution }));
       return 0;
     }
 
@@ -4202,8 +4399,8 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       "Use --cli config status --json.",
       "Use --cli provider list --json.",
       "Use --cli models list --json.",
-      "Use --cli generate --prompt <text> --yes --json.",
-      "Use --cli edit --prompt <text> --input <path> --yes --json.",
+      "Use --cli generate --prompt <text> --yes [--wait|--async|--enqueue-only] --json.",
+      "Use --cli edit --prompt <text> --input <path> --yes [--wait|--async|--enqueue-only] --json.",
       "Use --cli queue status --json.",
       "Use --cli job list --json.",
       "Use --cli job status <queue-id-or-history-job-id> --json.",

@@ -30,6 +30,10 @@ function request() {
   };
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 describe("generationQueue", () => {
   it("claims, executes, and completes an item", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
@@ -68,6 +72,40 @@ describe("generationQueue", () => {
       historyJobId: "job-1",
       outputAssetIds: ["asset-1"],
       workerHostId: undefined
+    });
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("refreshes running item heartbeat during long executions", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({ queuePath, lockPath: `${queuePath}.lock` });
+    const item = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      historyJobId: "job-1"
+    });
+    await store.appendItem(item);
+
+    let claimedLeaseExpiresAt = "";
+    await runNextGenerationQueueItem({
+      queueStore: store,
+      queueId: item.queueId,
+      host: { hostId: "host-1", kind: "desktop", processId: process.pid },
+      leaseMs: 300,
+      executeItem: async () => {
+        await sleep(170);
+        const queue = await store.read();
+        const running = queue.items.find((candidate) => candidate.queueId === item.queueId);
+        expect(Date.parse(running?.workerLeaseExpiresAt ?? "")).toBeGreaterThan(Date.parse(claimedLeaseExpiresAt));
+        return { status: "succeeded", historyJobId: "job-1", outputAssetIds: ["asset-1"] };
+      },
+      onStarted: (claimed) => {
+        claimedLeaseExpiresAt = claimed.workerLeaseExpiresAt ?? "";
+      }
     });
 
     await rm(tempDir, { recursive: true, force: true });

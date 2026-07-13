@@ -340,7 +340,7 @@ export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMod
     supportedModes: ["readonly", "write", "generate"],
     generateModeWarning:
       options.mode === "generate"
-        ? "Generate mode currently enqueues image generation/edit requests. Worker execution and wait-mode completion are reserved for later v0.3.1 phases."
+        ? "Generate mode can submit image generation/edit requests. MCP generate hosts start queue execution and tools may pass waitMs for short completion waits."
         : undefined
   };
 }

@@ -103,6 +103,60 @@ async function markClaimedItemStage(queueStore: QueueStore, queueId: string, now
   }));
 }
 
+async function refreshClaimedItemHeartbeat(
+  queueStore: QueueStore,
+  item: GenerationQueueItem,
+  host: QueueHostIdentity,
+  nowMs: number,
+  leaseMs: number
+): Promise<void> {
+  await queueStore.mutate((queue) => {
+    const heartbeatAt = iso(nowMs);
+    const leaseExpiresAt = iso(nowMs + leaseMs);
+    const workerHost: GenerationQueueWorkerHost = {
+      hostId: host.hostId,
+      kind: host.kind,
+      processId: host.processId,
+      mode: "generate",
+      heartbeatAt,
+      leaseExpiresAt
+    };
+    const workerHosts = [...queue.workerHosts];
+    const hostIndex = workerHosts.findIndex((candidate) => candidate.hostId === host.hostId);
+    if (hostIndex >= 0) workerHosts[hostIndex] = workerHost;
+    else workerHosts.push(workerHost);
+    return {
+      ...queue,
+      updatedAt: heartbeatAt,
+      workerHosts,
+      items: queue.items.map((current) =>
+        current.queueId === item.queueId && current.status === "running" && current.workerHostId === host.hostId
+          ? {
+              ...current,
+              updatedAt: heartbeatAt,
+              workerHeartbeatAt: heartbeatAt,
+              workerLeaseExpiresAt: leaseExpiresAt
+            }
+          : current
+      )
+    };
+  });
+}
+
+function startClaimedItemHeartbeat(
+  queueStore: QueueStore,
+  item: GenerationQueueItem,
+  host: QueueHostIdentity,
+  leaseMs: number,
+  now: () => number
+): () => void {
+  const intervalMs = Math.max(50, Math.floor(leaseMs / 3));
+  const timer = setInterval(() => {
+    void refreshClaimedItemHeartbeat(queueStore, item, host, now(), leaseMs).catch(() => undefined);
+  }, intervalMs);
+  return () => clearInterval(timer);
+}
+
 async function completeClaimedItem(
   queueStore: QueueStore,
   item: GenerationQueueItem,
@@ -230,6 +284,7 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
 
   const controller = options.createAbortController?.() ?? new AbortController();
   options.onStarted?.(item, controller);
+  const stopHeartbeat = startClaimedItemHeartbeat(options.queueStore, item, options.host, leaseMs, now);
   try {
     await markClaimedItemStage(options.queueStore, item.queueId, now());
     const execution = await options.executeItem(item, controller.signal);
@@ -288,6 +343,7 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
     const execution = await failClaimedItem<TValue>(options.queueStore, item, error, now(), classification);
     return { claimed: true, item, execution };
   } finally {
+    stopHeartbeat();
     options.onFinished?.(item);
   }
 }

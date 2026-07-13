@@ -50,6 +50,7 @@ export interface GenerationMcpControllers {
     model?: string;
     idempotencyKey?: string;
     confirm: boolean;
+    waitMs?: number;
     timeoutMs?: number;
     size?: string;
     quality?: string;
@@ -326,6 +327,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
         providerId: stringProperty("Optional provider id. Defaults to the active provider."),
         model: stringProperty("Optional model id override."),
         idempotencyKey: stringProperty("Optional key to prevent duplicate paid submissions."),
+        waitMs: numberProperty("Optional short wait window in milliseconds. The MCP host still starts queue execution in generate mode."),
         timeoutMs: numberProperty("Optional request timeout in milliseconds."),
         size: stringProperty("Optional OpenAI image size, such as auto or 1024x1024."),
         quality: stringProperty("Optional OpenAI quality."),
@@ -347,6 +349,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
           model: typeof args.model === "string" ? args.model.trim() : undefined,
           idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey.trim() : undefined,
           confirm: true,
+          waitMs: typeof args.waitMs === "number" ? args.waitMs : undefined,
           timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : undefined,
           size: typeof args.size === "string" ? args.size.trim() : undefined,
           quality: typeof args.quality === "string" ? args.quality.trim() : undefined,
@@ -366,6 +369,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
         providerId: stringProperty("Optional provider id. Defaults to the active provider."),
         model: stringProperty("Optional model id override."),
         idempotencyKey: stringProperty("Optional key to prevent duplicate paid submissions."),
+        waitMs: numberProperty("Optional short wait window in milliseconds. The MCP host still starts queue execution in generate mode."),
         timeoutMs: numberProperty("Optional request timeout in milliseconds."),
         size: stringProperty("Optional OpenAI image size, such as auto or 1024x1024."),
         quality: stringProperty("Optional OpenAI quality."),
@@ -390,6 +394,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
           model: typeof args.model === "string" ? args.model.trim() : undefined,
           idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey.trim() : undefined,
           confirm: true,
+          waitMs: typeof args.waitMs === "number" ? args.waitMs : undefined,
           timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : undefined,
           size: typeof args.size === "string" ? args.size.trim() : undefined,
           quality: typeof args.quality === "string" ? args.quality.trim() : undefined,
@@ -778,8 +783,8 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
             effectiveMode === "readonly"
               ? "CrossGen MCP is running in readonly mode. It can inspect configuration, providers, models, queue state, and Gallery metadata without exposing local asset paths."
               : effectiveMode === "write"
-              ? "CrossGen MCP is running in write mode. It can inspect CrossGen state and manage Gallery folders/assets. Generation tools are reserved for later v0.3.1 phases."
-              : "CrossGen MCP is running in generate mode. It can inspect CrossGen state, manage Gallery folders/assets, submit image generation/edit requests to the durable queue, and request queue cancellation.",
+              ? "CrossGen MCP is running in write mode. It can inspect CrossGen state and manage Gallery folders/assets. Generation tools require generate mode."
+              : "CrossGen MCP is running in generate mode. It can inspect CrossGen state, manage Gallery folders/assets, submit image generation/edit requests to the durable queue, start queue execution, wait briefly with waitMs, and request queue cancellation.",
           crossgen: {
             requestedMode: options.mode,
             effectiveMode,
@@ -790,7 +795,7 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
             },
             generateModeWarning:
               effectiveMode === "generate"
-                ? "Generate mode currently enqueues image generation/edit requests. Worker execution and wait-mode completion are still later v0.3.1 phases."
+                ? "Generate mode starts queue execution in this MCP process. Use waitMs for a short completion wait, then poll crossgen_job_status."
                 : options.mode === "generate"
                 ? "Generate mode was requested, but generation controls were not available in this process."
                 : undefined

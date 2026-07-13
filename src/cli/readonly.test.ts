@@ -123,7 +123,7 @@ describe("readonly CLI builders", () => {
       env: { CROSSGEN_MCP_MODE: "generate" },
       permissions: { readonly: true, write: true, generate: true },
       supportedModes: ["readonly", "write", "generate"],
-      generateModeWarning: "Generate mode currently enqueues image generation/edit requests. Worker execution and wait-mode completion are reserved for later v0.3.1 phases."
+      generateModeWarning: "Generate mode can submit image generation/edit requests. MCP generate hosts start queue execution and tools may pass waitMs for short completion waits."
     });
   });
 });

@@ -53,12 +53,13 @@ function writers(): GalleryMcpWriters {
 
 function controllers(): GenerationMcpControllers {
   return {
-    generationSubmit: async ({ mode, prompt, inputPaths, idempotencyKey }) => ({
+    generationSubmit: async ({ mode, prompt, inputPaths, idempotencyKey, waitMs }) => ({
       created: true,
       duplicate: false,
       queueId: `queue-${mode}`,
       historyJobId: `history-${mode}`,
       idempotencyKey,
+      execution: waitMs ? { mode: "waitMs", waitMs } : { mode: "async" },
       job: {
         lookupId: `queue-${mode}`,
         queueItem: { queueId: `queue-${mode}`, mode, promptPreview: prompt, inputCount: inputPaths.length, status: "queued" }
@@ -268,7 +269,7 @@ describe("readonly MCP stdio server", () => {
     const { output } = await runServer(
       [
         JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "crossgen_generate_image", arguments: { prompt: "yellow product render" } } }),
-        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "crossgen_generate_image", arguments: { prompt: "yellow product render", idempotencyKey: "idem-1", confirm: true } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "crossgen_generate_image", arguments: { prompt: "yellow product render", idempotencyKey: "idem-1", confirm: true, waitMs: 250 } } }),
         JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "crossgen_edit_image", arguments: { prompt: "make it brighter", inputPaths: ["/tmp/input.png"], confirm: true } } })
       ].join("\n"),
       { mode: "generate", withWriters: true, withControllers: true }
@@ -290,7 +291,8 @@ describe("readonly MCP stdio server", () => {
             created: true,
             queueId: "queue-generate",
             historyJobId: "history-generate",
-            idempotencyKey: "idem-1"
+            idempotencyKey: "idem-1",
+            execution: { mode: "waitMs", waitMs: 250 }
           }
         }
       }
