@@ -78,6 +78,19 @@ import { resolveDataDirs, resolveUserDataDir } from "../core/dataDirs.js";
 import { createGenerationQueueItem } from "../core/generation.js";
 import { recordGenerationQueuePartialOutput, requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion } from "../core/generationQueue.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
+import {
+  buildCliAssetInspect,
+  buildCliConfigStatus,
+  buildCliFolderList,
+  buildCliGalleryList,
+  buildCliJobList,
+  buildCliMcpConfig,
+  buildCliModelsList,
+  buildCliProviderList,
+  buildCliQueueStatus,
+  type McpClientName,
+  type McpMode
+} from "../cli/readonly.js";
 import { buildEndpoint, fetchWithTimeout } from "./services/openaiImageAdapter.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
@@ -3206,6 +3219,19 @@ function getCliCommand(args: string[]): string | undefined {
   return args.find((arg) => !arg.startsWith("--"));
 }
 
+function getCliSubcommand(args: string[], command: string | undefined): string | undefined {
+  if (!command) return undefined;
+  const commandIndex = args.indexOf(command);
+  if (commandIndex < 0) return undefined;
+  return args.slice(commandIndex + 1).find((arg) => !arg.startsWith("--"));
+}
+
+function getCliPositionalAfter(args: string[], token: string): string | undefined {
+  const index = args.indexOf(token);
+  if (index < 0) return undefined;
+  return args.slice(index + 1).find((arg) => !arg.startsWith("--"));
+}
+
 function writeCliJson(response: CrossGenJsonResponse): void {
   process.stdout.write(`${JSON.stringify(response)}\n`);
 }
@@ -3250,6 +3276,18 @@ async function readExistingStateForCli(): Promise<AppStateFile | null> {
   }
 }
 
+async function readExistingQueueForCli() {
+  return getGenerationQueueStore().read();
+}
+
+function normalizeCliMcpClient(value: string | undefined): McpClientName {
+  return value === "claude-code" || value === "cursor" ? value : "codex";
+}
+
+function normalizeCliMcpMode(value: string | undefined): McpMode {
+  return value === "write" || value === "generate" ? value : "readonly";
+}
+
 function envApiKeyAvailable(kind: StoredProviderConfig["kind"]): boolean {
   const providerSpecific = kind === "gemini" ? "CROSSGEN_GEMINI_API_KEY" : kind === "custom" ? "CROSSGEN_CUSTOM_API_KEY" : "CROSSGEN_OPENAI_API_KEY";
   return Boolean(process.env[providerSpecific]?.trim() || process.env.CROSSGEN_API_KEY?.trim());
@@ -3264,6 +3302,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
   const correlationId = getCliCorrelationId(args, requestId);
   const json = hasCliFlag(args, "--json");
   const command = getCliCommand(args);
+  const subcommand = getCliSubcommand(args, command);
 
   try {
     if (hasCliFlag(args, "--version") || command === "version") {
@@ -3279,6 +3318,16 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       } else {
         process.stdout.write(`${BRAND_NAME} ${getAppVersion()}\n`);
       }
+      return 0;
+    }
+
+    if (command === "mcp" && subcommand === "config") {
+      const data = buildCliMcpConfig({
+        client: normalizeCliMcpClient(getCliOption(args, "--client")),
+        mode: normalizeCliMcpMode(getCliOption(args, "--mode")),
+        command: process.execPath
+      });
+      writeCliJson(cliSuccess(requestId, correlationId, data));
       return 0;
     }
 
@@ -3324,9 +3373,66 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       return 0;
     }
 
+    if (command === "config" && subcommand === "status") {
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliConfigStatus(await readExistingStateForCli(), await readExistingQueueForCli())));
+      return 0;
+    }
+
+    if (command === "provider" && subcommand === "list") {
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliProviderList(await readExistingStateForCli())));
+      return 0;
+    }
+
+    if (command === "models" && subcommand === "list") {
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliModelsList(await readExistingStateForCli())));
+      return 0;
+    }
+
+    if (command === "queue" && subcommand === "status") {
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliQueueStatus(await readExistingQueueForCli())));
+      return 0;
+    }
+
+    if (command === "job" && subcommand === "list") {
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliJobList(await readExistingQueueForCli())));
+      return 0;
+    }
+
+    if (command === "folder" && subcommand === "list") {
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliFolderList(await readExistingStateForCli())));
+      return 0;
+    }
+
+    if (command === "gallery" && subcommand === "list") {
+      writeCliJson(cliSuccess(requestId, correlationId, buildCliGalleryList(await readExistingStateForCli())));
+      return 0;
+    }
+
+    if (command === "asset" && subcommand === "inspect") {
+      const assetId = getCliOption(args, "--asset-id")?.trim() || getCliPositionalAfter(args, subcommand)?.trim();
+      if (!assetId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing --asset-id for asset inspect.", ["Use --asset-id <gallery asset id>."]));
+        return 2;
+      }
+      const asset = buildCliAssetInspect(await readExistingStateForCli(), assetId);
+      if (!asset) {
+        writeCliJson(cliFailure(requestId, correlationId, "ASSET_NOT_FOUND", "Gallery asset not found.", ["Run crossgen --cli gallery list --json to find asset ids."]));
+        return 4;
+      }
+      writeCliJson(cliSuccess(requestId, correlationId, { asset }));
+      return 0;
+    }
+
     const response = cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Unsupported CrossGen CLI command.", [
       "Use --cli --version --json.",
-      "Use --cli doctor --agent --json."
+      "Use --cli doctor --agent --json.",
+      "Use --cli config status --json.",
+      "Use --cli provider list --json.",
+      "Use --cli models list --json.",
+      "Use --cli queue status --json.",
+      "Use --cli job list --json.",
+      "Use --cli gallery list --json.",
+      "Use --cli mcp config --client codex --mode readonly --json."
     ]);
     if (json) {
       writeCliJson(response);
