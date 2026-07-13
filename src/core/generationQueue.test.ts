@@ -3,7 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createGenerationQueueItem } from "./generation";
-import { recordGenerationQueuePartialOutput, requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion, runNextGenerationQueueItem } from "./generationQueue";
+import {
+  recordGenerationQueuePartialOutput,
+  requestGenerationQueueItemCancel,
+  retryGenerationQueueItem,
+  runGenerationQueueItemToCompletion,
+  runNextGenerationQueueItem
+} from "./generationQueue";
 import { createQueueStore } from "./queueStore";
 
 function request() {
@@ -263,6 +269,104 @@ describe("generationQueue", () => {
     const queue = await store.read();
     expect(queue.items[0].partialAssetIds).toEqual(["partial-1", "partial-2"]);
     expect(queue.items[0].outputAssetIds).toEqual(["partial-1", "partial-2"]);
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("requeues retryable terminal items and clears stale execution state", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({ queuePath, lockPath: `${queuePath}.lock` });
+    const item = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      historyJobId: "job-1"
+    });
+    await store.appendItem({
+      ...item,
+      status: "failed",
+      stage: "finalizing",
+      attempt: 2,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      completedAt: "2026-01-01T00:00:10.000Z",
+      nextRunAt: "2026-01-01T00:01:00.000Z",
+      lastError: "provider failed",
+      lastErrorCategory: "transient",
+      lastErrorRetryable: true,
+      outputAssetIds: ["asset-old"],
+      partialAssetIds: ["partial-old"],
+      galleryAssetIds: ["gallery-old"],
+      cancelRequested: true,
+      workerHostId: "host-old",
+      workerProcessId: 1234,
+      workerHeartbeatAt: "2026-01-01T00:00:05.000Z",
+      workerLeaseExpiresAt: "2026-01-01T00:01:05.000Z"
+    });
+
+    const result = await retryGenerationQueueItem(store, "job-1", () => Date.parse("2026-01-01T00:02:00.000Z"));
+
+    expect(result.action).toBe("retried");
+    expect(result.item).toMatchObject({
+      queueId: item.queueId,
+      historyJobId: "job-1",
+      status: "queued",
+      stage: "queued",
+      attempt: 0,
+      outputAssetIds: [],
+      partialAssetIds: [],
+      galleryAssetIds: [],
+      cancelRequested: false,
+      workerHostId: undefined
+    });
+    expect(result.item?.startedAt).toBeUndefined();
+    expect(result.item?.completedAt).toBeUndefined();
+    expect(result.item?.nextRunAt).toBeUndefined();
+    expect(result.item?.lastError).toBeUndefined();
+    expect(result.item?.lastErrorCategory).toBeUndefined();
+    expect(result.item?.lastErrorRetryable).toBeUndefined();
+    expect(result.item?.workerProcessId).toBeUndefined();
+    expect(result.item?.workerHeartbeatAt).toBeUndefined();
+    expect(result.item?.workerLeaseExpiresAt).toBeUndefined();
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("does not retry non-terminal or succeeded items", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({ queuePath, lockPath: `${queuePath}.lock` });
+    const queued = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      historyJobId: "job-queued"
+    });
+    const succeeded = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      historyJobId: "job-succeeded"
+    });
+    await store.appendItem(queued);
+    await store.appendItem({
+      ...succeeded,
+      status: "succeeded",
+      stage: "finalizing",
+      completedAt: "2026-01-01T00:00:10.000Z",
+      outputAssetIds: ["asset-1"]
+    });
+
+    const queuedResult = await retryGenerationQueueItem(store, queued.queueId);
+    const succeededResult = await retryGenerationQueueItem(store, "job-succeeded");
+    const missingResult = await retryGenerationQueueItem(store, "missing-job");
+
+    expect(queuedResult).toMatchObject({ action: "not_retryable", item: { queueId: queued.queueId, status: "queued" } });
+    expect(succeededResult).toMatchObject({ action: "not_retryable", item: { queueId: succeeded.queueId, status: "succeeded" } });
+    expect(missingResult).toEqual({ action: "not_found" });
 
     await rm(tempDir, { recursive: true, force: true });
   });

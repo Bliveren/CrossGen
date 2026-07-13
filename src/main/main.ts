@@ -99,7 +99,13 @@ import {
   type GalleryDuplicateAction,
   type GalleryMutationContext
 } from "../core/gallery.js";
-import { recordGenerationQueuePartialOutput, requestGenerationQueueItemCancel, runGenerationQueueItemToCompletion, runNextGenerationQueueItem } from "../core/generationQueue.js";
+import {
+  recordGenerationQueuePartialOutput,
+  requestGenerationQueueItemCancel,
+  retryGenerationQueueItem,
+  runGenerationQueueItemToCompletion,
+  runNextGenerationQueueItem
+} from "../core/generationQueue.js";
 import { getProviderEnvKeyNames } from "../core/keyring.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
 import { createJsonStateStore, type JsonStateStore } from "../core/stateStore.js";
@@ -3691,6 +3697,29 @@ async function cancelGenerationQueueItemForCli(queueId: string) {
   };
 }
 
+async function retryGenerationQueueItemForCli(jobId: string) {
+  const result = await retryGenerationQueueItem(getGenerationQueueStore(), jobId);
+  if (result.action === "not_found") return { action: "not_found" as const };
+
+  const lookupId = result.item?.queueId ?? jobId;
+  const job = buildCliJobStatus(await readExistingQueueForCli(), await readExistingStateForCli(), lookupId);
+  if (result.action === "not_retryable") {
+    return {
+      action: "not_retryable" as const,
+      queueId: result.item?.queueId,
+      status: result.item?.status,
+      job
+    };
+  }
+
+  return {
+    action: "retried" as const,
+    queueId: result.item?.queueId,
+    status: result.item?.status,
+    job
+  };
+}
+
 interface AgentGenerationEnqueueInput {
   source: QueueSource;
   mode: "generate" | "edit";
@@ -4240,7 +4269,8 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
           throw error;
         }
       },
-      jobCancel: async ({ queueId }) => cancelGenerationQueueItemForCli(queueId)
+      jobCancel: async ({ queueId }) => cancelGenerationQueueItemForCli(queueId),
+      jobRetry: async ({ jobId }) => retryGenerationQueueItemForCli(jobId)
     } : undefined,
     sanitizeError: (error) => redactLikelySecrets(normalizeError(error))
   });
@@ -4489,6 +4519,33 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       return 0;
     }
 
+    if (command === "job" && subcommand === "retry") {
+      const [jobId] = getCliPositionalsAfter(args, subcommand);
+      if (!jobId) {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Missing job id.", ["Use job retry <queue-id-or-history-job-id> --yes."]));
+        return 2;
+      }
+      if (!hasCliFlag(args, "--yes")) {
+        writeCliJson(cliFailure(requestId, correlationId, "CONFIRMATION_REQUIRED", "Job retry requires --yes.", [
+          "Re-run with --yes if you intend to requeue this failed, cancelled, or interrupted generation job."
+        ]));
+        return 3;
+      }
+      const result = await retryGenerationQueueItemForCli(jobId);
+      if (result.action === "not_found") {
+        writeCliJson(cliFailure(requestId, correlationId, "JOB_NOT_FOUND", "Generation job not found.", ["Run crossgen --cli job list --json to find queue ids."]));
+        return 4;
+      }
+      if (result.action === "not_retryable") {
+        writeCliJson(cliFailure(requestId, correlationId, "INVALID_ARGUMENT", "Generation job is not retryable.", [
+          "Only failed, cancelled, or interrupted generation jobs can be retried."
+        ]));
+        return 2;
+      }
+      writeCliJson(cliSuccess(requestId, correlationId, result));
+      return 0;
+    }
+
     if (command === "folder" && subcommand === "list") {
       writeCliJson(cliSuccess(requestId, correlationId, buildCliFolderList(await readExistingStateForCli())));
       return 0;
@@ -4720,6 +4777,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       "Use --cli job list --json.",
       "Use --cli job status <queue-id-or-history-job-id> --json.",
       "Use --cli job cancel <queue-id> --yes --json.",
+      "Use --cli job retry <queue-id-or-history-job-id> --yes --json.",
       "Use --cli gallery list --json.",
       "Use --cli folder create <name> --json.",
       "Use --cli asset import <path...> --json.",

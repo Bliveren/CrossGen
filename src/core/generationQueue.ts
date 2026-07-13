@@ -46,12 +46,18 @@ export interface GenerationQueueRunResult<TValue = unknown> {
   execution?: GenerationQueueExecutionResult<TValue>;
 }
 
+export interface GenerationQueueRetryResult {
+  action: "retried" | "not_found" | "not_retryable";
+  item?: GenerationQueueItem;
+}
+
 export interface RunGenerationQueueItemToCompletionOptions<TValue = unknown> extends RunNextGenerationQueueItemOptions<TValue> {
   pollIntervalMs?: number;
   waitTimeoutMs?: number;
 }
 
 const TERMINAL_STATUSES = new Set<JobStatus>(["succeeded", "failed", "cancelled", "interrupted"]);
+const RETRYABLE_TERMINAL_STATUSES = new Set<JobStatus>(["failed", "cancelled", "interrupted"]);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -434,4 +440,48 @@ export async function requestGenerationQueueItemCancel(queueStore: QueueStore, q
     };
   });
   return updated;
+}
+
+export async function retryGenerationQueueItem(queueStore: QueueStore, lookupId: string, now = Date.now): Promise<GenerationQueueRetryResult> {
+  const normalizedLookupId = lookupId.trim();
+  if (!normalizedLookupId) return { action: "not_found" };
+  let found: GenerationQueueItem | undefined;
+  let retried: GenerationQueueItem | undefined;
+  await queueStore.mutate((queue) => {
+    const nowIso = iso(now());
+    return {
+      ...queue,
+      updatedAt: nowIso,
+      items: queue.items.map((item) => {
+        if (item.queueId !== normalizedLookupId && item.historyJobId !== normalizedLookupId) return item;
+        found = item;
+        if (!RETRYABLE_TERMINAL_STATUSES.has(item.status)) return item;
+        retried = {
+          ...item,
+          status: "queued",
+          stage: "queued",
+          attempt: 0,
+          startedAt: undefined,
+          completedAt: undefined,
+          nextRunAt: undefined,
+          lastError: undefined,
+          lastErrorCategory: undefined,
+          lastErrorRetryable: undefined,
+          outputAssetIds: [],
+          partialAssetIds: [],
+          galleryAssetIds: [],
+          cancelRequested: false,
+          workerHostId: undefined,
+          workerProcessId: undefined,
+          workerHeartbeatAt: undefined,
+          workerLeaseExpiresAt: undefined,
+          updatedAt: nowIso
+        };
+        return retried;
+      })
+    };
+  });
+  if (retried) return { action: "retried", item: retried };
+  if (found) return { action: "not_retryable", item: found };
+  return { action: "not_found" };
 }
