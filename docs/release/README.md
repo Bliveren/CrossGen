@@ -53,9 +53,11 @@ External gate trackers:
 
 Release-specific preparation:
 
+- `v0.3.1`: [evidence.json](./evidence.json)
 - `v0.3.1`: [v0.3.1-preflight.md](./v0.3.1-preflight.md)
 - `v0.3.1`: [v0.3.1-evidence.json](./v0.3.1-evidence.json)
 - `v0.3.0`: [v0.3.0-preflight.md](./v0.3.0-preflight.md)
+- `v0.3.0`: [v0.3.0-evidence.json](./v0.3.0-evidence.json)
 - `v0.3.0`: [v0.3.0-closeout.md](./v0.3.0-closeout.md)
 - `v0.3.0`: [v0.3.0-rc-macos-local-package.md](./v0.3.0-rc-macos-local-package.md)
 
@@ -70,6 +72,6 @@ Rules for updating evidence:
   they are explicitly approved public samples.
 - Do not change checklist items from pending to complete until the matching
   evidence gate is marked `passed` and the validator succeeds.
-- For v0.3.1, keep `docs/release/v0.3.1-evidence.json` as candidate evidence
-  until the final release branch bumps `package.json` to `0.3.1` and promotes
-  the candidate gate data to `docs/release/evidence.json`.
+- For v0.3.1, `docs/release/evidence.json` is the active release ledger after
+  the `package.json` version bump. Keep `docs/release/v0.3.1-evidence.json`
+  as the candidate evidence snapshot used before the version bump.

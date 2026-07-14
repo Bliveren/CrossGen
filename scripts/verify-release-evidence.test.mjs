@@ -69,19 +69,23 @@ function completeLedger() {
 }
 
 describe("release evidence verifier", () => {
-  it("validates the completed release evidence ledger", async () => {
+  it("validates the default v0.3.1 release evidence ledger", async () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
-    expect(result.stdout).not.toContain("Pending required gate(s):");
+    expect(result.stdout).toContain("Release evidence validated: 8/12 required gate(s) passed.");
+    expect(result.stdout).toContain("Pending required gate(s):");
+    expect(result.stdout).toContain("macos-signed");
+    expect(result.stdout).toContain("update-manifest-assets");
   });
 
-  it("passes --require-complete for the completed release ledger", async () => {
+  it("fails --require-complete for the default pending v0.3.1 release ledger", async () => {
     const result = await run(["--require-complete"]);
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 5/5 required gate(s) passed.");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Required release evidence gates are not passed");
+    expect(result.stderr).toContain("macos-signed");
+    expect(result.stderr).toContain("update-manifest-assets");
   });
 
   it("fails --require-complete when a required gate is still pending", async () => {
@@ -102,7 +106,7 @@ describe("release evidence verifier", () => {
       const filePath = path.join(tempRoot, "evidence.json");
       await writeFile(filePath, JSON.stringify(ledger, null, 2));
 
-      const result = await run(["--file", filePath, "--require-complete"]);
+      const result = await run(["--file", filePath, "--expected-version", "0.3.0", "--require-complete"]);
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("Required release evidence gates are not passed");
@@ -118,7 +122,7 @@ describe("release evidence verifier", () => {
       const filePath = path.join(tempRoot, "evidence.json");
       await writeFile(filePath, JSON.stringify(completeLedger(), null, 2));
 
-      const result = await run(["--file", filePath, "--require-complete"]);
+      const result = await run(["--file", filePath, "--expected-version", "0.3.0", "--require-complete"]);
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("Release evidence validated: 7/7 required gate(s) passed.");
@@ -212,7 +216,7 @@ describe("release evidence verifier", () => {
         )
       );
 
-      const result = await run([], { cwd: tempRoot });
+      const result = await run(["--expected-version", "0.3.0"], { cwd: tempRoot });
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("Record Apple notarization status from actual notarization output.");

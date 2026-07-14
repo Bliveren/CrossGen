@@ -1,6 +1,6 @@
 {
   "name": "crossgen",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "One-stop AI image generation manager for API access, model discovery, Gallery/history reuse, and lightweight image editing.",
   "author": "Nowo, Corgnitor, and CrossGen contributors",
   "license": "MIT",
