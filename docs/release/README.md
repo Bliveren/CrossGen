@@ -27,6 +27,18 @@ Before publishing a release, require every required gate to be passed:
 pnpm verify:release-evidence -- --require-complete
 ```
 
+Release package workflows:
+
+- `.github/workflows/release-windows.yml` builds the Windows installer, runs
+  `pnpm verify:release:windows` in `full-install` mode, uploads the installer
+  artifact, and publishes the installer plus blockmap to the matching GitHub
+  Release.
+- `.github/workflows/release-linux.yml` builds the Linux AppImage, runs
+  packaged CLI/MCP smoke, agent integration smoke, and
+  `pnpm verify:release:linux`, then uploads and publishes the AppImage.
+- macOS Developer ID signing remains a local release-shell gate unless signing
+  certificates are configured in GitHub Actions secrets.
+
 External gate trackers:
 
 | Gate | Tracker |
