@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.1",
-  "lastUpdated": "2026-07-14T00:46:38.000Z",
+  "lastUpdated": "2026-07-14T01:08:53.589Z",
   "gates": [
     {
       "id": "real-openai-api",
       "title": "Real OpenAI-compatible GPT Image 2 acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Model discovery confirms gpt-image-2 is available to the tested key on the v0.3.1 release branch.",
         "GPT Image 2 text-to-image generation succeeds through the app-supported route.",
@@ -17,25 +17,44 @@
         "The release evidence records the selected provider route without exposing API keys or private base URLs."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T01:08:53.589Z",
+        "commit": "d7bb464a353b9fa88a05f64014bf09816a23faa5",
+        "environment": "macOS local release gate using an OpenAI-compatible aggregation endpoint through the app-supported chat-completions streaming route. API keys and the private base URL were loaded from local .env.local and are redacted from committed evidence.",
+        "commands": [
+          "set -a; . .env.local; set +a",
+          "IMAGE2TOOLS_REAL_AIHUB_TIMEOUT_MS=420000 pnpm verify:real-aihub-api"
+        ],
         "references": [
           {
             "label": "Real OpenAI GPT Image 2 external acceptance tracker",
             "url": "https://github.com/Bliveren/CrossGen/issues/1"
+          },
+          {
+            "label": "v0.3.1 real aggregation API gate",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.1-real-aggregation-api-gate.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 real OpenAI-compatible GPT Image 2 acceptance."
+        "artifacts": [
+          {
+            "kind": "local-command-output",
+            "path": "terminal transcript: IMAGE2TOOLS_REAL_AIHUB_TIMEOUT_MS=420000 pnpm verify:real-aihub-api",
+            "description": "The real aggregation verifier passed after model discovery and returned savable GPT Image 2 images for text-to-image, reference-image editing, and guided-region editing."
+          },
+          {
+            "kind": "local-directory",
+            "path": "real-api-artifacts/aihub/2026-07-14T01-06-20-214Z/",
+            "public": false,
+            "description": "Local generated-image artifacts and uncommitted summary for v0.3.1 real-provider acceptance. OpenAI outputs: openai-generation-212c81621d5b.png, openai-reference-edit-23da564b005b.png, openai-guided-region-edit-e37372c122f4.png."
+          }
+        ],
+        "summary": "Passed via the app-supported chat-completions streaming route on an OpenAI-compatible aggregation endpoint. Model discovery confirmed gpt-image-2, and text-to-image, reference-image editing, and guided-region editing all returned savable PNG images within the explicit 420000ms release-test timeout. API keys and the private base URL are not recorded."
       }
     },
     {
       "id": "real-gemini-api",
       "title": "Real Gemini-compatible image acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Model discovery confirms a Gemini-compatible image model is available to the tested key on the v0.3.1 release branch.",
         "Gemini-compatible text-to-image generation succeeds through the app-supported route.",
@@ -45,18 +64,37 @@
         "The release evidence records the selected provider route without exposing API keys or private base URLs."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T01:08:53.589Z",
+        "commit": "d7bb464a353b9fa88a05f64014bf09816a23faa5",
+        "environment": "macOS local release gate using an OpenAI-compatible aggregation endpoint through the app-supported chat-completions streaming route. API keys and the private base URL were loaded from local .env.local and are redacted from committed evidence.",
+        "commands": [
+          "set -a; . .env.local; set +a",
+          "IMAGE2TOOLS_REAL_AIHUB_TIMEOUT_MS=420000 pnpm verify:real-aihub-api"
+        ],
         "references": [
           {
             "label": "Real Gemini image external acceptance tracker",
             "url": "https://github.com/Bliveren/CrossGen/issues/102"
+          },
+          {
+            "label": "v0.3.1 real aggregation API gate",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.1-real-aggregation-api-gate.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 real Gemini-compatible image acceptance."
+        "artifacts": [
+          {
+            "kind": "local-command-output",
+            "path": "terminal transcript: IMAGE2TOOLS_REAL_AIHUB_TIMEOUT_MS=420000 pnpm verify:real-aihub-api",
+            "description": "The real aggregation verifier passed after model discovery and returned savable Gemini-compatible images for text-to-image, reference-image editing, and guided-region editing."
+          },
+          {
+            "kind": "local-directory",
+            "path": "real-api-artifacts/aihub/2026-07-14T01-06-20-214Z/",
+            "public": false,
+            "description": "Local generated-image artifacts and uncommitted summary for v0.3.1 real-provider acceptance. Gemini-compatible outputs: gemini-generation-1e6802e91931.jpg, gemini-reference-edit-423cbcabde4b.jpg, gemini-guided-region-edit-e1734ac6502b.jpg."
+          }
+        ],
+        "summary": "Passed via the app-supported chat-completions streaming route on an OpenAI-compatible aggregation endpoint. Model discovery confirmed gemini-3.1-flash-image, and text-to-image, reference-image editing, and guided-region editing all returned savable JPEG images within the explicit 420000ms release-test timeout. The guided-region check is recorded as provider-compatible guided editing, not exact-mask inpainting. API keys and the private base URL are not recorded."
       }
     },
     {
