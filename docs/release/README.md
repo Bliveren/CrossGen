@@ -74,4 +74,5 @@ Rules for updating evidence:
   evidence gate is marked `passed` and the validator succeeds.
 - For v0.3.1, `docs/release/evidence.json` is the active release ledger after
   the `package.json` version bump. Keep `docs/release/v0.3.1-evidence.json`
-  as the candidate evidence snapshot used before the version bump.
+  aligned as the version-specific ledger used by compatibility checks while
+  release evidence is still being completed.
