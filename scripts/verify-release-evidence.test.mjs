@@ -131,9 +131,9 @@ describe("release evidence verifier", () => {
     const result = await run(["--file", "docs/release/v0.3.1-evidence.json", "--expected-version", "0.3.1"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 0/12 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated: 5/12 required gate(s) passed.");
     expect(result.stdout).toContain("Pending required gate(s):");
-    expect(result.stdout).toContain("cli-mcp-packaged-smoke");
+    expect(result.stdout).toContain("real-openai-api");
     expect(result.stdout).toContain("image-core-regression");
   });
 
@@ -148,8 +148,8 @@ describe("release evidence verifier", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Required release evidence gates are not passed");
-    expect(result.stderr).toContain("build-and-mock-verifiers");
-    expect(result.stderr).toContain("gallery-mutation-smoke");
+    expect(result.stderr).toContain("real-openai-api");
+    expect(result.stderr).toContain("image-core-regression");
   });
 
   it("rejects secret-looking values in evidence", async () => {
@@ -237,8 +237,8 @@ describe("release evidence verifier", () => {
       await writeFile(
         checklistPath,
         checklist.replace(
-          "- [ ] Run packaged CLI and MCP smoke against the packaged app.",
-          "- [x] Run packaged CLI and MCP smoke against the packaged app."
+          "- [ ] Run the image core regression checklist for generation, edit, inpaint, partial streaming, provider switching, Gallery, and editor workflows.",
+          "- [x] Run the image core regression checklist for generation, edit, inpaint, partial streaming, provider switching, Gallery, and editor workflows."
         )
       );
 
@@ -248,8 +248,8 @@ describe("release evidence verifier", () => {
       );
 
       expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain("Run packaged CLI and MCP smoke against the packaged app.");
-      expect(result.stderr).toContain("cli-mcp-packaged-smoke");
+      expect(result.stderr).toContain("Run the image core regression checklist");
+      expect(result.stderr).toContain("image-core-regression");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
