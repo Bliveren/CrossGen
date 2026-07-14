@@ -1,4 +1,4 @@
-<h1 align="center">CrossGen 0.3.0</h1>
+<h1 align="center">CrossGen 0.3.1</h1>
 
 <p align="center">
   <img src="./build/icon.png" width="132" height="132" alt="CrossGen app icon" />
@@ -22,17 +22,18 @@
 </p>
 
 <p align="center">
-  <a href="#why-crossgen-030">Why 0.3.0</a> ·
+  <a href="#why-crossgen-031">Why 0.3.1</a> ·
   <a href="#visual-tour">Visual Tour</a> ·
   <a href="#core-workflows">Core Workflows</a> ·
+  <a href="#agent-runtime">Agent Runtime</a> ·
   <a href="#download-and-use">Download</a> ·
   <a href="https://discord.gg/XphwmYtY">Discord</a> ·
   <a href="#technical-notes">Technical Notes</a>
 </p>
 
-## Why CrossGen 0.3.0
+## Why CrossGen 0.3.1
 
-CrossGen 0.3.0 is the release where Image2Tools becomes CrossGen: a practical desktop workspace for people who generate, edit, compare, and reuse AI images every day.
+CrossGen 0.3.1 turns the desktop workspace into an agent-ready local runtime. It keeps the 0.3.0 image-generation loop intact and adds CLI/MCP access so local coding agents can discover models, submit queued generation work, monitor jobs, and export Gallery assets.
 
 <img width="1541" height="974" alt="image" src="https://github.com/user-attachments/assets/10ac6a8a-f8f6-441c-94c6-52f6e036d134" />
 
@@ -89,7 +90,7 @@ CrossGen keeps API access simple:
 - automatically probe compatible generation routes,
 - keep the active API profile visible without crowding the workspace.
 
-For aggregation platforms, route compatibility matters. CrossGen 0.3.0 can prefer the route that actually works for the configured provider, including chat-style image generation paths used by compatible gateways.
+For aggregation platforms, route compatibility matters. CrossGen can prefer the route that actually works for the configured provider, including chat-style image generation paths used by compatible gateways.
 
 ### 2. Gallery And History That Actually Help
 
@@ -106,7 +107,7 @@ The goal is simple: the image you generated ten minutes ago should be easy to fi
 
 ### 3. Generate, Edit, Reuse, Generate Again
 
-CrossGen 0.3.0 adds a much stronger image preview and editing area:
+CrossGen includes a stronger image preview and editing area:
 
 - crop results and save the selected region as a new image,
 - draw quick annotations,
@@ -121,13 +122,28 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 ## Other Highlights
 
 - **GPT Image 2 and Gemini image workflows**: focused launch entries for GPT Image 2 and Nano Banana/Gemini image models.
-- **Aggregation-provider compatibility**: v0.3.0 release gates include real-provider validation through an OpenAI-compatible aggregation endpoint for GPT Image 2 and Gemini-compatible image models.
+- **Agent-ready CLI/MCP runtime**: local agents can discover providers and models, submit queue-backed image jobs, inspect status, and export Gallery assets.
+- **Aggregation-provider compatibility**: release gates include real-provider validation through OpenAI-compatible aggregation endpoints and Gemini-compatible image models.
+- **Durable generation queue**: generation and edit work runs through a bounded local queue with status tracking, retry, cancel, and safe defaults.
 - **Prompt templates**: save reusable prompt structures and apply them quickly.
 - **Prompt chips**: insert Gallery assets, color values, and templates into prompts.
 - **Image-to-image reference handling**: drag local files, Gallery assets, or History outputs into reference slots.
 - **Dark mode**: built for longer visual review sessions.
 - **Local-first storage**: history, outputs, templates, and Gallery assets are stored locally.
 - **Open source**: released under the MIT License.
+
+## Agent Runtime
+
+CrossGen 0.3.1 exposes the local runtime through JSON CLI commands and an MCP stdio server. The same queue and Gallery rules protect desktop, CLI, and MCP workflows:
+
+- `crossgen doctor --agent --json` reports the app path, data directory, provider readiness, worker status, and MCP launch hints.
+- `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` prints client-ready MCP configuration.
+- `crossgen generate ... --yes --wait --json` and MCP `generate_image` submit work through the durable queue.
+- `crossgen asset export <asset-id> --to <path> --yes --json` copies a managed image into a project without moving the Gallery source.
+
+CLI and MCP default to read-only behavior. Write and generation modes are explicit, paid generation requires confirmation, and local path disclosure is opt-in.
+
+See [`docs/cli-mcp.md`](./docs/cli-mcp.md) for command examples and [`docs/KNOWN_LIMITATIONS.md`](./docs/KNOWN_LIMITATIONS.md) for current agent/runtime limits.
 
 ## Download And Use
 
@@ -137,7 +153,7 @@ CrossGen is distributed as a desktop release package. Download the latest instal
 | --- | --- |
 | macOS Apple Silicon | `.dmg` |
 | Windows x64 | `.exe` installer |
-| Linux x64 | AppImage when published |
+| Linux x64 | AppImage |
 
 Basic setup:
 
@@ -147,7 +163,7 @@ Basic setup:
 4. Launch GPT Image 2, Nano Banana/Gemini, or a compatible model.
 5. Generate, edit, save useful images to Gallery, and reuse them as references.
 
-If macOS Gatekeeper blocks an unnotarized local build, right-click the app and choose **Open**, or clear the quarantine attribute:
+The macOS arm64 release is Developer ID signed and Apple notarized. If Gatekeeper blocks a local unsigned build, right-click the app and choose **Open**, or clear the quarantine attribute:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/CrossGen.app
