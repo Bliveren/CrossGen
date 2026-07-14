@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -42,8 +44,17 @@ jobs:
 
       - name: Verify Windows package
         env:
-          IMAGE2TOOLS_WINDOWS_VERIFY_MODE: package-smoke
+          IMAGE2TOOLS_WINDOWS_VERIFY_MODE: full-install
         run: pnpm verify:release:windows
+
+      - name: Upload Windows release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: crossgen-windows-${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          path: |
+            release/CrossGen-Setup.exe
+            release/CrossGen-Setup.exe.blockmap
+          if-no-files-found: error
 
       - name: Publish GitHub Release asset
         uses: softprops/action-gh-release@v3
@@ -52,4 +63,6 @@ jobs:
           make_latest: true
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: release/CrossGen-Setup.exe
+          files: |
+            release/CrossGen-Setup.exe
+            release/CrossGen-Setup.exe.blockmap

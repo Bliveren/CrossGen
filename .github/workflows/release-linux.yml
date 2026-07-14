@@ -1,0 +1,77 @@
+name: Release Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag to publish, for example v0.3.1
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  linux-appimage:
+    name: Build and publish Linux AppImage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.25.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 25
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Linux smoke-test dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2t64 libgbm1 libdrm2 libxkbcommon0
+
+      - name: Package Linux app
+        run: pnpm package
+
+      - name: Verify CLI and MCP smoke
+        run: |
+          app_executable="$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)"
+          test -n "$app_executable"
+          CROSSGEN_APP_EXECUTABLE="$app_executable" CROSSGEN_APP_EXTRA_ARGS="--no-sandbox" xvfb-run -a node scripts/verify-cli-mcp-smoke.mjs
+
+      - name: Verify agent integration smoke
+        run: |
+          app_executable="$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)"
+          test -n "$app_executable"
+          CROSSGEN_APP_EXECUTABLE="$app_executable" CROSSGEN_APP_EXTRA_ARGS="--no-sandbox" xvfb-run -a node scripts/verify-agent-integration-smoke.mjs
+
+      - name: Verify Linux package
+        run: pnpm verify:release:linux
+
+      - name: Upload Linux release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: crossgen-linux-${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          path: release/*.AppImage
+          if-no-files-found: error
+
+      - name: Publish GitHub Release asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          make_latest: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: release/*.AppImage
