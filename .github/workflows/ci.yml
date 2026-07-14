@@ -53,6 +53,9 @@ jobs:
       - name: Verify Gallery mutation smoke
         run: pnpm verify:gallery-mutation-smoke
 
+      - name: Verify image core regression smoke
+        run: pnpm verify:image-core-regression-smoke
+
   mac-package:
     name: macOS package
     runs-on: macos-latest
