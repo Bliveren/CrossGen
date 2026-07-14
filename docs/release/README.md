@@ -27,6 +27,31 @@ Before publishing a release, require every required gate to be passed:
 pnpm verify:release-evidence -- --require-complete
 ```
 
+## Product Acceptance Lock
+
+No CrossGen version may be published as a public GitHub Release, marked as
+Latest, advertised through `docs/updates/latest.json`, or announced as released
+until the product owner has completed hands-on testing of the exact local
+installable package and explicitly approved the release.
+
+This is a hard gate, not a recommendation:
+
+- Automated CI, mock API checks, package creation, signing, notarization, and
+  short smoke tests are necessary but never sufficient for release.
+- The release candidate must be installed and tested as a real user would use
+  it, including launch, provider configuration, text-to-image, image-to-image,
+  Gallery/History reuse, image editing, save/download, and any changed feature
+  area.
+- The approval evidence must record the exact candidate commit, package path or
+  artifact identity, test date, tested platform, issues found, and the product
+  owner's explicit approval wording.
+- Before that approval exists, GitHub Releases must remain draft-only and
+  `docs/updates/latest.json` must continue to point at the last approved
+  release.
+- If a release is published before this gate is satisfied, immediately convert
+  it back to draft, restore the update manifest to the last approved release,
+  and record the withdrawal before further release work continues.
+
 Release package workflows:
 
 - `.github/workflows/release-windows.yml` builds the Windows installer, runs

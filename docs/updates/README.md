@@ -12,17 +12,20 @@ GitHub Pages can also serve this directory from `docs/` once Pages is enabled
 for the repository. Until then, the raw GitHub URL is the stable default to
 avoid a 404 update check.
 
-For each release:
+For each approved release:
 
-1. Upload installers to a GitHub Release.
-2. Compute SHA-256 hashes and byte sizes for each installer. Every asset must
+1. Confirm the product-owner acceptance gate in `docs/release/README.md` has
+   passed for the exact installable package. Until then, keep any GitHub Release
+   as draft-only and keep `latest.json` pointed at the last approved release.
+2. Upload installers to a GitHub Release.
+3. Compute SHA-256 hashes and byte sizes for each installer. Every asset must
    include a lowercase 64-character `sha256` value and positive integer
    `sizeBytes` value before the app will open it.
-3. Generate asset entries with `pnpm update:manifest-asset -- --file <path>
+4. Generate asset entries with `pnpm update:manifest-asset -- --file <path>
    --platform <darwin|win32|linux|all> --url <https-url> [--arch <arch>]`.
-4. Update `latest.json` so `version` is greater than the app version and each
+5. Update `latest.json` so `version` is greater than the app version and each
    asset URL points to the matching GitHub Release download URL.
-5. Commit and push this directory to `main`.
+6. Commit and push this directory to `main`.
 
 Example asset:
 

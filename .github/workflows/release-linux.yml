@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify release evidence gate
+        run: pnpm verify:release-evidence -- --require-complete
+
       - name: Install Linux smoke-test dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2t64 libgbm1 libdrm2 libxkbcommon0
 

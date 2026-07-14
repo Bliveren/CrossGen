@@ -1,8 +1,35 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.1",
-  "lastUpdated": "2026-07-14T02:58:04.000Z",
+  "lastUpdated": "2026-07-14T06:33:23.000Z",
   "gates": [
+    {
+      "id": "product-owner-acceptance",
+      "title": "Product-owner installable package acceptance",
+      "required": true,
+      "status": "blocked",
+      "acceptanceCriteria": [
+        "The product owner installs and tests the exact release-candidate package before publication.",
+        "Testing covers launch, API configuration, text-to-image, image-to-image, Gallery/History reuse, image editing, save/download, and changed feature areas.",
+        "Any release-blocking product issue found during testing is fixed and retested before approval.",
+        "The evidence records the exact commit, package identity, platform, test date, issues found, and explicit product-owner approval wording.",
+        "GitHub Release publication, Latest marking, and update manifest promotion happen only after this approval is recorded."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [
+          {
+            "label": "Release policy: Product Acceptance Lock",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
+          }
+        ],
+        "artifacts": [],
+        "summary": "Blocked. The v0.3.1 public release was withdrawn to draft on 2026-07-14 before product-owner acceptance. A new 0.3.1 release candidate must be installed and explicitly approved by the product owner before GitHub Release publication, Latest marking, or update manifest promotion."
+      }
+    },
     {
       "id": "real-openai-api",
       "title": "Real OpenAI-compatible GPT Image 2 acceptance",
@@ -400,7 +427,7 @@
       "id": "update-manifest-assets",
       "title": "Formal update manifest distribution assets",
       "required": true,
-      "status": "passed",
+      "status": "blocked",
       "acceptanceCriteria": [
         "Distribution artifacts are uploaded to a public HTTPS v0.3.1 release URL.",
         "docs/updates/latest.json contains matching asset URL, fileName, sha256, and sizeBytes metadata for v0.3.1.",
@@ -444,7 +471,7 @@
             "kind": "manifest-file",
             "path": "docs/updates/latest.json",
             "public": true,
-            "description": "Update manifest now points to v0.3.1 public release assets for darwin arm64 DMG, Windows x64 NSIS installer, and Linux x64 AppImage with exact SHA-256 and sizeBytes values."
+            "description": "Withdrawn for v0.3.1. The update manifest has been restored to v0.3.0 until a new product-approved v0.3.1 release candidate is tested and approved."
           },
           {
             "kind": "release-asset",
@@ -474,7 +501,7 @@
             "description": "Manifest linux x64 asset."
           }
         ],
-        "summary": "Passed. docs/updates/latest.json now advertises v0.3.1 and points to public GitHub Release assets whose downloaded bytes match the recorded SHA-256 and sizeBytes values: macOS DMG 88965b0064534e9b596d5f82a4889e645021ff8b67bd370e31936434baa66f11 / 103663616 bytes, Windows installer 54c586a9aee53b164c07f805ae3f6db37216e4f39c1b17734fc6bdbf7162feb0 / 98816143 bytes, Linux AppImage ce7513f1ebe102f61fe6ce30fd1aa492ab35056ee903c6f9454cb357d41a45eb / 120565331 bytes."
+        "summary": "Blocked. The v0.3.1 update manifest promotion was withdrawn on 2026-07-14 and docs/updates/latest.json now advertises the last approved release, v0.3.0. Regenerate this gate only after product-owner acceptance for a new v0.3.1 release candidate."
       }
     },
     {

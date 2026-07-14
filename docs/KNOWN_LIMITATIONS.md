@@ -1,6 +1,6 @@
 # CrossGen Known Limitations
 
-Last updated: 2026-07-14 for v0.3.1.
+Last updated: 2026-07-14 for the withdrawn v0.3.1 candidate.
 
 This document tracks the current user-facing limits for the released app and
 agent runtime surfaces.
@@ -54,7 +54,10 @@ agent runtime surfaces.
 
 ## Resolved In v0.3.1
 
-- The v0.3.1 GitHub Release includes public macOS, Windows, and Linux assets.
-- The macOS arm64 DMG is Developer ID signed and Apple notarized.
-- CLI/MCP release smoke, agent integration smoke, queue concurrency smoke, and
-  Gallery mutation smoke are recorded in release evidence.
+   - The v0.3.1 GitHub Release was withdrawn back to draft before product-owner
+     acceptance.
+   - The macOS arm64 DMG remains signed and notarized as historical packaging
+     evidence, but it is not an approved public release.
+   - CLI/MCP release smoke, agent integration smoke, queue concurrency smoke,
+     and Gallery mutation smoke remain historical candidate evidence until a
+     product-approved release is reissued.

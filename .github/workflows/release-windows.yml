@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify release evidence gate
+        run: pnpm verify:release-evidence -- --require-complete
+
       - name: Package Windows app
         run: pnpm package:win
 

@@ -19,6 +19,7 @@ const baseGateIds = [
 ];
 
 const v031GateIds = [
+  "product-owner-acceptance",
   "build-and-mock-verifiers",
   "cli-mcp-packaged-smoke",
   "agent-integration-smoke",
@@ -95,6 +96,11 @@ const v030ChecklistGuards = [
 ];
 
 const v031ChecklistGuards = [
+  {
+    file: "docs/release/v0.3.1-preflight.md",
+    text: "Obtain explicit product-owner approval after local installable package testing.",
+    gateIds: ["product-owner-acceptance"]
+  },
   {
     file: "docs/release/v0.3.1-preflight.md",
     text: "Run `pnpm build` from the v0.3.1 release branch.",
@@ -222,6 +228,11 @@ const v031ChecklistGuards = [
 ];
 
 const commonChecklistGuards = [
+  {
+    file: "CHECKLIST.md",
+    text: "产品负责人已完成本地安装包实测并明确批准发布",
+    gateIds: ["product-owner-acceptance"]
+  },
   {
     file: "CHECKLIST.md",
     text: "仅输入 prompt 生成一张图（需真实 API Key）",

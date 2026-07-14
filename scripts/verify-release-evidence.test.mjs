@@ -73,19 +73,17 @@ describe("release evidence verifier", () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 12/12 required gate(s) passed.");
-    expect(result.stdout).not.toContain("Pending required gate(s):");
-    expect(result.stdout).not.toContain("windows-native-release");
-    expect(result.stdout).not.toContain("linux-native-release");
-    expect(result.stdout).not.toContain("update-manifest-assets");
+    expect(result.stdout).toContain("Release evidence validated: 11/13 required gate(s) passed.");
+    expect(result.stdout).toContain("Pending required gate(s): product-owner-acceptance, update-manifest-assets");
   });
 
-  it("passes --require-complete for the default complete v0.3.1 release ledger", async () => {
+  it("fails --require-complete for the withdrawn v0.3.1 release ledger", async () => {
     const result = await run(["--require-complete"]);
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 12/12 required gate(s) passed.");
-    expect(result.stderr).not.toContain("Required release evidence gates are not passed");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Required release evidence gates are not passed");
+    expect(result.stderr).toContain("product-owner-acceptance");
+    expect(result.stderr).toContain("update-manifest-assets");
   });
 
   it("fails --require-complete when a required gate is still pending", async () => {
@@ -135,18 +133,11 @@ describe("release evidence verifier", () => {
     const result = await run(["--file", "docs/release/v0.3.1-evidence.json", "--expected-version", "0.3.1"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 12/12 required gate(s) passed.");
-    expect(result.stdout).not.toContain("Pending required gate(s):");
-    expect(result.stdout).not.toContain("windows-native-release");
-    expect(result.stdout).not.toContain("linux-native-release");
-    expect(result.stdout).not.toContain("update-manifest-assets");
-    expect(result.stdout).not.toContain("macos-signed");
-    expect(result.stdout).not.toContain("real-openai-api");
-    expect(result.stdout).not.toContain("real-gemini-api");
-    expect(result.stdout).not.toContain("image-core-regression");
+    expect(result.stdout).toContain("Release evidence validated: 11/13 required gate(s) passed.");
+    expect(result.stdout).toContain("Pending required gate(s): product-owner-acceptance, update-manifest-assets");
   });
 
-  it("passes --require-complete for the complete v0.3.1 candidate evidence ledger", async () => {
+  it("fails --require-complete for the withdrawn v0.3.1 candidate evidence ledger", async () => {
     const result = await run([
       "--file",
       "docs/release/v0.3.1-evidence.json",
@@ -155,13 +146,10 @@ describe("release evidence verifier", () => {
       "--require-complete"
     ]);
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 12/12 required gate(s) passed.");
-    expect(result.stderr).not.toContain("Required release evidence gates are not passed");
-    expect(result.stderr).not.toContain("macos-signed");
-    expect(result.stderr).not.toContain("real-openai-api");
-    expect(result.stderr).not.toContain("real-gemini-api");
-    expect(result.stderr).not.toContain("image-core-regression");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Required release evidence gates are not passed");
+    expect(result.stderr).toContain("product-owner-acceptance");
+    expect(result.stderr).toContain("update-manifest-assets");
   });
 
   it("rejects secret-looking values in evidence", async () => {
@@ -260,7 +248,12 @@ describe("release evidence verifier", () => {
 
       const checklistPath = path.join(tempRoot, "docs", "release", "v0.3.1-preflight.md");
       const checklist = await readFile(checklistPath, "utf8");
-      expect(checklist).toContain("- [x] Update public release assets and `docs/updates/latest.json` from exact artifact hashes and sizes.");
+      const promotedChecklist = checklist.replace(
+        "- [ ] Update public release assets and `docs/updates/latest.json` from exact artifact hashes and sizes.",
+        "- [x] Update public release assets and `docs/updates/latest.json` from exact artifact hashes and sizes."
+      );
+      expect(promotedChecklist).toContain("- [x] Update public release assets and `docs/updates/latest.json` from exact artifact hashes and sizes.");
+      await writeFile(checklistPath, promotedChecklist);
 
       const result = await run(
         ["--file", "docs/release/v0.3.1-evidence.json", "--expected-version", "0.3.1"],
