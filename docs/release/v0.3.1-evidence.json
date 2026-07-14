@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.1",
-  "lastUpdated": "2026-07-14T00:00:00.000Z",
+  "lastUpdated": "2026-07-14T00:15:21.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -198,7 +198,7 @@
       "id": "build-and-mock-verifiers",
       "title": "Build and mock API verifier gate",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "pnpm build passes on the v0.3.1 release branch.",
         "Mock OpenAI-compatible API verifier passes.",
@@ -207,10 +207,16 @@
         "The CI build job records the same verifier set for the final release commit."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T00:15:21.000Z",
+        "commit": "8fdc68741de2b5319189e1faa9c36f501e99a207",
+        "environment": "Local macOS candidate verification plus GitHub Actions main CI run 29294703575.",
+        "commands": [
+          "pnpm install --frozen-lockfile",
+          "pnpm build",
+          "pnpm verify:mock-api",
+          "pnpm verify:mock-gemini-api",
+          "pnpm verify:mock-model-discovery"
+        ],
         "references": [
           {
             "label": "v0.3.1 plan",
@@ -219,17 +225,33 @@
           {
             "label": "CI workflow",
             "url": "https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml"
+          },
+          {
+            "label": "main CI run 29294703575",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29294703575"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 build and mock API verifier evidence."
+        "artifacts": [
+          {
+            "kind": "local-command-output",
+            "path": "terminal transcript: pnpm build, verify:mock-api, verify:mock-gemini-api, verify:mock-model-discovery",
+            "description": "Local candidate verification passed: 38 test files, 345 tests, production renderer/main build, and all three mock verifier scripts."
+          },
+          {
+            "kind": "ci-run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29294703575",
+            "public": true,
+            "description": "Merge-to-main CI build job passed with build, mock API, mock Gemini API, mock model discovery, queue concurrency smoke, and Gallery mutation smoke."
+          }
+        ],
+        "summary": "Candidate build and mock verifier gate passed on commit 8fdc68741de2b5319189e1faa9c36f501e99a207. Final v0.3.1 release branch must rerun this gate after the version bump."
       }
     },
     {
       "id": "cli-mcp-packaged-smoke",
       "title": "Packaged CLI and MCP smoke gate",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Packaged app command mode reports CLI version and doctor output.",
         "Packaged CLI can list models, reject async generation without a live worker, run queue-backed generate --wait, return idempotent generation results, and report job status.",
@@ -238,10 +260,12 @@
         "Packaged MCP can run generate_image, edit_image, Gallery listing, and asset export against isolated mock data."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T00:15:21.000Z",
+        "commit": "8fdc68741de2b5319189e1faa9c36f501e99a207",
+        "environment": "Local macOS source smoke plus GitHub Actions Linux packaged-app smoke in main CI run 29294703575.",
+        "commands": [
+          "pnpm verify:cli-mcp-smoke"
+        ],
         "references": [
           {
             "label": "CLI and MCP documentation",
@@ -250,17 +274,33 @@
           {
             "label": "CI workflow",
             "url": "https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml"
+          },
+          {
+            "label": "main CI run 29294703575",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29294703575"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 packaged CLI and MCP smoke evidence."
+        "artifacts": [
+          {
+            "kind": "local-command-output",
+            "path": "terminal transcript: pnpm verify:cli-mcp-smoke",
+            "description": "Local CLI/MCP smoke passed after build:main, including version, doctor, models list, async no-worker error, queue-backed generate --wait, idempotency, job status, Gallery list, path confirmation, asset export, MCP mode registration, generate_image, edit_image, gallery_list, and asset_export."
+          },
+          {
+            "kind": "ci-run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29294703575",
+            "public": true,
+            "description": "Linux package job ran packaged CLI/MCP smoke against the packaged Linux app."
+          }
+        ],
+        "summary": "Candidate packaged CLI/MCP smoke gate passed through the main CI Linux package job, with matching local source smoke on commit 8fdc68741de2b5319189e1faa9c36f501e99a207. Final release artifacts still need final release-branch package evidence."
       }
     },
     {
       "id": "agent-integration-smoke",
       "title": "Agent integration smoke gate",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "pnpm verify:agent-integration-smoke passes on the v0.3.1 release branch.",
         "crossgen mcp config emits usable snippets for Codex, Claude Code, and Cursor.",
@@ -270,10 +310,12 @@
         "Agent-facing JSON outputs preserve schemaVersion, requestId, data-or-error, stable error codes, and no secret or path leakage beyond explicit confirmation."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T00:15:21.000Z",
+        "commit": "8fdc68741de2b5319189e1faa9c36f501e99a207",
+        "environment": "Local macOS candidate verification plus GitHub Actions Linux packaged-app smoke in main CI run 29294703575.",
+        "commands": [
+          "pnpm verify:agent-integration-smoke"
+        ],
         "references": [
           {
             "label": "CLI and MCP documentation",
@@ -282,17 +324,33 @@
           {
             "label": "v0.3.1 plan",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.1-plan.md"
+          },
+          {
+            "label": "main CI run 29294703575",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29294703575"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 Codex, Claude Code, and Cursor agent integration smoke evidence."
+        "artifacts": [
+          {
+            "kind": "local-command-output",
+            "path": "terminal transcript: pnpm verify:agent-integration-smoke",
+            "description": "Local agent integration smoke passed after build:main, covering doctor --agent, mcp config for Codex, Claude Code, and Cursor in readonly/write/generate modes, mode-specific MCP tool registration, confirmation-required errors, schemaVersion/requestId, and secret/data-dir redaction."
+          },
+          {
+            "kind": "ci-run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29294703575",
+            "public": true,
+            "description": "Linux package job ran agent integration smoke against the packaged Linux app."
+          }
+        ],
+        "summary": "Candidate agent integration smoke gate passed on commit 8fdc68741de2b5319189e1faa9c36f501e99a207, including Codex, Claude Code, Cursor configuration output and MCP mode boundaries."
       }
     },
     {
       "id": "queue-concurrency-smoke",
       "title": "Durable queue concurrency smoke gate",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "pnpm verify:queue-concurrency-smoke passes on the v0.3.1 release branch.",
         "Default queue concurrency remains 1.",
@@ -302,25 +360,43 @@
         "Cancel and retry update queue and history consistently."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T00:15:21.000Z",
+        "commit": "8fdc68741de2b5319189e1faa9c36f501e99a207",
+        "environment": "Local macOS candidate verification plus GitHub Actions main CI run 29294703575.",
+        "commands": [
+          "pnpm verify:queue-concurrency-smoke"
+        ],
         "references": [
           {
             "label": "v0.3.1 plan",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.1-plan.md"
+          },
+          {
+            "label": "main CI run 29294703575",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29294703575"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 durable queue concurrency smoke evidence."
+        "artifacts": [
+          {
+            "kind": "local-command-output",
+            "path": "terminal transcript: pnpm verify:queue-concurrency-smoke",
+            "description": "Local queue concurrency smoke passed: 2 test files and 19 tests, covering queue store and generation queue behavior."
+          },
+          {
+            "kind": "ci-run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29294703575",
+            "public": true,
+            "description": "Merge-to-main CI build job ran queue concurrency smoke successfully."
+          }
+        ],
+        "summary": "Candidate queue concurrency gate passed on commit 8fdc68741de2b5319189e1faa9c36f501e99a207, covering default concurrency, bounded concurrency, two-host claim safety, stale recovery, cancel, and retry."
       }
     },
     {
       "id": "gallery-mutation-smoke",
       "title": "Gallery mutation smoke gate",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "pnpm verify:gallery-mutation-smoke passes on the v0.3.1 release branch.",
         "Folder create, rename, move, delete, and disk sync remain safe under the shared lock.",
@@ -330,18 +406,36 @@
         "Concurrent Gallery mutation smoke proves file mutation and matching state write happen in one critical section."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T00:15:21.000Z",
+        "commit": "8fdc68741de2b5319189e1faa9c36f501e99a207",
+        "environment": "Local macOS candidate verification plus GitHub Actions main CI run 29294703575.",
+        "commands": [
+          "pnpm verify:gallery-mutation-smoke"
+        ],
         "references": [
           {
             "label": "v0.3.1 plan",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.1-plan.md"
+          },
+          {
+            "label": "main CI run 29294703575",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29294703575"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 Gallery mutation smoke evidence."
+        "artifacts": [
+          {
+            "kind": "local-command-output",
+            "path": "terminal transcript: pnpm verify:gallery-mutation-smoke",
+            "description": "Local Gallery mutation smoke passed: 3 test files and 24 tests, covering Gallery core, shared state/queue transactions, and gallery disk sync behavior."
+          },
+          {
+            "kind": "ci-run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29294703575",
+            "public": true,
+            "description": "Merge-to-main CI build job ran Gallery mutation smoke successfully."
+          }
+        ],
+        "summary": "Candidate Gallery mutation gate passed on commit 8fdc68741de2b5319189e1faa9c36f501e99a207, including shared-lock mutation coverage and explicit path-disclosure safeguards."
       }
     },
     {
