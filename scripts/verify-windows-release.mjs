@@ -19,7 +19,10 @@ const installerPattern = /^CrossGen(?:-Setup|-.*-win-.*)\.exe$/;
 const installerTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_INSTALL_TIMEOUT_MS ?? 120000);
 const smokeTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_SMOKE_TIMEOUT_MS ?? 12000);
 const windowTimeoutMs = Number(process.env.IMAGE2TOOLS_WINDOWS_WINDOW_TIMEOUT_MS ?? 15000);
-const defaultSilentInstallArgs = ["/S", "/currentuser"];
+const defaultSilentInstallArgSets = [
+  ["/S", "/currentuser"],
+  ["/S"]
+];
 
 function assertWindows() {
   if (process.platform !== "win32") {
@@ -398,10 +401,7 @@ async function cleanupExistingInstall() {
 }
 
 async function runSilentInstallCycle(installerPath) {
-  await cleanupExistingInstall();
-  const installArgs = silentInstallArgs();
-  console.log(`Running silent Windows installer: ${installerPath} ${installArgs.join(" ")}`);
-  await run(installerPath, installArgs, { timeout: installerTimeoutMs });
+  await runSilentInstaller(installerPath);
 
   let installedExecutable = "";
   let uninstaller = "";
@@ -428,11 +428,39 @@ async function runSilentInstallCycle(installerPath) {
   console.log("Silent Windows install/uninstall cycle passed.");
 }
 
-function silentInstallArgs() {
+async function runSilentInstaller(installerPath) {
+  let lastError;
+  for (const installArgs of silentInstallArgSets()) {
+    await cleanupExistingInstall();
+    console.log(`Running silent Windows installer: ${installerPath} ${installArgs.join(" ")}`);
+    try {
+      await run(installerPath, installArgs, { timeout: installerTimeoutMs });
+      return;
+    } catch (error) {
+      lastError = error;
+      console.log(`Silent Windows installer attempt failed for args "${installArgs.join(" ")}": ${formatCommandFailure(error)}`);
+    }
+  }
+
+  throw lastError ?? new Error("Silent Windows installer did not run.");
+}
+
+function formatCommandFailure(error) {
+  const lines = [error instanceof Error ? error.message : String(error)];
+  if (error && typeof error === "object") {
+    const stdout = "stdout" in error ? String(error.stdout ?? "").trim() : "";
+    const stderr = "stderr" in error ? String(error.stderr ?? "").trim() : "";
+    if (stdout) lines.push(`stdout: ${stdout}`);
+    if (stderr) lines.push(`stderr: ${stderr}`);
+  }
+  return lines.join(" ");
+}
+
+function silentInstallArgSets() {
   const raw = process.env.IMAGE2TOOLS_WINDOWS_INSTALLER_ARGS;
-  if (!raw?.trim()) return defaultSilentInstallArgs;
+  if (!raw?.trim()) return defaultSilentInstallArgSets;
   const parsed = raw.split(/\s+/).map((item) => item.trim()).filter(Boolean);
-  return parsed.length > 0 ? parsed : defaultSilentInstallArgs;
+  return parsed.length > 0 ? [parsed] : defaultSilentInstallArgSets;
 }
 
 async function main() {
