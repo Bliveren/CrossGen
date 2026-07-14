@@ -131,10 +131,11 @@ describe("release evidence verifier", () => {
     const result = await run(["--file", "docs/release/v0.3.1-evidence.json", "--expected-version", "0.3.1"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 5/12 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated: 6/12 required gate(s) passed.");
     expect(result.stdout).toContain("Pending required gate(s):");
     expect(result.stdout).toContain("real-openai-api");
-    expect(result.stdout).toContain("image-core-regression");
+    expect(result.stdout).toContain("update-manifest-assets");
+    expect(result.stdout).not.toContain("image-core-regression");
   });
 
   it("fails --require-complete for the pending v0.3.1 candidate evidence ledger", async () => {
@@ -149,7 +150,8 @@ describe("release evidence verifier", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Required release evidence gates are not passed");
     expect(result.stderr).toContain("real-openai-api");
-    expect(result.stderr).toContain("image-core-regression");
+    expect(result.stderr).toContain("update-manifest-assets");
+    expect(result.stderr).not.toContain("image-core-regression");
   });
 
   it("rejects secret-looking values in evidence", async () => {
@@ -237,8 +239,8 @@ describe("release evidence verifier", () => {
       await writeFile(
         checklistPath,
         checklist.replace(
-          "- [ ] Run the image core regression checklist for generation, edit, inpaint, partial streaming, provider switching, Gallery, and editor workflows.",
-          "- [x] Run the image core regression checklist for generation, edit, inpaint, partial streaming, provider switching, Gallery, and editor workflows."
+          "- [ ] Complete real OpenAI-compatible GPT Image acceptance.",
+          "- [x] Complete real OpenAI-compatible GPT Image acceptance."
         )
       );
 
@@ -248,8 +250,8 @@ describe("release evidence verifier", () => {
       );
 
       expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain("Run the image core regression checklist");
-      expect(result.stderr).toContain("image-core-regression");
+      expect(result.stderr).toContain("Complete real OpenAI-compatible GPT Image acceptance.");
+      expect(result.stderr).toContain("real-openai-api");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

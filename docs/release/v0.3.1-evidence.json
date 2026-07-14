@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.1",
-  "lastUpdated": "2026-07-14T00:15:21.000Z",
+  "lastUpdated": "2026-07-14T00:46:38.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -442,7 +442,7 @@
       "id": "image-core-regression",
       "title": "Desktop image workflow regression gate",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Desktop text-to-image generation remains functional.",
         "Desktop image-to-image editing and guided-region editing remain functional.",
@@ -452,18 +452,42 @@
         "Manual checklist evidence records failures, blockers, and exact visible error text without secrets."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T00:46:38.000Z",
+        "commit": "1b8d08c77d69ece4bcf1576175ec605af55c9cf7",
+        "environment": "Local macOS candidate verification plus GitHub Actions main CI run 29296515328.",
+        "commands": [
+          "pnpm verify:image-core-regression-smoke",
+          "pnpm verify:release-evidence:v0.3.1",
+          "pnpm build"
+        ],
         "references": [
           {
             "label": "v0.3.1 plan",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.1-plan.md"
+          },
+          {
+            "label": "Image core regression smoke documentation",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.1-image-core-regression.md"
+          },
+          {
+            "label": "main CI run 29296515328",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29296515328"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 desktop image workflow regression evidence."
+        "artifacts": [
+          {
+            "kind": "local-command-output",
+            "path": "terminal transcript: pnpm verify:image-core-regression-smoke",
+            "description": "Local image core regression smoke passed: 5 test files and 175 tests covering desktop generation, edit, guided-region edit, partial streaming parameter behavior, provider switching, Gallery workflows, and editor save/download contracts."
+          },
+          {
+            "kind": "ci-run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29296515328",
+            "public": true,
+            "description": "Merge-to-main CI build job ran Verify image core regression smoke successfully for commit 1b8d08c77d69ece4bcf1576175ec605af55c9cf7."
+          }
+        ],
+        "summary": "Candidate image-core regression smoke gate passed on commit 1b8d08c77d69ece4bcf1576175ec605af55c9cf7. This evidence is deterministic mock coverage only; real OpenAI-compatible and Gemini-compatible provider acceptance remain separate pending gates."
       }
     }
   ]
