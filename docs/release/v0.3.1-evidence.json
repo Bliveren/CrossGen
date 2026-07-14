@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.1",
-  "lastUpdated": "2026-07-14T02:11:19.000Z",
+  "lastUpdated": "2026-07-14T02:58:04.000Z",
   "gates": [
     {
       "id": "real-openai-api",
@@ -275,7 +275,7 @@
       "id": "windows-native-release",
       "title": "Native Windows release package validation",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Windows package verifier runs against the v0.3.1 artifact.",
         "NSIS silent install, installed app launch, main-window detection, and silent uninstall pass in full-install evidence.",
@@ -283,25 +283,65 @@
         "Download and open-folder behavior are checked on native Windows."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T02:58:04.000Z",
+        "commit": "20cb2f9fff350910fa2bd89b237347fc218f6d56",
+        "environment": "GitHub-hosted native Windows release runner on tag v0.3.1. The workflow built the x64 NSIS installer, ran Windows package verification in full-install mode, uploaded workflow artifacts, and published the installer plus blockmap to the v0.3.1 GitHub Release.",
+        "commands": [
+          "git push --force origin v0.3.1",
+          "Release Windows workflow run 29301942374",
+          "pnpm package:win",
+          "IMAGE2TOOLS_WINDOWS_VERIFY_MODE=full-install pnpm verify:release:windows",
+          "gh release download v0.3.1 -D /tmp/crossgen-v031-release-assets --clobber",
+          "shasum -a 256 /tmp/crossgen-v031-release-assets/CrossGen-Setup.exe /tmp/crossgen-v031-release-assets/CrossGen-Setup.exe.blockmap"
+        ],
         "references": [
           {
             "label": "Native Windows release validation tracker",
             "url": "https://github.com/Bliveren/CrossGen/issues/4"
+          },
+          {
+            "label": "Release Windows run 29301942374",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29301942374"
+          },
+          {
+            "label": "CrossGen v0.3.1 GitHub Release",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.1"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 native Windows release package validation."
+        "artifacts": [
+          {
+            "kind": "ci-run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29301942374",
+            "public": true,
+            "description": "Release Windows run passed Package Windows app, Verify Windows package in full-install mode, Upload Windows release artifact, and Publish GitHub Release asset."
+          },
+          {
+            "kind": "release-asset",
+            "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-Setup.exe",
+            "fileName": "CrossGen-Setup.exe",
+            "sha256": "54c586a9aee53b164c07f805ae3f6db37216e4f39c1b17734fc6bdbf7162feb0",
+            "size": 98816143,
+            "public": true,
+            "description": "Windows x64 NSIS installer published by Release Windows run 29301942374."
+          },
+          {
+            "kind": "release-asset",
+            "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-Setup.exe.blockmap",
+            "fileName": "CrossGen-Setup.exe.blockmap",
+            "sha256": "aa67ba2771dd666a3614fcaafb56940b6a4e6762f8e022e2e402964fdf0e24be",
+            "size": 103792,
+            "public": true,
+            "description": "Windows NSIS blockmap published with the v0.3.1 Windows installer."
+          }
+        ],
+        "summary": "Passed on native Windows release workflow run 29301942374 from tag v0.3.1 at commit 20cb2f9fff350910fa2bd89b237347fc218f6d56. The verifier confirmed the installer PE, unpacked x64 app PE, unpacked app launch and main-window detection, NSIS silent install with fallback-compatible args, installed app launch, and silent uninstall. The published Windows installer is 98816143 bytes with SHA-256 54c586a9aee53b164c07f805ae3f6db37216e4f39c1b17734fc6bdbf7162feb0."
       }
     },
     {
       "id": "linux-native-release",
       "title": "CI Linux package and AppImage validation",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Linux release verifier runs in the GitHub Actions Linux package job against the v0.3.1 AppImage and unpacked Linux artifact.",
         "Direct AppImage execution is best-effort when FUSE support is available; AppImage extraction and extracted app smoke verification cover CI environments without direct AppImage support.",
@@ -309,29 +349,58 @@
         "Linux-specific release coverage focuses on package creation, AppImage verification, Linux launch smoke, and packaged command-mode behavior."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T02:58:04.000Z",
+        "commit": "20cb2f9fff350910fa2bd89b237347fc218f6d56",
+        "environment": "GitHub-hosted Ubuntu release runner on tag v0.3.1. The workflow built the Linux AppImage, ran packaged CLI/MCP and agent integration smoke through xvfb, verified the Linux package, uploaded workflow artifacts, and published the AppImage to the v0.3.1 GitHub Release.",
+        "commands": [
+          "git push --force origin v0.3.1",
+          "Release Linux workflow run 29301942367",
+          "pnpm package",
+          "CROSSGEN_APP_EXECUTABLE=<packaged linux executable> CROSSGEN_APP_EXTRA_ARGS=--no-sandbox xvfb-run -a node scripts/verify-cli-mcp-smoke.mjs",
+          "CROSSGEN_APP_EXECUTABLE=<packaged linux executable> CROSSGEN_APP_EXTRA_ARGS=--no-sandbox xvfb-run -a node scripts/verify-agent-integration-smoke.mjs",
+          "pnpm verify:release:linux",
+          "gh release download v0.3.1 -D /tmp/crossgen-v031-release-assets --clobber",
+          "shasum -a 256 /tmp/crossgen-v031-release-assets/CrossGen-0.3.1-linux-x86_64.AppImage"
+        ],
         "references": [
           {
-            "label": "Linux package and AppImage validation tracker",
+            "label": "CI Linux package and AppImage validation tracker",
             "url": "https://github.com/Bliveren/CrossGen/issues/4"
           },
           {
-            "label": "CI workflow",
-            "url": "https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml"
+            "label": "Release Linux run 29301942367",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29301942367"
+          },
+          {
+            "label": "CrossGen v0.3.1 GitHub Release",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.1"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 CI Linux package, AppImage, launch, and packaged CLI/MCP evidence."
+        "artifacts": [
+          {
+            "kind": "ci-run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29301942367",
+            "public": true,
+            "description": "Release Linux run passed Linux packaging, packaged CLI/MCP smoke, agent integration smoke, Linux package verification, artifact upload, and GitHub Release publishing."
+          },
+          {
+            "kind": "release-asset",
+            "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-linux-x86_64.AppImage",
+            "fileName": "CrossGen-0.3.1-linux-x86_64.AppImage",
+            "sha256": "ce7513f1ebe102f61fe6ce30fd1aa492ab35056ee903c6f9454cb357d41a45eb",
+            "size": 120565331,
+            "public": true,
+            "description": "Linux x64 AppImage published by Release Linux run 29301942367."
+          }
+        ],
+        "summary": "Passed on Release Linux workflow run 29301942367 from tag v0.3.1 at commit 20cb2f9fff350910fa2bd89b237347fc218f6d56. The published Linux AppImage is 120565331 bytes with SHA-256 ce7513f1ebe102f61fe6ce30fd1aa492ab35056ee903c6f9454cb357d41a45eb."
       }
     },
     {
       "id": "update-manifest-assets",
       "title": "Formal update manifest distribution assets",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Distribution artifacts are uploaded to a public HTTPS v0.3.1 release URL.",
         "docs/updates/latest.json contains matching asset URL, fileName, sha256, and sizeBytes metadata for v0.3.1.",
@@ -339,18 +408,73 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-14T02:58:04.000Z",
+        "commit": "20cb2f9fff350910fa2bd89b237347fc218f6d56",
+        "environment": "Local manifest update from public GitHub Release v0.3.1 assets downloaded after macOS, Windows, and Linux release assets were published. Hashes and sizes were computed from downloaded release assets, not from unpublished build outputs.",
+        "commands": [
+          "gh release view v0.3.1 --json assets,tagName,url,isDraft,isPrerelease",
+          "gh release download v0.3.1 -D /tmp/crossgen-v031-release-assets --clobber",
+          "shasum -a 256 /tmp/crossgen-v031-release-assets/*",
+          "wc -c /tmp/crossgen-v031-release-assets/*",
+          "node scripts/update-manifest-asset.mjs --file /tmp/crossgen-v031-release-assets/CrossGen-0.3.1-mac-arm64.dmg --platform darwin --arch arm64 --url https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-mac-arm64.dmg",
+          "node scripts/update-manifest-asset.mjs --file /tmp/crossgen-v031-release-assets/CrossGen-Setup.exe --platform win32 --arch x64 --url https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-Setup.exe",
+          "node scripts/update-manifest-asset.mjs --file /tmp/crossgen-v031-release-assets/CrossGen-0.3.1-linux-x86_64.AppImage --platform linux --arch x64 --url https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-linux-x86_64.AppImage",
+          "pnpm verify:release-evidence -- --require-complete"
+        ],
         "references": [
           {
-            "label": "Formal update manifest distribution asset tracker",
+            "label": "Formal update manifest distribution assets tracker",
             "url": "https://github.com/Bliveren/CrossGen/issues/103"
+          },
+          {
+            "label": "CrossGen v0.3.1 GitHub Release",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.1"
+          },
+          {
+            "label": "Release Windows run 29301942374",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29301942374"
+          },
+          {
+            "label": "Release Linux run 29301942367",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/29301942367"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending v0.3.1 public release asset upload and update manifest evidence."
+        "artifacts": [
+          {
+            "kind": "manifest-file",
+            "path": "docs/updates/latest.json",
+            "public": true,
+            "description": "Update manifest now points to v0.3.1 public release assets for darwin arm64 DMG, Windows x64 NSIS installer, and Linux x64 AppImage with exact SHA-256 and sizeBytes values."
+          },
+          {
+            "kind": "release-asset",
+            "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-mac-arm64.dmg",
+            "fileName": "CrossGen-0.3.1-mac-arm64.dmg",
+            "sha256": "88965b0064534e9b596d5f82a4889e645021ff8b67bd370e31936434baa66f11",
+            "size": 103663616,
+            "public": true,
+            "description": "Manifest darwin arm64 asset."
+          },
+          {
+            "kind": "release-asset",
+            "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-Setup.exe",
+            "fileName": "CrossGen-Setup.exe",
+            "sha256": "54c586a9aee53b164c07f805ae3f6db37216e4f39c1b17734fc6bdbf7162feb0",
+            "size": 98816143,
+            "public": true,
+            "description": "Manifest win32 x64 asset."
+          },
+          {
+            "kind": "release-asset",
+            "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-linux-x86_64.AppImage",
+            "fileName": "CrossGen-0.3.1-linux-x86_64.AppImage",
+            "sha256": "ce7513f1ebe102f61fe6ce30fd1aa492ab35056ee903c6f9454cb357d41a45eb",
+            "size": 120565331,
+            "public": true,
+            "description": "Manifest linux x64 asset."
+          }
+        ],
+        "summary": "Passed. docs/updates/latest.json now advertises v0.3.1 and points to public GitHub Release assets whose downloaded bytes match the recorded SHA-256 and sizeBytes values: macOS DMG 88965b0064534e9b596d5f82a4889e645021ff8b67bd370e31936434baa66f11 / 103663616 bytes, Windows installer 54c586a9aee53b164c07f805ae3f6db37216e4f39c1b17734fc6bdbf7162feb0 / 98816143 bytes, Linux AppImage ce7513f1ebe102f61fe6ce30fd1aa492ab35056ee903c6f9454cb357d41a45eb / 120565331 bytes."
       }
     },
     {
