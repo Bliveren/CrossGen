@@ -1,4 +1,4 @@
-<h1 align="center">CrossGen 0.3.1</h1>
+<h1 align="center">CrossGen 0.3.0</h1>
 
 <p align="center">
   <img src="./build/icon.png" width="132" height="132" alt="CrossGen app icon" />
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="#why-crossgen-031">Why 0.3.1</a> ·
+  <a href="#why-crossgen-030">Why 0.3.0</a> ·
   <a href="#visual-tour">Visual Tour</a> ·
   <a href="#core-workflows">Core Workflows</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -31,9 +31,11 @@
   <a href="#technical-notes">Technical Notes</a>
 </p>
 
-## Why CrossGen 0.3.1
+## Why CrossGen 0.3.0
 
-CrossGen 0.3.1 turns the desktop workspace into an agent-ready local runtime. It keeps the 0.3.0 image-generation loop intact and adds CLI/MCP access so local coding agents can discover models, submit queued generation work, monitor jobs, and export Gallery assets.
+CrossGen 0.3.0 is the release where Image2Tools becomes CrossGen: a practical desktop workspace for people who generate, edit, compare, and reuse AI images every day.
+
+> **Note:** The agent-ready CLI/MCP runtime described below is part of the upcoming **0.3.1** release, which is still in development and not yet published. The latest published release is **0.3.0**.
 
 <img width="1541" height="974" alt="image" src="https://github.com/user-attachments/assets/10ac6a8a-f8f6-441c-94c6-52f6e036d134" />
 
@@ -134,7 +136,9 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 
 ## Agent Runtime
 
-CrossGen 0.3.1 exposes the local runtime through JSON CLI commands and an MCP stdio server. The same queue and Gallery rules protect desktop, CLI, and MCP workflows:
+> **Unreleased (0.3.1, in development):** the agent runtime below is under active development and is not part of the current 0.3.0 release.
+
+CrossGen exposes the local runtime through JSON CLI commands and an MCP stdio server. The same queue and Gallery rules protect desktop, CLI, and MCP workflows:
 
 - `crossgen doctor --agent --json` reports the app path, data directory, provider readiness, worker status, and MCP launch hints.
 - `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` prints client-ready MCP configuration.
