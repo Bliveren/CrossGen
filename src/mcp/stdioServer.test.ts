@@ -54,6 +54,15 @@ function writers(): GalleryMcpWriters {
   };
 }
 
+function duplicateFolderWriters(): GalleryMcpWriters {
+  return {
+    ...writers(),
+    folderCreate: async () => {
+      throw new Error("Gallery 文件夹名称已存在。");
+    }
+  };
+}
+
 function controllers(): GenerationMcpControllers {
   return {
     generationSubmit: async ({ mode, prompt, inputPaths, folderId, idempotencyKey, waitMs }) => ({
@@ -90,14 +99,17 @@ function queueControllers(): QueueMcpControllers {
   };
 }
 
-async function runServer(inputText: string, options: { mode?: ReadonlyMcpMode; withWriters?: boolean; withControllers?: boolean } = {}) {
+async function runServer(
+  inputText: string,
+  options: { mode?: ReadonlyMcpMode; withWriters?: boolean; withControllers?: boolean; writers?: GalleryMcpWriters } = {}
+) {
   const input = new PassThrough();
   const captured = captureOutput();
   const run = runReadonlyMcpStdioServer({
     mode: options.mode ?? "readonly",
     serverVersion: "0.3.0-test",
     readers: readers(),
-    writers: options.withWriters ? writers() : undefined,
+    writers: options.writers ?? (options.withWriters ? writers() : undefined),
     queueControllers: options.withWriters ? queueControllers() : undefined,
     jobControllers: options.withControllers ? controllers() : undefined,
     input,
@@ -269,6 +281,22 @@ describe("readonly MCP stdio server", () => {
         isError: true,
         structuredContent: {
           error: { code: "CONFIRMATION_REQUIRED" }
+        }
+      }
+    });
+  });
+
+  it("maps duplicate folder names to a specific MCP error code", async () => {
+    const { output } = await runServer(
+      JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "crossgen_folder_create", arguments: { name: "Campaign" } } }),
+      { mode: "write", withWriters: true, writers: duplicateFolderWriters() }
+    );
+
+    expect(lineResponses(output)[0]).toMatchObject({
+      result: {
+        isError: true,
+        structuredContent: {
+          error: { code: "FOLDER_ALREADY_EXISTS" }
         }
       }
     });

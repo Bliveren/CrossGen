@@ -7,9 +7,11 @@ import {
   Circle,
   Crop,
   Download,
+  Expand,
   FolderInput,
   Loader2,
   Maximize2,
+  Minimize2,
   Pencil,
   Pipette,
   RectangleHorizontal,
@@ -53,6 +55,7 @@ interface ImageEditorProps {
   previewZoomPercent: number;
   isPanning: boolean;
   isPreviewCanvasInteractive: boolean;
+  isEditorFocusMode: boolean;
   hasEditorOverlay: boolean;
   isEditingPreview: boolean;
   isCroppingPreview: boolean;
@@ -138,6 +141,7 @@ export function ImageEditor({
   previewZoomPercent,
   isPanning,
   isPreviewCanvasInteractive,
+  isEditorFocusMode,
   hasEditorOverlay,
   isEditingPreview,
   isCroppingPreview,
@@ -509,6 +513,16 @@ export function ImageEditor({
               </button>
               <button type="button" className="icon-button" disabled={previewZoom === 1 && previewPan.x === 0 && previewPan.y === 0} onClick={onResetPreviewView} aria-label={copy.resetZoom} data-tooltip={copy.resetZoom}>
                 <Maximize2 size={16} />
+              </button>
+              <button
+                type="button"
+                className={isEditorFocusMode ? "icon-button active" : "icon-button"}
+                onClick={onOpenPreview}
+                aria-label={isEditorFocusMode ? copy.exitFocusView : copy.enterFocusView}
+                data-tooltip={isEditorFocusMode ? copy.exitFocusView : copy.enterFocusView}
+                aria-pressed={isEditorFocusMode}
+              >
+                {isEditorFocusMode ? <Minimize2 size={16} /> : <Expand size={16} />}
               </button>
             </div>
           </>

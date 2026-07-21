@@ -2,7 +2,6 @@ import { memo, Profiler, useEffect, useMemo, useRef, useState, type ReactNode } 
 import {
   AlertTriangle,
   BookOpen,
-  Brush,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -29,6 +28,7 @@ import {
   LibraryBig,
   Monitor,
   Moon,
+  MoreHorizontal,
   Paintbrush,
   Pencil,
   Radar,
@@ -1102,7 +1102,10 @@ export function App() {
     hasExportableEditorOverlay,
     hasEditedPreviewChanges
   } = useImageEditor();
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isEditorFocusMode, setIsEditorFocusMode] = useState(false);
+  const [referencePreviewAssetId, setReferencePreviewAssetId] = useState<string | null>(null);
+  const [isReferenceMaskToolsOpen, setIsReferenceMaskToolsOpen] = useState(false);
+  const [referenceMaskConfirmAssetId, setReferenceMaskConfirmAssetId] = useState<string | null>(null);
   const [isReferenceDragOver, setIsReferenceDragOver] = useState(false);
   const [referenceLimitToast, setReferenceLimitToast] = useState<{ id: number; text: string } | null>(null);
   const [buttonFeedback, setButtonFeedback] = useState<Record<string, number>>({});
@@ -1118,11 +1121,14 @@ export function App() {
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const galleryContentRef = useRef<HTMLDivElement | null>(null);
   const historyListRef = useRef<HTMLDivElement | null>(null);
+  const referenceClickTimerRef = useRef<number | null>(null);
   const referenceLimitToastTimerRef = useRef<number | null>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
   const paintedDuringStrokeRef = useRef(false);
+  const lastMaskPointRef = useRef<{ x: number; y: number } | null>(null);
   const hasAutoTestedConnectionRef = useRef(false);
   const partialImageCountRef = useRef(0);
+  const editorFocusRestoreRef = useRef<{ sidebarCollapsed: boolean; rightRailWidth: number; rightRailCollapsed: boolean } | null>(null);
   const previewLayoutRef = useRef<HTMLDivElement | null>(null);
   const promptActionsRef = useRef<HTMLDivElement | null>(null);
   const primaryRunButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -1150,6 +1156,11 @@ export function App() {
   );
   const sourceAsset = effectiveInputAssets[0];
   const sourcePreview = assetSource(sourceAsset);
+  const referencePreviewAsset = referencePreviewAssetId ? inputAssets.find((asset) => asset.id === referencePreviewAssetId) ?? null : null;
+  const referencePreviewSource = referencePreviewAsset ? assetSource(referencePreviewAsset) : undefined;
+  const referenceMaskConfirmAsset = referenceMaskConfirmAssetId
+    ? inputAssets.find((asset) => asset.id === referenceMaskConfirmAssetId) ?? null
+    : null;
   const maskPreview = maskDataUrl ?? assetSource(maskAsset);
   const activeResults = getResultAssets(activeJob);
   const selectedResult = activeResults.find((asset) => asset.id === selectedResultId);
@@ -1266,6 +1277,32 @@ export function App() {
 
     expandedHistoryWidthRef.current = Math.max(historyWidthRef.current, MIN_HISTORY_WIDTH);
     applyRightRailWidth(RIGHT_RAIL_COLLAPSED_WIDTH, { forceCollapsed: true });
+  }
+
+  function toggleEditorFocusMode() {
+    setIsEditorFocusMode((current) => {
+      const next = !current;
+      if (next) {
+        // Entering focus mode: remember both side regions, then collapse them so the
+        // middle editor expands. Both restore together when focus mode exits.
+        editorFocusRestoreRef.current = {
+          sidebarCollapsed: isSidebarCollapsed,
+          rightRailWidth: historyWidthRef.current,
+          rightRailCollapsed: isRightRailCollapsed
+        };
+        setIsSidebarCollapsed(true);
+        expandedHistoryWidthRef.current = Math.max(historyWidthRef.current, MIN_HISTORY_WIDTH);
+        applyRightRailWidth(RIGHT_RAIL_COLLAPSED_WIDTH, { forceCollapsed: true });
+      } else {
+        const restore = editorFocusRestoreRef.current;
+        editorFocusRestoreRef.current = null;
+        if (restore) {
+          setIsSidebarCollapsed(restore.sidebarCollapsed);
+          applyRightRailWidth(restore.rightRailWidth, { forceCollapsed: restore.rightRailCollapsed });
+        }
+      }
+      return next;
+    });
   }
 
   const {
@@ -2039,9 +2076,18 @@ export function App() {
 
   useEffect(() => {
     return () => {
+      if (referenceClickTimerRef.current) window.clearTimeout(referenceClickTimerRef.current);
       if (referenceLimitToastTimerRef.current) window.clearTimeout(referenceLimitToastTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!referencePreviewAssetId) return;
+    if (inputAssets.some((asset) => asset.id === referencePreviewAssetId)) return;
+    setReferencePreviewAssetId(null);
+    setIsReferenceMaskToolsOpen(false);
+    setReferenceMaskConfirmAssetId(null);
+  }, [inputAssets, referencePreviewAssetId]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -2118,6 +2164,19 @@ export function App() {
         ...current,
         galleryFolders: event.folders,
         galleryAssets: event.assets
+      }));
+    });
+  }, [bridge]);
+
+  useEffect(() => {
+    if (!bridge?.onSnapshotChange) return;
+    // External processes (CLI / MCP) can mutate the shared state file. The main process
+    // watches that file and pushes a fresh snapshot; merge the server-owned data so the UI
+    // hot-reloads, but keep the user's in-progress draft/edit context untouched.
+    return bridge.onSnapshotChange((next) => {
+      setSnapshot((current) => ({
+        ...next,
+        draft: current.draft
       }));
     });
   }, [bridge]);
@@ -3315,6 +3374,70 @@ export function App() {
         text: copy.notices.imagesAdded(addedCount, cappedNext.length, false, referenceLimit)
       });
     }
+  }
+
+  function clearReferenceClickTimer() {
+    if (!referenceClickTimerRef.current) return;
+    window.clearTimeout(referenceClickTimerRef.current);
+    referenceClickTimerRef.current = null;
+  }
+
+  function promoteReferenceAssetToFirst(assetId: string, options: { clearMask?: boolean } = {}) {
+    const index = inputAssets.findIndex((asset) => asset.id === assetId);
+    if (index <= 0) return;
+    const target = inputAssets[index];
+    setInputAssets([target, ...inputAssets.slice(0, index), ...inputAssets.slice(index + 1)]);
+    markDraftChanged();
+    setTabMode("img2img");
+    if (options.clearMask && (maskAsset || maskDataUrl)) {
+      setMaskAsset(null);
+      setMaskDataUrl(null);
+      setMaskCheck(null);
+    }
+    setNotice({ kind: "info", text: copy.referencePromoted });
+  }
+
+  function handleReferenceTileClick(assetId: string) {
+    clearReferenceClickTimer();
+    referenceClickTimerRef.current = window.setTimeout(() => {
+      referenceClickTimerRef.current = null;
+      promoteReferenceAssetToFirst(assetId);
+    }, 180);
+  }
+
+  function openReferencePreview(assetId: string) {
+    clearReferenceClickTimer();
+    setReferencePreviewAssetId(assetId);
+    setIsReferenceMaskToolsOpen(false);
+    setReferenceMaskConfirmAssetId(null);
+  }
+
+  function closeReferencePreview() {
+    clearReferenceClickTimer();
+    setReferencePreviewAssetId(null);
+    setIsReferenceMaskToolsOpen(false);
+    setReferenceMaskConfirmAssetId(null);
+    setIsPainting(false);
+  }
+
+  function requestReferenceMaskEditor(asset: InputAsset) {
+    if (isGeneralMode) {
+      setNotice({ kind: "error", text: copy.validation.generalNoMask });
+      return;
+    }
+    if (inputAssets[0]?.id !== asset.id) {
+      setReferenceMaskConfirmAssetId(asset.id);
+      return;
+    }
+    setTabMode("img2img");
+    setIsReferenceMaskToolsOpen((current) => !current);
+  }
+
+  function confirmReferenceMaskEditor(assetId: string) {
+    promoteReferenceAssetToFirst(assetId, { clearMask: true });
+    setReferencePreviewAssetId(assetId);
+    setReferenceMaskConfirmAssetId(null);
+    setIsReferenceMaskToolsOpen(true);
   }
 
   async function selectImages() {
@@ -4644,6 +4767,29 @@ export function App() {
   }, [contextMenu]);
 
   useEffect(() => {
+    if (!isEditorFocusMode) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") toggleEditorFocusMode();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [isEditorFocusMode]);
+
+  useEffect(() => {
+    // The reference source image is now always mounted, so its onLoad no longer fires
+    // when the mask canvas appears. Size the canvas explicitly when masking begins.
+    if (!isReferenceMaskToolsOpen) return;
+    const frame = window.requestAnimationFrame(() => resizeMaskCanvas());
+    return () => window.cancelAnimationFrame(frame);
+  }, [isReferenceMaskToolsOpen, referencePreviewAssetId]);
+
+  useEffect(() => {
+    // The editor surface changes width when focus mode toggles; resync the annotation canvas.
+    const frame = window.requestAnimationFrame(() => resizeAnnotationCanvas(false));
+    return () => window.cancelAnimationFrame(frame);
+  }, [isEditorFocusMode]);
+
+  useEffect(() => {
     const tooltipTarget = (target: EventTarget | null): HTMLElement | null => {
       if (!(target instanceof Element)) return null;
       return target.closest<HTMLElement>("[data-tooltip]");
@@ -4838,6 +4984,16 @@ export function App() {
     }
   }
 
+  function maskPointFromEvent(event: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number } | null {
+    const canvas = maskCanvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((event.clientY - rect.top) / rect.height) * canvas.height
+    };
+  }
+
   function startPaint(event: React.PointerEvent<HTMLCanvasElement>) {
     // Painting is what CREATES a freehand mask, so it cannot gate on requestMode === "inpaint"
     // (which only becomes true once a mask already exists). Gate on the conditions under which
@@ -4845,6 +5001,7 @@ export function App() {
     if (isGeneralMode || tabMode !== "img2img" || !sourcePreview) return;
     setIsPainting(true);
     paintedDuringStrokeRef.current = false;
+    lastMaskPointRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
     paintAt(event);
   }
@@ -4858,6 +5015,7 @@ export function App() {
     if (!isPainting) return;
     event.currentTarget.releasePointerCapture(event.pointerId);
     setIsPainting(false);
+    lastMaskPointRef.current = null;
     const canvas = maskCanvasRef.current;
     if (canvas && paintedDuringStrokeRef.current) {
       markDraftChanged();
@@ -4869,20 +5027,32 @@ export function App() {
   function paintAt(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = maskCanvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
-    const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+    const point = maskPointFromEvent(event);
+    if (!point) return;
     const context = canvas.getContext("2d");
     if (!context) return;
     context.save();
     context.globalCompositeOperation = "source-over";
     context.fillStyle = "rgba(255,255,255,0.9)";
-    context.shadowColor = "rgba(30,107,95,0.4)";
-    context.shadowBlur = brushSize * 0.2;
+    context.strokeStyle = "rgba(255,255,255,0.9)";
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.lineWidth = brushSize;
+    const from = lastMaskPointRef.current;
+    if (from) {
+      // Connect consecutive pointer samples so a fast stroke is a continuous band
+      // rather than a row of detached dots.
+      context.beginPath();
+      context.moveTo(from.x, from.y);
+      context.lineTo(point.x, point.y);
+      context.stroke();
+    }
+    // Round cap at the current point keeps the start of the stroke and slow moves solid.
     context.beginPath();
-    context.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+    context.arc(point.x, point.y, brushSize / 2, 0, Math.PI * 2);
     context.fill();
     context.restore();
+    lastMaskPointRef.current = point;
     paintedDuringStrokeRef.current = true;
   }
 
@@ -4905,26 +5075,28 @@ export function App() {
     : effectiveOpenAIImageRoute
       ? copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, effectiveOpenAIImageRoute))
       : undefined;
+  const openAIImageRouteControl = openAIParams ? (
+    <label title={imageRouteTitle}>
+      <span className="route-label">
+        <span>{copy.imageRoute}</span>
+        <span className="route-info-icon" aria-label={copy.imageRouteInfo} data-tooltip={copy.imageRouteInfo} title={copy.imageRouteInfo}>
+          <Info size={12} />
+        </span>
+      </span>
+      <select
+        value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
+        disabled={requestMode === "inpaint"}
+        onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
+      >
+        <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
+        <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
+        <option value="responses">{copy.imageRouteResponses}</option>
+        <option value="image-api">{copy.imageRouteImageApi}</option>
+      </select>
+    </label>
+  ) : null;
   const parameterSummary = openAIParams ? (
     <>
-      <label title={imageRouteTitle}>
-        <span className="route-label">
-          <span>{copy.imageRoute}</span>
-          <span className="route-info-icon" aria-label={copy.imageRouteInfo} data-tooltip={copy.imageRouteInfo} title={copy.imageRouteInfo}>
-            <Info size={12} />
-          </span>
-        </span>
-        <select
-          value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
-          disabled={requestMode === "inpaint"}
-          onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
-        >
-          <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
-          <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
-          <option value="responses">{copy.imageRouteResponses}</option>
-          <option value="image-api">{copy.imageRouteImageApi}</option>
-        </select>
-      </label>
       <label>
         <span>{copy.size}</span>
         <select
@@ -4962,6 +5134,7 @@ export function App() {
           ))}
         </select>
       </label>
+      {showAdvanced && openAIImageRouteControl}
     </>
   ) : geminiParams ? (
     <>
@@ -5621,7 +5794,7 @@ export function App() {
 
       <PerfProfiler id="Workspace">
       <section className="workspace">
-        <div className="preview-layout" ref={previewLayoutRef}>
+        <div className={isEditorFocusMode ? "preview-layout editor-focus-mode" : "preview-layout"} ref={previewLayoutRef}>
           <ImageEditor
             copy={copy}
             language={language}
@@ -5667,7 +5840,8 @@ export function App() {
             annotationLayerStyle={annotationLayerStyle}
             cssRectForCanvasRect={cssRectForCanvasRect}
             cssSizeForCanvasUnits={cssSizeForCanvasUnits}
-            onOpenPreview={() => setIsPreviewOpen(true)}
+            isEditorFocusMode={isEditorFocusMode}
+            onOpenPreview={toggleEditorFocusMode}
             onPreviewPanStart={handlePreviewPanStart}
             onPreviewPanMove={handlePreviewPanMove}
             onPreviewPanEnd={handlePreviewPanEnd}
@@ -5852,16 +6026,50 @@ export function App() {
                     <div className="empty-inline">{copy.dropReferencesHint}</div>
                   ) : (
                     inputAssets.map((asset, index) => (
-                      <div key={asset.id} className="asset-tile">
+                      <div
+                        key={asset.id}
+                        className={[
+                          "asset-tile",
+                          "reference-thumb-tile",
+                          index === 0 ? "primary-reference" : "",
+                          index === 0 && maskPreview ? "has-mask" : ""
+                        ].filter(Boolean).join(" ")}
+                        role="button"
+                        tabIndex={0}
+                        title={copy.referenceTileHint}
+                        data-tooltip={copy.referenceTileHint}
+                        onClick={() => handleReferenceTileClick(asset.id)}
+                        onDoubleClick={() => openReferencePreview(asset.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            openReferencePreview(asset.id);
+                            return;
+                          }
+                          if (event.key === " ") {
+                            event.preventDefault();
+                            promoteReferenceAssetToFirst(asset.id);
+                          }
+                        }}
+                      >
                         {assetSource(asset) && <img src={assetSource(asset)} alt={asset.name} />}
-                        <button type="button" className="tile-remove" onClick={() => removeInputAsset(asset.id)} aria-label={copy.delete} data-tooltip={copy.delete}>
+                        <button
+                          type="button"
+                          className="tile-remove"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removeInputAsset(asset.id);
+                          }}
+                          aria-label={copy.delete}
+                          data-tooltip={copy.delete}
+                        >
                           <X size={14} />
                         </button>
-                        <div>
+                        <div className="reference-thumb-meta">
                           <strong>{index === 0 ? copy.source : `${copy.reference} ${index + 1}`}</strong>
                           <span>{asset.name}</span>
-                          <small>{formatBytes(asset.sizeBytes)}</small>
                         </div>
+                        {index === 0 && maskPreview && <span className="reference-mask-badge">{copy.mask}</span>}
                       </div>
                     ))
                   )}
@@ -5889,72 +6097,6 @@ export function App() {
               </>
             )}
 
-            {tabMode === "img2img" && !isGeneralMode && (
-              <div className="mask-editor">
-                <div className="mask-header">
-                  <div>
-                    <h3>
-                      {copy.mask} <span className="mask-optional">{copy.maskOptional}</span>
-                    </h3>
-                    <p>{maskDescription}</p>
-                  </div>
-                  <div className="brush-controls">
-                    <Eraser size={16} />
-                    <span className="range-tooltip" data-tooltip={copy.maskBrushSize}>
-                      <input
-                        type="range"
-                        min="16"
-                        max="180"
-                        value={brushSize}
-                        aria-label={copy.maskBrushSize}
-                        onChange={(event) => {
-                          markDraftChanged();
-                          setBrushSize(Number(event.target.value));
-                        }}
-                      />
-                    </span>
-                    <button
-                      type="button"
-                      className="icon-button secondary compact-mask-button"
-                      onClick={addPaintedMask}
-                      disabled={!maskDataUrl}
-                      aria-label={copy.addPaintedMask}
-                      data-tooltip={copy.addPaintedMaskTooltip}
-                    >
-                      <Paintbrush size={15} />
-                    </button>
-                    <button type="button" className="icon-button" onClick={clearPaintedMask} aria-label={copy.clearPaintedMask} data-tooltip={copy.clearPaintedMask}>
-                      <X size={15} />
-                    </button>
-                  </div>
-                </div>
-                <div className={sourcePreview ? "mask-canvas-wrap has-source" : "mask-canvas-wrap"}>
-                  {sourcePreview ? (
-                    <>
-                      <img ref={sourceImageRef} src={sourcePreview} alt={copy.sourceForMask} onLoad={handleSourceImageLoad} />
-                      <canvas
-                        ref={maskCanvasRef}
-                        onPointerDown={startPaint}
-                        onPointerMove={continuePaint}
-                        onPointerUp={finishPaint}
-                        onPointerCancel={finishPaint}
-                      />
-                    </>
-                  ) : (
-                    <div className="empty-state">
-                      <Brush size={24} />
-                      <span>{copy.addSourceForMask}</span>
-                    </div>
-                  )}
-                </div>
-                {maskPreview && (
-                  <div className="mask-status">
-                    {maskCheck?.ok ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
-                    <span>{maskCheck?.message ?? copy.checkingMask}</span>
-                  </div>
-                )}
-              </div>
-            )}
           </section>
         </div>
       </section>
@@ -6161,11 +6303,11 @@ export function App() {
             onClick={() => setIsRightRailActionDrawerOpen((current) => !current)}
             onMouseMove={movePreviewToolbarTowardPointer}
             onMouseLeave={resetPreviewToolbarDrift}
-            aria-label={copy.parameters}
-            data-tooltip={copy.parameters}
+            aria-label={copy.moreActions}
+            data-tooltip={copy.moreActions}
             aria-expanded={isRightRailActionDrawerOpen}
           >
-            <SlidersHorizontal size={15} />
+            <MoreHorizontal size={15} />
           </button>
           <div className="right-rail-action-group" data-drift="subtle" onMouseMove={movePreviewToolbarTowardPointer} onMouseLeave={resetPreviewToolbarDrift}>
             <button
@@ -6496,18 +6638,104 @@ export function App() {
             </div>
         </DialogShell>
       )}
-      {isPreviewOpen && activePreviewSource && (
-        <DialogShell className="preview-modal-dialog" backdropClassName="preview-modal-backdrop" labelledBy="preview-modal-title" onClose={() => setIsPreviewOpen(false)}>
-          <h2 id="preview-modal-title" className="visually-hidden">{copy.resultViewer}</h2>
-          <button type="button" className="preview-modal-close icon-button tooltip-below" onClick={() => setIsPreviewOpen(false)} aria-label={copy.cancel} data-tooltip={copy.cancel}>
+      {referencePreviewAsset && referencePreviewSource && (
+        <DialogShell className="preview-modal-dialog reference-preview-dialog" backdropClassName="preview-modal-backdrop" labelledBy="reference-preview-modal-title" onClose={closeReferencePreview}>
+          <h2 id="reference-preview-modal-title" className="visually-hidden">{referencePreviewAsset.name}</h2>
+          <button type="button" className="preview-modal-close icon-button tooltip-below" onClick={closeReferencePreview} aria-label={copy.cancel} data-tooltip={copy.cancel}>
             <X size={18} />
           </button>
-          <img
-            src={activePreviewSource}
-            alt={copy.generatedResult}
-            className="preview-modal-image"
-            onContextMenu={(e) => handleImageContextMenu(e, activeImage, activeJob?.prompt ?? '')}
-          />
+          <div
+            className="preview-control-strip reference-preview-tools"
+            onMouseMove={movePreviewToolbarTowardPointer}
+            onMouseLeave={resetPreviewToolbarDrift}
+          >
+            <div className="preview-primary-actions" aria-label={copy.referenceMaskTools}>
+              <button
+                type="button"
+                className={isReferenceMaskToolsOpen ? "icon-button active" : "icon-button"}
+                disabled={isGeneralMode}
+                onClick={() => requestReferenceMaskEditor(referencePreviewAsset)}
+                aria-label={copy.addReferenceMask}
+                data-tooltip={copy.addReferenceMask}
+                aria-pressed={isReferenceMaskToolsOpen}
+              >
+                <Paintbrush size={16} />
+              </button>
+            </div>
+            {isReferenceMaskToolsOpen && sourcePreview && (
+              <div className="preview-secondary-actions reference-mask-tools" data-drift="subtle">
+                <Eraser size={15} />
+                <span className="range-tooltip" data-tooltip={copy.maskBrushSize}>
+                  <input
+                    type="range"
+                    min="16"
+                    max="180"
+                    value={brushSize}
+                    aria-label={copy.maskBrushSize}
+                    onChange={(event) => {
+                      markDraftChanged();
+                      setBrushSize(Number(event.target.value));
+                    }}
+                  />
+                </span>
+                <button
+                  type="button"
+                  className="icon-button secondary compact-mask-button"
+                  onClick={addPaintedMask}
+                  disabled={!maskDataUrl}
+                  aria-label={copy.addPaintedMask}
+                  data-tooltip={copy.addPaintedMaskTooltip}
+                >
+                  <Paintbrush size={15} />
+                </button>
+                <button type="button" className="icon-button" onClick={clearPaintedMask} aria-label={copy.clearPaintedMask} data-tooltip={copy.clearPaintedMask}>
+                  <X size={15} />
+                </button>
+              </div>
+            )}
+          </div>
+          <div className={isReferenceMaskToolsOpen && sourcePreview ? "reference-preview-stage masking" : "reference-preview-stage"}>
+            <div className="reference-preview-canvas-wrap">
+              <img
+                ref={sourceImageRef}
+                src={referencePreviewSource}
+                alt={referencePreviewAsset.name}
+                className="preview-modal-image"
+                onLoad={handleSourceImageLoad}
+              />
+              {isReferenceMaskToolsOpen && sourcePreview && (
+                <canvas
+                  ref={maskCanvasRef}
+                  className="reference-preview-mask-canvas"
+                  aria-label={maskDescription}
+                  onPointerDown={startPaint}
+                  onPointerMove={continuePaint}
+                  onPointerUp={finishPaint}
+                  onPointerCancel={finishPaint}
+                />
+              )}
+            </div>
+            {isReferenceMaskToolsOpen && maskPreview && (
+              <div className="mask-status reference-preview-mask-status">
+                {maskCheck?.ok ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+                <span>{maskCheck?.message ?? copy.checkingMask}</span>
+              </div>
+            )}
+          </div>
+          {referenceMaskConfirmAsset && (
+            <div className="reference-mask-confirm" role="alertdialog" aria-labelledby="reference-mask-confirm-title" aria-modal="true">
+              <h3 id="reference-mask-confirm-title">{copy.referenceMaskConfirmTitle}</h3>
+              <p>{copy.referenceMaskConfirmBody(referenceMaskConfirmAsset.name)}</p>
+              <div className="dialog-actions">
+                <button type="button" className="secondary" onClick={() => setReferenceMaskConfirmAssetId(null)}>
+                  {copy.cancel}
+                </button>
+                <button type="button" onClick={() => confirmReferenceMaskEditor(referenceMaskConfirmAsset.id)}>
+                  {copy.referenceMaskConfirmAction}
+                </button>
+              </div>
+            </div>
+          )}
         </DialogShell>
       )}
       {contextMenu && (

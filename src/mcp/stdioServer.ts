@@ -124,6 +124,40 @@ function toolError(code: string, message: string, nextActions: string[] = []): T
   };
 }
 
+function galleryToolErrorFromMessage(message: string): ToolCallResult | undefined {
+  if (!message) return undefined;
+  if (message.includes("文件夹名称已存在")) {
+    return toolError("FOLDER_ALREADY_EXISTS", message);
+  }
+  if (message.includes("文件夹不存在")) {
+    return toolError("FOLDER_NOT_FOUND", message, ["Use crossgen_folder_list or crossgen_folder_tree to find current folder ids."]);
+  }
+  if (message.includes("资源不存在")) {
+    return toolError("ASSET_NOT_FOUND", message, ["Use crossgen_gallery_list or crossgen_asset_inspect to find current asset ids."]);
+  }
+  if (
+    message.includes("不能为空") ||
+    message.includes("不能包含路径分隔符") ||
+    message.includes("非法字符") ||
+    message.includes("不能以空格或句点结尾") ||
+    message.includes("不可用于托管目录") ||
+    message.includes("过长") ||
+    message.includes("只能导入图片文件") ||
+    message.includes("不是文件") ||
+    message.includes("无法创建唯一的 Gallery 文件名") ||
+    message.includes("不能将文件夹移动到自身或其子文件夹") ||
+    message.includes("导出路径不能为空") ||
+    message.includes("导出路径不能与原文件相同") ||
+    message.includes("导出目标已存在")
+  ) {
+    return toolError("INVALID_ARGUMENT", message);
+  }
+  if (message.includes("无法操作：资源不属于 CrossGen 管理目录") || message.includes("Gallery 资源路径无效")) {
+    return toolError("PATH_NOT_ALLOWED", message);
+  }
+  return undefined;
+}
+
 function isToolCallResult(value: unknown): value is ToolCallResult {
   return Boolean(value && typeof value === "object" && Array.isArray((value as ToolCallResult).content));
 }
@@ -924,9 +958,8 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
     if (!tool) {
       return toolError("INVALID_ARGUMENT", "Unknown CrossGen MCP tool.", [`Use tools/list to inspect available tools before calling ${name || "a tool"}.`]);
     }
-    try {
-      const requestId = typeof call.requestId === "string" && call.requestId.trim() ? call.requestId.trim() : `mcp_${randomUUID()}`;
-      const result = normalizeToolResult(await tool.handler(asRecord(call.arguments)));
+    const requestId = typeof call.requestId === "string" && call.requestId.trim() ? call.requestId.trim() : `mcp_${randomUUID()}`;
+    const withSchemaEnvelope = (result: ToolCallResult): ToolCallResult => {
       if (result.structuredContent && typeof result.structuredContent === "object" && !Array.isArray(result.structuredContent)) {
         result.structuredContent = {
           schemaVersion: 1,
@@ -935,8 +968,17 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
         };
       }
       return result;
+    };
+    try {
+      const result = normalizeToolResult(await tool.handler(asRecord(call.arguments)));
+      return withSchemaEnvelope(result);
     } catch (error) {
-      return toolError("UNKNOWN_ERROR", sanitizeError(error));
+      const message = sanitizeError(error);
+      const galleryError = galleryToolErrorFromMessage(message);
+      if (galleryError) {
+        return withSchemaEnvelope(galleryError);
+      }
+      return withSchemaEnvelope(toolError("UNKNOWN_ERROR", message));
     }
   }
 

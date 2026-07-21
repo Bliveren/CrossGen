@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createQueueStore } from "./queueStore";
-import type { GenerationQueueItem } from "../shared/types";
+import type { GenerationQueueItem, GenerationQueueWorkerHost } from "../shared/types";
 
 function queueItem(patch: Partial<GenerationQueueItem> = {}): GenerationQueueItem {
   const now = new Date().toISOString();
@@ -47,6 +47,19 @@ function queueItem(patch: Partial<GenerationQueueItem> = {}): GenerationQueueIte
     stage: "queued",
     sourceAssetIds: [],
     outputMediaKinds: ["image"],
+    ...patch
+  };
+}
+
+function workerHost(patch: Partial<GenerationQueueWorkerHost> = {}): GenerationQueueWorkerHost {
+  const now = "2026-07-19T00:00:00.000Z";
+  return {
+    hostId: "host_1",
+    kind: "desktop",
+    processId: process.pid,
+    mode: "generate",
+    heartbeatAt: now,
+    leaseExpiresAt: now,
     ...patch
   };
 }
@@ -239,6 +252,69 @@ describe("queueStore", () => {
       limit: 2
     });
     expect(claimed.map((item) => item.queueId)).toEqual(["queue-now"]);
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("prunes worker hosts older than 24 hours and caps retained hosts", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const nowMs = Date.parse("2026-07-19T12:00:00.000Z");
+    const store = createQueueStore({
+      queuePath,
+      lockPath: `${queuePath}.lock`,
+      now: () => nowMs
+    });
+
+    const workerHosts: GenerationQueueWorkerHost[] = [
+      ...Array.from({ length: 3 }, (_, index) =>
+        workerHost({
+          hostId: `expired-${index + 1}`,
+          heartbeatAt: "2026-07-17T11:59:59.000Z",
+          leaseExpiresAt: `2026-07-18T11:59:5${index}.000Z`
+        })
+      ),
+      ...Array.from({ length: 22 }, (_, index) =>
+        workerHost({
+          hostId: `recent-${index + 1}`,
+          heartbeatAt: `2026-07-19T11:${String(index).padStart(2, "0")}:00.000Z`,
+          leaseExpiresAt: `2026-07-19T11:${String(index).padStart(2, "0")}:30.000Z`
+        })
+      )
+    ];
+
+    await store.write({
+      schemaVersion: 1,
+      updatedAt: "2026-07-19T12:00:00.000Z",
+      items: [],
+      workerHosts
+    });
+
+    const queue = await store.read();
+    expect(queue.workerHosts).toHaveLength(20);
+    expect(queue.workerHosts.some((host) => host.hostId.startsWith("expired-"))).toBe(false);
+    expect(queue.workerHosts.map((host) => host.hostId)).toEqual([
+      "recent-22",
+      "recent-21",
+      "recent-20",
+      "recent-19",
+      "recent-18",
+      "recent-17",
+      "recent-16",
+      "recent-15",
+      "recent-14",
+      "recent-13",
+      "recent-12",
+      "recent-11",
+      "recent-10",
+      "recent-9",
+      "recent-8",
+      "recent-7",
+      "recent-6",
+      "recent-5",
+      "recent-4",
+      "recent-3"
+    ]);
 
     await rm(tempDir, { recursive: true, force: true });
   });

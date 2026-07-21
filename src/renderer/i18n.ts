@@ -143,6 +143,7 @@ export interface UiCopy {
   keySaved: string;
   noKeySaved: string;
   parameters: string;
+  moreActions: string;
   imageRoute: string;
   imageRouteAuto: string;
   imageRouteAutoUsing: (route: string) => string;
@@ -314,6 +315,13 @@ export interface UiCopy {
   uploadMaskTooltip: string;
   addPaintedMask: string;
   addPaintedMaskTooltip: string;
+  addReferenceMask: string;
+  referenceMaskTools: string;
+  referenceMaskConfirmTitle: string;
+  referenceMaskConfirmBody: (name: string) => string;
+  referenceMaskConfirmAction: string;
+  referenceTileHint: string;
+  referencePromoted: string;
   clear: string;
   noReferences: string;
   dropReferencesHint: string;
@@ -406,6 +414,8 @@ export interface UiCopy {
   zoomOut: string;
   resetZoom: string;
   zoomLevel: string;
+  enterFocusView: string;
+  exitFocusView: string;
   clicked: string;
   back: string;
   editImage: string;
@@ -516,6 +526,7 @@ export const translations: Record<Language, UiCopy> = {
     keySaved: "Key saved",
     noKeySaved: "No key saved",
     parameters: "Parameters",
+    moreActions: "More actions",
     imageRoute: "API route",
     imageRouteAuto: "Auto",
     imageRouteAutoUsing: (route: string) => `Auto · ${route}`,
@@ -688,6 +699,13 @@ export const translations: Record<Language, UiCopy> = {
     uploadMaskTooltip: "Upload an existing mask image.",
     addPaintedMask: "Add as mask",
     addPaintedMaskTooltip: "Add the painted region as the active mask.",
+    addReferenceMask: "Add mask",
+    referenceMaskTools: "Reference mask tools",
+    referenceMaskConfirmTitle: "Use this image for the mask?",
+    referenceMaskConfirmBody: (name: string) => `Adding a mask to "${name}" will move it to the first reference image and replace the currently configured mask.`,
+    referenceMaskConfirmAction: "Use and add mask",
+    referenceTileHint: "Click to move this image to the first reference. Double-click to preview and add a mask.",
+    referencePromoted: "Reference image moved to the first position.",
     clear: "Clear",
     noReferences: "No reference images selected.",
     dropReferencesHint: "Drag local images, History results, or Gallery images here.",
@@ -779,6 +797,8 @@ export const translations: Record<Language, UiCopy> = {
     zoomOut: "Zoom out",
     resetZoom: "Reset zoom",
     zoomLevel: "Zoom level",
+    enterFocusView: "Expand editor",
+    exitFocusView: "Exit expanded editor",
     clicked: "Done",
     back: "Back",
     editImage: "Edit",
@@ -954,6 +974,7 @@ export const translations: Record<Language, UiCopy> = {
     keySaved: "Key 已保存",
     noKeySaved: "未保存 Key",
     parameters: "参数配置",
+    moreActions: "更多操作",
     imageRoute: "接口路径",
     imageRouteAuto: "自动",
     imageRouteAutoUsing: (route: string) => `自动 · ${route}`,
@@ -1126,6 +1147,13 @@ export const translations: Record<Language, UiCopy> = {
     uploadMaskTooltip: "上传已有蒙版图片。",
     addPaintedMask: "添加为蒙版",
     addPaintedMaskTooltip: "将已绘制区域添加为当前蒙版。",
+    addReferenceMask: "添加蒙版",
+    referenceMaskTools: "参考图蒙版工具",
+    referenceMaskConfirmTitle: "将该图作为蒙版源图？",
+    referenceMaskConfirmBody: (name: string) => `为“${name}”添加蒙版会将该图排到第 1 张参考图，并替换当前已配置的蒙版。`,
+    referenceMaskConfirmAction: "确认并添加蒙版",
+    referenceTileHint: "单击将图片排到第 1 张参考图；双击预览并可添加蒙版。",
+    referencePromoted: "已将参考图排到第 1 位。",
     clear: "清除",
     noReferences: "未选择参考图。",
     dropReferencesHint: "可拖拽本地图片、历史或图库中的图片到此处。",
@@ -1217,6 +1245,8 @@ export const translations: Record<Language, UiCopy> = {
     zoomOut: "缩小",
     resetZoom: "重置缩放",
     zoomLevel: "缩放比例",
+    enterFocusView: "放大编辑器",
+    exitFocusView: "退出放大编辑器",
     clicked: "完成",
     back: "返回",
     editImage: "编辑",

@@ -424,6 +424,8 @@ export type CrossGenJsonErrorCode =
   | "LOCK_TIMEOUT"
   | "PATH_NOT_ALLOWED"
   | "ASSET_NOT_FOUND"
+  | "FOLDER_ALREADY_EXISTS"
+  | "FOLDER_NOT_FOUND"
   | "JOB_NOT_FOUND"
   | "INVALID_ARGUMENT"
   | "UNKNOWN_ERROR";
@@ -606,4 +608,5 @@ export interface AppBridge {
   clearHistory: () => Promise<GenerationJob[]>;
   onJobEvent: (callback: (event: JobProgressEvent) => void) => () => void;
   onGalleryEvent: (callback: (event: GallerySyncEvent) => void) => () => void;
+  onSnapshotChange: (callback: (snapshot: AppSnapshot) => void) => () => void;
 }

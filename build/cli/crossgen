@@ -1,0 +1,39 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+if [ -z "${CROSSGEN_APP_EXECUTABLE:-}" ]; then
+  if [ -x "$script_dir/../../MacOS/CrossGen" ]; then
+    CROSSGEN_APP_EXECUTABLE="$script_dir/../../MacOS/CrossGen"
+  elif [ -x "$script_dir/../../crossgen" ]; then
+    CROSSGEN_APP_EXECUTABLE="$script_dir/../../crossgen"
+  elif [ -x "/Applications/CrossGen.app/Contents/MacOS/CrossGen" ]; then
+    CROSSGEN_APP_EXECUTABLE="/Applications/CrossGen.app/Contents/MacOS/CrossGen"
+  fi
+  export CROSSGEN_APP_EXECUTABLE
+fi
+
+if [ -z "${CROSSGEN_APP_EXECUTABLE:-}" ] || [ ! -x "$CROSSGEN_APP_EXECUTABLE" ]; then
+  printf '%s\n' "CrossGen executable was not found." >&2
+  exit 127
+fi
+
+if [ "${1:-}" = "--data-dir" ]; then
+  if [ -z "${2:-}" ]; then
+    printf '%s\n' "Missing value for --data-dir." >&2
+    exit 2
+  fi
+  export CROSSGEN_DATA_DIR="$2"
+  export CROSSGEN_USER_DATA_DIR="$2"
+  shift 2
+fi
+
+case "${1:-}" in
+  --mcp)
+    exec "$CROSSGEN_APP_EXECUTABLE" "$@"
+    ;;
+  *)
+    exec "$CROSSGEN_APP_EXECUTABLE" --cli "$@"
+    ;;
+esac

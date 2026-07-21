@@ -31,6 +31,7 @@ export interface ModelCapabilitySummary {
   modelId: string;
   displayName: string;
   launchId?: FocusedLaunchId;
+  selectionKey: string;
   source: ModelCapabilitySource;
   capabilities: ImageModelCapabilityContract;
 }
@@ -69,6 +70,10 @@ function baseContract(
     contract,
     confidence
   };
+}
+
+function selectionKeyForModel(launchId: FocusedLaunchId | undefined, providerKind: ProviderKind, modelId: string): string {
+  return `${launchId ?? providerKind}:${normalizeModelId(modelId)}`;
 }
 
 function promptOnlyCapabilities(providerKind: ProviderKind, confidence: ImageCapabilityConfidence): ImageModelCapabilityContract {
@@ -127,6 +132,7 @@ function summaryForFocusedModel(providerId: string | undefined, definition: Focu
     modelId,
     displayName: getModelDisplayName(definition.launchId, modelId),
     launchId: definition.launchId,
+    selectionKey: selectionKeyForModel(definition.launchId, definition.providerKind, modelId),
     source: definition.launchId === GENERAL_LAUNCH_ID ? "general-fallback" : "focused-catalog",
     capabilities: capabilityContractForFocusedModel(definition)
   };
@@ -155,6 +161,7 @@ export function capabilitySummaryForDiscoveredModel(providerId: string | undefin
       providerKind: model.providerKind,
       modelId: model.id,
       displayName,
+      selectionKey: selectionKeyForModel(undefined, model.providerKind, model.id),
       source: "discovered",
       capabilities: promptOnlyCapabilities(model.providerKind, "discovered")
     };
@@ -165,6 +172,7 @@ export function capabilitySummaryForDiscoveredModel(providerId: string | undefin
     providerKind: model.providerKind,
     modelId: model.id,
     displayName,
+    selectionKey: selectionKeyForModel(undefined, model.providerKind, model.id),
     source: "unknown",
     capabilities: unknownCapabilities()
   };
@@ -195,6 +203,7 @@ export function listProviderModelCapabilitySummaries(provider: ProviderConfig): 
         modelId: provider.activeModelId,
         displayName: provider.activeModelId,
         launchId: GENERAL_LAUNCH_ID,
+        selectionKey: selectionKeyForModel(GENERAL_LAUNCH_ID, provider.kind, provider.activeModelId),
         source: "general-fallback",
         capabilities: promptOnlyCapabilities(provider.kind, "assumed")
       });

@@ -22,6 +22,66 @@ function assertNoSecret(text, label) {
   assert(!text.includes(mockApiKey), `${label} leaked the mock API key.`);
 }
 
+function parseRuntimeArgs(value) {
+  const raw = value?.trim();
+  if (!raw) return [];
+  if (raw.startsWith("[")) {
+    const parsed = JSON.parse(raw);
+    assert(Array.isArray(parsed) && parsed.every((item) => typeof item === "string"), "Runtime args JSON must be a string array.");
+    return parsed;
+  }
+  return raw.split(/\s+/).filter(Boolean);
+}
+
+function cliInvocation(args) {
+  const smokeCommand = process.env.CROSSGEN_SMOKE_CLI_COMMAND?.trim();
+  if (smokeCommand) {
+    return {
+      command: smokeCommand,
+      args: [...parseRuntimeArgs(process.env.CROSSGEN_SMOKE_CLI_ARGS), ...args],
+      packaged: true
+    };
+  }
+  const appCommand = process.env.CROSSGEN_APP_EXECUTABLE?.trim();
+  if (appCommand) {
+    return {
+      command: appCommand,
+      args: [...parseRuntimeArgs(process.env.CROSSGEN_APP_EXTRA_ARGS), "--cli", ...args],
+      packaged: true
+    };
+  }
+  return {
+    command: process.execPath,
+    args: [cliPath, ...args],
+    packaged: false
+  };
+}
+
+function mcpInvocation() {
+  const smokeCommand = process.env.CROSSGEN_SMOKE_MCP_COMMAND?.trim() || process.env.CROSSGEN_SMOKE_CLI_COMMAND?.trim();
+  if (smokeCommand) {
+    const explicitArgs = process.env.CROSSGEN_SMOKE_MCP_ARGS;
+    return {
+      command: smokeCommand,
+      args: explicitArgs ? parseRuntimeArgs(explicitArgs) : ["--mcp"],
+      packaged: true
+    };
+  }
+  const appCommand = process.env.CROSSGEN_APP_EXECUTABLE?.trim();
+  if (appCommand) {
+    return {
+      command: appCommand,
+      args: [...parseRuntimeArgs(process.env.CROSSGEN_APP_EXTRA_ARGS), "--mcp"],
+      packaged: true
+    };
+  }
+  return {
+    command: process.execPath,
+    args: [cliPath, "--mcp"],
+    packaged: false
+  };
+}
+
 async function findFreePort() {
   return new Promise((resolve, reject) => {
     const server = createServer();
@@ -101,7 +161,15 @@ function parseJsonLine(stdout, label) {
 }
 
 async function runCli(dataDir, args, options = {}) {
-  const result = await runProcess(process.execPath, [cliPath, "--data-dir", dataDir, ...args], options);
+  const invocation = cliInvocation(args);
+  const result = await runProcess(invocation.command, invocation.args, {
+    ...options,
+    env: {
+      CROSSGEN_DATA_DIR: dataDir,
+      CROSSGEN_USER_DATA_DIR: dataDir,
+      ...(options.env ?? {})
+    }
+  });
   assertNoSecret(result.stdout, `CLI ${args.join(" ")} stdout`);
   assertNoSecret(result.stderr, `CLI ${args.join(" ")} stderr`);
   const expectedCode = options.expectedCode ?? 0;
@@ -121,9 +189,14 @@ function parseMcpResponses(stdout, label) {
 
 async function runMcp(dataDir, mode, requests) {
   const input = `${requests.map((request) => JSON.stringify(request)).join("\n")}\n`;
-  const result = await runProcess(process.execPath, [cliPath, "--data-dir", dataDir, "--mcp"], {
+  const invocation = mcpInvocation();
+  const result = await runProcess(invocation.command, invocation.args, {
     input,
-    env: { CROSSGEN_MCP_MODE: mode }
+    env: {
+      CROSSGEN_DATA_DIR: dataDir,
+      CROSSGEN_USER_DATA_DIR: dataDir,
+      CROSSGEN_MCP_MODE: mode
+    }
   });
   assertNoSecret(result.stdout, `MCP ${mode} stdout`);
   assertNoSecret(result.stderr, `MCP ${mode} stderr`);
@@ -378,7 +451,9 @@ async function verifyMcpFlow(baseURL) {
 }
 
 async function main() {
-  assert(existsSync(cliPath), "Missing dist/cli/crossgen.js. Run pnpm build:main before verify:cli-mcp-smoke.");
+  if (!process.env.CROSSGEN_SMOKE_CLI_COMMAND && !process.env.CROSSGEN_APP_EXECUTABLE) {
+    assert(existsSync(cliPath), "Missing dist/cli/crossgen.js. Run pnpm build:main before verify:cli-mcp-smoke.");
+  }
   const port = await findFreePort();
   const baseURL = `http://127.0.0.1:${port}/v1`;
   const mock = startMockServer(port);

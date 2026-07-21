@@ -4263,6 +4263,7 @@
   }
 
   .preview-modal-dialog {
+    position: relative;
     display: grid;
     place-items: center;
     max-width: 100%;
@@ -4283,6 +4284,96 @@
     top: 18px;
     right: 18px;
     z-index: 31;
+  }
+
+  .reference-preview-dialog {
+    width: min(1120px, 96vw);
+    height: min(840px, 94vh);
+  }
+
+  .reference-preview-dialog .preview-modal-image {
+    max-width: min(95vw, 1080px);
+    max-height: 88vh;
+  }
+
+  .reference-preview-tools {
+    z-index: 40;
+  }
+
+  .reference-mask-tools {
+    max-width: min(92vw, 620px);
+    flex-wrap: wrap;
+  }
+
+  .reference-mask-tools input[type="range"] {
+    width: min(180px, 30vw);
+  }
+
+  .reference-preview-stage {
+    display: grid;
+    gap: 10px;
+    place-items: center;
+    max-width: 96vw;
+    max-height: 92vh;
+  }
+
+  .reference-preview-canvas-wrap {
+    position: relative;
+    display: inline-flex;
+    min-height: 0;
+    line-height: 0;
+  }
+
+  .reference-preview-canvas-wrap .preview-modal-image {
+    display: block;
+  }
+
+  .reference-preview-mask-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  .reference-preview-stage.masking .reference-preview-canvas-wrap {
+    box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.55);
+    border-radius: 4px;
+  }
+
+  .reference-preview-mask-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .reference-mask-confirm {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    z-index: 80;
+    display: grid;
+    gap: 12px;
+    width: min(360px, calc(100% - 34px));
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--surface-floating-radius);
+    background: var(--surface-floating);
+    box-shadow: var(--shadow-popover);
+    padding: 16px;
+    transform: translate(-50%, -50%);
+    backdrop-filter: blur(14px);
+  }
+
+  .reference-mask-confirm h3 {
+    font-size: 15px;
+  }
+
+  .reference-mask-confirm p {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.45;
   }
 
   .empty-state,
@@ -4629,9 +4720,11 @@
   .reference-grid {
     position: relative;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
-    gap: 10px;
-    min-height: clamp(132px, 24vh, 220px);
+    grid-template-columns: repeat(auto-fill, minmax(82px, 106px));
+    align-content: start;
+    justify-content: start;
+    gap: 8px;
+    min-height: 112px;
     max-height: 100%;
     overflow: auto;
     border: 1px dashed var(--border-strong);
@@ -4646,7 +4739,7 @@
   .reference-grid > .empty-inline {
     display: grid;
     grid-column: 1 / -1;
-    min-height: clamp(108px, 20vh, 196px);
+    min-height: 96px;
     place-items: center;
     text-align: center;
   }
@@ -4718,12 +4811,43 @@
     padding: 8px;
   }
 
+  .reference-thumb-tile {
+    width: 100%;
+    min-height: 0;
+    gap: 5px;
+    padding: 6px;
+    cursor: pointer;
+    transition:
+      border-color 0.14s ease,
+      box-shadow 0.14s ease,
+      transform 0.14s ease,
+      background 0.14s ease;
+  }
+
+  .reference-thumb-tile:hover,
+  .reference-thumb-tile:focus-visible {
+    border-color: var(--accent-border);
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.08);
+    transform: translateY(-1px);
+    outline: none;
+  }
+
+  .reference-thumb-tile.primary-reference {
+    border-color: var(--accent-border);
+  }
+
   .asset-tile img {
     width: 100%;
     aspect-ratio: 4 / 3;
     object-fit: cover;
     border-radius: var(--radius-md);
     background: var(--surface-panel-muted);
+  }
+
+  .reference-thumb-tile img {
+    aspect-ratio: 1;
+    border-radius: var(--radius-md);
   }
 
   .asset-tile div {
@@ -4748,6 +4872,37 @@
   .asset-tile small {
     color: var(--text-muted);
     font-size: 11px;
+  }
+
+  .reference-thumb-meta {
+    line-height: 1.2;
+  }
+
+  .reference-thumb-meta strong {
+    font-size: 11px;
+  }
+
+  .reference-thumb-meta span {
+    font-size: 10px;
+  }
+
+  .reference-mask-badge {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    max-width: calc(100% - 44px);
+    overflow: hidden;
+    border: 1px solid rgba(var(--accent-rgb), 0.28);
+    border-radius: 999px;
+    background: rgba(var(--accent-rgb), 0.9);
+    color: #ffffff;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 750;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-shadow: 0 6px 14px rgba(var(--accent-rgb), 0.18);
   }
 
   .tile-remove {

@@ -752,24 +752,33 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector(".notice-area")?.getAttribute("aria-live")).toBe("polite");
     expect(document.querySelector(".notice-area")?.getAttribute("aria-atomic")).toBe("true");
 
+    const shell = document.querySelector<HTMLElement>(".app-shell")!;
     const previewOpener = document.querySelector<HTMLElement>(".preview-image-frame img")!;
     previewOpener.focus();
     expect(document.activeElement).toBe(previewOpener);
+    expect(document.querySelector(".preview-layout.editor-focus-mode")).toBeNull();
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(false);
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(false);
+
     await keyDown(previewOpener, "Enter");
     await flushAsync();
 
-    const previewDialog = document.querySelector<HTMLElement>(".preview-modal-dialog")!;
-    const previewClose = document.querySelector<HTMLButtonElement>(".preview-modal-close")!;
-    expect(previewDialog.getAttribute("aria-modal")).toBe("true");
-    expect(previewDialog.getAttribute("aria-labelledby")).toBe("preview-modal-title");
-    expect(document.querySelector("#preview-modal-title")?.textContent).toBe("Image preview");
-    expect(document.activeElement).toBe(previewClose);
+    // Double-click / Enter now expands the in-place editor instead of opening a read-only modal.
+    expect(document.querySelector(".preview-layout.editor-focus-mode")).not.toBeNull();
+    expect(document.querySelector(".preview-modal-dialog")).toBeNull();
+    // The editing toolbar remains available in expanded mode.
+    expect(document.querySelector('.preview-control-strip button[aria-label="Edit"]')).not.toBeNull();
+    // Expanding the editor collapses both side regions.
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(true);
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
 
-    await keyDown(previewDialog, "Escape");
+    await keyDown(document.body, "Escape");
     await flushAsync();
 
-    expect(document.querySelector(".preview-modal-dialog")).toBeNull();
-    expect(document.activeElement).toBe(previewOpener);
+    // Exiting restores both side regions together.
+    expect(document.querySelector(".preview-layout.editor-focus-mode")).toBeNull();
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(false);
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(false);
   });
 
   it("picks a Gallery image as a reference asset from the context menu", async () => {
@@ -990,6 +999,28 @@ describe("renderer multi-model smoke", () => {
 
     expect(bridge.pickGalleryAsset).toHaveBeenCalledWith(matching.id);
     expect(document.body.textContent).toContain("@ folder-match.png");
+  });
+
+  it("hot-reloads history from an external state change via onSnapshotChange", async () => {
+    const bridge = await renderApp(snapshot({ history: [geminiJob(0, { outputs: [imageAsset("existing.png")] })] }));
+
+    expect(document.querySelectorAll(".history-item")).toHaveLength(1);
+
+    // Simulate the main process pushing a fresh snapshot after a CLI/MCP external write.
+    const pushSnapshot = vi.mocked(bridge.onSnapshotChange).mock.calls[0]?.[0];
+    expect(pushSnapshot).toBeTruthy();
+
+    const externalSnapshot = snapshot({
+      history: [
+        geminiJob(1, { outputs: [imageAsset("external.png", "job_gemini_1")] }),
+        geminiJob(0, { outputs: [imageAsset("existing.png")] })
+      ]
+    });
+    await act(async () => {
+      pushSnapshot!(externalSnapshot);
+    });
+
+    expect(document.querySelectorAll(".history-item")).toHaveLength(2);
   });
 
   it("adds a history result to a selected Gallery folder", async () => {
@@ -1576,7 +1607,7 @@ describe("renderer multi-model smoke", () => {
     const reminder = document.querySelector<HTMLElement>(".reference-rights-reminder");
     expect(reminder?.textContent).toContain("Only upload images you have permission to use");
     expect(referenceGrid && reminder ? Boolean(referenceGrid.compareDocumentPosition(reminder) & Node.DOCUMENT_POSITION_FOLLOWING) : false).toBe(true);
-    expect(document.querySelector<HTMLButtonElement>('button[aria-label="Add as mask"]')?.disabled).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('.input-panel button[aria-label="Add as mask"]')).toBeNull();
     expect(document.body.textContent).toContain("Drag local images, History results, or Gallery images here.");
     expect(document.querySelector<HTMLButtonElement>('.input-panel button[aria-label="Clear"]')).toBeNull();
   });
@@ -2475,6 +2506,7 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     clearHistory: vi.fn(async () => []),
     onJobEvent: vi.fn(() => () => undefined),
     onGalleryEvent: vi.fn(() => () => undefined),
+    onSnapshotChange: vi.fn(() => () => undefined),
     addProvider: vi.fn(async (input) => {
       const kind = input.kind ?? "openai";
       const newProvider = providerConfig({
