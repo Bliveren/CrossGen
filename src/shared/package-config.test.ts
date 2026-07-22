@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync, statSync } from "node:fs";
+import path from "node:path";
 import packageJson from "../../package.json";
 import updateManifest from "../../docs/updates/latest.json";
 
@@ -41,5 +43,27 @@ describe("package release configuration", () => {
   it("uses an assisted Windows installer so users can choose the install path", () => {
     expect(packageJson.build.nsis.oneClick).toBe(false);
     expect(packageJson.build.nsis.allowToChangeInstallationDirectory).toBe(true);
+  });
+
+  it("ships CLI launchers that do not require Node.js in installed packages", () => {
+    const shellLauncherPath = path.resolve("build/cli/crossgen");
+    const cmdLauncherPath = path.resolve("build/cli/crossgen.cmd");
+    const shellLauncher = readFileSync(shellLauncherPath, "utf8");
+    const cmdLauncher = readFileSync(cmdLauncherPath, "utf8");
+
+    if (process.platform !== "win32") {
+      expect(statSync(shellLauncherPath).mode & 0o111).toBeGreaterThan(0);
+    }
+    expect(shellLauncher).toContain('exec "$CROSSGEN_APP_EXECUTABLE" --cli "$@"');
+    expect(shellLauncher).toContain('exec "$CROSSGEN_APP_EXECUTABLE" "$@"');
+    expect(shellLauncher).toContain("CROSSGEN_DATA_DIR");
+    expect(shellLauncher).not.toMatch(/\bnode\b/);
+    expect(shellLauncher).not.toContain("dist/cli/crossgen.js");
+
+    expect(cmdLauncher).toContain('"%CROSSGEN_APP_EXECUTABLE%" --cli %*');
+    expect(cmdLauncher).toContain('"%CROSSGEN_APP_EXECUTABLE%" %*');
+    expect(cmdLauncher).toContain("CROSSGEN_DATA_DIR");
+    expect(cmdLauncher).not.toMatch(/\bnode\b/i);
+    expect(cmdLauncher).not.toContain("dist\\cli\\crossgen.js");
   });
 });

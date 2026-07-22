@@ -25,6 +25,60 @@ function assertNoDataDir(text, dataDir, label) {
   assert(!text.includes(dataDir), `${label} leaked the isolated data directory.`);
 }
 
+function parseRuntimeArgs(value) {
+  const raw = value?.trim();
+  if (!raw) return [];
+  if (raw.startsWith("[")) {
+    const parsed = JSON.parse(raw);
+    assert(Array.isArray(parsed) && parsed.every((item) => typeof item === "string"), "Runtime args JSON must be a string array.");
+    return parsed;
+  }
+  return raw.split(/\s+/).filter(Boolean);
+}
+
+function cliInvocation(args) {
+  const smokeCommand = process.env.CROSSGEN_SMOKE_CLI_COMMAND?.trim();
+  if (smokeCommand) {
+    return {
+      command: smokeCommand,
+      args: [...parseRuntimeArgs(process.env.CROSSGEN_SMOKE_CLI_ARGS), ...args]
+    };
+  }
+  const appCommand = process.env.CROSSGEN_APP_EXECUTABLE?.trim();
+  if (appCommand) {
+    return {
+      command: appCommand,
+      args: [...parseRuntimeArgs(process.env.CROSSGEN_APP_EXTRA_ARGS), "--cli", ...args]
+    };
+  }
+  return {
+    command: process.execPath,
+    args: [cliPath, ...args]
+  };
+}
+
+function mcpInvocation() {
+  const smokeCommand = process.env.CROSSGEN_SMOKE_MCP_COMMAND?.trim() || process.env.CROSSGEN_SMOKE_CLI_COMMAND?.trim();
+  if (smokeCommand) {
+    const explicitArgs = process.env.CROSSGEN_SMOKE_MCP_ARGS;
+    return {
+      command: smokeCommand,
+      args: explicitArgs ? parseRuntimeArgs(explicitArgs) : ["--mcp"]
+    };
+  }
+  const appCommand = process.env.CROSSGEN_APP_EXECUTABLE?.trim();
+  if (appCommand) {
+    return {
+      command: appCommand,
+      args: [...parseRuntimeArgs(process.env.CROSSGEN_APP_EXTRA_ARGS), "--mcp"]
+    };
+  }
+  return {
+    command: process.execPath,
+    args: [cliPath, "--mcp"]
+  };
+}
+
 function runProcess(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -60,7 +114,15 @@ function parseJsonLine(stdout, label) {
 }
 
 async function runCli(dataDir, args, options = {}) {
-  const result = await runProcess(process.execPath, [cliPath, "--data-dir", dataDir, ...args], options);
+  const invocation = cliInvocation(args);
+  const result = await runProcess(invocation.command, invocation.args, {
+    ...options,
+    env: {
+      CROSSGEN_DATA_DIR: dataDir,
+      CROSSGEN_USER_DATA_DIR: dataDir,
+      ...(options.env ?? {})
+    }
+  });
   assertNoSecret(result.stdout, `CLI ${args.join(" ")} stdout`);
   assertNoSecret(result.stderr, `CLI ${args.join(" ")} stderr`);
   const expectedCode = options.expectedCode ?? 0;
@@ -80,9 +142,14 @@ function parseMcpResponses(stdout, label) {
 
 async function runMcp(dataDir, mode, requests) {
   const input = `${requests.map((request) => JSON.stringify(request)).join("\n")}\n`;
-  const result = await runProcess(process.execPath, [cliPath, "--data-dir", dataDir, "--mcp"], {
+  const invocation = mcpInvocation();
+  const result = await runProcess(invocation.command, invocation.args, {
     input,
-    env: { CROSSGEN_MCP_MODE: mode }
+    env: {
+      CROSSGEN_DATA_DIR: dataDir,
+      CROSSGEN_USER_DATA_DIR: dataDir,
+      CROSSGEN_MCP_MODE: mode
+    }
   });
   assertNoSecret(result.stdout, `MCP ${mode} stdout`);
   assertNoSecret(result.stderr, `MCP ${mode} stderr`);
@@ -237,7 +304,9 @@ async function verifyDoctor(dataDir) {
 }
 
 async function main() {
-  assert(existsSync(cliPath), "Missing dist/cli/crossgen.js. Run pnpm build:main before verify:agent-integration-smoke.");
+  if (!process.env.CROSSGEN_SMOKE_CLI_COMMAND && !process.env.CROSSGEN_APP_EXECUTABLE) {
+    assert(existsSync(cliPath), "Missing dist/cli/crossgen.js. Run pnpm build:main before verify:agent-integration-smoke.");
+  }
   const dataDir = path.join(smokeRoot, "agent");
   try {
     await writeMockState(dataDir);

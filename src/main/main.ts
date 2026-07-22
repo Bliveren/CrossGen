@@ -11,7 +11,7 @@ import {
   type IpcMainInvokeEvent
 } from "electron";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, watch, type FSWatcher } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,9 +42,6 @@ import type {
   ImageQuality,
   JobStatus,
   JobProgressEvent,
-  OpenAIImageRoute,
-  OpenAIImageRouteProbe,
-  OpenAIImageRouting,
   PromptTemplate,
   PromptTemplateInput,
   ProviderConfig,
@@ -139,7 +136,8 @@ import {
   type McpMode
 } from "../cli/readonly.js";
 import { runReadonlyMcpStdioServer } from "../mcp/stdioServer.js";
-import { buildEndpoint, fetchWithTimeout } from "./services/openaiImageAdapter.js";
+import { fetchWithTimeout } from "./services/openaiImageAdapter.js";
+import { probeOpenAIImageRouting } from "./services/openaiImageRouting.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
@@ -244,8 +242,15 @@ let galleryOperationQueue: Promise<void> = Promise.resolve();
 let galleryWatchNeedsFullSync = false;
 let galleryWatchChangedRelPaths = new Set<string>();
 let stateWriteCount = 0;
+let lastSelfWriteAt = 0;   // Date.now() of the most recent self-write; used to suppress self-triggered reloads
+let stateFileWatcher: FSWatcher | null = null;
+let stateFileWatchDebounce: NodeJS.Timeout | null = null;
+const STATE_FILE_WATCH_DEBOUNCE_MS = 300;
+const STATE_FILE_SELF_WRITE_GRACE_MS = 500;
 let appStateStore: JsonStateStore<AppStateFile> | null = null;
 let generationQueueStore: QueueStore | null = null;
+const APP_STATE_LOCK_TIMEOUT_MS = 60000;
+const APP_STATE_LOCK_STALE_MS = 5 * 60 * 1000;
 const desktopWorkerHostId = `desktop_${process.pid}_${randomUUID()}`;
 let desktopQueueWorkerTimer: NodeJS.Timeout | null = null;
 let desktopQueueWorkerRunning = false;
@@ -295,6 +300,11 @@ interface GalleryAssetSourceMetadata {
   sourcePathHash?: string;
   sourceJobId?: string;
   sourceAssetId?: string;
+}
+
+interface GalleryDiskScanSnapshot {
+  galleryDir: string;
+  disk: Awaited<ReturnType<typeof scanGalleryDisk>>;
 }
 
 async function runGalleryOperation<T>(operation: () => Promise<T>): Promise<T> {
@@ -480,7 +490,9 @@ function getAppStateStore(): JsonStateStore<AppStateFile> {
     backupPath: getBackupStatePath(),
     lockPath: getStateLockPath(),
     defaultState: getDefaultState(),
-    normalize: normalizeState
+    normalize: normalizeState,
+    timeoutMs: APP_STATE_LOCK_TIMEOUT_MS,
+    staleLockMs: APP_STATE_LOCK_STALE_MS
   });
   return appStateStore;
 }
@@ -542,18 +554,30 @@ async function ensureDir(dirPath: string): Promise<void> {
   await fs.mkdir(dirPath, { recursive: true });
 }
 
+function shouldRecoverInterruptedJobsOnRead(): boolean {
+  return process.argv.indexOf("--cli") < 0 && process.argv.indexOf("--mcp") < 0;
+}
+
+async function applyStartupRecovery(state: AppStateFile): Promise<AppStateFile> {
+  if (!shouldRecoverInterruptedJobsOnRead()) return state;
+  const queue = await getGenerationQueueStore().read().catch(() => undefined);
+  const result = recoverInterruptedJobs(state.history, new Date().toISOString(), queue);
+  recoveredInterruptedJobs = recoveredInterruptedJobs || result.changed;
+  return result.changed ? { ...state, history: result.history } : state;
+}
+
 async function readState(): Promise<AppStateFile> {
   if (stateCache) return stateCache;
 
   try {
-    stateCache = applyStartupRecovery(normalizeState(await readStateFile(getStatePath())));
+    stateCache = await applyStartupRecovery(normalizeState(await readStateFile(getStatePath())));
   } catch (error) {
     if (!isNodeError(error) || error.code !== "ENOENT") {
       console.warn("[CrossGen] Failed to read state file; trying backup.", sanitizeError(error));
     }
 
     try {
-      stateCache = applyStartupRecovery(normalizeState(await readStateFile(getBackupStatePath())));
+      stateCache = await applyStartupRecovery(normalizeState(await readStateFile(getBackupStatePath())));
       await writeState(stateCache, { updateBackup: false });
       return stateCache;
     } catch (backupError) {
@@ -577,6 +601,7 @@ async function writeState(state: AppStateFile, options: WriteStateOptions = {}):
   const payload = persistentStatePayload(state);
   await getAppStateStore().write(payload, options);
   stateWriteCount += 1;
+  lastSelfWriteAt = Date.now();
   stateCache = payload;
 }
 
@@ -608,7 +633,7 @@ async function mutateStateAndQueue<TResult>(
       statePath: getStatePath(),
       backupPath: getBackupStatePath(),
       defaultState: getDefaultState(),
-      normalize: (value) => applyStartupRecovery(normalizeState(value))
+      normalize: normalizeState
     }
   }, async (context) => {
     const next = await operation(context.state, context.queue);
@@ -617,6 +642,7 @@ async function mutateStateAndQueue<TResult>(
     return next.result;
   });
   stateWriteCount += 1;
+  lastSelfWriteAt = Date.now();
   stateCache = transaction.state;
   return transaction;
 }
@@ -624,12 +650,6 @@ async function mutateStateAndQueue<TResult>(
 async function readStateFile(filePath: string): Promise<unknown> {
   const raw = await fs.readFile(filePath, "utf8");
   return JSON.parse(raw) as unknown;
-}
-
-function applyStartupRecovery(state: AppStateFile): AppStateFile {
-  const result = recoverInterruptedJobs(state.history);
-  recoveredInterruptedJobs = recoveredInterruptedJobs || result.changed;
-  return result.changed ? { ...state, history: result.history } : state;
 }
 
 function encryptApiKey(apiKey: string): Pick<StoredProviderConfig, "encryptedApiKey" | "encryption"> {
@@ -1138,7 +1158,7 @@ async function persistMaskDataUrl(dataUrl: string, imagesDir: string): Promise<I
   };
 }
 
-function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAssets: InputAsset[], maskAsset?: InputAsset): GenerationJob {
+function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAssets: InputAsset[], maskAsset?: InputAsset, source: QueueSource = "desktop"): GenerationJob {
   const now = new Date().toISOString();
   const launchId = request.params.launchId;
   const modelId = request.params.model;
@@ -1146,6 +1166,7 @@ function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAs
     id: `job_${randomUUID()}`,
     name: "",
     tags: [],
+    source,
     providerKind: request.params.providerKind,
     providerId: config.id,
     launchId,
@@ -1216,19 +1237,32 @@ function sendGalleryEvent(state: AppStateFile, reason: "disk" | "mutation"): voi
   }
 }
 
+// Pushes a full snapshot to every renderer. Used when the state file was mutated by an
+// external process (CLI / MCP) so the desktop UI hot-reloads instead of showing stale data.
+function broadcastSnapshot(state: AppStateFile): void {
+  const windows = BrowserWindow.getAllWindows();
+  if (windows.length === 0) return;
+  const snapshot = snapshotFromState(state);
+  for (const window of windows) {
+    window.webContents.send("app:snapshot", snapshot);
+  }
+}
+
 async function mutateDesktopGalleryState<TResult>(
   operation: (state: AppStateFile) => Promise<{ state: AppStateFile; result: TResult; changed?: boolean }>
 ): Promise<TResult> {
   let result: TResult | undefined;
   let shouldNotify = false;
+  const snapshot = await scanGalleryDiskForState(await readState());
   const nextState = await getAppStateStore().mutate(async (state) => {
-    const synced = await buildGalleryDiskSyncedState(state, undefined, { useStateCache: false });
+    const synced = await buildSyncedStateFromDiskSnapshot(state, snapshot, undefined, { useStateCache: false });
     const outcome = await operation(synced.state);
     result = outcome.result;
     shouldNotify = outcome.changed !== false;
     return persistentStatePayload(outcome.state);
   });
   stateWriteCount += 1;
+  lastSelfWriteAt = Date.now();
   stateCache = nextState;
   if (result === undefined) throw new Error("Gallery 操作没有返回结果。");
   if (shouldNotify) sendGalleryEvent(nextState, "mutation");
@@ -1279,13 +1313,15 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
 
   const hasUsableApiKey = Boolean(nextConfig.encryptedApiKey);
   const baseURLChanged = nextConfig.baseURL !== activeProvider.baseURL;
+  const providerKindChanged = nextConfig.kind !== activeProvider.kind;
   const submittedNewApiKey = input.apiKey !== undefined && input.apiKey.trim().length > 0;
-  if (hasUsableApiKey && (submittedNewApiKey || baseURLChanged)) {
-    nextConfig = await refreshModelDiscovery(nextConfig);
-  }
 
   const nextProviders = state.providers.map(p => p.id === activeProvider.id ? nextConfig : p);
-  await writeState({ ...state, providers: nextProviders });
+  const nextState = { ...state, providers: nextProviders };
+  await writeState(nextState);
+  if (hasUsableApiKey && (submittedNewApiKey || baseURLChanged || providerKindChanged)) {
+    scheduleProviderDiscoveryRefresh(nextConfig.id, nextConfig.updatedAt);
+  }
   return toPublicConfig(nextConfig);
 }
 
@@ -1325,12 +1361,14 @@ async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConf
       throw new Error(validation.message ?? "API Key 无效。");
     }
     Object.assign(newConfig, encryptApiKey(input.apiKey));
-    newConfig = await refreshModelDiscovery(newConfig);
   }
 
   const nextProviders = [...state.providers, newConfig];
   const nextState = { ...state, providers: nextProviders, activeProviderId: newId };
   await writeState(nextState);
+  if (newConfig.encryptedApiKey) {
+    scheduleProviderDiscoveryRefresh(newConfig.id, newConfig.updatedAt);
+  }
 
   return snapshotFromState(nextState);
 }
@@ -1726,16 +1764,13 @@ function applyGalleryAssetCreateResult(state: AppStateFile, result: GalleryAsset
 
 async function buildGalleryDiskSyncedState(
   inputState: AppStateFile,
+  disk: Awaited<ReturnType<typeof scanGalleryDisk>>,
   changedRelPaths?: string[],
   options: { useStateCache?: boolean } = {}
 ): Promise<{ state: AppStateFile; changed: boolean }> {
-  const galleryDir = getGalleryDir(inputState);
-  await ensureDir(galleryDir);
-
   const now = new Date().toISOString();
   const baseState = options.useStateCache === false ? inputState : stateCache ?? inputState;
   const hasIncrementalChanges = Boolean(changedRelPaths?.length);
-  const disk = await scanGalleryDisk(galleryDir, hasIncrementalChanges ? { rootRelPaths: changedRelPaths } : undefined);
   const reconcileOptions = {
     now,
     createFolderId: () => `gallery_folder_${randomUUID()}`,
@@ -1747,14 +1782,38 @@ async function buildGalleryDiskSyncedState(
   return result;
 }
 
+async function scanGalleryDiskForState(inputState: AppStateFile, changedRelPaths?: string[]): Promise<GalleryDiskScanSnapshot> {
+  const galleryDir = getGalleryDir(inputState);
+  await ensureDir(galleryDir);
+  const hasIncrementalChanges = Boolean(changedRelPaths?.length);
+  return {
+    galleryDir,
+    disk: await scanGalleryDisk(galleryDir, hasIncrementalChanges ? { rootRelPaths: changedRelPaths } : undefined)
+  };
+}
+
+async function buildSyncedStateFromDiskSnapshot(
+  inputState: AppStateFile,
+  snapshot: GalleryDiskScanSnapshot,
+  changedRelPaths?: string[],
+  options: { useStateCache?: boolean } = {}
+): Promise<{ state: AppStateFile; changed: boolean }> {
+  if (!sameResolvedPath(getGalleryDir(inputState), snapshot.galleryDir)) {
+    return { state: inputState, changed: false };
+  }
+  return buildGalleryDiskSyncedState(inputState, snapshot.disk, changedRelPaths, options);
+}
+
 async function syncGalleryWithDisk(inputState: AppStateFile, changedRelPaths?: string[]): Promise<AppStateFile> {
   let syncedState = inputState;
+  const snapshot = await scanGalleryDiskForState(inputState, changedRelPaths);
   const nextState = await getAppStateStore().mutate(async (state) => {
-    const result = await buildGalleryDiskSyncedState(state, changedRelPaths, { useStateCache: false });
+    const result = await buildSyncedStateFromDiskSnapshot(state, snapshot, changedRelPaths, { useStateCache: false });
     syncedState = result.state;
     return result.changed ? persistentStatePayload(result.state) : persistentStatePayload(state);
   });
   stateWriteCount += 1;
+  lastSelfWriteAt = Date.now();
   stateCache = nextState;
   return syncedState;
 }
@@ -2211,118 +2270,28 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
   }
 }
 
-async function probeOpenAIImageRouting(config: StoredProviderConfig, apiKey: string): Promise<OpenAIImageRouting | undefined> {
-  if (config.kind !== "openai" || config.activeLaunchId !== GPT_IMAGE_2_LAUNCH_ID) return config.openAIImageRouting;
+function scheduleProviderDiscoveryRefresh(providerId: string, expectedUpdatedAt: string): void {
+  void refreshProviderDiscoveryIfCurrent(providerId, expectedUpdatedAt).catch((error: unknown) => {
+    console.warn("[CrossGen] Background model discovery failed.", sanitizeError(error));
+  });
+}
 
-  const model = config.activeModelId || config.defaultModel || GPT_IMAGE_2_MODEL_ID;
-  const probeTimeoutMs = Math.min(Math.max(Math.floor(config.timeoutMs / 8), 2500), 8000);
-  const probes = await Promise.all([
-    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "image-api", "generate", {
-      endpoint: "/images/generations",
-      body: {
-        model
-      }
-    }),
-    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "image-api", "edit", {
-      endpoint: "/images/edits",
-      body: new FormData()
-    }),
-    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "responses", "edit", {
-      endpoint: "/responses",
-      body: {
-        model
-      }
-    }),
-    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "responses", "generate", {
-      endpoint: "/responses",
-      body: {
-        model
-      }
-    }),
-    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "chat-completions", "edit", {
-      endpoint: "/chat/completions",
-      body: {
-        model
-      }
-    }),
-    probeOpenAIImageRoute(config.baseURL, apiKey, probeTimeoutMs, "chat-completions", "generate", {
-      endpoint: "/chat/completions",
-      body: {
-        model
-      }
-    })
-  ]);
+async function refreshProviderDiscoveryIfCurrent(providerId: string, expectedUpdatedAt: string): Promise<void> {
+  const state = await readState();
+  const currentConfig = state.providers.find((provider) => provider.id === providerId);
+  if (!currentConfig || currentConfig.updatedAt !== expectedUpdatedAt) return;
 
-  return {
-    preferredGenerateRoute: preferredOpenAIImageRoute(probes, "generate"),
-    preferredEditRoute: preferredOpenAIImageRoute(probes, "edit"),
-    probes,
-    updatedAt: new Date().toISOString()
+  const refreshedConfig = await refreshModelDiscovery(currentConfig);
+  const latestState = await readState();
+  const latestConfig = latestState.providers.find((provider) => provider.id === providerId);
+  if (!latestConfig || latestConfig.updatedAt !== expectedUpdatedAt) return;
+
+  const nextState = {
+    ...latestState,
+    providers: latestState.providers.map((provider) => provider.id === providerId ? refreshedConfig : provider)
   };
-}
-
-async function probeOpenAIImageRoute(
-  baseURL: string,
-  apiKey: string,
-  timeoutMs: number,
-  route: OpenAIImageRoute,
-  mode: "generate" | "edit",
-  request: {
-    endpoint: "/images/generations" | "/images/edits" | "/responses" | "/chat/completions";
-    body: Record<string, unknown> | FormData;
-  }
-): Promise<OpenAIImageRouteProbe> {
-  const startedAt = Date.now();
-  try {
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${apiKey}`,
-      Accept: request.endpoint === "/chat/completions" ? "text/event-stream" : "application/json"
-    };
-    if (!(request.body instanceof FormData)) {
-      headers["Content-Type"] = "application/json";
-    }
-    const response = await fetchWithTimeout(fetch, buildEndpoint(baseURL, request.endpoint), {
-      method: "POST",
-      headers,
-      body: request.body instanceof FormData ? request.body : JSON.stringify(request.body)
-    }, timeoutMs);
-    const latencyMs = Date.now() - startedAt;
-    return {
-      route,
-      mode,
-      endpoint: request.endpoint,
-      ok: isRouteProbeReachableStatus(response.status),
-      latencyMs,
-      status: response.status,
-      error: isRouteProbeReachableStatus(response.status) ? undefined : `HTTP ${response.status}`
-    };
-  } catch (error) {
-    return {
-      route,
-      mode,
-      endpoint: request.endpoint,
-      ok: false,
-      latencyMs: Date.now() - startedAt,
-      error: normalizeError(error)
-    };
-  }
-}
-
-function isRouteProbeReachableStatus(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-function preferredOpenAIImageRoute(probes: OpenAIImageRouteProbe[], mode: "generate" | "edit"): OpenAIImageRoute | undefined {
-  const successfulCandidates = probes
-    .filter((probe) => probe.mode === mode && probe.ok && probe.status !== undefined && probe.status >= 200 && probe.status < 300)
-    .sort((a, b) => routePreferenceScore(a) - routePreferenceScore(b));
-  if (successfulCandidates[0]) return successfulCandidates[0].route;
-
-  return "chat-completions";
-}
-
-function routePreferenceScore(probe: OpenAIImageRouteProbe): number {
-  return probe.latencyMs;
+  await writeState(nextState);
+  broadcastSnapshot(nextState);
 }
 
 function selectActiveLaunchForDiscovery(
@@ -2465,7 +2434,7 @@ async function getOrCreateHistoryJobForQueueItem(
   }
 
   const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
-  const job = createJob(request, provider, inputs, mask);
+  const job = createJob(request, provider, inputs, mask, item.source);
   await upsertJob(job);
   return job;
 }
@@ -2511,7 +2480,7 @@ function terminalJobForQueueExecution(job: GenerationJob, execution: GenerationQ
     return {
       ...job,
       status: "cancelled",
-      error: execution.error ?? job.error ?? "任务已终止。",
+      error: execution.error ?? "任务已终止。",
       updatedAt: nowIso
     };
   }
@@ -2617,7 +2586,7 @@ function cancelledHistoryJob(job: GenerationJob, item: GenerationQueueItem): Gen
   return {
     ...job,
     status: "cancelled",
-    error: job.error ?? "任务已取消。",
+    error: "任务已取消。",
     updatedAt: item.updatedAt
   };
 }
@@ -2988,7 +2957,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     if (!canRunRequestWithConfig(normalizedRequest, currentProvider)) {
       throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
     }
-    job = createJob(normalizedRequest, currentProvider, inputs, mask);
+    job = createJob(normalizedRequest, currentProvider, inputs, mask, "desktop");
     queueItem = createGenerationQueueItem({
       source: "desktop",
       providerId: currentProvider.id,
@@ -3162,8 +3131,9 @@ async function migrateHistoryStorage(state: AppStateFile, nextDir: string): Prom
   };
 }
 
-async function migrateGalleryStorage(state: AppStateFile, nextDir: string): Promise<AppStateFile> {
-  const syncedState = (await buildGalleryDiskSyncedState(state, undefined, { useStateCache: false })).state;
+async function migrateGalleryStorage(state: AppStateFile, nextDir: string, snapshot?: GalleryDiskScanSnapshot): Promise<AppStateFile> {
+  const diskSnapshot = snapshot ?? await scanGalleryDiskForState(state);
+  const syncedState = (await buildSyncedStateFromDiskSnapshot(state, diskSnapshot, undefined, { useStateCache: false })).state;
   const storage = getStorageSettings(syncedState);
   const oldDir = storage.galleryDir;
   const resolvedNextDir = path.resolve(nextDir);
@@ -3222,21 +3192,22 @@ async function handleChooseStorageFolder(_event: IpcMainInvokeEvent, kindInput: 
   if (result.canceled || !result.filePaths[0]) return snapshotFromState(currentState);
 
   const nextDir = result.filePaths[0];
+  const baseGallerySnapshot = kind === "gallery" || options.syncBoth
+    ? await scanGalleryDiskForState(currentState)
+    : null;
   const nextState = await getAppStateStore().mutate(async (state) => {
     const baseState = kind === "gallery" || options.syncBoth
-      ? (await buildGalleryDiskSyncedState(state, undefined, { useStateCache: false })).state
+      ? (await buildSyncedStateFromDiskSnapshot(state, baseGallerySnapshot!, undefined, { useStateCache: false })).state
       : state;
     const migratedState = options.syncBoth
-      ? await migrateGalleryStorage(await migrateHistoryStorage(baseState, nextDir), nextDir)
+      ? await migrateGalleryStorage(await migrateHistoryStorage(baseState, nextDir), nextDir, baseGallerySnapshot ?? undefined)
       : kind === "history"
         ? await migrateHistoryStorage(baseState, nextDir)
-        : await migrateGalleryStorage(baseState, nextDir);
-    const finalState = kind === "gallery" || options.syncBoth
-      ? (await buildGalleryDiskSyncedState(migratedState, undefined, { useStateCache: false })).state
-      : migratedState;
-    return persistentStatePayload(finalState);
+        : await migrateGalleryStorage(baseState, nextDir, baseGallerySnapshot ?? undefined);
+    return persistentStatePayload(migratedState);
   });
   stateWriteCount += 1;
+  lastSelfWriteAt = Date.now();
   stateCache = nextState;
   if (kind === "gallery" || options.syncBoth) {
     await startGalleryWatcherForState(nextState);
@@ -3432,6 +3403,66 @@ async function startGalleryWatcherForState(state: AppStateFile): Promise<void> {
 async function startGalleryWatcher(): Promise<void> {
   const state = await syncGalleryWithDisk(await readState());
   await startGalleryWatcherForState(state);
+}
+
+function stopStateFileWatcher(): void {
+  if (stateFileWatcher) {
+    stateFileWatcher.close();
+    stateFileWatcher = null;
+  }
+  if (stateFileWatchDebounce) {
+    clearTimeout(stateFileWatchDebounce);
+    stateFileWatchDebounce = null;
+  }
+}
+
+// Watches the shared app-state file so external mutations (CLI / MCP writing under the
+// cross-process lock) hot-reload the desktop UI instead of leaving it stale.
+// Watches the containing directory (not the file directly): the state store writes
+// atomically via tmp+rename, which on Linux/inotify would orphan a file-level watch after
+// the first replace. Directory watching survives the rename and we filter by basename.
+function startStateFileWatcher(): void {
+  stopStateFileWatcher();
+  const statePath = getStatePath();
+  const stateDir = path.dirname(statePath);
+  const stateFileName = path.basename(statePath);
+  try {
+    stateFileWatcher = watch(stateDir, (_eventType, filename) => {
+      if (filename && path.basename(String(filename)) !== stateFileName) return;
+      scheduleExternalStateReload();
+    });
+  } catch (error) {
+    // watch() throws if the directory does not exist yet; it is created on first write and
+    // the watcher is (re)started after startup completes, so a missing dir here is non-fatal.
+    console.warn("[CrossGen] Failed to watch state file for external changes.", sanitizeError(error));
+  }
+}
+
+function scheduleExternalStateReload(): void {
+  if (stateFileWatchDebounce) clearTimeout(stateFileWatchDebounce);
+  stateFileWatchDebounce = setTimeout(() => {
+    stateFileWatchDebounce = null;
+    void reloadStateFromDiskIfExternal();
+  }, STATE_FILE_WATCH_DEBOUNCE_MS);
+}
+
+async function reloadStateFromDiskIfExternal(): Promise<void> {
+  // Ignore filesystem events caused by our own writes: the debounce window plus this grace
+  // check keep a self-write from clobbering in-flight desktop edits with a re-read.
+  if (Date.now() - lastSelfWriteAt < STATE_FILE_SELF_WRITE_GRACE_MS) return;
+  if (BrowserWindow.getAllWindows().length === 0) return;
+  try {
+    const external = normalizeState(await readStateFile(getStatePath()));
+    // Serialize behind the Gallery operation queue so a concurrent desktop mutation and an
+    // external reload never interleave into a half-applied snapshot.
+    await runGalleryOperation(async () => {
+      const synced = await syncGalleryForRead(external);
+      stateCache = persistentStatePayload(synced);
+      broadcastSnapshot(synced);
+    });
+  } catch (error) {
+    console.warn("[CrossGen] Failed to reload state after external change.", sanitizeError(error));
+  }
 }
 
 function scheduleGalleryDiskSync(changedRelPath: string | null = null): void {
@@ -4310,7 +4341,7 @@ async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
   const targetGalleryFolderId = normalizeTargetGalleryFolderId(state, input.targetGalleryFolderId);
   const request = validateAgentRunJobRequest(buildAgentRunJobRequest(provider, input), provider);
   const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
-  const job = createJob(request, provider, inputs, mask);
+  const job = createJob(request, provider, inputs, mask, input.source);
   const queueItem = createGenerationQueueItem({
     source: input.source,
     providerId: provider.id,
@@ -5382,6 +5413,7 @@ app.whenReady().then(async () => {
     return;
   }
   void startGalleryWatcher();
+  startStateFileWatcher();
   startDesktopQueueWorker();
 
   app.on("activate", () => {
@@ -5400,4 +5432,5 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   stopDesktopQueueWorker();
   stopGalleryWatcher();
+  stopStateFileWatcher();
 });

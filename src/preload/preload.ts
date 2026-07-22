@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type {
   AppBridge,
+  AppSnapshot,
   DownloadRequest,
   EditedImageDownloadRequest,
   EditedGalleryImageInput,
@@ -70,6 +71,11 @@ const bridge: AppBridge = {
     const handler = (_event: Electron.IpcRendererEvent, payload: GallerySyncEvent) => callback(payload);
     ipcRenderer.on("gallery:event", handler);
     return () => ipcRenderer.off("gallery:event", handler);
+  },
+  onSnapshotChange: (callback: (snapshot: AppSnapshot) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: AppSnapshot) => callback(payload);
+    ipcRenderer.on("app:snapshot", handler);
+    return () => ipcRenderer.off("app:snapshot", handler);
   }
 };
 

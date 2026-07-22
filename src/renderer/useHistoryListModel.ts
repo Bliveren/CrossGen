@@ -54,7 +54,7 @@ export function useHistoryListModel({
       : statusMatched.filter((job) => {
           const modelDetails = modelDetailsForJob(job);
           const systemTag = systemTagLabelForMode(job.mode, language);
-          const haystack = `${displayNameForJob(job)} ${job.tags.join(" ")} ${systemTag} ${job.prompt} ${job.mode} ${job.status} ${job.error ?? ""} ${job.createdAt} ${modelDetails.searchText}`.toLowerCase();
+          const haystack = `${displayNameForJob(job)} ${job.tags.join(" ")} ${systemTag} ${job.source ?? ""} ${job.prompt} ${job.mode} ${job.status} ${job.error ?? ""} ${job.createdAt} ${modelDetails.searchText}`.toLowerCase();
           return haystack.includes(query);
         });
     const sorted = [...matched];

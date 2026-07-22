@@ -26,12 +26,47 @@ async function ensureParentDir(filePath: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
 
+async function readLockOwnerPid(lockPath: string): Promise<number | null> {
+  try {
+    const raw = await fs.readFile(lockPath, "utf8");
+    const parsed = JSON.parse(raw) as { pid?: unknown };
+    return Number.isSafeInteger(parsed.pid) && Number(parsed.pid) > 0 ? Number(parsed.pid) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ESRCH") return false;
+    return true;
+  }
+}
+
+async function removeLockFile(lockPath: string): Promise<boolean> {
+  try {
+    await fs.unlink(lockPath);
+    return true;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return true;
+    return false;
+  }
+}
+
 async function tryRemoveStaleLock(lockPath: string, staleLockMs: number, now: () => number): Promise<boolean> {
   try {
     const stat = await fs.stat(lockPath);
-    if (now() - stat.mtimeMs < staleLockMs) return false;
-    await fs.unlink(lockPath);
-    return true;
+    if (now() - stat.mtimeMs >= staleLockMs) {
+      return removeLockFile(lockPath);
+    }
+    const ownerPid = await readLockOwnerPid(lockPath);
+    if (ownerPid !== null) {
+      return isProcessAlive(ownerPid) ? false : removeLockFile(lockPath);
+    }
+    return false;
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") return true;
     return false;

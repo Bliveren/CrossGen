@@ -2,7 +2,6 @@ import { memo, Profiler, useEffect, useMemo, useRef, useState, type ReactNode } 
 import {
   AlertTriangle,
   BookOpen,
-  Brush,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -29,6 +28,7 @@ import {
   LibraryBig,
   Monitor,
   Moon,
+  MoreHorizontal,
   Paintbrush,
   Pencil,
   Radar,
@@ -115,7 +115,7 @@ import { ImageEditor } from "./ImageEditor";
 import { DialogShell } from "./DialogShell";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
 import { ApiConfigDialog, LaunchSection, ProviderSummarySection } from "./ProviderConfigPanel";
-import { ParameterSection } from "./ParameterConfigPanel";
+import { ParameterConfigDialog, ParameterConfigLauncher } from "./ParameterConfigPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -260,6 +260,7 @@ const RIGHT_RAIL_THUMB_MIN_SIZE = 128;
 const RIGHT_RAIL_THUMB_HORIZONTAL_CHROME = 48;
 const LEFT_RAIL_AUTO_COLLAPSE_WIDTH = MIN_SIDEBAR_WIDTH;
 const RIGHT_RAIL_AUTO_COLLAPSE_WIDTH = MIN_HISTORY_WIDTH;
+const RAIL_AUTO_COLLAPSE_BREAKPOINT = 1320;
 const DEFAULT_PREVIEW_PANEL_RATIO = 0.618;
 const MIN_PREVIEW_PANEL_RATIO = 0.48;
 const MAX_PREVIEW_PANEL_RATIO = 0.74;
@@ -928,6 +929,7 @@ export function App() {
   const [params, setParams] = useState<ImageParams>(DEFAULT_IMAGE_PARAMS);
   const modeLabels = useMemo(() => modeLabelsForParams(copy, params), [copy, params]);
   const [apiKey, setApiKey] = useState("");
+  const [apiAccessKind, setApiAccessKind] = useState<ProviderKind>("openai");
   const [apiAccessName, setApiAccessName] = useState("OpenAI");
   const [baseURL, setBaseURL] = useState(DEFAULT_BASE_URL);
   const [isActiveApiConfigOpen, setIsActiveApiConfigOpen] = useState(false);
@@ -966,7 +968,7 @@ export function App() {
   const [generationAttemptIndex, setGenerationAttemptIndex] = useState<number | null>(null);
   const [arePromptSecondaryActionsIconOnly, setArePromptSecondaryActionsIconOnly] = useState(false);
   const [isPrimaryRunIconOnly, setIsPrimaryRunIconOnly] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isParameterDialogOpen, setIsParameterDialogOpen] = useState(false);
   const [openLaunchMenuId, setOpenLaunchMenuId] = useState<FocusedLaunchId | null>(null);
   const [historySearch, setHistorySearch] = useState("");
   const [historyStatusFilter, setHistoryStatusFilter] = useState<"all" | "succeeded" | "failed">("all");
@@ -984,6 +986,7 @@ export function App() {
   const [editingHistoryTagsId, setEditingHistoryTagsId] = useState<string | null>(null);
   const [historyTagsInput, setHistoryTagsInput] = useState("");
   const [historyGalleryMenuJobId, setHistoryGalleryMenuJobId] = useState<string | null>(null);
+  const [expandedHistoryCardId, setExpandedHistoryCardId] = useState<string | null>(null);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -1102,11 +1105,15 @@ export function App() {
     hasExportableEditorOverlay,
     hasEditedPreviewChanges
   } = useImageEditor();
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isEditorFocusMode, setIsEditorFocusMode] = useState(false);
+  const [referencePreviewAssetId, setReferencePreviewAssetId] = useState<string | null>(null);
+  const [isReferenceMaskToolsOpen, setIsReferenceMaskToolsOpen] = useState(false);
+  const [referenceMaskConfirmAssetId, setReferenceMaskConfirmAssetId] = useState<string | null>(null);
   const [isReferenceDragOver, setIsReferenceDragOver] = useState(false);
   const [referenceLimitToast, setReferenceLimitToast] = useState<{ id: number; text: string } | null>(null);
   const [buttonFeedback, setButtonFeedback] = useState<Record<string, number>>({});
   const [globalTooltip, setGlobalTooltip] = useState<GlobalTooltip | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredWidth("image2tools.sidebarWidth", DEFAULT_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH));
   const [historyWidth, setHistoryWidth] = useState(() => readStoredWidth("image2tools.historyWidth", DEFAULT_HISTORY_WIDTH, MIN_RIGHT_RAIL_WIDTH, MAX_HISTORY_WIDTH));
   const [previewPanelRatio, setPreviewPanelRatio] = useState(() => readStoredWidth("image2tools.previewPanelRatio", DEFAULT_PREVIEW_PANEL_RATIO, MIN_PREVIEW_PANEL_RATIO, MAX_PREVIEW_PANEL_RATIO));
@@ -1114,15 +1121,22 @@ export function App() {
   const [contextMenu, setContextMenu] = useState<ImageContextMenuState | null>(null);
   const [sidebarCollapseButtonY, setSidebarCollapseButtonY] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight - 86));
   const [rightRailCollapseButtonY, setRightRailCollapseButtonY] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight - 86));
+  const [isAutoRightRailCollapsed, setIsAutoRightRailCollapsed] = useState(() => {
+    const leftWidth = window.innerWidth <= RAIL_AUTO_COLLAPSE_BREAKPOINT ? COMPACT_SIDEBAR_WIDTH : DEFAULT_SIDEBAR_WIDTH;
+    return window.innerWidth <= RAIL_AUTO_COLLAPSE_BREAKPOINT || window.innerWidth - leftWidth - RESIZER_WIDTH * 2 < MIN_WORKSPACE_WIDTH + RIGHT_RAIL_AUTO_COLLAPSE_WIDTH;
+  });
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const galleryContentRef = useRef<HTMLDivElement | null>(null);
   const historyListRef = useRef<HTMLDivElement | null>(null);
+  const referenceClickTimerRef = useRef<number | null>(null);
   const referenceLimitToastTimerRef = useRef<number | null>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
   const paintedDuringStrokeRef = useRef(false);
+  const lastMaskPointRef = useRef<{ x: number; y: number } | null>(null);
   const hasAutoTestedConnectionRef = useRef(false);
   const partialImageCountRef = useRef(0);
+  const editorFocusRestoreRef = useRef<{ sidebarCollapsed: boolean; rightRailWidth: number; rightRailCollapsed: boolean } | null>(null);
   const previewLayoutRef = useRef<HTMLDivElement | null>(null);
   const promptActionsRef = useRef<HTMLDivElement | null>(null);
   const primaryRunButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -1150,6 +1164,11 @@ export function App() {
   );
   const sourceAsset = effectiveInputAssets[0];
   const sourcePreview = assetSource(sourceAsset);
+  const referencePreviewAsset = referencePreviewAssetId ? inputAssets.find((asset) => asset.id === referencePreviewAssetId) ?? null : null;
+  const referencePreviewSource = referencePreviewAsset ? assetSource(referencePreviewAsset) : undefined;
+  const referenceMaskConfirmAsset = referenceMaskConfirmAssetId
+    ? inputAssets.find((asset) => asset.id === referenceMaskConfirmAssetId) ?? null
+    : null;
   const maskPreview = maskDataUrl ?? assetSource(maskAsset);
   const activeResults = getResultAssets(activeJob);
   const selectedResult = activeResults.find((asset) => asset.id === selectedResultId);
@@ -1191,12 +1210,12 @@ export function App() {
   const generalModeNotice = generalParams ? generalRuntimeNotice(generalParams.providerKind, copy) : copy.generalRuntimeUnsupported;
   const activeInpaintCapability = inpaintCapabilityForParams(params);
   const usesExactMask = activeInpaintCapability === "exact-mask";
+  const showExactMaskRouteNotice = requestMode === "inpaint" && usesExactMask;
   const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
   const streamDisabledReason = openAIParams ? streamPartialPreviewDisabledReason(openAIParams, activeConfig, requestMode, copy) : undefined;
   const streamPartialsAllowed = openAIParams ? !streamDisabledReason : false;
   const apiKeyPlaceholder = selectedApiConfig.apiKeyPreview ?? (selectedApiConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
   const launchButtons = useMemo(() => getLaunchButtonStates(activeConfig, copy), [copy, activeConfig]);
-  const activeLaunchDisplay = launchButtons.find((button) => button.launchId === activeConfig.activeLaunchId)?.displayName ?? modelLabelFromId(activeConfig.activeModelId);
   const connectionLabel = connectionStatusLabel(connectionCheck, copy);
   const connectionTitle = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : connectionLabel;
   const connectionErrorText = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : null;
@@ -1206,14 +1225,21 @@ export function App() {
     ?? (selectedApiConfig.lastModelDiscoveryAt || selectedApiConfig.discoveredModels.length > 0 ? selectedDiscoveryText : copy.apiAccessNoModels);
   const isSelectedConfigSaved = savedApiConfigId === selectedApiConfig.id && selectedApiConfig.apiKeySaved && !apiKey.trim();
   const inactiveApiConfigs = snapshot.providers.filter((config) => config.id !== activeConfig.id);
-  const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
-  const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_RIGHT_RAIL_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
-  const isRightRailStacked = historyWidth <= RIGHT_RAIL_STACKED_WIDTH;
-  const isRightRailDense = historyWidth <= RIGHT_RAIL_DENSE_WIDTH;
-  const isRightRailCompact = isRightRailCollapsed || historyWidth <= RIGHT_RAIL_COLLAPSED_WIDTH;
+  const renderedSidebarWidth = isSidebarCompact ? COMPACT_SIDEBAR_WIDTH : sidebarWidth;
+  const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_RIGHT_RAIL_WIDTH, viewportWidth - renderedSidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+  const clampedHistoryWidth = clamp(historyWidth, MIN_RIGHT_RAIL_WIDTH, maxHistoryWidth);
+  const isRightRailCompact = isRightRailCollapsed || isAutoRightRailCollapsed || historyWidth <= RIGHT_RAIL_COLLAPSED_WIDTH;
+  const autoCollapsedHistoryWidth = Math.min(RIGHT_RAIL_COLLAPSED_WIDTH, Math.max(MIN_RIGHT_RAIL_WIDTH, maxHistoryWidth));
+  const renderedHistoryWidth =
+    isAutoRightRailCollapsed && !isRightRailCollapsed && historyWidth > RIGHT_RAIL_COLLAPSED_WIDTH
+      ? autoCollapsedHistoryWidth
+      : clampedHistoryWidth;
+  const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, viewportWidth - renderedHistoryWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+  const isRightRailStacked = renderedHistoryWidth <= RIGHT_RAIL_STACKED_WIDTH;
+  const isRightRailDense = renderedHistoryWidth <= RIGHT_RAIL_DENSE_WIDTH;
   const rightRailLayoutMode = isRightRailCompact ? "compact" : isRightRailDense ? "dense" : isRightRailStacked ? "stacked" : "full";
   const rightRailThumbSize = clamp(
-    historyWidth - RIGHT_RAIL_THUMB_HORIZONTAL_CHROME,
+    renderedHistoryWidth - RIGHT_RAIL_THUMB_HORIZONTAL_CHROME,
     RIGHT_RAIL_THUMB_MIN_SIZE,
     RIGHT_RAIL_THUMB_MAX_SIZE
   );
@@ -1266,6 +1292,32 @@ export function App() {
 
     expandedHistoryWidthRef.current = Math.max(historyWidthRef.current, MIN_HISTORY_WIDTH);
     applyRightRailWidth(RIGHT_RAIL_COLLAPSED_WIDTH, { forceCollapsed: true });
+  }
+
+  function toggleEditorFocusMode() {
+    setIsEditorFocusMode((current) => {
+      const next = !current;
+      if (next) {
+        // Entering focus mode: remember both side regions, then collapse them so the
+        // middle editor expands. Both restore together when focus mode exits.
+        editorFocusRestoreRef.current = {
+          sidebarCollapsed: isSidebarCollapsed,
+          rightRailWidth: historyWidthRef.current,
+          rightRailCollapsed: isRightRailCollapsed
+        };
+        setIsSidebarCollapsed(true);
+        expandedHistoryWidthRef.current = Math.max(historyWidthRef.current, MIN_HISTORY_WIDTH);
+        applyRightRailWidth(RIGHT_RAIL_COLLAPSED_WIDTH, { forceCollapsed: true });
+      } else {
+        const restore = editorFocusRestoreRef.current;
+        editorFocusRestoreRef.current = null;
+        if (restore) {
+          setIsSidebarCollapsed(restore.sidebarCollapsed);
+          applyRightRailWidth(restore.rightRailWidth, { forceCollapsed: restore.rightRailCollapsed });
+        }
+      }
+      return next;
+    });
   }
 
   const {
@@ -1682,11 +1734,44 @@ export function App() {
   }, [isTagManagerOpen]);
 
   useEffect(() => {
-    const updateCompactState = () => setIsAutoSidebarCollapsed(window.innerWidth <= 1320);
+    if (!expandedHistoryCardId) return undefined;
+
+    const closeExpandedHistoryCard = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".history-item")) return;
+      setExpandedHistoryCardId(null);
+    };
+
+    window.addEventListener("pointerdown", closeExpandedHistoryCard, true);
+    return () => window.removeEventListener("pointerdown", closeExpandedHistoryCard, true);
+  }, [expandedHistoryCardId]);
+
+  useEffect(() => {
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth);
+    updateViewportWidth();
+    window.addEventListener("resize", updateViewportWidth);
+    return () => window.removeEventListener("resize", updateViewportWidth);
+  }, []);
+
+  useEffect(() => {
+    const updateCompactState = () => setIsAutoSidebarCollapsed(window.innerWidth <= RAIL_AUTO_COLLAPSE_BREAKPOINT);
     updateCompactState();
     window.addEventListener("resize", updateCompactState);
     return () => window.removeEventListener("resize", updateCompactState);
   }, []);
+
+  useEffect(() => {
+    const updateCompactState = () => {
+      const leftWidth = isSidebarCompact ? COMPACT_SIDEBAR_WIDTH : sidebarWidthRef.current;
+      setIsAutoRightRailCollapsed(
+        window.innerWidth <= RAIL_AUTO_COLLAPSE_BREAKPOINT ||
+        window.innerWidth - leftWidth - RESIZER_WIDTH * 2 < MIN_WORKSPACE_WIDTH + RIGHT_RAIL_AUTO_COLLAPSE_WIDTH
+      );
+    };
+    updateCompactState();
+    window.addEventListener("resize", updateCompactState);
+    return () => window.removeEventListener("resize", updateCompactState);
+  }, [isSidebarCompact]);
 
   useEffect(() => {
     const container = promptActionsRef.current;
@@ -1851,7 +1936,7 @@ export function App() {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleMeasure);
     };
-  }, [isRightRailCompact, isSidebarCompact, notice.text, rightRailView, rightRailLayoutMode, showAdvanced, updateCheck?.status]);
+  }, [isParameterDialogOpen, isRightRailCompact, isSidebarCompact, notice.text, rightRailView, rightRailLayoutMode, updateCheck?.status]);
 
   useEffect(() => {
     const node = historyListRef.current;
@@ -1870,6 +1955,13 @@ export function App() {
   useEffect(() => {
     setHistoryPageIndex((current) => Math.min(current, historyPageCount - 1));
   }, [historyPageCount]);
+
+  useEffect(() => {
+    setExpandedHistoryCardId((current) => {
+      if (!current) return current;
+      return visibleHistory.some((job) => job.id === current) ? current : null;
+    });
+  }, [visibleHistory]);
 
   useEffect(() => {
     if (!isActiveApiConfigOpen) return;
@@ -2039,9 +2131,18 @@ export function App() {
 
   useEffect(() => {
     return () => {
+      if (referenceClickTimerRef.current) window.clearTimeout(referenceClickTimerRef.current);
       if (referenceLimitToastTimerRef.current) window.clearTimeout(referenceLimitToastTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!referencePreviewAssetId) return;
+    if (inputAssets.some((asset) => asset.id === referencePreviewAssetId)) return;
+    setReferencePreviewAssetId(null);
+    setIsReferenceMaskToolsOpen(false);
+    setReferenceMaskConfirmAssetId(null);
+  }, [inputAssets, referencePreviewAssetId]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -2118,6 +2219,19 @@ export function App() {
         ...current,
         galleryFolders: event.folders,
         galleryAssets: event.assets
+      }));
+    });
+  }, [bridge]);
+
+  useEffect(() => {
+    if (!bridge?.onSnapshotChange) return;
+    // External processes (CLI / MCP) can mutate the shared state file. The main process
+    // watches that file and pushes a fresh snapshot; merge the server-owned data so the UI
+    // hot-reloads, but keep the user's in-progress draft/edit context untouched.
+    return bridge.onSnapshotChange((next) => {
+      setSnapshot((current) => ({
+        ...next,
+        draft: current.draft
       }));
     });
   }, [bridge]);
@@ -2833,6 +2947,7 @@ export function App() {
 
   function hydrateApiConfigForm(config: ProviderConfig) {
     setSelectedApiConfigId(config.id);
+    setApiAccessKind(config.kind);
     setApiAccessName(apiAccessDisplayName(config, copy.apiAccessUntitled));
     setBaseURL(config.baseURL);
     setApiKey("");
@@ -2841,10 +2956,12 @@ export function App() {
 
   function openApiConfigDialog(config: ProviderConfig = activeConfig) {
     hydrateApiConfigForm(config);
+    setIsAddingApiAccess(false);
     setIsActiveApiConfigOpen(true);
   }
 
   function selectApiConfigForEditing(config: ProviderConfig) {
+    setIsAddingApiAccess(false);
     hydrateApiConfigForm(config);
     resetConnectionCheckForConfigEdit();
   }
@@ -2853,6 +2970,7 @@ export function App() {
     setSnapshot(next);
     const nextActiveConfig = next.providers.find(p => p.id === next.activeProviderId) ?? next.providers[0];
     const nextSelectedConfig = next.providers.find(p => p.id === selectedApiConfigId) ?? nextActiveConfig;
+    setApiAccessKind(nextSelectedConfig.kind);
     setApiAccessName(apiAccessDisplayName(nextSelectedConfig, copy.apiAccessUntitled));
     setBaseURL(nextSelectedConfig.baseURL);
     setSelectedApiConfigId(nextSelectedConfig.id);
@@ -2867,6 +2985,7 @@ export function App() {
       return { ...current, providers: nextProviders };
     });
     if (config.id === (selectedApiConfigId ?? activeConfig.id)) {
+      setApiAccessKind(config.kind);
       setApiAccessName(apiAccessDisplayName(config, copy.apiAccessUntitled));
       setBaseURL(config.baseURL);
     }
@@ -2891,16 +3010,23 @@ export function App() {
 
   function renderApiConfigConnectionBadge(config: ProviderConfig) {
     const check = apiConfigConnectionCheck(config);
-    const label = connectionStatusLabel(check, copy);
-    const title = check.status === "error" && check.message ? copy.connectionErrorDetail(check.message) : label;
-    const checking = config.id === activeConfig.id && (isTestingConnection || check.status === "checking");
+    const testing = config.id === activeConfig.id && (isTestingConnection || check.status === "checking");
+    const discovering = discoveringProviderId === config.id;
+    const hasDiscovery = !config.lastModelDiscoveryError && (Boolean(config.lastModelDiscoveryAt) || config.discoveredModels.length > 0);
+    const isTested = check.status === "ok";
+    const hasError = check.status === "error" || Boolean(config.lastModelDiscoveryError);
+    const status = testing || discovering ? "checking" : hasError ? "error" : isTested || hasDiscovery ? "ok" : "idle";
+    const label = testing ? copy.connectionChecking : discovering ? copy.discoveringModels : isTested ? copy.apiAccessTestedStatus : hasDiscovery ? copy.apiAccessDiscoveredStatus : connectionStatusLabel(check, copy);
+    const title = check.status === "error" && check.message
+      ? copy.connectionErrorDetail(check.message)
+      : config.lastModelDiscoveryError ?? (isTested ? copy.apiAccessTestedStatus : hasDiscovery ? discoveredModelTooltip(config, copy) : label);
     return (
-      <span className="connection-badge api-config-card-connection" data-status={check.status} title={title}>
-        {checking ? (
+      <span className="connection-badge api-config-card-connection" data-status={status} title={title}>
+        {testing || discovering ? (
           <Loader2 className="spin" size={12} />
-        ) : check.status === "ok" ? (
+        ) : isTested || hasDiscovery ? (
           <CheckCircle2 size={12} />
-        ) : check.status === "error" ? (
+        ) : hasError ? (
           <AlertTriangle size={12} />
         ) : (
           <span className="connection-dot" />
@@ -2931,22 +3057,28 @@ export function App() {
       return;
     }
     setIsSavingConfig(true);
+    let shouldRunConnectionTest = false;
     try {
       const targetConfig = selectedApiConfig;
-      const configKind = targetConfig.kind;
+      const configKind = apiAccessKind;
       const isEditingActiveConfig = targetConfig.id === activeConfig.id;
+      const providerKindChanged = configKind !== targetConfig.kind;
+      const nextActiveLaunchId = providerKindChanged ? defaultLaunchForProvider(configKind) : targetConfig.activeLaunchId;
+      const nextDefaultModel = providerKindChanged
+        ? defaultModelForProvider(configKind)
+        : isEditingActiveConfig ? defaultModelForConfigSave(configKind, params, activeConfig) : targetConfig.defaultModel;
       const config = await bridge.saveConfig({
         providerId: targetConfig.id,
         kind: configKind,
         name: apiAccessName.trim() || providerLabelFromKind(configKind),
         apiKey: apiKey.trim() ? apiKey : undefined,
         baseURL,
-        defaultModel: isEditingActiveConfig ? defaultModelForConfigSave(configKind, params, activeConfig) : targetConfig.defaultModel,
+        defaultModel: nextDefaultModel,
         defaultSize: isEditingActiveConfig ? defaultSizeForConfigSave(params, activeConfig) : targetConfig.defaultSize,
         defaultQuality: isEditingActiveConfig ? defaultQualityForConfigSave(params, activeConfig) : targetConfig.defaultQuality,
         timeoutMs: isEditingActiveConfig ? params.timeoutMs : targetConfig.timeoutMs,
-        activeLaunchId: targetConfig.activeLaunchId,
-        activeModelId: targetConfig.activeModelId
+        activeLaunchId: nextActiveLaunchId,
+        activeModelId: providerKindChanged ? nextDefaultModel : targetConfig.activeModelId
       });
       applyConfig(config);
       if (config.id === activeConfig.id) {
@@ -2959,8 +3091,7 @@ export function App() {
         text: config.lastModelDiscoveryError ? config.lastModelDiscoveryError : copy.notices.configSaved
       });
       if (config.id === activeConfig.id && config.apiKeySaved) {
-        hasAutoTestedConnectionRef.current = true;
-        await runConnectionTest({ silent: false, apiKeySaved: config.apiKeySaved });
+        shouldRunConnectionTest = true;
       } else if (config.id === activeConfig.id) {
         setConnectionCheck({ status: "idle" });
       }
@@ -2969,12 +3100,22 @@ export function App() {
     } finally {
       setIsSavingConfig(false);
     }
+    if (shouldRunConnectionTest) {
+      hasAutoTestedConnectionRef.current = true;
+      void runConnectionTest({ silent: false, apiKeySaved: true });
+    }
   }
 
   function changeNewApiAccessKind(kind: ProviderKind) {
     setNewApiAccessKind(kind);
     setNewApiAccessBaseURL(defaultBaseURLForProvider(kind, kind === "custom" ? newApiAccessBaseURL : baseURL));
     setNewApiAccessName((current) => current || providerLabelFromKind(kind));
+  }
+
+  function changeApiAccessKind(kind: ProviderKind) {
+    setSavedApiConfigId(null);
+    resetConnectionCheckForConfigEdit();
+    setApiAccessKind(kind);
   }
 
   async function switchApiAccess(providerId: string) {
@@ -3005,6 +3146,7 @@ export function App() {
   async function addApiAccess() {
     if (!bridge) return;
     setIsSavingConfig(true);
+    let shouldRunConnectionTest = false;
     try {
       await persistCurrentDraft();
       const defaultModel = defaultModelForProvider(newApiAccessKind);
@@ -3032,13 +3174,16 @@ export function App() {
       setConnectionCheck({ status: "idle" });
       setNotice({ kind: "success", text: copy.apiAccessAdded });
       if (nextActiveConfig.apiKeySaved) {
-        hasAutoTestedConnectionRef.current = true;
-        await runConnectionTest({ silent: true, apiKeySaved: nextActiveConfig.apiKeySaved });
+        shouldRunConnectionTest = true;
       }
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
       setIsSavingConfig(false);
+    }
+    if (shouldRunConnectionTest) {
+      hasAutoTestedConnectionRef.current = true;
+      void runConnectionTest({ silent: true, apiKeySaved: true });
     }
   }
 
@@ -3315,6 +3460,70 @@ export function App() {
         text: copy.notices.imagesAdded(addedCount, cappedNext.length, false, referenceLimit)
       });
     }
+  }
+
+  function clearReferenceClickTimer() {
+    if (!referenceClickTimerRef.current) return;
+    window.clearTimeout(referenceClickTimerRef.current);
+    referenceClickTimerRef.current = null;
+  }
+
+  function promoteReferenceAssetToFirst(assetId: string, options: { clearMask?: boolean } = {}) {
+    const index = inputAssets.findIndex((asset) => asset.id === assetId);
+    if (index <= 0) return;
+    const target = inputAssets[index];
+    setInputAssets([target, ...inputAssets.slice(0, index), ...inputAssets.slice(index + 1)]);
+    markDraftChanged();
+    setTabMode("img2img");
+    if (options.clearMask && (maskAsset || maskDataUrl)) {
+      setMaskAsset(null);
+      setMaskDataUrl(null);
+      setMaskCheck(null);
+    }
+    setNotice({ kind: "info", text: copy.referencePromoted });
+  }
+
+  function handleReferenceTileClick(assetId: string) {
+    clearReferenceClickTimer();
+    referenceClickTimerRef.current = window.setTimeout(() => {
+      referenceClickTimerRef.current = null;
+      promoteReferenceAssetToFirst(assetId);
+    }, 180);
+  }
+
+  function openReferencePreview(assetId: string) {
+    clearReferenceClickTimer();
+    setReferencePreviewAssetId(assetId);
+    setIsReferenceMaskToolsOpen(false);
+    setReferenceMaskConfirmAssetId(null);
+  }
+
+  function closeReferencePreview() {
+    clearReferenceClickTimer();
+    setReferencePreviewAssetId(null);
+    setIsReferenceMaskToolsOpen(false);
+    setReferenceMaskConfirmAssetId(null);
+    setIsPainting(false);
+  }
+
+  function requestReferenceMaskEditor(asset: InputAsset) {
+    if (isGeneralMode) {
+      setNotice({ kind: "error", text: copy.validation.generalNoMask });
+      return;
+    }
+    if (inputAssets[0]?.id !== asset.id) {
+      setReferenceMaskConfirmAssetId(asset.id);
+      return;
+    }
+    setTabMode("img2img");
+    setIsReferenceMaskToolsOpen((current) => !current);
+  }
+
+  function confirmReferenceMaskEditor(assetId: string) {
+    promoteReferenceAssetToFirst(assetId, { clearMask: true });
+    setReferencePreviewAssetId(assetId);
+    setReferenceMaskConfirmAssetId(null);
+    setIsReferenceMaskToolsOpen(true);
   }
 
   async function selectImages() {
@@ -4644,6 +4853,29 @@ export function App() {
   }, [contextMenu]);
 
   useEffect(() => {
+    if (!isEditorFocusMode) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") toggleEditorFocusMode();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [isEditorFocusMode]);
+
+  useEffect(() => {
+    // The reference source image is now always mounted, so its onLoad no longer fires
+    // when the mask canvas appears. Size the canvas explicitly when masking begins.
+    if (!isReferenceMaskToolsOpen) return;
+    const frame = window.requestAnimationFrame(() => resizeMaskCanvas());
+    return () => window.cancelAnimationFrame(frame);
+  }, [isReferenceMaskToolsOpen, referencePreviewAssetId]);
+
+  useEffect(() => {
+    // The editor surface changes width when focus mode toggles; resync the annotation canvas.
+    const frame = window.requestAnimationFrame(() => resizeAnnotationCanvas(false));
+    return () => window.cancelAnimationFrame(frame);
+  }, [isEditorFocusMode]);
+
+  useEffect(() => {
     const tooltipTarget = (target: EventTarget | null): HTMLElement | null => {
       if (!(target instanceof Element)) return null;
       return target.closest<HTMLElement>("[data-tooltip]");
@@ -4838,6 +5070,16 @@ export function App() {
     }
   }
 
+  function maskPointFromEvent(event: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number } | null {
+    const canvas = maskCanvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((event.clientY - rect.top) / rect.height) * canvas.height
+    };
+  }
+
   function startPaint(event: React.PointerEvent<HTMLCanvasElement>) {
     // Painting is what CREATES a freehand mask, so it cannot gate on requestMode === "inpaint"
     // (which only becomes true once a mask already exists). Gate on the conditions under which
@@ -4845,6 +5087,7 @@ export function App() {
     if (isGeneralMode || tabMode !== "img2img" || !sourcePreview) return;
     setIsPainting(true);
     paintedDuringStrokeRef.current = false;
+    lastMaskPointRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
     paintAt(event);
   }
@@ -4858,6 +5101,7 @@ export function App() {
     if (!isPainting) return;
     event.currentTarget.releasePointerCapture(event.pointerId);
     setIsPainting(false);
+    lastMaskPointRef.current = null;
     const canvas = maskCanvasRef.current;
     if (canvas && paintedDuringStrokeRef.current) {
       markDraftChanged();
@@ -4869,20 +5113,32 @@ export function App() {
   function paintAt(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = maskCanvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
-    const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+    const point = maskPointFromEvent(event);
+    if (!point) return;
     const context = canvas.getContext("2d");
     if (!context) return;
     context.save();
     context.globalCompositeOperation = "source-over";
     context.fillStyle = "rgba(255,255,255,0.9)";
-    context.shadowColor = "rgba(30,107,95,0.4)";
-    context.shadowBlur = brushSize * 0.2;
+    context.strokeStyle = "rgba(255,255,255,0.9)";
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.lineWidth = brushSize;
+    const from = lastMaskPointRef.current;
+    if (from) {
+      // Connect consecutive pointer samples so a fast stroke is a continuous band
+      // rather than a row of detached dots.
+      context.beginPath();
+      context.moveTo(from.x, from.y);
+      context.lineTo(point.x, point.y);
+      context.stroke();
+    }
+    // Round cap at the current point keeps the start of the stroke and slow moves solid.
     context.beginPath();
-    context.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+    context.arc(point.x, point.y, brushSize / 2, 0, Math.PI * 2);
     context.fill();
     context.restore();
+    lastMaskPointRef.current = point;
     paintedDuringStrokeRef.current = true;
   }
 
@@ -4905,16 +5161,75 @@ export function App() {
     : effectiveOpenAIImageRoute
       ? copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, effectiveOpenAIImageRoute))
       : undefined;
-  const parameterSummary = openAIParams ? (
+  const openAIImageRouteControl = openAIParams ? (
+    <label title={imageRouteTitle}>
+      <span className="route-label">
+        <span>{copy.imageRoute}</span>
+        <span className="route-info-icon" aria-label={copy.imageRouteInfo} data-tooltip={copy.imageRouteInfo} title={copy.imageRouteInfo}>
+          <Info size={12} />
+        </span>
+      </span>
+      <select
+        value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
+        disabled={requestMode === "inpaint"}
+        onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
+      >
+        <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
+        <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
+        <option value="responses">{copy.imageRouteResponses}</option>
+        <option value="image-api">{copy.imageRouteImageApi}</option>
+      </select>
+    </label>
+  ) : null;
+  const parameterQuickControls = openAIParams ? (
     <>
-      <label title={imageRouteTitle}>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.size}</small>
+        <select
+          aria-label={copy.size}
+          value={sizeSelectValue}
+          onChange={(event) => {
+            const value = event.target.value;
+            updateOpenAIParams({ size: value === "custom" ? customSize : value });
+          }}
+        >
+          {sizePresets.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+          <option value="custom">{copy.custom}</option>
+        </select>
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.quality}</small>
+        <select aria-label={copy.quality} value={openAIParams.quality} onChange={(event) => updateOpenAIParams({ quality: event.target.value as ImageQuality })}>
+          {qualityOptions.map((quality) => (
+            <option key={quality} value={quality}>
+              {quality}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.format}</small>
+        <select aria-label={copy.format} value={openAIParams.outputFormat} onChange={(event) => updateOpenAIParams({ outputFormat: event.target.value as ImageFormat })}>
+          {formatOptions.map((format) => (
+            <option key={format} value={format}>
+              {format.toUpperCase()}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field parameter-route-field" title={imageRouteTitle}>
         <span className="route-label">
-          <span>{copy.imageRoute}</span>
+          <small>{copy.imageRoute}</small>
           <span className="route-info-icon" aria-label={copy.imageRouteInfo} data-tooltip={copy.imageRouteInfo} title={copy.imageRouteInfo}>
             <Info size={12} />
           </span>
         </span>
         <select
+          aria-label={copy.imageRoute}
           value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
           disabled={requestMode === "inpaint"}
           onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
@@ -4925,6 +5240,48 @@ export function App() {
           <option value="image-api">{copy.imageRouteImageApi}</option>
         </select>
       </label>
+    </>
+  ) : geminiParams ? (
+    <>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.aspectRatio}</small>
+        <select aria-label={copy.aspectRatio} value={geminiParams.aspectRatio} onChange={(event) => updateGeminiParams({ aspectRatio: event.target.value as GeminiAspectRatio })}>
+          {GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => (
+            <option key={aspectRatio} value={aspectRatio}>
+              {aspectRatio}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.resolution}</small>
+        <select aria-label={copy.resolution} value={geminiParams.resolution} onChange={(event) => updateGeminiParams({ resolution: event.target.value as GeminiResolution })}>
+          {GEMINI_RESOLUTION_OPTIONS.map((resolution) => (
+            <option key={resolution} value={resolution}>
+              {resolution}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.count}</small>
+        <input aria-label={copy.count} type="number" min="1" max="1" value={geminiParams.outputCount} onChange={() => updateGeminiParams({ outputCount: 1 })} />
+      </label>
+    </>
+  ) : (
+    <>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.model}</small>
+        <input aria-label={copy.model} value={generalParams?.model || copy.generalFallback} readOnly />
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.provider}</small>
+        <input aria-label={copy.provider} value={providerLabelFromKind(generalParams?.providerKind ?? activeConfig.kind)} readOnly />
+      </label>
+    </>
+  );
+  const parameterPrimaryControls = openAIParams ? (
+    <>
       <label>
         <span>{copy.size}</span>
         <select
@@ -4962,6 +5319,7 @@ export function App() {
           ))}
         </select>
       </label>
+      {openAIImageRouteControl}
     </>
   ) : geminiParams ? (
     <>
@@ -5450,7 +5808,7 @@ export function App() {
       style={
         {
           "--sidebar-width": `${isSidebarCompact ? COMPACT_SIDEBAR_WIDTH : sidebarWidth}px`,
-          "--history-width": `${historyWidth}px`,
+          "--history-width": `${renderedHistoryWidth}px`,
           "--right-rail-thumb-size": `${rightRailThumbSize}px`,
           "--preview-ratio": previewPanelRatio,
           "--sidebar-collapse-button-y": `${sidebarCollapseButtonY}px`,
@@ -5490,10 +5848,7 @@ export function App() {
           <button
             type="button"
             className="icon-button"
-            onClick={() => {
-              setIsSidebarCollapsed(false);
-              setShowAdvanced(true);
-            }}
+            onClick={() => setIsParameterDialogOpen(true)}
             aria-label={copy.parameters}
             data-tooltip={copy.parameters}
           >
@@ -5521,10 +5876,7 @@ export function App() {
 
         <ProviderSummarySection
           copy={copy}
-          activeConfig={activeConfig}
           displayName={apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}
-          providerLabel={providerLabelFromKind(activeConfig.kind)}
-          baseUrlSummary={summarizeBaseURL(activeConfig.baseURL)}
           discoveryText={discoveryText}
           connectionStatus={connectionCheck.status}
           connectionLabel={connectionLabel}
@@ -5537,23 +5889,13 @@ export function App() {
           copy={copy}
           activeConfig={activeConfig}
           activeProviderKind={params.providerKind}
-          activeLaunchDisplay={activeLaunchDisplay}
           launchButtons={launchButtons}
           openLaunchMenuId={openLaunchMenuId}
           saving={isSavingConfig}
-          providerLabelForKind={providerLabelFromKind}
           modelOptionsForLaunch={getLaunchModelOptions}
           onToggleLaunchMenu={(launchId, open) => setOpenLaunchMenuId(open ? launchId : null)}
           onLaunch={(button) => void launchModel(button)}
           onSelectModel={(launchId, model) => void selectLaunchModel(launchId, model)}
-        />
-
-        <ParameterSection
-          copy={copy}
-          expanded={showAdvanced}
-          summary={parameterSummary}
-          controls={advancedControls}
-          onToggle={() => setShowAdvanced((current) => !current)}
         />
 
         <section className="notice-area" data-kind={notice.kind} aria-live={notice.kind === "error" ? "assertive" : "polite"} aria-atomic="true">
@@ -5621,7 +5963,7 @@ export function App() {
 
       <PerfProfiler id="Workspace">
       <section className="workspace">
-        <div className="preview-layout" ref={previewLayoutRef}>
+        <div className={isEditorFocusMode ? "preview-layout editor-focus-mode" : "preview-layout"} ref={previewLayoutRef}>
           <ImageEditor
             copy={copy}
             language={language}
@@ -5667,7 +6009,8 @@ export function App() {
             annotationLayerStyle={annotationLayerStyle}
             cssRectForCanvasRect={cssRectForCanvasRect}
             cssSizeForCanvasUnits={cssSizeForCanvasUnits}
-            onOpenPreview={() => setIsPreviewOpen(true)}
+            isEditorFocusMode={isEditorFocusMode}
+            onOpenPreview={toggleEditorFocusMode}
             onPreviewPanStart={handlePreviewPanStart}
             onPreviewPanMove={handlePreviewPanMove}
             onPreviewPanEnd={handlePreviewPanEnd}
@@ -5833,6 +6176,14 @@ export function App() {
               {validationError && <p className="inline-check error">{validationError}</p>}
             </div>
 
+            {!showReferenceTools && (
+              <ParameterConfigLauncher
+                copy={copy}
+                quickControls={parameterQuickControls}
+                onOpen={() => setIsParameterDialogOpen(true)}
+              />
+            )}
+
             {showReferenceTools && (
               <>
                 <div
@@ -5852,16 +6203,50 @@ export function App() {
                     <div className="empty-inline">{copy.dropReferencesHint}</div>
                   ) : (
                     inputAssets.map((asset, index) => (
-                      <div key={asset.id} className="asset-tile">
+                      <div
+                        key={asset.id}
+                        className={[
+                          "asset-tile",
+                          "reference-thumb-tile",
+                          index === 0 ? "primary-reference" : "",
+                          index === 0 && maskPreview ? "has-mask" : ""
+                        ].filter(Boolean).join(" ")}
+                        role="button"
+                        tabIndex={0}
+                        title={copy.referenceTileHint}
+                        data-tooltip={copy.referenceTileHint}
+                        onClick={() => handleReferenceTileClick(asset.id)}
+                        onDoubleClick={() => openReferencePreview(asset.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            openReferencePreview(asset.id);
+                            return;
+                          }
+                          if (event.key === " ") {
+                            event.preventDefault();
+                            promoteReferenceAssetToFirst(asset.id);
+                          }
+                        }}
+                      >
                         {assetSource(asset) && <img src={assetSource(asset)} alt={asset.name} />}
-                        <button type="button" className="tile-remove" onClick={() => removeInputAsset(asset.id)} aria-label={copy.delete} data-tooltip={copy.delete}>
+                        <button
+                          type="button"
+                          className="tile-remove"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removeInputAsset(asset.id);
+                          }}
+                          aria-label={copy.delete}
+                          data-tooltip={copy.delete}
+                        >
                           <X size={14} />
                         </button>
-                        <div>
+                        <div className="reference-thumb-meta">
                           <strong>{index === 0 ? copy.source : `${copy.reference} ${index + 1}`}</strong>
                           <span>{asset.name}</span>
-                          <small>{formatBytes(asset.sizeBytes)}</small>
                         </div>
+                        {index === 0 && maskPreview && <span className="reference-mask-badge">{copy.mask}</span>}
                       </div>
                     ))
                   )}
@@ -5886,75 +6271,20 @@ export function App() {
                     <span>{copy.uploadRightsReminder}</span>
                   </p>
                 )}
+                {showExactMaskRouteNotice && (
+                  <p className="inline-check warning mask-route-notice">
+                    <AlertTriangle size={14} />
+                    <span>{copy.exactMaskRouteNotice}</span>
+                  </p>
+                )}
+                <ParameterConfigLauncher
+                  copy={copy}
+                  quickControls={parameterQuickControls}
+                  onOpen={() => setIsParameterDialogOpen(true)}
+                />
               </>
             )}
 
-            {tabMode === "img2img" && !isGeneralMode && (
-              <div className="mask-editor">
-                <div className="mask-header">
-                  <div>
-                    <h3>
-                      {copy.mask} <span className="mask-optional">{copy.maskOptional}</span>
-                    </h3>
-                    <p>{maskDescription}</p>
-                  </div>
-                  <div className="brush-controls">
-                    <Eraser size={16} />
-                    <span className="range-tooltip" data-tooltip={copy.maskBrushSize}>
-                      <input
-                        type="range"
-                        min="16"
-                        max="180"
-                        value={brushSize}
-                        aria-label={copy.maskBrushSize}
-                        onChange={(event) => {
-                          markDraftChanged();
-                          setBrushSize(Number(event.target.value));
-                        }}
-                      />
-                    </span>
-                    <button
-                      type="button"
-                      className="icon-button secondary compact-mask-button"
-                      onClick={addPaintedMask}
-                      disabled={!maskDataUrl}
-                      aria-label={copy.addPaintedMask}
-                      data-tooltip={copy.addPaintedMaskTooltip}
-                    >
-                      <Paintbrush size={15} />
-                    </button>
-                    <button type="button" className="icon-button" onClick={clearPaintedMask} aria-label={copy.clearPaintedMask} data-tooltip={copy.clearPaintedMask}>
-                      <X size={15} />
-                    </button>
-                  </div>
-                </div>
-                <div className={sourcePreview ? "mask-canvas-wrap has-source" : "mask-canvas-wrap"}>
-                  {sourcePreview ? (
-                    <>
-                      <img ref={sourceImageRef} src={sourcePreview} alt={copy.sourceForMask} onLoad={handleSourceImageLoad} />
-                      <canvas
-                        ref={maskCanvasRef}
-                        onPointerDown={startPaint}
-                        onPointerMove={continuePaint}
-                        onPointerUp={finishPaint}
-                        onPointerCancel={finishPaint}
-                      />
-                    </>
-                  ) : (
-                    <div className="empty-state">
-                      <Brush size={24} />
-                      <span>{copy.addSourceForMask}</span>
-                    </div>
-                  )}
-                </div>
-                {maskPreview && (
-                  <div className="mask-status">
-                    {maskCheck?.ok ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
-                    <span>{maskCheck?.message ?? copy.checkingMask}</span>
-                  </div>
-                )}
-              </div>
-            )}
           </section>
         </div>
       </section>
@@ -5967,7 +6297,7 @@ export function App() {
         aria-orientation="vertical"
         aria-valuemin={MIN_RIGHT_RAIL_WIDTH}
         aria-valuemax={maxHistoryWidth}
-        aria-valuenow={historyWidth}
+        aria-valuenow={renderedHistoryWidth}
         aria-disabled={false}
         tabIndex={0}
         onPointerDown={(event) => {
@@ -6095,6 +6425,7 @@ export function App() {
                         resultSrc={result ? assetSource(result) : undefined}
                         jobError={jobError}
                         active={activeJob?.id === job.id}
+                        hoverOpen={expandedHistoryCardId === job.id}
                         selected={isSelected}
                         batchMode={isHistoryBatchMode}
                         displayName={displayName}
@@ -6117,6 +6448,7 @@ export function App() {
                         copyButtonLabel={buttonFeedback[`copy:${job.id}`] ? copy.clicked : copy.copy}
                         downloadButtonLabel={result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}
                         onToggleSelection={(checked) => toggleHistoryJobSelection(job.id, checked)}
+                        onHoverOpen={() => setExpandedHistoryCardId(job.id)}
                         onOpen={() => {
                           setActiveGalleryAssetId(null);
                           setActiveJob(job);
@@ -6148,7 +6480,14 @@ export function App() {
             {galleryRailPanel}
           </StableGalleryRailPanel>
         )}
-        <div ref={rightRailActionsRef} className={`right-rail-actions ${isRightRailActionDrawerOpen ? "drawer-open" : ""}`}>
+        <div
+          ref={rightRailActionsRef}
+          className={[
+            "right-rail-actions",
+            isRightRailActionDrawerOpen ? "drawer-open" : "",
+            isTagManagerOpen ? "tag-manager-open" : ""
+          ].filter(Boolean).join(" ")}
+        >
           <span className="right-rail-summary">
             {rightRailView === "history"
               ? isHistoryBatchMode ? copy.historySelectionCount(selectedHistoryItemCount) : copy.historyStats(snapshot.history.length)
@@ -6161,11 +6500,11 @@ export function App() {
             onClick={() => setIsRightRailActionDrawerOpen((current) => !current)}
             onMouseMove={movePreviewToolbarTowardPointer}
             onMouseLeave={resetPreviewToolbarDrift}
-            aria-label={copy.parameters}
-            data-tooltip={copy.parameters}
+            aria-label={copy.moreActions}
+            data-tooltip={copy.moreActions}
             aria-expanded={isRightRailActionDrawerOpen}
           >
-            <SlidersHorizontal size={15} />
+            <MoreHorizontal size={15} />
           </button>
           <div className="right-rail-action-group" data-drift="subtle" onMouseMove={movePreviewToolbarTowardPointer} onMouseLeave={resetPreviewToolbarDrift}>
             <button
@@ -6240,6 +6579,7 @@ export function App() {
           discoveringProviderId={discoveringProviderId}
           discoveringAny={isDiscoveringModels}
           connectionErrorText={connectionErrorText}
+          kind={apiAccessKind}
           name={apiAccessName}
           apiKey={apiKey}
           baseURL={baseURL}
@@ -6256,11 +6596,15 @@ export function App() {
           displayNameForConfig={(config) => apiAccessDisplayName(config, copy.apiAccessUntitled)}
           providerLabelForKind={providerLabelFromKind}
           baseUrlSummaryForConfig={(config) => summarizeBaseURL(config.baseURL)}
+          baseUrlSummaryForValue={summarizeBaseURL}
           discoverySummaryForConfig={(config) => discoverySummary(config, copy)}
           discoveryTooltipForConfig={(config) => discoveredModelTooltip(config, copy)}
           modelLabel={discoveredModelLabel}
           connectionBadgeForConfig={renderApiConfigConnectionBadge}
-          onClose={() => setIsActiveApiConfigOpen(false)}
+          onClose={() => {
+            setIsAddingApiAccess(false);
+            setIsActiveApiConfigOpen(false);
+          }}
           onUseConfig={(config) => void switchApiAccess(config.id)}
           onSelectConfig={selectApiConfigForEditing}
           onDeleteConfig={(config) => void deleteApiAccess(config)}
@@ -6272,6 +6616,7 @@ export function App() {
           onNewApiAccessKeyChange={setNewApiAccessKey}
           onAddApiAccess={() => void addApiAccess()}
           onCancelAddApiAccess={() => setIsAddingApiAccess(false)}
+          onKindChange={changeApiAccessKind}
           onNameChange={(value) => {
             setSavedApiConfigId(null);
             setApiAccessName(value);
@@ -6287,6 +6632,14 @@ export function App() {
             setBaseURL(value);
           }}
           onSubmit={() => void saveConfig()}
+        />
+      )}
+      {isParameterDialogOpen && (
+        <ParameterConfigDialog
+          copy={copy}
+          primaryControls={parameterPrimaryControls}
+          controls={advancedControls}
+          onClose={() => setIsParameterDialogOpen(false)}
         />
       )}
       {isTemplatesOpen && (
@@ -6496,18 +6849,104 @@ export function App() {
             </div>
         </DialogShell>
       )}
-      {isPreviewOpen && activePreviewSource && (
-        <DialogShell className="preview-modal-dialog" backdropClassName="preview-modal-backdrop" labelledBy="preview-modal-title" onClose={() => setIsPreviewOpen(false)}>
-          <h2 id="preview-modal-title" className="visually-hidden">{copy.resultViewer}</h2>
-          <button type="button" className="preview-modal-close icon-button tooltip-below" onClick={() => setIsPreviewOpen(false)} aria-label={copy.cancel} data-tooltip={copy.cancel}>
+      {referencePreviewAsset && referencePreviewSource && (
+        <DialogShell className="preview-modal-dialog reference-preview-dialog" backdropClassName="preview-modal-backdrop" labelledBy="reference-preview-modal-title" onClose={closeReferencePreview}>
+          <h2 id="reference-preview-modal-title" className="visually-hidden">{referencePreviewAsset.name}</h2>
+          <button type="button" className="preview-modal-close icon-button tooltip-below" onClick={closeReferencePreview} aria-label={copy.cancel} data-tooltip={copy.cancel}>
             <X size={18} />
           </button>
-          <img
-            src={activePreviewSource}
-            alt={copy.generatedResult}
-            className="preview-modal-image"
-            onContextMenu={(e) => handleImageContextMenu(e, activeImage, activeJob?.prompt ?? '')}
-          />
+          <div
+            className="preview-control-strip reference-preview-tools"
+            onMouseMove={movePreviewToolbarTowardPointer}
+            onMouseLeave={resetPreviewToolbarDrift}
+          >
+            <div className="preview-primary-actions" aria-label={copy.referenceMaskTools}>
+              <button
+                type="button"
+                className={isReferenceMaskToolsOpen ? "icon-button active" : "icon-button"}
+                disabled={isGeneralMode}
+                onClick={() => requestReferenceMaskEditor(referencePreviewAsset)}
+                aria-label={copy.addReferenceMask}
+                data-tooltip={copy.addReferenceMask}
+                aria-pressed={isReferenceMaskToolsOpen}
+              >
+                <Paintbrush size={16} />
+              </button>
+            </div>
+            {isReferenceMaskToolsOpen && sourcePreview && (
+              <div className="preview-secondary-actions reference-mask-tools" data-drift="subtle">
+                <Eraser size={15} />
+                <span className="range-tooltip" data-tooltip={copy.maskBrushSize}>
+                  <input
+                    type="range"
+                    min="16"
+                    max="180"
+                    value={brushSize}
+                    aria-label={copy.maskBrushSize}
+                    onChange={(event) => {
+                      markDraftChanged();
+                      setBrushSize(Number(event.target.value));
+                    }}
+                  />
+                </span>
+                <button
+                  type="button"
+                  className="icon-button secondary compact-mask-button"
+                  onClick={addPaintedMask}
+                  disabled={!maskDataUrl}
+                  aria-label={copy.addPaintedMask}
+                  data-tooltip={copy.addPaintedMaskTooltip}
+                >
+                  <Paintbrush size={15} />
+                </button>
+                <button type="button" className="icon-button" onClick={clearPaintedMask} aria-label={copy.clearPaintedMask} data-tooltip={copy.clearPaintedMask}>
+                  <X size={15} />
+                </button>
+              </div>
+            )}
+          </div>
+          <div className={isReferenceMaskToolsOpen && sourcePreview ? "reference-preview-stage masking" : "reference-preview-stage"}>
+            <div className="reference-preview-canvas-wrap">
+              <img
+                ref={sourceImageRef}
+                src={referencePreviewSource}
+                alt={referencePreviewAsset.name}
+                className="preview-modal-image"
+                onLoad={handleSourceImageLoad}
+              />
+              {isReferenceMaskToolsOpen && sourcePreview && (
+                <canvas
+                  ref={maskCanvasRef}
+                  className="reference-preview-mask-canvas"
+                  aria-label={maskDescription}
+                  onPointerDown={startPaint}
+                  onPointerMove={continuePaint}
+                  onPointerUp={finishPaint}
+                  onPointerCancel={finishPaint}
+                />
+              )}
+            </div>
+            {isReferenceMaskToolsOpen && maskPreview && (
+              <div className="mask-status reference-preview-mask-status">
+                {maskCheck?.ok ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+                <span>{maskCheck?.message ?? copy.checkingMask}</span>
+              </div>
+            )}
+          </div>
+          {referenceMaskConfirmAsset && (
+            <div className="reference-mask-confirm" role="alertdialog" aria-labelledby="reference-mask-confirm-title" aria-modal="true">
+              <h3 id="reference-mask-confirm-title">{copy.referenceMaskConfirmTitle}</h3>
+              <p>{copy.referenceMaskConfirmBody(referenceMaskConfirmAsset.name)}</p>
+              <div className="dialog-actions">
+                <button type="button" className="secondary" onClick={() => setReferenceMaskConfirmAssetId(null)}>
+                  {copy.cancel}
+                </button>
+                <button type="button" onClick={() => confirmReferenceMaskEditor(referenceMaskConfirmAsset.id)}>
+                  {copy.referenceMaskConfirmAction}
+                </button>
+              </div>
+            </div>
+          )}
         </DialogShell>
       )}
       {contextMenu && (

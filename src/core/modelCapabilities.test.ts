@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { GENERAL_LAUNCH_ID, GPT_IMAGE_2_LAUNCH_ID, NANO_BANANA_3_LAUNCH_ID } from "../shared/modelCatalog";
+import {
+  GENERAL_LAUNCH_ID,
+  GEMINI_3_PRO_IMAGE_MODEL_ID,
+  GPT_IMAGE_2_LAUNCH_ID,
+  NANO_BANANA_3_LAUNCH_ID,
+  NANO_BANANA_3_MODEL_ID
+} from "../shared/modelCatalog";
 import type { ProviderConfig } from "../shared/types";
 import { capabilityContractForFocusedModel, capabilitySummaryForDiscoveredModel, listProviderModelCapabilitySummaries } from "./modelCapabilities";
 import { getFocusedModelDefinition } from "../shared/modelCatalog";
@@ -133,5 +139,29 @@ describe("model capability contracts", () => {
       edit: false,
       confidence: "discovered"
     });
+  });
+
+  it("keeps shared-launch Gemini models selectable with unique keys", () => {
+    const summaries = listProviderModelCapabilitySummaries(
+      provider({
+        id: "provider-gemini",
+        kind: "gemini",
+        name: "Gemini",
+        defaultModel: NANO_BANANA_3_MODEL_ID,
+        activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+        activeModelId: NANO_BANANA_3_MODEL_ID,
+        discoveredModels: [
+          { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini" }
+        ]
+      })
+    );
+
+    const nanoModels = summaries.filter((summary) => summary.launchId === NANO_BANANA_3_LAUNCH_ID);
+    expect(nanoModels.map((summary) => summary.modelId)).toEqual([NANO_BANANA_3_MODEL_ID, GEMINI_3_PRO_IMAGE_MODEL_ID]);
+    expect(nanoModels.map((summary) => summary.selectionKey)).toEqual([
+      `${NANO_BANANA_3_LAUNCH_ID}:${NANO_BANANA_3_MODEL_ID}`,
+      `${NANO_BANANA_3_LAUNCH_ID}:${GEMINI_3_PRO_IMAGE_MODEL_ID}`
+    ]);
+    expect(new Set(nanoModels.map((summary) => summary.selectionKey)).size).toBe(nanoModels.length);
   });
 });

@@ -145,7 +145,7 @@ CrossGen exposes the local runtime through JSON CLI commands and an MCP stdio se
 - `crossgen generate ... --yes --wait --json` and MCP `generate_image` submit work through the durable queue.
 - `crossgen asset export <asset-id> --to <path> --yes --json` copies a managed image into a project without moving the Gallery source.
 
-CLI and MCP default to read-only behavior. Write and generation modes are explicit, paid generation requires confirmation, and local path disclosure is opt-in.
+CLI and MCP are separate entry points. MCP can point directly at the installed CrossGen app executable with `--mcp` and does not require a CLI wrapper. The packaged CLI launcher forwards to the app executable and does not require Node.js, npm, pnpm, or a global package. CLI and MCP default to read-only behavior. Write and generation modes are explicit, paid generation requires confirmation, and local path disclosure is opt-in.
 
 See [`docs/cli-mcp.md`](./docs/cli-mcp.md) for command examples and [`docs/KNOWN_LIMITATIONS.md`](./docs/KNOWN_LIMITATIONS.md) for current agent/runtime limits.
 

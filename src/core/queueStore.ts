@@ -52,6 +52,9 @@ const DEFAULT_QUEUE_FILE: GenerationQueueFile = {
   workerHosts: []
 };
 
+const WORKER_HOST_EXPIRED_RETENTION_MS = 24 * 60 * 60 * 1000;
+const MAX_RETAINED_WORKER_HOSTS = 20;
+
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
@@ -177,6 +180,33 @@ function cloneQueue(queue: GenerationQueueFile): GenerationQueueFile {
   return structuredClone(queue);
 }
 
+function hostTimestampMs(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
+function workerHostRecencyMs(host: GenerationQueueWorkerHost): number {
+  return Math.max(hostTimestampMs(host.leaseExpiresAt), hostTimestampMs(host.heartbeatAt));
+}
+
+function pruneWorkerHosts(queue: GenerationQueueFile, nowMs: number): GenerationQueueFile {
+  const staleLeaseCutoffMs = nowMs - WORKER_HOST_EXPIRED_RETENTION_MS;
+  const next = cloneQueue(queue);
+  next.workerHosts = next.workerHosts
+    .filter((host) => {
+      const leaseExpiresAt = hostTimestampMs(host.leaseExpiresAt);
+      if (!Number.isFinite(leaseExpiresAt)) return workerHostRecencyMs(host) > staleLeaseCutoffMs;
+      return leaseExpiresAt > staleLeaseCutoffMs;
+    })
+    .sort((a, b) => workerHostRecencyMs(b) - workerHostRecencyMs(a) || a.hostId.localeCompare(b.hostId))
+    .slice(0, MAX_RETAINED_WORKER_HOSTS);
+  return next;
+}
+
+function normalizeQueueForWrite(queue: GenerationQueueFile, nowMs: number): GenerationQueueFile {
+  return pruneWorkerHosts(normalizeQueueFile(queue), nowMs);
+}
+
 function markStaleRunning(queue: GenerationQueueFile, nowMs: number, staleRunningAfterMs: number): GenerationQueueFile {
   const next = cloneQueue(queue);
   for (const item of next.items) {
@@ -263,7 +293,7 @@ export function createQueueStore(options: QueueStoreOptions): QueueStore {
       return readQueueFile(options.queuePath);
     },
     async write(queue: GenerationQueueFile): Promise<void> {
-      await withExclusiveFileLock(options.lockPath, async () => writeQueueFile(options.queuePath, normalizeQueueFile(queue)), {
+      await withExclusiveFileLock(options.lockPath, async () => writeQueueFile(options.queuePath, normalizeQueueForWrite(queue, now())), {
         timeoutMs,
         staleLockMs
       });
@@ -273,7 +303,7 @@ export function createQueueStore(options: QueueStoreOptions): QueueStore {
         options.lockPath,
         async () => {
           const current = await readQueueFile(options.queuePath);
-          const next = normalizeQueueFile(await mutator(current));
+          const next = normalizeQueueForWrite(await mutator(current), now());
           await writeQueueFile(options.queuePath, next);
           return next;
         },
@@ -285,7 +315,7 @@ export function createQueueStore(options: QueueStoreOptions): QueueStore {
         options.lockPath,
         async () => {
           const current = await readQueueFile(options.queuePath);
-          const next = markStaleRunning(current, nowOverride, staleRunningAfterMs);
+          const next = pruneWorkerHosts(markStaleRunning(current, nowOverride, staleRunningAfterMs), nowOverride);
           await writeQueueFile(options.queuePath, next);
           return next;
         },
@@ -311,8 +341,9 @@ export function createQueueStore(options: QueueStoreOptions): QueueStore {
           if (index >= 0) next.workerHosts[index] = normalized;
           else next.workerHosts.push(normalized);
           next.updatedAt = nowIso;
-          await writeQueueFile(options.queuePath, next);
-          return next;
+          const pruned = pruneWorkerHosts(next, Date.parse(nowIso));
+          await writeQueueFile(options.queuePath, pruned);
+          return pruned;
         },
         { timeoutMs, staleLockMs }
       );
@@ -322,9 +353,11 @@ export function createQueueStore(options: QueueStoreOptions): QueueStore {
         options.lockPath,
         async () => {
           const current = await readQueueFile(options.queuePath);
-          const recovered = markStaleRunning(current, now(), staleRunningAfterMs);
-          const claimed = claimItems(recovered, claimOptions, now(), leaseMs);
-          await writeQueueFile(options.queuePath, recovered);
+          const nowMs = now();
+          const recovered = markStaleRunning(current, nowMs, staleRunningAfterMs);
+          const claimed = claimItems(recovered, claimOptions, nowMs, leaseMs);
+          const next = pruneWorkerHosts(recovered, nowMs);
+          await writeQueueFile(options.queuePath, next);
           return claimed;
         },
         { timeoutMs, staleLockMs }
@@ -337,9 +370,11 @@ export function createQueueStore(options: QueueStoreOptions): QueueStore {
           const current = await readQueueFile(options.queuePath);
           const next = cloneQueue(current);
           next.items.push(normalizeQueueItem(item));
-          next.updatedAt = new Date(now()).toISOString();
-          await writeQueueFile(options.queuePath, next);
-          return next;
+          const nowMs = now();
+          next.updatedAt = new Date(nowMs).toISOString();
+          const pruned = pruneWorkerHosts(next, nowMs);
+          await writeQueueFile(options.queuePath, pruned);
+          return pruned;
         },
         { timeoutMs, staleLockMs }
       );

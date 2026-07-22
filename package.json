@@ -69,6 +69,17 @@
       "dist-renderer/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "build/cli",
+        "to": "cli",
+        "filter": ["**/*"]
+      }
+    ],
+    "asarUnpack": [
+      "dist/cli/**/*",
+      "dist/mcp/**/*"
+    ],
     "asar": true,
     "publish": null,
     "mac": {

@@ -24,7 +24,6 @@ export function providerDisplayName(kind: StoredProviderConfig["kind"]): string 
 export function buildProviderConfigForSave(current: StoredProviderConfig, input: ProviderConfigInput, now: string): StoredProviderConfig {
   const kind = input.kind ?? current.kind;
   const providerChanged = kind !== current.kind;
-  const hasNewApiKey = input.apiKey !== undefined && input.apiKey.trim().length > 0;
   const defaultModel = defaultModelForProvider(kind, input.defaultModel);
   const baseURL = normalizeBaseURL(input.baseURL || defaultBaseURLForProvider(kind, current.baseURL));
   const name = input.name?.trim() || (providerChanged ? providerDisplayName(kind) : current.name);
@@ -55,18 +54,6 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
     openAIImageRouting: discoveryInvalidated ? undefined : current.openAIImageRouting,
     updatedAt: now
   };
-
-  if (providerChanged && !hasNewApiKey) {
-    return {
-      ...nextConfig,
-      encryptedApiKey: undefined,
-      encryption: "none",
-      discoveredModels: [],
-      lastModelDiscoveryAt: undefined,
-      lastModelDiscoveryError: undefined,
-      openAIImageRouting: undefined
-    };
-  }
 
   return nextConfig;
 }

@@ -10,6 +10,7 @@ import type {
   OpenAIImageParams,
   PromptTemplate,
   ProviderKind,
+  QueueSource,
   QueueRuntimeConfig,
   StorageSettings,
   WorkspaceDraft
@@ -393,6 +394,10 @@ function normalizeStringList(value: unknown): string[] {
   });
 }
 
+function normalizeQueueSource(value: unknown): QueueSource | undefined {
+  return value === "desktop" || value === "cli" || value === "mcp" ? value : undefined;
+}
+
 function normalizeGenerationJob(value: unknown, fallbackProviderId: string): GenerationJob {
   const input = isRecord(value) ? value : {};
   const params = normalizeImageParams(input.params);
@@ -408,6 +413,7 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
     ...(input as unknown as GenerationJob),
     name: nonEmptyString(input.name, fallbackName),
     tags: normalizeStringList(input.tags),
+    source: normalizeQueueSource(input.source),
     providerKind,
     providerId: nonEmptyString(input.providerId, fallbackProviderId),
     launchId,

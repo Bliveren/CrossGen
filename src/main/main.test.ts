@@ -68,7 +68,7 @@ describe("main config save builder", () => {
     expect(next.streamingPartialsEnabled).toBe(false);
   });
 
-  it("clears saved key and discovery metadata when switching provider without a new key", () => {
+  it("preserves saved key and invalidates discovery metadata when switching provider without a new key", () => {
     const next = buildProviderConfigForSave(
       savedConfig(),
       input({
@@ -82,8 +82,8 @@ describe("main config save builder", () => {
     );
 
     expect(next.kind).toBe("gemini");
-    expect(next.encryptedApiKey).toBeUndefined();
-    expect(next.encryption).toBe("none");
+    expect(next.encryptedApiKey).toBe("plain:c2stdZXN0LW9wZW5haS1rZXk=");
+    expect(next.encryption).toBe("localFallback");
     expect(next.activeLaunchId).toBe("nano-banana-3");
     expect(next.activeModelId).toBe("gemini-3.1-flash-image");
     expect(next.discoveredModels).toEqual([]);
