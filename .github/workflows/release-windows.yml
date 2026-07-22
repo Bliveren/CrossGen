@@ -18,6 +18,7 @@ jobs:
   windows-installer:
     name: Build and publish Windows installer
     runs-on: windows-latest
+    if: ${{ !contains(github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name, '-rc.') }}
 
     steps:
       - name: Check out repository
