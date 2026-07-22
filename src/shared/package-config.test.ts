@@ -51,7 +51,9 @@ describe("package release configuration", () => {
     const shellLauncher = readFileSync(shellLauncherPath, "utf8");
     const cmdLauncher = readFileSync(cmdLauncherPath, "utf8");
 
-    expect(statSync(shellLauncherPath).mode & 0o111).toBeGreaterThan(0);
+    if (process.platform !== "win32") {
+      expect(statSync(shellLauncherPath).mode & 0o111).toBeGreaterThan(0);
+    }
     expect(shellLauncher).toContain('exec "$CROSSGEN_APP_EXECUTABLE" --cli "$@"');
     expect(shellLauncher).toContain('exec "$CROSSGEN_APP_EXECUTABLE" "$@"');
     expect(shellLauncher).toContain("CROSSGEN_DATA_DIR");
