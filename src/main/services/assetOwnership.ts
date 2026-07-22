@@ -85,6 +85,14 @@ export async function assertManagedRegularFileInRoots(managedRoots: string[], as
   throw new Error(NOT_MANAGED_MESSAGE);
 }
 
+export function historyAssetReadRoots(managedRoots: string[], knownAssetPath: string): string[] {
+  const roots = [
+    ...managedRoots,
+    path.dirname(path.resolve(knownAssetPath))
+  ];
+  return [...new Set(roots.map((root) => path.resolve(root)))];
+}
+
 export function resolveManagedFileName(rootDir: string, fileName: string): string {
   const normalizedFileName = fileName.trim().replace(/\\/g, "/");
   const segments = normalizedFileName.split("/");

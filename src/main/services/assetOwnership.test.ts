@@ -10,6 +10,7 @@ import {
   assertManagedRegularFile,
   assertManagedRegularFileInRoots,
   collectOwnedJobFilePaths,
+  historyAssetReadRoots,
   resolveManagedFileName,
   normalizeManagedAssetPath
 } from "./assetOwnership";
@@ -166,6 +167,21 @@ describe("asset ownership checks", () => {
     await writeFile(filePath, "gallery");
 
     await expect(assertManagedRegularFileInRoots([imagesDir, galleryDir], filePath)).resolves.toBe(path.resolve(filePath));
+  });
+
+  it("allows a known history asset to be read from its original legacy directory", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-assets-"));
+    const imagesDir = path.join(tmpDir, "images");
+    const legacyDir = path.join(tmpDir, "legacy-history");
+    await mkdir(imagesDir);
+    await mkdir(legacyDir);
+    const filePath = path.join(legacyDir, "result.png");
+    await writeFile(filePath, "legacy history");
+
+    const roots = historyAssetReadRoots([imagesDir], filePath);
+
+    expect(roots).toEqual([path.resolve(imagesDir), path.resolve(legacyDir)]);
+    await expect(assertManagedRegularFileInRoots(roots, filePath)).resolves.toBe(path.resolve(filePath));
   });
 
   it.skipIf(process.platform === "win32")("rejects gallery symlinks that resolve outside multiple managed roots", async () => {

@@ -141,7 +141,7 @@ import { probeOpenAIImageRouting } from "./services/openaiImageRouting.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
-import { assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
+import { assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, historyAssetReadRoots, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
 import {
   diskGalleryFoldersFromState,
   isIgnoredGalleryEntryName,
@@ -519,7 +519,7 @@ function assertKnownHistoryAssetPath(state: AppStateFile, assetPath: string): st
 
 async function assertKnownHistoryRegularAsset(state: AppStateFile, assetPath: string): Promise<string> {
   const knownPath = assertKnownHistoryAssetPath(state, assetPath);
-  return assertManagedRegularFileInRoots(getHistoryImageRoots(state), knownPath);
+  return assertManagedRegularFileInRoots(historyAssetReadRoots(getHistoryImageRoots(state), knownPath), knownPath);
 }
 
 function toPublicConfig(config: StoredProviderConfig): ProviderConfig {
