@@ -336,6 +336,7 @@ async function verifyCliFlow(baseURL) {
   const jobStatus = await runCli(dataDir, ["job", "status", queueId, "--json"]);
   assertCliOk(jobStatus, "CLI job status");
   assert(jobStatus.data.job?.terminal === true, "CLI job status did not report terminal state.");
+  assert(jobStatus.data.job?.historyJob?.source === "cli", "CLI-generated History job did not record source=cli.");
 
   const gallery = await runCli(dataDir, ["gallery", "list", "--json"]);
   assertCliOk(gallery, "CLI gallery list");
@@ -423,10 +424,12 @@ async function verifyMcpFlow(baseURL) {
   const mcpGenerated = mcpStructuredData(mcpById(generateResponses, 3), "MCP generate_image");
   assert(mcpGenerated.execution?.terminal === true, "MCP generate_image did not reach terminal state.");
   assert(mcpGenerated.execution?.status === "succeeded", "MCP generate_image did not succeed.");
+  assert(mcpGenerated.execution?.job?.historyJob?.source === "mcp", "MCP-generated History job did not record source=mcp.");
 
   const mcpEdited = mcpStructuredData(mcpById(generateResponses, 4), "MCP edit_image");
   assert(mcpEdited.execution?.terminal === true, "MCP edit_image did not reach terminal state.");
   assert(mcpEdited.execution?.status === "succeeded", "MCP edit_image did not succeed.");
+  assert(mcpEdited.execution?.job?.historyJob?.source === "mcp", "MCP-edited History job did not record source=mcp.");
 
   const mcpGallery = mcpStructuredData(mcpById(generateResponses, 5), "MCP gallery_list");
   assert((mcpGallery.assets?.length ?? 0) >= 2, "MCP Gallery did not include generated and edited assets.");

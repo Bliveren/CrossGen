@@ -46,17 +46,25 @@ describe("fileLock", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it("does not reclaim a stale-looking lock owned by a live process", async () => {
+  it("does not reclaim a fresh lock owned by a live process", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-lock-live-"));
+    const lockPath = path.join(tempDir, "state.lock");
+    await writeFile(lockPath, `${JSON.stringify({ pid: process.pid, acquiredAt: Date.now() })}\n`, "utf8");
+
+    await expect(withExclusiveFileLock(lockPath, async () => undefined, { timeoutMs: 30, staleLockMs: 1000, pollMs: 5 })).rejects.toThrow(`Timed out acquiring lock: ${lockPath}`);
+    expect(JSON.parse(await readFile(lockPath, "utf8"))).toMatchObject({ pid: process.pid });
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("reclaims an expired lock even if its pid has been reused by a live process", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-lock-reused-pid-"));
     const lockPath = path.join(tempDir, "state.lock");
     await writeFile(lockPath, `${JSON.stringify({ pid: process.pid, acquiredAt: Date.now() - 10000 })}\n`, "utf8");
     const oldDate = new Date(Date.now() - 10000);
     await utimes(lockPath, oldDate, oldDate);
 
-    await expect(
-      withExclusiveFileLock(lockPath, async () => undefined, { timeoutMs: 30, staleLockMs: 1, pollMs: 5 })
-    ).rejects.toThrow(`Timed out acquiring lock: ${lockPath}`);
-    expect(JSON.parse(await readFile(lockPath, "utf8"))).toMatchObject({ pid: process.pid });
+    await withExclusiveFileLock(lockPath, async () => undefined, { timeoutMs: 1000, staleLockMs: 1, pollMs: 5 });
+    await expect(readFile(lockPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     await rm(tempDir, { recursive: true, force: true });
   });
 

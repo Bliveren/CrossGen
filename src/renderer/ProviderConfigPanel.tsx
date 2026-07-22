@@ -24,10 +24,7 @@ interface LaunchModelOption {
 
 interface ProviderSummarySectionProps {
   copy: UiCopy;
-  activeConfig: ProviderConfig;
   displayName: string;
-  providerLabel: string;
-  baseUrlSummary: string;
   discoveryText: string;
   connectionStatus: ConnectionStatus;
   connectionLabel: string;
@@ -40,11 +37,9 @@ interface LaunchSectionProps {
   copy: UiCopy;
   activeConfig: ProviderConfig;
   activeProviderKind: ProviderKind;
-  activeLaunchDisplay: string;
   launchButtons: LaunchButtonState[];
   openLaunchMenuId: FocusedLaunchId | null;
   saving: boolean;
-  providerLabelForKind: (kind: ProviderKind) => string;
   modelOptionsForLaunch: (config: ProviderConfig, launchId: FocusedLaunchId) => LaunchModelOption[];
   onToggleLaunchMenu: (launchId: FocusedLaunchId, open: boolean) => void;
   onLaunch: (button: LaunchButtonState) => void;
@@ -61,31 +56,35 @@ interface ApiConfigCardProps {
   canDelete: boolean;
   saving: boolean;
   bridgeAvailable: boolean;
-  discovering: boolean;
-  discoveringAny: boolean;
   tooltip: string;
   displayName: string;
-  providerLabel: string;
   baseUrlSummary: string;
   connectionBadge: React.ReactNode;
-  keyLabel: string;
   modelSummary: string;
   modelSummaryKind: "error" | "info";
   onUse: () => void;
   onSelect: () => void;
   onDelete: () => void;
-  onDiscover: () => void;
+}
+
+interface ApiConfigDraftCardProps {
+  copy: UiCopy;
+  name: string;
+  baseURL: string;
+  saving: boolean;
+  namePlaceholder: string;
+  baseUrlSummary: string;
+  onSelect: () => void;
+  onCancel: () => void;
 }
 
 export function LaunchSection({
   copy,
   activeConfig,
   activeProviderKind,
-  activeLaunchDisplay,
   launchButtons,
   openLaunchMenuId,
   saving,
-  providerLabelForKind,
   modelOptionsForLaunch,
   onToggleLaunchMenu,
   onLaunch,
@@ -98,7 +97,6 @@ export function LaunchSection({
           <Rocket size={16} />
           <h2>{copy.launchModels}</h2>
         </div>
-        <strong>{activeLaunchDisplay}</strong>
       </div>
       <div className="launch-strip" aria-label={copy.launchModels}>
         {launchButtons.map((button) => {
@@ -126,7 +124,7 @@ export function LaunchSection({
                   <span>{button.displayName}</span>
                   {hasModelMenu && (openLaunchMenuId === button.launchId ? <ChevronUp size={15} /> : <ChevronDown size={15} />)}
                 </span>
-                <small>{button.available ? activeModelOption?.displayName ?? (button.modelId || copy.generalFallback) : button.reason}</small>
+                <small className="launch-model-detail">{button.available ? activeModelOption?.displayName ?? (button.modelId || copy.generalFallback) : button.reason}</small>
               </button>
               {hasModelMenu && openLaunchMenuId === button.launchId && (
                 <div className="launch-model-menu" role="listbox" aria-label={`${button.displayName} ${copy.model}`}>
@@ -144,7 +142,6 @@ export function LaunchSection({
                         title={model.id}
                       >
                         <span>{model.displayName}</span>
-                        <small>{providerLabelForKind(model.providerKind)}</small>
                       </button>
                     );
                   })}
@@ -160,10 +157,7 @@ export function LaunchSection({
 
 export function ProviderSummarySection({
   copy,
-  activeConfig,
   displayName,
-  providerLabel,
-  baseUrlSummary,
   discoveryText,
   connectionStatus,
   connectionLabel,
@@ -193,14 +187,13 @@ export function ProviderSummarySection({
       </div>
 
       <button type="button" className="api-access-current" onClick={onOpen}>
-        <span>
+        <span className="api-access-current-main">
           <strong>{displayName}</strong>
-          <small>{providerLabel} · {baseUrlSummary}</small>
-          <small>
-            {activeConfig.apiKeySaved ? copy.keySaved : copy.noKeySaved} · {discoveryText}
-          </small>
+          <small className="api-access-hover-detail">{discoveryText}</small>
         </span>
-        <Wrench size={16} />
+        <span className="api-access-config-icon">
+          <Wrench size={16} />
+        </span>
       </button>
     </section>
   );
@@ -217,6 +210,7 @@ interface ApiConfigDetailProps {
   discoveringAny: boolean;
   canDelete: boolean;
   connectionErrorText: string | null;
+  kind: ProviderKind;
   name: string;
   apiKey: string;
   baseURL: string;
@@ -227,6 +221,8 @@ interface ApiConfigDetailProps {
   modelSummaryKind: "error" | "info";
   modelTooltip: string;
   modelLabel: (model: DiscoveredProviderModel) => string;
+  providerLabelForKind: (kind: ProviderKind) => string;
+  onKindChange: (kind: ProviderKind) => void;
   onNameChange: (value: string) => void;
   onApiKeyChange: (value: string) => void;
   onBaseURLChange: (value: string) => void;
@@ -235,16 +231,14 @@ interface ApiConfigDetailProps {
   onDelete: () => void;
 }
 
-interface AddApiConfigFormProps {
+interface AddApiConfigDetailProps {
   copy: UiCopy;
-  open: boolean;
   saving: boolean;
   kind: ProviderKind;
   name: string;
   baseURL: string;
   apiKey: string;
   namePlaceholder: string;
-  onToggle: () => void;
   onKindChange: (kind: ProviderKind) => void;
   onNameChange: (value: string) => void;
   onBaseURLChange: (value: string) => void;
@@ -267,6 +261,7 @@ interface ApiConfigDialogProps {
   discoveringProviderId: string | null;
   discoveringAny: boolean;
   connectionErrorText: string | null;
+  kind: ProviderKind;
   name: string;
   apiKey: string;
   baseURL: string;
@@ -283,6 +278,7 @@ interface ApiConfigDialogProps {
   displayNameForConfig: (config: ProviderConfig) => string;
   providerLabelForKind: (kind: ProviderKind) => string;
   baseUrlSummaryForConfig: (config: ProviderConfig) => string;
+  baseUrlSummaryForValue: (baseURL: string) => string;
   discoverySummaryForConfig: (config: ProviderConfig) => string;
   discoveryTooltipForConfig: (config: ProviderConfig) => string;
   modelLabel: (model: DiscoveredProviderModel) => string;
@@ -299,6 +295,7 @@ interface ApiConfigDialogProps {
   onNewApiAccessKeyChange: (value: string) => void;
   onAddApiAccess: () => void;
   onCancelAddApiAccess: () => void;
+  onKindChange: (kind: ProviderKind) => void;
   onNameChange: (value: string) => void;
   onApiKeyChange: (value: string) => void;
   onBaseURLChange: (value: string) => void;
@@ -319,6 +316,7 @@ export function ApiConfigDialog({
   discoveringProviderId,
   discoveringAny,
   connectionErrorText,
+  kind,
   name,
   apiKey,
   baseURL,
@@ -335,6 +333,7 @@ export function ApiConfigDialog({
   displayNameForConfig,
   providerLabelForKind,
   baseUrlSummaryForConfig,
+  baseUrlSummaryForValue,
   discoverySummaryForConfig,
   discoveryTooltipForConfig,
   modelLabel,
@@ -351,6 +350,7 @@ export function ApiConfigDialog({
   onNewApiAccessKeyChange,
   onAddApiAccess,
   onCancelAddApiAccess,
+  onKindChange,
   onNameChange,
   onApiKeyChange,
   onBaseURLChange,
@@ -362,26 +362,27 @@ export function ApiConfigDialog({
       copy={copy}
       config={config}
       active={active}
-      selected={config.id === selectedConfig.id}
+      selected={!addFormOpen && config.id === selectedConfig.id}
       promoted={promotedApiConfigId === config.id}
       canUse={!active}
       canDelete={active ? canDeleteActiveApiAccess : canDeleteSelectedApiAccess}
       saving={saving}
       bridgeAvailable={bridgeAvailable}
-      discovering={discoveringProviderId === config.id}
-      discoveringAny={discoveringAny}
       tooltip={discoveryTooltipForConfig(config)}
       displayName={displayNameForConfig(config)}
-      providerLabel={providerLabelForKind(config.kind)}
       baseUrlSummary={baseUrlSummaryForConfig(config)}
       connectionBadge={connectionBadgeForConfig(config)}
-      keyLabel={config.apiKeySaved ? config.apiKeyPreview ?? copy.keySaved : copy.noKeySaved}
       modelSummary={discoverySummaryForConfig(config)}
       modelSummaryKind={config.lastModelDiscoveryError ? "error" : "info"}
-      onUse={() => onUseConfig(config)}
-      onSelect={() => onSelectConfig(config)}
+      onUse={() => {
+        onCancelAddApiAccess();
+        onUseConfig(config);
+      }}
+      onSelect={() => {
+        onCancelAddApiAccess();
+        onSelectConfig(config);
+      }}
       onDelete={() => onDeleteConfig(config)}
-      onDiscover={() => onDiscoverConfig(config)}
     />
   );
 
@@ -405,17 +406,34 @@ export function ApiConfigDialog({
             {renderCard(activeConfig, true)}
             <div className="api-config-card-list" aria-label={copy.apiAccessList}>
               {inactiveConfigs.map((config) => renderCard(config, false))}
+              {addFormOpen && (
+                <ApiConfigDraftCard
+                  copy={copy}
+                  name={newApiAccessName}
+                  baseURL={newApiAccessBaseURL}
+                  saving={saving}
+                  namePlaceholder={providerLabelForKind(newApiAccessKind)}
+                  baseUrlSummary={baseUrlSummaryForValue(newApiAccessBaseURL)}
+                  onSelect={() => undefined}
+                  onCancel={onCancelAddApiAccess}
+                />
+              )}
             </div>
-            <AddApiConfigForm
+            <button type="button" className={addFormOpen ? "secondary api-config-add-button active" : "secondary api-config-add-button"} onClick={onToggleAddForm}>
+              {addFormOpen ? <X size={16} /> : <Plus size={16} />}
+              {addFormOpen ? copy.cancel : copy.addApiAccess}
+            </button>
+          </aside>
+
+          {addFormOpen ? (
+            <AddApiConfigDetail
               copy={copy}
-              open={addFormOpen}
               saving={saving}
               kind={newApiAccessKind}
               name={newApiAccessName}
               baseURL={newApiAccessBaseURL}
               apiKey={newApiAccessKey}
               namePlaceholder={providerLabelForKind(newApiAccessKind)}
-              onToggle={onToggleAddForm}
               onKindChange={onNewApiAccessKindChange}
               onNameChange={onNewApiAccessNameChange}
               onBaseURLChange={onNewApiAccessBaseURLChange}
@@ -423,99 +441,164 @@ export function ApiConfigDialog({
               onAdd={onAddApiAccess}
               onCancel={onCancelAddApiAccess}
             />
-          </aside>
-
-          <ApiConfigDetail
-            copy={copy}
-            selectedConfig={selectedConfig}
-            active={selectedConfig.id === activeConfig.id}
-            bridgeAvailable={bridgeAvailable}
-            saving={saving}
-            saved={selectedConfigSaved}
-            discovering={discoveringProviderId === selectedConfig.id}
-            discoveringAny={discoveringAny}
-            canDelete={canDeleteSelectedApiAccess}
-            connectionErrorText={connectionErrorText}
-            name={name}
-            apiKey={apiKey}
-            baseURL={baseURL}
-            namePlaceholder={providerLabelForKind(selectedConfig.kind)}
-            apiKeyPlaceholder={apiKeyPlaceholder}
-            discoveryTooltip={selectedDiscoveryText}
-            modelSummary={selectedModelSummary}
-            modelSummaryKind={selectedModelSummaryKind}
-            modelTooltip={discoveryTooltipForConfig(selectedConfig)}
-            modelLabel={modelLabel}
-            onNameChange={onNameChange}
-            onApiKeyChange={onApiKeyChange}
-            onBaseURLChange={onBaseURLChange}
-            onSubmit={onSubmit}
-            onDiscover={() => onDiscoverConfig(selectedConfig)}
-            onDelete={() => onDeleteConfig(selectedConfig)}
-          />
+          ) : (
+            <ApiConfigDetail
+              copy={copy}
+              selectedConfig={selectedConfig}
+              active={selectedConfig.id === activeConfig.id}
+              bridgeAvailable={bridgeAvailable}
+              saving={saving}
+              saved={selectedConfigSaved}
+              discovering={discoveringProviderId === selectedConfig.id}
+              discoveringAny={discoveringAny}
+              canDelete={canDeleteSelectedApiAccess}
+              connectionErrorText={connectionErrorText}
+              kind={kind}
+              name={name}
+              apiKey={apiKey}
+              baseURL={baseURL}
+              namePlaceholder={providerLabelForKind(kind)}
+              apiKeyPlaceholder={apiKeyPlaceholder}
+              discoveryTooltip={selectedDiscoveryText}
+              modelSummary={selectedModelSummary}
+              modelSummaryKind={selectedModelSummaryKind}
+              modelTooltip={discoveryTooltipForConfig(selectedConfig)}
+              modelLabel={modelLabel}
+              providerLabelForKind={providerLabelForKind}
+              onKindChange={onKindChange}
+              onNameChange={onNameChange}
+              onApiKeyChange={onApiKeyChange}
+              onBaseURLChange={onBaseURLChange}
+              onSubmit={onSubmit}
+              onDiscover={() => onDiscoverConfig(selectedConfig)}
+              onDelete={() => onDeleteConfig(selectedConfig)}
+            />
+          )}
         </div>
     </DialogShell>
   );
 }
 
-export function AddApiConfigForm({
+export function ApiConfigDraftCard({
   copy,
-  open,
+  name,
+  baseURL,
+  saving,
+  namePlaceholder,
+  baseUrlSummary,
+  onSelect,
+  onCancel
+}: ApiConfigDraftCardProps) {
+  const displayName = name.trim() || namePlaceholder || copy.apiAccessUntitled;
+  return (
+    <article className="api-config-card api-config-draft-card selected" title={copy.apiAccessDraftStatus}>
+      <button
+        type="button"
+        className="api-config-card-main"
+        onClick={onSelect}
+        aria-current="true"
+        title={copy.apiAccessDraftStatus}
+      >
+        <span className="api-config-card-title-row">
+          <span className="api-config-card-title">{displayName}</span>
+          <span className="connection-badge api-config-card-connection" data-status="checking" title={copy.apiAccessDraftStatus}>
+            <span className="connection-dot" />
+            {copy.apiAccessDraftStatus}
+          </span>
+        </span>
+        <span className="api-config-card-meta-row">
+          <span className="api-config-card-meta api-config-card-meta-url" title={baseURL}>{baseUrlSummary}</span>
+          <span className="api-config-card-models" data-kind="info">
+            {copy.apiAccessNoModels}
+          </span>
+        </span>
+      </button>
+      <div className="api-config-card-actions">
+        <button
+          type="button"
+          className="icon-button ghost"
+          onClick={onCancel}
+          disabled={saving}
+          aria-label={copy.cancel}
+          data-tooltip={copy.cancel}
+        >
+          <X size={15} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
+export function AddApiConfigDetail({
+  copy,
   saving,
   kind,
   name,
   baseURL,
   apiKey,
   namePlaceholder,
-  onToggle,
   onKindChange,
   onNameChange,
   onBaseURLChange,
   onApiKeyChange,
   onAdd,
   onCancel
-}: AddApiConfigFormProps) {
+}: AddApiConfigDetailProps) {
   return (
-    <>
-      <button type="button" className="secondary" onClick={onToggle}>
-        <Plus size={16} />
-        {copy.addApiAccess}
-      </button>
-      {open && (
-        <div className="api-access-add-form">
-          <label>
-            {copy.apiAccessKind}
-            <select value={kind} onChange={(event) => onKindChange(event.target.value as ProviderKind)}>
-              <option value="openai">OpenAI</option>
-              <option value="gemini">Gemini</option>
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          <label>
-            {copy.apiAccessName}
-            <input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder={namePlaceholder} />
-          </label>
-          <label>
-            {copy.baseURL}
-            <input value={baseURL} onChange={(event) => onBaseURLChange(event.target.value)} />
-          </label>
-          <label>
-            {copy.apiKey}
-            <input type="text" autoComplete="off" value={apiKey} onChange={(event) => onApiKeyChange(event.target.value)} placeholder={copy.pasteApiKey} />
-          </label>
-          <div className="button-row">
-            <button type="button" onClick={onAdd} disabled={saving}>
-              {saving ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
-              {saving ? copy.addingApiAccess : copy.addApiAccess}
-            </button>
-            <button type="button" className="ghost" onClick={onCancel}>
-              <X size={16} />
-              {copy.cancel}
-            </button>
-          </div>
+    <form
+      className="api-config-detail api-config-add-detail api-access-add-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onAdd();
+      }}
+    >
+      <div className="api-config-detail-header">
+        <div className="section-title">
+          <Plus size={16} />
+          <h3>{copy.apiAccessDraftDetail}</h3>
         </div>
-      )}
-    </>
+        <span className="provider-chip-inline">{copy.apiAccessDraftStatus}</span>
+      </div>
+      <label>
+        {copy.apiAccessKind}
+        <select value={kind} onChange={(event) => onKindChange(event.target.value as ProviderKind)}>
+          <option value="openai">OpenAI</option>
+          <option value="gemini">Gemini</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+      <label>
+        {copy.apiAccessName}
+        <input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder={namePlaceholder} />
+      </label>
+      <label>
+        {copy.apiKey}
+        <input type="text" autoComplete="off" value={apiKey} onChange={(event) => onApiKeyChange(event.target.value)} placeholder={copy.pasteApiKey} />
+      </label>
+      <label>
+        {copy.baseURL}
+        <input value={baseURL} onChange={(event) => onBaseURLChange(event.target.value)} />
+      </label>
+      <div className="button-row">
+        <button type="submit" disabled={saving}>
+          {saving ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
+          {saving ? copy.addingApiAccess : copy.addApiAccess}
+        </button>
+        <button type="button" className="ghost" onClick={onCancel}>
+          <X size={16} />
+          {copy.cancel}
+        </button>
+      </div>
+      <section className="api-model-section" aria-label={copy.apiAccessModels}>
+        <div className="section-title">
+          <LibraryBig size={16} />
+          <h3>{copy.apiAccessModels}</h3>
+        </div>
+        <p className="api-model-summary" data-kind="info">
+          {copy.apiAccessNoModels}
+        </p>
+      </section>
+    </form>
   );
 }
 
@@ -530,6 +613,7 @@ export function ApiConfigDetail({
   discoveringAny,
   canDelete,
   connectionErrorText,
+  kind,
   name,
   apiKey,
   baseURL,
@@ -540,6 +624,8 @@ export function ApiConfigDetail({
   modelSummaryKind,
   modelTooltip,
   modelLabel,
+  providerLabelForKind,
+  onKindChange,
   onNameChange,
   onApiKeyChange,
   onBaseURLChange,
@@ -569,6 +655,14 @@ export function ApiConfigDetail({
           onChange={(event) => onNameChange(event.target.value)}
           placeholder={namePlaceholder}
         />
+      </label>
+      <label>
+        {copy.apiAccessKind}
+        <select value={kind} onChange={(event) => onKindChange(event.target.value as ProviderKind)}>
+          <option value="openai">{providerLabelForKind("openai")}</option>
+          <option value="gemini">{providerLabelForKind("gemini")}</option>
+          <option value="custom">{providerLabelForKind("custom")}</option>
+        </select>
       </label>
       <label>
         {copy.apiKey}
@@ -647,20 +741,15 @@ export function ApiConfigCard({
   canDelete,
   saving,
   bridgeAvailable,
-  discovering,
-  discoveringAny,
   tooltip,
   displayName,
-  providerLabel,
   baseUrlSummary,
   connectionBadge,
-  keyLabel,
   modelSummary,
   modelSummaryKind,
   onUse,
   onSelect,
-  onDelete,
-  onDiscover
+  onDelete
 }: ApiConfigCardProps) {
   return (
     <article
@@ -670,39 +759,22 @@ export function ApiConfigCard({
         selected ? "selected" : "",
         promoted ? "promoted" : ""
       ].filter(Boolean).join(" ")}
-      title={tooltip}
+      title={copy.apiAccessEditCardTooltip}
     >
-      <button
-        type="button"
-        className="icon-button api-config-use-button"
-        onClick={active ? undefined : onUse}
-        disabled={active || !canUse || !bridgeAvailable || saving}
-        aria-label={active ? copy.currentApiAccess : copy.apiAccessUseNow}
-        data-tooltip={active ? copy.currentApiAccess : copy.apiAccessUseNow}
-      >
-        <ChevronUp size={15} />
-      </button>
       <button
         type="button"
         className="api-config-card-main"
         onClick={onSelect}
         aria-current={selected ? "true" : undefined}
-        title={tooltip}
+        title={copy.apiAccessEditCardTooltip}
       >
         <span className="api-config-card-title-row">
           <span className="api-config-card-title">{displayName}</span>
           {connectionBadge}
         </span>
         <span className="api-config-card-meta-row">
-          <span className="api-config-card-meta">{providerLabel}</span>
           <span className="api-config-card-meta api-config-card-meta-url">{baseUrlSummary}</span>
-        </span>
-        <span className="api-config-card-meta-row">
-          <span className="api-config-card-key">
-            <span className={config.apiKeySaved ? "dot ok" : "dot"} />
-            {keyLabel}
-          </span>
-          <span className="api-config-card-models" data-kind={modelSummaryKind}>
+          <span className="api-config-card-models" data-kind={modelSummaryKind} title={tooltip}>
             {modelSummary}
           </span>
         </span>
@@ -720,13 +792,13 @@ export function ApiConfigCard({
         </button>
         <button
           type="button"
-          className="icon-button"
-          onClick={onDiscover}
-          disabled={!bridgeAvailable || discoveringAny || !config.apiKeySaved}
-          aria-label={copy.discoverModels}
-          data-tooltip={copy.discoverModels}
+          className="icon-button api-config-enable-button"
+          onClick={onUse}
+          disabled={active || !canUse || !bridgeAvailable || saving}
+          aria-label={active ? copy.currentApiAccess : copy.apiAccessUseNow}
+          data-tooltip={active ? copy.currentApiAccess : copy.apiAccessUseNow}
         >
-          {discovering ? <Loader2 className="spin" size={15} /> : <Radar size={15} />}
+          <CheckCircle2 size={15} />
         </button>
       </div>
     </article>

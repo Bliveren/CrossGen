@@ -1,40 +1,68 @@
 import type React from "react";
-import { ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, Wrench, X } from "lucide-react";
+import { DialogShell } from "./DialogShell";
 import type { UiCopy } from "./i18n";
 
-interface ParameterSectionProps {
+interface ParameterConfigLauncherProps {
   copy: UiCopy;
-  expanded: boolean;
-  summary: React.ReactNode;
-  controls: React.ReactNode;
-  onToggle: () => void;
+  quickControls: React.ReactNode;
+  onOpen: () => void;
 }
 
-export function ParameterSection({
-  copy,
-  expanded,
-  summary,
-  controls,
-  onToggle
-}: ParameterSectionProps) {
-  return (
-    <section className="tool-section">
-      <button type="button" className="section-toggle" onClick={onToggle}>
-        <span className="section-toggle-label">
-          <SlidersHorizontal size={16} />
-          <span>{copy.parameters}</span>
-        </span>
-        <span className="section-toggle-state">
-          {expanded ? copy.hide : copy.show}
-          {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-        </span>
-      </button>
+interface ParameterConfigDialogProps {
+  copy: UiCopy;
+  primaryControls: React.ReactNode;
+  controls: React.ReactNode;
+  onClose: () => void;
+}
 
-      <div className="compact-grid">
-        {summary}
+export function ParameterConfigLauncher({
+  copy,
+  quickControls,
+  onOpen
+}: ParameterConfigLauncherProps) {
+  return (
+    <section className="parameter-config-bar" aria-label={copy.parameters}>
+      <div className="parameter-config-heading">
+        <span className="section-title-label">
+          <SlidersHorizontal size={16} />
+          <strong>{copy.parameters}</strong>
+        </span>
+        <button type="button" className="icon-button secondary parameter-config-trigger" onClick={onOpen} aria-label={copy.detailedConfig} data-tooltip={copy.detailedConfig}>
+          <Wrench size={15} />
+        </button>
       </div>
 
-      {expanded && controls}
+      <div className="parameter-summary-strip" aria-label={copy.parameters}>
+        {quickControls}
+      </div>
     </section>
+  );
+}
+
+export function ParameterConfigDialog({
+  copy,
+  primaryControls,
+  controls,
+  onClose
+}: ParameterConfigDialogProps) {
+  return (
+    <DialogShell className="parameter-dialog" labelledBy="parameter-dialog-title" onClose={onClose}>
+      <header className="history-header parameter-dialog-header">
+        <div>
+          <h2 id="parameter-dialog-title">{copy.parameters}</h2>
+        </div>
+        <button type="button" className="icon-button" onClick={onClose} aria-label={copy.cancel} data-tooltip={copy.cancel}>
+          <X size={16} />
+        </button>
+      </header>
+
+      <div className="parameter-dialog-body">
+        <div className="compact-grid parameter-dialog-primary">
+          {primaryControls}
+        </div>
+        {controls}
+      </div>
+    </DialogShell>
   );
 }

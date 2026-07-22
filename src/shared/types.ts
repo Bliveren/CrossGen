@@ -325,6 +325,7 @@ export interface GenerationJob {
   id: string;
   name: string;
   tags: string[];
+  source?: QueueSource;
   providerKind: ProviderKind;
   providerId: string;
   launchId: FocusedLaunchId;

@@ -162,6 +162,7 @@ function publicHistoryJob(job: GenerationJob) {
     id: job.id,
     name: job.name,
     tags: job.tags,
+    source: job.source ?? "desktop",
     providerKind: job.providerKind,
     providerId: job.providerId,
     launchId: job.launchId,

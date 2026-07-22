@@ -59,12 +59,14 @@ async function removeLockFile(lockPath: string): Promise<boolean> {
 async function tryRemoveStaleLock(lockPath: string, staleLockMs: number, now: () => number): Promise<boolean> {
   try {
     const stat = await fs.stat(lockPath);
+    if (now() - stat.mtimeMs >= staleLockMs) {
+      return removeLockFile(lockPath);
+    }
     const ownerPid = await readLockOwnerPid(lockPath);
     if (ownerPid !== null) {
       return isProcessAlive(ownerPid) ? false : removeLockFile(lockPath);
     }
-    if (now() - stat.mtimeMs < staleLockMs) return false;
-    return removeLockFile(lockPath);
+    return false;
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") return true;
     return false;

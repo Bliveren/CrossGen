@@ -127,7 +127,7 @@ describe("renderer multi-model smoke", () => {
   it("submits GPT Image 2 multi-count requests without stream partial previews", async () => {
     const bridge = await renderApp(snapshot());
 
-    await click(buttonByText("Parameters", ".section-toggle"));
+    await openParameterDialog();
     expect(inputByLabel("Stream partial preview").checked).toBe(false);
     expect(inputByLabel("Partial images").value).toBe("0");
 
@@ -155,7 +155,7 @@ describe("renderer multi-model smoke", () => {
   it("lets users enable stream partial previews when they are off by default", async () => {
     const bridge = await renderApp(snapshot());
 
-    await click(buttonByText("Parameters", ".section-toggle"));
+    await openParameterDialog();
     const streamPreview = inputByLabel("Stream partial preview");
     expect(streamPreview.disabled).toBe(false);
     expect(streamPreview.checked).toBe(false);
@@ -187,7 +187,7 @@ describe("renderer multi-model smoke", () => {
     await openGalleryRail();
     await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
     await click(elementByText("Choose from Gallery", ".context-menu-item"));
-    await click(buttonByText("Parameters", ".section-toggle"));
+    await openParameterDialog();
     const streamPreview = inputByLabel("Stream partial preview");
     expect(streamPreview.disabled).toBe(false);
 
@@ -213,7 +213,7 @@ describe("renderer multi-model smoke", () => {
   it("keeps the PNG compression note in a tooltip instead of inline text", async () => {
     await renderApp(snapshot());
 
-    await click(buttonByText("Parameters", ".section-toggle"));
+    await openParameterDialog();
     await changeSelect(selectByLabel("Format"), "png");
 
     const compressionField = inputByLabel("Compression").closest<HTMLElement>(".range-field")!;
@@ -233,7 +233,7 @@ describe("renderer multi-model smoke", () => {
     });
     const bridge = await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
 
-    await click(buttonByText("Parameters", ".section-toggle"));
+    await openParameterDialog();
 
     expect(selectByLabel("API route").selectedOptions[0]?.textContent).toBe("Auto · Chat");
     expect(document.body.textContent).toContain("API route: Chat");
@@ -260,8 +260,8 @@ describe("renderer multi-model smoke", () => {
 
     await click(document.querySelector<HTMLButtonElement>('.sidebar-mini-stack button[aria-label="Parameters"]')!);
 
-    expect(document.querySelector<HTMLElement>(".app-shell")?.classList.contains("sidebar-collapsed")).toBe(false);
-    expect(document.querySelector(".advanced-controls")).toBeTruthy();
+    expect(document.querySelector<HTMLElement>(".app-shell")?.classList.contains("sidebar-collapsed")).toBe(true);
+    expect(document.querySelector(".parameter-dialog .advanced-controls")).toBeTruthy();
   });
 
   it("keeps the job progress listener stable when partial images arrive", async () => {
@@ -422,6 +422,7 @@ describe("renderer multi-model smoke", () => {
     expect(launchButton("Nano Banana 3").disabled).toBe(false);
 
     await click(launchButton("Nano Banana 3"));
+    await openParameterDialog();
     await changeSelect(selectByLabel("Aspect ratio"), "4:3");
     await click(buttonByText("Generate", ".primary-run"));
 
@@ -446,8 +447,10 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot());
 
     expect(document.body.textContent).toContain("API config");
-    expect(document.body.textContent).toContain("OpenAI · api.openai.com/v1");
-    expect(document.body.textContent).toContain("Key saved · 1 model discovered");
+    expect(apiAccessCurrentButton().textContent).toContain("OpenAI");
+    expect(apiAccessCurrentButton().textContent).toContain("1 model discovered");
+    expect(apiAccessCurrentButton().textContent).not.toContain("api.openai.com/v1");
+    expect(apiAccessCurrentButton().textContent).not.toContain("Key saved");
 
     await click(apiAccessCurrentButton());
     await changeInput(inputByLabel("API config name"), "Primary gateway");
@@ -463,15 +466,58 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Current API config");
   });
 
+  it("does not block saved API key feedback on slow connection checks", async () => {
+    const bridge = await renderApp(snapshot());
+    await flushAsync();
+    vi.mocked(bridge.testConnection).mockImplementation(() => new Promise(() => undefined));
+
+    await click(apiAccessCurrentButton());
+    await changeInput(inputByLabel("API Key"), "sk-new-key-that-is-long-enough");
+    await click(buttonByText("Save"));
+    await flushAsync();
+
+    const savedButton = buttonByText("Saved", ".api-config-detail button");
+    expect(bridge.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ apiKey: "sk-new-key-that-is-long-enough" }));
+    expect(bridge.testConnection).toHaveBeenCalled();
+    expect(savedButton.disabled).toBe(false);
+    expect(document.body.textContent).toContain("Config saved locally.");
+  });
+
+  it("edits API type from the details pane without showing the type on the card", async () => {
+    const defaultConfig = providerConfig({ name: "Main gateway" });
+    const bridge = await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
+
+    await openSavedApiAccess();
+    const card = apiConfigCardByText("Main gateway");
+    expect(card.textContent).not.toContain("OpenAI");
+    expect(card.getAttribute("title")).toBe("Click to edit config");
+
+    const detail = document.querySelector<HTMLElement>(".api-config-detail")!;
+    expect(selectByLabel("API type", detail).value).toBe("openai");
+    await changeSelect(selectByLabel("API type", detail), "gemini");
+    await click(buttonByText("Save", ".api-config-detail button"));
+
+    expect(bridge.saveConfig).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "gemini",
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID
+    }));
+  });
+
   it("adds a second API config and switches to it automatically", async () => {
     const bridge = await renderApp(snapshot());
 
     await openSavedApiAccess();
     await click(buttonByText("Add API config"));
     const addForm = apiAccessAddForm();
+    expect(document.body.textContent).toContain("New config");
+    expect(apiConfigCardByText("Configuring").textContent).toContain("OpenAI");
     await changeSelect(selectByLabel("API type", addForm), "gemini");
     await changeInput(inputByLabel("API config name", addForm), "Gemini gateway");
     await changeInput(inputByLabel("API Key", addForm), "gemini-test-key");
+    expect(apiConfigCardByText("Gemini gateway").textContent).toContain("Configuring");
+    expect(apiConfigCardByText("Gemini gateway").textContent).not.toContain("Key entered");
     await click(buttonByText("Add API config", ".api-access-add-form button"));
 
     expect(bridge.addProvider).toHaveBeenCalledWith(
@@ -495,6 +541,8 @@ describe("renderer multi-model smoke", () => {
     await openSavedApiAccess();
     await click(buttonByText("Add API config"));
     const addForm = apiAccessAddForm();
+    expect(document.body.textContent).toContain("New config");
+    expect(apiConfigCardByText("Configuring").textContent).toContain("OpenAI");
     await changeSelect(selectByLabel("API type", addForm), "custom");
     await changeInput(inputByLabel("API config name", addForm), "Custom gateway");
     await changeInput(inputByLabel("Base URL", addForm), "https://gateway.example.com/v1");
@@ -509,8 +557,9 @@ describe("renderer multi-model smoke", () => {
       })
     );
     expect(bridge.testConnection).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("Custom gateway");
-    expect(document.body.textContent).toContain("No key saved");
+    expect(apiAccessCurrentButton().textContent).toContain("Custom gateway");
+    expect(apiAccessCurrentButton().textContent).toContain("0 models discovered");
+    expect(apiAccessCurrentButton().textContent).not.toContain("No key saved");
     expect(buttonByText("GPT Image 2", ".launch-button").disabled).toBe(true);
   });
 
@@ -565,13 +614,15 @@ describe("renderer multi-model smoke", () => {
     });
 
     await openSavedApiAccess();
-    await click(apiConfigDiscoverButtonByText("Gemini access"));
-    await flushAsync();
     await click(apiConfigCardMainByText("Gemini access"));
+    expect([...apiConfigCardByText("Gemini access").querySelectorAll<HTMLButtonElement>(".api-config-card-actions button")].some((button) => button.getAttribute("aria-label") === "Discover models")).toBe(false);
+    await click(buttonByText("Discover models", ".api-config-detail button"));
+    await flushAsync();
 
     expect(bridge.discoverModels).toHaveBeenCalledWith("gemini-access");
+    expect(apiConfigCardByText("Gemini access").textContent).toContain("Discovered");
     expect(apiConfigCardByText("Gemini access").textContent).toContain("2 models discovered");
-    expect(apiConfigCardByText("Gemini access").getAttribute("title")).toContain(NANO_BANANA_3_MODEL_ID);
+    expect(apiConfigCardByText("Gemini access").querySelector(".api-config-card-models")?.getAttribute("title")).toContain(NANO_BANANA_3_MODEL_ID);
     expect(document.body.textContent).toContain("Gemini 3 Pro Image");
   });
 
@@ -1089,6 +1140,40 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("product");
   });
 
+  it("marks CLI and MCP history cards with their generation channel", async () => {
+    await renderApp(snapshot({
+      history: [
+        geminiJob(0, { source: "cli", outputs: [imageAsset("history-cli.png")] }),
+        geminiJob(1, { source: "mcp", outputs: [imageAsset("history-mcp.png", "job_gemini_1")] })
+      ]
+    }));
+
+    const sourceChips = [...document.querySelectorAll<HTMLElement>(".history-chip.source-tag")].map((chip) => chip.textContent);
+    expect(sourceChips).toEqual(["MCP", "CLI"]);
+  });
+
+  it("keeps a History card expanded until another card is hovered or the user clicks elsewhere", async () => {
+    const first = geminiJob(0, { outputs: [imageAsset("history-hover-a.png")] });
+    const second = geminiJob(1, { outputs: [imageAsset("history-hover-b.png", "job_gemini_1")] });
+    await renderApp(snapshot({ history: [first, second] }));
+
+    const cards = [...document.querySelectorAll<HTMLElement>(".history-item")];
+    expect(cards).toHaveLength(2);
+
+    await pointer(cards[0]!, "mouseover");
+    expect(cards[0]!.classList.contains("hover-open")).toBe(true);
+
+    await pointer(cards[0]!, "mouseout");
+    expect(cards[0]!.classList.contains("hover-open")).toBe(true);
+
+    await pointer(cards[1]!, "mouseover");
+    expect(cards[0]!.classList.contains("hover-open")).toBe(false);
+    expect(cards[1]!.classList.contains("hover-open")).toBe(true);
+
+    await pointer(document.body, "pointerdown");
+    expect(cards[1]!.classList.contains("hover-open")).toBe(false);
+  });
+
   it("adds Gallery tags from the card popover and updates the visible filter state", async () => {
     const asset = galleryAsset("gallery-tags.png", { tags: ["old"] });
     const other = galleryAsset("gallery-other.png", { tags: ["draft"] });
@@ -1566,6 +1651,7 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot({ providers: [geminiConfig], activeProviderId: geminiConfig.id }));
 
     await click(launchButton("Nano Banana 3"));
+    await openParameterDialog();
     await changeSelect(selectByLabel("Aspect ratio"), "1:1");
     await click(buttonByText("Generate", ".primary-run"));
 
@@ -1610,6 +1696,28 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector<HTMLButtonElement>('.input-panel button[aria-label="Add as mask"]')).toBeNull();
     expect(document.body.textContent).toContain("Drag local images, History results, or Gallery images here.");
     expect(document.querySelector<HTMLButtonElement>('.input-panel button[aria-label="Clear"]')).toBeNull();
+  });
+
+  it("shows the Images API route notice for GPT Image 2 exact mask mode", async () => {
+    await renderApp(snapshot({
+      draft: {
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        mode: "inpaint",
+        prompt: "Replace the masked area",
+        params: DEFAULT_IMAGE_PARAMS,
+        inputAssets: [inputAsset("mask-source.png")],
+        maskDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+        brushSize: 48,
+        updatedAt: now
+      }
+    }));
+
+    expect(document.body.textContent).toContain("Mask mode uses the official Images API edit route");
+    expect(document.querySelector<HTMLSelectElement>(".parameter-route-field select")?.value).toBe("image-api");
+    await openParameterDialog();
+    expect(selectByLabel("API route").value).toBe("image-api");
+    expect(selectByLabel("API route").disabled).toBe(true);
   });
 
   it("caps local reference images to the active model capability", async () => {
@@ -1731,23 +1839,24 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
-  it("keeps API config, launch buttons, parameters, and updates in a clear left-rail order", async () => {
+  it("keeps API config and launch buttons in the left rail and moves parameters into the workspace", async () => {
     await renderApp(snapshot());
     const sidebar = document.querySelector<HTMLElement>(".sidebar")!;
     const configSection = sidebar.querySelector<HTMLElement>(".api-access-section")!;
     const launchSection = sidebar.querySelector<HTMLElement>(".launch-section")!;
-    const parameterSection = buttonByText("Parameters", ".section-toggle").closest<HTMLElement>(".tool-section")!;
+    const parameterBar = document.querySelector<HTMLElement>(".parameter-config-bar")!;
     const updatePanel = sidebar.querySelector<HTMLElement>(".sidebar-utility-bar")!;
+    const promptBlock = document.querySelector<HTMLElement>(".prompt-block")!;
 
     expect(configSection.textContent).toContain("API config");
     expect(launchSection.textContent).toContain("Launch");
-    expect(parameterSection.textContent).toContain("Parameters");
+    expect(parameterBar.textContent).toContain("Parameters");
     expect(updatePanel.textContent).toContain("0.1.0");
     expect(sidebar.querySelector(".template-sidebar-section")).toBeNull();
     expect(sidebar.querySelector(".draft-section")).toBeNull();
+    expect(sidebar.querySelector(".parameter-config-bar")).toBeNull();
     expect(configSection.compareDocumentPosition(launchSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(launchSection.compareDocumentPosition(parameterSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(parameterSection.compareDocumentPosition(updatePanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(promptBlock.compareDocumentPosition(parameterBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("offers a persistent theme mode toggle in the left rail", async () => {
@@ -1846,6 +1955,44 @@ describe("renderer multi-model smoke", () => {
     expect(shell.style.getPropertyValue("--history-width")).toBe("280px");
     expect(historyResizer.getAttribute("aria-disabled")).toBe("false");
     expect(historyResizer.getAttribute("aria-valuenow")).toBe("280");
+  });
+
+  it("compresses the right rail with the window before auto-collapsing it", async () => {
+    window.localStorage.setItem("image2tools.historyWidth", "460");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1360 });
+
+    await renderApp(snapshot({ history: [geminiJob(0)], galleryAssets: [galleryAsset("compressed.png")] }));
+
+    const shell = document.querySelector<HTMLElement>(".app-shell")!;
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(false);
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(false);
+    expect(shell.style.getPropertyValue("--history-width")).toBe("406px");
+  });
+
+  it("auto-collapses the right rail at the same narrow-window breakpoint as the left rail", async () => {
+    await renderApp(snapshot({ history: [geminiJob(0)], galleryAssets: [galleryAsset("breakpoint.png")] }));
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1320 });
+    window.dispatchEvent(new Event("resize"));
+    await flushAsync();
+
+    const shell = document.querySelector<HTMLElement>(".app-shell")!;
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(true);
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
+    expect(shell.style.getPropertyValue("--history-width")).toBe("256px");
+  });
+
+  it("auto-collapses the right rail before a narrow window can squeeze the editor under it", async () => {
+    await renderApp(snapshot({ history: [geminiJob(0)], galleryAssets: [galleryAsset("narrow.png")] }));
+    await openGalleryRail();
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1000 });
+    window.dispatchEvent(new Event("resize"));
+    await flushAsync();
+
+    const shell = document.querySelector<HTMLElement>(".app-shell")!;
+    expect(shell.classList.contains("sidebar-collapsed")).toBe(true);
+    expect(shell.classList.contains("right-rail-collapsed")).toBe(true);
+    expect(shell.style.getPropertyValue("--history-width")).toBe("256px");
+    expect(document.querySelector(".right-rail.collapsed .gallery-thumb img")).toBeTruthy();
   });
 
   it("keeps the workspace in the main grid when the sidebar is collapsed", async () => {
@@ -2720,6 +2867,12 @@ function apiAccessCurrentButton(): HTMLButtonElement {
   return button;
 }
 
+function parameterConfigButton(): HTMLButtonElement {
+  const button = document.querySelector<HTMLButtonElement>(".parameter-config-trigger");
+  if (!button) throw new Error("Parameter config button was not found.");
+  return button;
+}
+
 function apiConfigCardByText(text: string): HTMLElement {
   const card = [...document.querySelectorAll<HTMLElement>(".api-config-card")].find((item) => item.textContent?.includes(text));
   if (!card) throw new Error(`API config card containing "${text}" was not found.`);
@@ -2733,7 +2886,7 @@ function apiConfigCardMainByText(text: string): HTMLButtonElement {
 }
 
 function apiConfigUseButtonByText(text: string): HTMLButtonElement {
-  const button = apiConfigCardByText(text).querySelector<HTMLButtonElement>(".api-config-use-button");
+  const button = [...apiConfigCardByText(text).querySelectorAll<HTMLButtonElement>(".api-config-card-actions button")].find((item) => item.getAttribute("aria-label") === "Use this config now");
   if (!button) throw new Error(`API config use button containing "${text}" was not found.`);
   return button;
 }
@@ -2744,18 +2897,16 @@ function apiConfigDeleteButtonByText(text: string): HTMLButtonElement {
   return button;
 }
 
-function apiConfigDiscoverButtonByText(text: string): HTMLButtonElement {
-  const button = [...apiConfigCardByText(text).querySelectorAll<HTMLButtonElement>(".api-config-card-actions button")].find((item) => item.getAttribute("aria-label") === "Discover models");
-  if (!button) throw new Error(`API config discover button containing "${text}" was not found.`);
-  return button;
-}
-
 async function openSavedApiAccess() {
   await click(apiAccessCurrentButton());
 }
 
 async function openTemplateDialog() {
   await click(buttonByText("Prompt templates", ".prompt-actions button"));
+}
+
+async function openParameterDialog() {
+  await click(parameterConfigButton());
 }
 
 async function openGalleryRail() {

@@ -554,18 +554,30 @@ async function ensureDir(dirPath: string): Promise<void> {
   await fs.mkdir(dirPath, { recursive: true });
 }
 
+function shouldRecoverInterruptedJobsOnRead(): boolean {
+  return process.argv.indexOf("--cli") < 0 && process.argv.indexOf("--mcp") < 0;
+}
+
+async function applyStartupRecovery(state: AppStateFile): Promise<AppStateFile> {
+  if (!shouldRecoverInterruptedJobsOnRead()) return state;
+  const queue = await getGenerationQueueStore().read().catch(() => undefined);
+  const result = recoverInterruptedJobs(state.history, new Date().toISOString(), queue);
+  recoveredInterruptedJobs = recoveredInterruptedJobs || result.changed;
+  return result.changed ? { ...state, history: result.history } : state;
+}
+
 async function readState(): Promise<AppStateFile> {
   if (stateCache) return stateCache;
 
   try {
-    stateCache = applyStartupRecovery(normalizeState(await readStateFile(getStatePath())));
+    stateCache = await applyStartupRecovery(normalizeState(await readStateFile(getStatePath())));
   } catch (error) {
     if (!isNodeError(error) || error.code !== "ENOENT") {
       console.warn("[CrossGen] Failed to read state file; trying backup.", sanitizeError(error));
     }
 
     try {
-      stateCache = applyStartupRecovery(normalizeState(await readStateFile(getBackupStatePath())));
+      stateCache = await applyStartupRecovery(normalizeState(await readStateFile(getBackupStatePath())));
       await writeState(stateCache, { updateBackup: false });
       return stateCache;
     } catch (backupError) {
@@ -621,7 +633,7 @@ async function mutateStateAndQueue<TResult>(
       statePath: getStatePath(),
       backupPath: getBackupStatePath(),
       defaultState: getDefaultState(),
-      normalize: (value) => applyStartupRecovery(normalizeState(value))
+      normalize: normalizeState
     }
   }, async (context) => {
     const next = await operation(context.state, context.queue);
@@ -638,12 +650,6 @@ async function mutateStateAndQueue<TResult>(
 async function readStateFile(filePath: string): Promise<unknown> {
   const raw = await fs.readFile(filePath, "utf8");
   return JSON.parse(raw) as unknown;
-}
-
-function applyStartupRecovery(state: AppStateFile): AppStateFile {
-  const result = recoverInterruptedJobs(state.history);
-  recoveredInterruptedJobs = recoveredInterruptedJobs || result.changed;
-  return result.changed ? { ...state, history: result.history } : state;
 }
 
 function encryptApiKey(apiKey: string): Pick<StoredProviderConfig, "encryptedApiKey" | "encryption"> {
@@ -1152,7 +1158,7 @@ async function persistMaskDataUrl(dataUrl: string, imagesDir: string): Promise<I
   };
 }
 
-function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAssets: InputAsset[], maskAsset?: InputAsset): GenerationJob {
+function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAssets: InputAsset[], maskAsset?: InputAsset, source: QueueSource = "desktop"): GenerationJob {
   const now = new Date().toISOString();
   const launchId = request.params.launchId;
   const modelId = request.params.model;
@@ -1160,6 +1166,7 @@ function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAs
     id: `job_${randomUUID()}`,
     name: "",
     tags: [],
+    source,
     providerKind: request.params.providerKind,
     providerId: config.id,
     launchId,
@@ -1306,13 +1313,15 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
 
   const hasUsableApiKey = Boolean(nextConfig.encryptedApiKey);
   const baseURLChanged = nextConfig.baseURL !== activeProvider.baseURL;
+  const providerKindChanged = nextConfig.kind !== activeProvider.kind;
   const submittedNewApiKey = input.apiKey !== undefined && input.apiKey.trim().length > 0;
-  if (hasUsableApiKey && (submittedNewApiKey || baseURLChanged)) {
-    nextConfig = await refreshModelDiscovery(nextConfig);
-  }
 
   const nextProviders = state.providers.map(p => p.id === activeProvider.id ? nextConfig : p);
-  await writeState({ ...state, providers: nextProviders });
+  const nextState = { ...state, providers: nextProviders };
+  await writeState(nextState);
+  if (hasUsableApiKey && (submittedNewApiKey || baseURLChanged || providerKindChanged)) {
+    scheduleProviderDiscoveryRefresh(nextConfig.id, nextConfig.updatedAt);
+  }
   return toPublicConfig(nextConfig);
 }
 
@@ -1352,12 +1361,14 @@ async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConf
       throw new Error(validation.message ?? "API Key 无效。");
     }
     Object.assign(newConfig, encryptApiKey(input.apiKey));
-    newConfig = await refreshModelDiscovery(newConfig);
   }
 
   const nextProviders = [...state.providers, newConfig];
   const nextState = { ...state, providers: nextProviders, activeProviderId: newId };
   await writeState(nextState);
+  if (newConfig.encryptedApiKey) {
+    scheduleProviderDiscoveryRefresh(newConfig.id, newConfig.updatedAt);
+  }
 
   return snapshotFromState(nextState);
 }
@@ -2259,6 +2270,30 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
   }
 }
 
+function scheduleProviderDiscoveryRefresh(providerId: string, expectedUpdatedAt: string): void {
+  void refreshProviderDiscoveryIfCurrent(providerId, expectedUpdatedAt).catch((error: unknown) => {
+    console.warn("[CrossGen] Background model discovery failed.", sanitizeError(error));
+  });
+}
+
+async function refreshProviderDiscoveryIfCurrent(providerId: string, expectedUpdatedAt: string): Promise<void> {
+  const state = await readState();
+  const currentConfig = state.providers.find((provider) => provider.id === providerId);
+  if (!currentConfig || currentConfig.updatedAt !== expectedUpdatedAt) return;
+
+  const refreshedConfig = await refreshModelDiscovery(currentConfig);
+  const latestState = await readState();
+  const latestConfig = latestState.providers.find((provider) => provider.id === providerId);
+  if (!latestConfig || latestConfig.updatedAt !== expectedUpdatedAt) return;
+
+  const nextState = {
+    ...latestState,
+    providers: latestState.providers.map((provider) => provider.id === providerId ? refreshedConfig : provider)
+  };
+  await writeState(nextState);
+  broadcastSnapshot(nextState);
+}
+
 function selectActiveLaunchForDiscovery(
   config: StoredProviderConfig,
   models: StoredProviderConfig["discoveredModels"],
@@ -2399,7 +2434,7 @@ async function getOrCreateHistoryJobForQueueItem(
   }
 
   const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
-  const job = createJob(request, provider, inputs, mask);
+  const job = createJob(request, provider, inputs, mask, item.source);
   await upsertJob(job);
   return job;
 }
@@ -2445,7 +2480,7 @@ function terminalJobForQueueExecution(job: GenerationJob, execution: GenerationQ
     return {
       ...job,
       status: "cancelled",
-      error: execution.error ?? job.error ?? "任务已终止。",
+      error: execution.error ?? "任务已终止。",
       updatedAt: nowIso
     };
   }
@@ -2551,7 +2586,7 @@ function cancelledHistoryJob(job: GenerationJob, item: GenerationQueueItem): Gen
   return {
     ...job,
     status: "cancelled",
-    error: job.error ?? "任务已取消。",
+    error: "任务已取消。",
     updatedAt: item.updatedAt
   };
 }
@@ -2922,7 +2957,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     if (!canRunRequestWithConfig(normalizedRequest, currentProvider)) {
       throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
     }
-    job = createJob(normalizedRequest, currentProvider, inputs, mask);
+    job = createJob(normalizedRequest, currentProvider, inputs, mask, "desktop");
     queueItem = createGenerationQueueItem({
       source: "desktop",
       providerId: currentProvider.id,
@@ -3417,7 +3452,7 @@ async function reloadStateFromDiskIfExternal(): Promise<void> {
   if (Date.now() - lastSelfWriteAt < STATE_FILE_SELF_WRITE_GRACE_MS) return;
   if (BrowserWindow.getAllWindows().length === 0) return;
   try {
-    const external = applyStartupRecovery(normalizeState(await readStateFile(getStatePath())));
+    const external = normalizeState(await readStateFile(getStatePath()));
     // Serialize behind the Gallery operation queue so a concurrent desktop mutation and an
     // external reload never interleave into a half-applied snapshot.
     await runGalleryOperation(async () => {
@@ -4306,7 +4341,7 @@ async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
   const targetGalleryFolderId = normalizeTargetGalleryFolderId(state, input.targetGalleryFolderId);
   const request = validateAgentRunJobRequest(buildAgentRunJobRequest(provider, input), provider);
   const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
-  const job = createJob(request, provider, inputs, mask);
+  const job = createJob(request, provider, inputs, mask, input.source);
   const queueItem = createGenerationQueueItem({
     source: input.source,
     providerId: provider.id,

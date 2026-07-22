@@ -90,7 +90,12 @@ export interface UiCopy {
   apiAccessDialogSummary: (count: number) => string;
   apiAccessEditHint: string;
   apiAccessUseNow: string;
+  apiAccessEditCardTooltip: string;
   apiAccessSelectedDetail: string;
+  apiAccessDraftDetail: string;
+  apiAccessDraftStatus: string;
+  apiAccessTestedStatus: string;
+  apiAccessDiscoveredStatus: string;
   apiAccessModels: string;
   apiAccessNoModels: string;
   apiAccessSaved: string;
@@ -143,6 +148,7 @@ export interface UiCopy {
   keySaved: string;
   noKeySaved: string;
   parameters: string;
+  detailedConfig: string;
   moreActions: string;
   imageRoute: string;
   imageRouteAuto: string;
@@ -330,6 +336,7 @@ export interface UiCopy {
   mask: string;
   maskDescription: string;
   guidedRegionDescription: string;
+  exactMaskRouteNotice: string;
   maskBrushSize: string;
   clearPaintedMask: string;
   sourceForMask: string;
@@ -373,6 +380,9 @@ export interface UiCopy {
   historySaveName: string;
   historySaveTags: string;
   historySystemTag: string;
+  historySourceTag: string;
+  historySourceCli: string;
+  historySourceMcp: string;
   historyImageName: string;
   historyDuration: (duration: string) => string;
   historyPageSizeMenu: string;
@@ -473,7 +483,12 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessDialogSummary: (count: number) => `${count} saved config${count === 1 ? "" : "s"} · Click a card to edit it.`,
     apiAccessEditHint: "Click a card to edit it on the right.",
     apiAccessUseNow: "Use this config now",
+    apiAccessEditCardTooltip: "Click to edit config",
     apiAccessSelectedDetail: "Config details",
+    apiAccessDraftDetail: "New config",
+    apiAccessDraftStatus: "Configuring",
+    apiAccessTestedStatus: "Tested",
+    apiAccessDiscoveredStatus: "Discovered",
     apiAccessModels: "Supported models",
     apiAccessNoModels: "No models discovered yet.",
     apiAccessSaved: "Saved",
@@ -526,6 +541,7 @@ export const translations: Record<Language, UiCopy> = {
     keySaved: "Key saved",
     noKeySaved: "No key saved",
     parameters: "Parameters",
+    detailedConfig: "Detailed config",
     moreActions: "More actions",
     imageRoute: "API route",
     imageRouteAuto: "Auto",
@@ -714,6 +730,7 @@ export const translations: Record<Language, UiCopy> = {
     mask: "Mask",
     maskDescription: "Paint the area to replace. With multiple references, the mask applies to the first image.",
     guidedRegionDescription: "Use the painted region as guidance for the first image.",
+    exactMaskRouteNotice: "Mask mode uses the official Images API edit route because exact masks are only supported there. Aggregation platforms may have a lower success rate on this route.",
     maskBrushSize: "Adjust mask brush size",
     clearPaintedMask: "Clear painted mask",
     sourceForMask: "Source for mask",
@@ -757,6 +774,9 @@ export const translations: Record<Language, UiCopy> = {
     historySaveName: "Save image name",
     historySaveTags: "Save history tags",
     historySystemTag: "System tag",
+    historySourceTag: "Generation channel",
+    historySourceCli: "CLI",
+    historySourceMcp: "MCP",
     historyImageName: "Image name",
     historyDuration: (duration: string) => `Took ${duration}`,
     historyPageSizeMenu: "History page size",
@@ -921,7 +941,12 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessDialogSummary: (count: number) => `${count} 个已保存配置 · 点击卡片编辑。`,
     apiAccessEditHint: "点击卡片后可在右侧编辑配置。",
     apiAccessUseNow: "立即使用该配置",
+    apiAccessEditCardTooltip: "单击编辑配置",
     apiAccessSelectedDetail: "配置信息",
+    apiAccessDraftDetail: "新增配置",
+    apiAccessDraftStatus: "正在配置",
+    apiAccessTestedStatus: "已测试",
+    apiAccessDiscoveredStatus: "已探测",
     apiAccessModels: "支持的模型",
     apiAccessNoModels: "暂未探测到模型。",
     apiAccessSaved: "已保存",
@@ -974,6 +999,7 @@ export const translations: Record<Language, UiCopy> = {
     keySaved: "Key 已保存",
     noKeySaved: "未保存 Key",
     parameters: "参数配置",
+    detailedConfig: "详细配置",
     moreActions: "更多操作",
     imageRoute: "接口路径",
     imageRouteAuto: "自动",
@@ -1162,6 +1188,7 @@ export const translations: Record<Language, UiCopy> = {
     mask: "蒙版",
     maskDescription: "涂抹需要替换的区域。多张参考图时，蒙版应用到第一张图片。",
     guidedRegionDescription: "将涂抹区域作为第一张图片的修改引导。",
+    exactMaskRouteNotice: "蒙版模式会使用官方 Images API 编辑通道，因为官方精确 mask 仅支持该通道；聚合平台在该通道下的生图成功率可能下降。",
     maskBrushSize: "调整蒙版画笔大小",
     clearPaintedMask: "清除已绘制蒙版",
     sourceForMask: "蒙版源图",
@@ -1205,6 +1232,9 @@ export const translations: Record<Language, UiCopy> = {
     historySaveName: "保存图片名称",
     historySaveTags: "保存历史标签",
     historySystemTag: "系统标签",
+    historySourceTag: "生图渠道",
+    historySourceCli: "CLI",
+    historySourceMcp: "MCP",
     historyImageName: "图片名称",
     historyDuration: (duration: string) => `耗时 ${duration}`,
     historyPageSizeMenu: "历史每页数量",

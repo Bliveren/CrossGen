@@ -115,7 +115,7 @@ import { ImageEditor } from "./ImageEditor";
 import { DialogShell } from "./DialogShell";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
 import { ApiConfigDialog, LaunchSection, ProviderSummarySection } from "./ProviderConfigPanel";
-import { ParameterSection } from "./ParameterConfigPanel";
+import { ParameterConfigDialog, ParameterConfigLauncher } from "./ParameterConfigPanel";
 import {
   GalleryCompactControls,
   GalleryContentGrid,
@@ -260,6 +260,7 @@ const RIGHT_RAIL_THUMB_MIN_SIZE = 128;
 const RIGHT_RAIL_THUMB_HORIZONTAL_CHROME = 48;
 const LEFT_RAIL_AUTO_COLLAPSE_WIDTH = MIN_SIDEBAR_WIDTH;
 const RIGHT_RAIL_AUTO_COLLAPSE_WIDTH = MIN_HISTORY_WIDTH;
+const RAIL_AUTO_COLLAPSE_BREAKPOINT = 1320;
 const DEFAULT_PREVIEW_PANEL_RATIO = 0.618;
 const MIN_PREVIEW_PANEL_RATIO = 0.48;
 const MAX_PREVIEW_PANEL_RATIO = 0.74;
@@ -928,6 +929,7 @@ export function App() {
   const [params, setParams] = useState<ImageParams>(DEFAULT_IMAGE_PARAMS);
   const modeLabels = useMemo(() => modeLabelsForParams(copy, params), [copy, params]);
   const [apiKey, setApiKey] = useState("");
+  const [apiAccessKind, setApiAccessKind] = useState<ProviderKind>("openai");
   const [apiAccessName, setApiAccessName] = useState("OpenAI");
   const [baseURL, setBaseURL] = useState(DEFAULT_BASE_URL);
   const [isActiveApiConfigOpen, setIsActiveApiConfigOpen] = useState(false);
@@ -966,7 +968,7 @@ export function App() {
   const [generationAttemptIndex, setGenerationAttemptIndex] = useState<number | null>(null);
   const [arePromptSecondaryActionsIconOnly, setArePromptSecondaryActionsIconOnly] = useState(false);
   const [isPrimaryRunIconOnly, setIsPrimaryRunIconOnly] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isParameterDialogOpen, setIsParameterDialogOpen] = useState(false);
   const [openLaunchMenuId, setOpenLaunchMenuId] = useState<FocusedLaunchId | null>(null);
   const [historySearch, setHistorySearch] = useState("");
   const [historyStatusFilter, setHistoryStatusFilter] = useState<"all" | "succeeded" | "failed">("all");
@@ -984,6 +986,7 @@ export function App() {
   const [editingHistoryTagsId, setEditingHistoryTagsId] = useState<string | null>(null);
   const [historyTagsInput, setHistoryTagsInput] = useState("");
   const [historyGalleryMenuJobId, setHistoryGalleryMenuJobId] = useState<string | null>(null);
+  const [expandedHistoryCardId, setExpandedHistoryCardId] = useState<string | null>(null);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -1110,6 +1113,7 @@ export function App() {
   const [referenceLimitToast, setReferenceLimitToast] = useState<{ id: number; text: string } | null>(null);
   const [buttonFeedback, setButtonFeedback] = useState<Record<string, number>>({});
   const [globalTooltip, setGlobalTooltip] = useState<GlobalTooltip | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredWidth("image2tools.sidebarWidth", DEFAULT_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH));
   const [historyWidth, setHistoryWidth] = useState(() => readStoredWidth("image2tools.historyWidth", DEFAULT_HISTORY_WIDTH, MIN_RIGHT_RAIL_WIDTH, MAX_HISTORY_WIDTH));
   const [previewPanelRatio, setPreviewPanelRatio] = useState(() => readStoredWidth("image2tools.previewPanelRatio", DEFAULT_PREVIEW_PANEL_RATIO, MIN_PREVIEW_PANEL_RATIO, MAX_PREVIEW_PANEL_RATIO));
@@ -1117,6 +1121,10 @@ export function App() {
   const [contextMenu, setContextMenu] = useState<ImageContextMenuState | null>(null);
   const [sidebarCollapseButtonY, setSidebarCollapseButtonY] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight - 86));
   const [rightRailCollapseButtonY, setRightRailCollapseButtonY] = useState(() => (typeof window === "undefined" ? 0 : window.innerHeight - 86));
+  const [isAutoRightRailCollapsed, setIsAutoRightRailCollapsed] = useState(() => {
+    const leftWidth = window.innerWidth <= RAIL_AUTO_COLLAPSE_BREAKPOINT ? COMPACT_SIDEBAR_WIDTH : DEFAULT_SIDEBAR_WIDTH;
+    return window.innerWidth <= RAIL_AUTO_COLLAPSE_BREAKPOINT || window.innerWidth - leftWidth - RESIZER_WIDTH * 2 < MIN_WORKSPACE_WIDTH + RIGHT_RAIL_AUTO_COLLAPSE_WIDTH;
+  });
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const galleryContentRef = useRef<HTMLDivElement | null>(null);
@@ -1202,12 +1210,12 @@ export function App() {
   const generalModeNotice = generalParams ? generalRuntimeNotice(generalParams.providerKind, copy) : copy.generalRuntimeUnsupported;
   const activeInpaintCapability = inpaintCapabilityForParams(params);
   const usesExactMask = activeInpaintCapability === "exact-mask";
+  const showExactMaskRouteNotice = requestMode === "inpaint" && usesExactMask;
   const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
   const streamDisabledReason = openAIParams ? streamPartialPreviewDisabledReason(openAIParams, activeConfig, requestMode, copy) : undefined;
   const streamPartialsAllowed = openAIParams ? !streamDisabledReason : false;
   const apiKeyPlaceholder = selectedApiConfig.apiKeyPreview ?? (selectedApiConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
   const launchButtons = useMemo(() => getLaunchButtonStates(activeConfig, copy), [copy, activeConfig]);
-  const activeLaunchDisplay = launchButtons.find((button) => button.launchId === activeConfig.activeLaunchId)?.displayName ?? modelLabelFromId(activeConfig.activeModelId);
   const connectionLabel = connectionStatusLabel(connectionCheck, copy);
   const connectionTitle = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : connectionLabel;
   const connectionErrorText = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : null;
@@ -1217,14 +1225,21 @@ export function App() {
     ?? (selectedApiConfig.lastModelDiscoveryAt || selectedApiConfig.discoveredModels.length > 0 ? selectedDiscoveryText : copy.apiAccessNoModels);
   const isSelectedConfigSaved = savedApiConfigId === selectedApiConfig.id && selectedApiConfig.apiKeySaved && !apiKey.trim();
   const inactiveApiConfigs = snapshot.providers.filter((config) => config.id !== activeConfig.id);
-  const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - historyWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
-  const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_RIGHT_RAIL_WIDTH, window.innerWidth - sidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
-  const isRightRailStacked = historyWidth <= RIGHT_RAIL_STACKED_WIDTH;
-  const isRightRailDense = historyWidth <= RIGHT_RAIL_DENSE_WIDTH;
-  const isRightRailCompact = isRightRailCollapsed || historyWidth <= RIGHT_RAIL_COLLAPSED_WIDTH;
+  const renderedSidebarWidth = isSidebarCompact ? COMPACT_SIDEBAR_WIDTH : sidebarWidth;
+  const maxHistoryWidth = Math.min(MAX_HISTORY_WIDTH, Math.max(MIN_RIGHT_RAIL_WIDTH, viewportWidth - renderedSidebarWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+  const clampedHistoryWidth = clamp(historyWidth, MIN_RIGHT_RAIL_WIDTH, maxHistoryWidth);
+  const isRightRailCompact = isRightRailCollapsed || isAutoRightRailCollapsed || historyWidth <= RIGHT_RAIL_COLLAPSED_WIDTH;
+  const autoCollapsedHistoryWidth = Math.min(RIGHT_RAIL_COLLAPSED_WIDTH, Math.max(MIN_RIGHT_RAIL_WIDTH, maxHistoryWidth));
+  const renderedHistoryWidth =
+    isAutoRightRailCollapsed && !isRightRailCollapsed && historyWidth > RIGHT_RAIL_COLLAPSED_WIDTH
+      ? autoCollapsedHistoryWidth
+      : clampedHistoryWidth;
+  const maxSidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, viewportWidth - renderedHistoryWidth - RESIZER_WIDTH * 2 - MIN_WORKSPACE_WIDTH));
+  const isRightRailStacked = renderedHistoryWidth <= RIGHT_RAIL_STACKED_WIDTH;
+  const isRightRailDense = renderedHistoryWidth <= RIGHT_RAIL_DENSE_WIDTH;
   const rightRailLayoutMode = isRightRailCompact ? "compact" : isRightRailDense ? "dense" : isRightRailStacked ? "stacked" : "full";
   const rightRailThumbSize = clamp(
-    historyWidth - RIGHT_RAIL_THUMB_HORIZONTAL_CHROME,
+    renderedHistoryWidth - RIGHT_RAIL_THUMB_HORIZONTAL_CHROME,
     RIGHT_RAIL_THUMB_MIN_SIZE,
     RIGHT_RAIL_THUMB_MAX_SIZE
   );
@@ -1719,11 +1734,44 @@ export function App() {
   }, [isTagManagerOpen]);
 
   useEffect(() => {
-    const updateCompactState = () => setIsAutoSidebarCollapsed(window.innerWidth <= 1320);
+    if (!expandedHistoryCardId) return undefined;
+
+    const closeExpandedHistoryCard = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".history-item")) return;
+      setExpandedHistoryCardId(null);
+    };
+
+    window.addEventListener("pointerdown", closeExpandedHistoryCard, true);
+    return () => window.removeEventListener("pointerdown", closeExpandedHistoryCard, true);
+  }, [expandedHistoryCardId]);
+
+  useEffect(() => {
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth);
+    updateViewportWidth();
+    window.addEventListener("resize", updateViewportWidth);
+    return () => window.removeEventListener("resize", updateViewportWidth);
+  }, []);
+
+  useEffect(() => {
+    const updateCompactState = () => setIsAutoSidebarCollapsed(window.innerWidth <= RAIL_AUTO_COLLAPSE_BREAKPOINT);
     updateCompactState();
     window.addEventListener("resize", updateCompactState);
     return () => window.removeEventListener("resize", updateCompactState);
   }, []);
+
+  useEffect(() => {
+    const updateCompactState = () => {
+      const leftWidth = isSidebarCompact ? COMPACT_SIDEBAR_WIDTH : sidebarWidthRef.current;
+      setIsAutoRightRailCollapsed(
+        window.innerWidth <= RAIL_AUTO_COLLAPSE_BREAKPOINT ||
+        window.innerWidth - leftWidth - RESIZER_WIDTH * 2 < MIN_WORKSPACE_WIDTH + RIGHT_RAIL_AUTO_COLLAPSE_WIDTH
+      );
+    };
+    updateCompactState();
+    window.addEventListener("resize", updateCompactState);
+    return () => window.removeEventListener("resize", updateCompactState);
+  }, [isSidebarCompact]);
 
   useEffect(() => {
     const container = promptActionsRef.current;
@@ -1888,7 +1936,7 @@ export function App() {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleMeasure);
     };
-  }, [isRightRailCompact, isSidebarCompact, notice.text, rightRailView, rightRailLayoutMode, showAdvanced, updateCheck?.status]);
+  }, [isParameterDialogOpen, isRightRailCompact, isSidebarCompact, notice.text, rightRailView, rightRailLayoutMode, updateCheck?.status]);
 
   useEffect(() => {
     const node = historyListRef.current;
@@ -1907,6 +1955,13 @@ export function App() {
   useEffect(() => {
     setHistoryPageIndex((current) => Math.min(current, historyPageCount - 1));
   }, [historyPageCount]);
+
+  useEffect(() => {
+    setExpandedHistoryCardId((current) => {
+      if (!current) return current;
+      return visibleHistory.some((job) => job.id === current) ? current : null;
+    });
+  }, [visibleHistory]);
 
   useEffect(() => {
     if (!isActiveApiConfigOpen) return;
@@ -2892,6 +2947,7 @@ export function App() {
 
   function hydrateApiConfigForm(config: ProviderConfig) {
     setSelectedApiConfigId(config.id);
+    setApiAccessKind(config.kind);
     setApiAccessName(apiAccessDisplayName(config, copy.apiAccessUntitled));
     setBaseURL(config.baseURL);
     setApiKey("");
@@ -2900,10 +2956,12 @@ export function App() {
 
   function openApiConfigDialog(config: ProviderConfig = activeConfig) {
     hydrateApiConfigForm(config);
+    setIsAddingApiAccess(false);
     setIsActiveApiConfigOpen(true);
   }
 
   function selectApiConfigForEditing(config: ProviderConfig) {
+    setIsAddingApiAccess(false);
     hydrateApiConfigForm(config);
     resetConnectionCheckForConfigEdit();
   }
@@ -2912,6 +2970,7 @@ export function App() {
     setSnapshot(next);
     const nextActiveConfig = next.providers.find(p => p.id === next.activeProviderId) ?? next.providers[0];
     const nextSelectedConfig = next.providers.find(p => p.id === selectedApiConfigId) ?? nextActiveConfig;
+    setApiAccessKind(nextSelectedConfig.kind);
     setApiAccessName(apiAccessDisplayName(nextSelectedConfig, copy.apiAccessUntitled));
     setBaseURL(nextSelectedConfig.baseURL);
     setSelectedApiConfigId(nextSelectedConfig.id);
@@ -2926,6 +2985,7 @@ export function App() {
       return { ...current, providers: nextProviders };
     });
     if (config.id === (selectedApiConfigId ?? activeConfig.id)) {
+      setApiAccessKind(config.kind);
       setApiAccessName(apiAccessDisplayName(config, copy.apiAccessUntitled));
       setBaseURL(config.baseURL);
     }
@@ -2950,16 +3010,23 @@ export function App() {
 
   function renderApiConfigConnectionBadge(config: ProviderConfig) {
     const check = apiConfigConnectionCheck(config);
-    const label = connectionStatusLabel(check, copy);
-    const title = check.status === "error" && check.message ? copy.connectionErrorDetail(check.message) : label;
-    const checking = config.id === activeConfig.id && (isTestingConnection || check.status === "checking");
+    const testing = config.id === activeConfig.id && (isTestingConnection || check.status === "checking");
+    const discovering = discoveringProviderId === config.id;
+    const hasDiscovery = !config.lastModelDiscoveryError && (Boolean(config.lastModelDiscoveryAt) || config.discoveredModels.length > 0);
+    const isTested = check.status === "ok";
+    const hasError = check.status === "error" || Boolean(config.lastModelDiscoveryError);
+    const status = testing || discovering ? "checking" : hasError ? "error" : isTested || hasDiscovery ? "ok" : "idle";
+    const label = testing ? copy.connectionChecking : discovering ? copy.discoveringModels : isTested ? copy.apiAccessTestedStatus : hasDiscovery ? copy.apiAccessDiscoveredStatus : connectionStatusLabel(check, copy);
+    const title = check.status === "error" && check.message
+      ? copy.connectionErrorDetail(check.message)
+      : config.lastModelDiscoveryError ?? (isTested ? copy.apiAccessTestedStatus : hasDiscovery ? discoveredModelTooltip(config, copy) : label);
     return (
-      <span className="connection-badge api-config-card-connection" data-status={check.status} title={title}>
-        {checking ? (
+      <span className="connection-badge api-config-card-connection" data-status={status} title={title}>
+        {testing || discovering ? (
           <Loader2 className="spin" size={12} />
-        ) : check.status === "ok" ? (
+        ) : isTested || hasDiscovery ? (
           <CheckCircle2 size={12} />
-        ) : check.status === "error" ? (
+        ) : hasError ? (
           <AlertTriangle size={12} />
         ) : (
           <span className="connection-dot" />
@@ -2990,22 +3057,28 @@ export function App() {
       return;
     }
     setIsSavingConfig(true);
+    let shouldRunConnectionTest = false;
     try {
       const targetConfig = selectedApiConfig;
-      const configKind = targetConfig.kind;
+      const configKind = apiAccessKind;
       const isEditingActiveConfig = targetConfig.id === activeConfig.id;
+      const providerKindChanged = configKind !== targetConfig.kind;
+      const nextActiveLaunchId = providerKindChanged ? defaultLaunchForProvider(configKind) : targetConfig.activeLaunchId;
+      const nextDefaultModel = providerKindChanged
+        ? defaultModelForProvider(configKind)
+        : isEditingActiveConfig ? defaultModelForConfigSave(configKind, params, activeConfig) : targetConfig.defaultModel;
       const config = await bridge.saveConfig({
         providerId: targetConfig.id,
         kind: configKind,
         name: apiAccessName.trim() || providerLabelFromKind(configKind),
         apiKey: apiKey.trim() ? apiKey : undefined,
         baseURL,
-        defaultModel: isEditingActiveConfig ? defaultModelForConfigSave(configKind, params, activeConfig) : targetConfig.defaultModel,
+        defaultModel: nextDefaultModel,
         defaultSize: isEditingActiveConfig ? defaultSizeForConfigSave(params, activeConfig) : targetConfig.defaultSize,
         defaultQuality: isEditingActiveConfig ? defaultQualityForConfigSave(params, activeConfig) : targetConfig.defaultQuality,
         timeoutMs: isEditingActiveConfig ? params.timeoutMs : targetConfig.timeoutMs,
-        activeLaunchId: targetConfig.activeLaunchId,
-        activeModelId: targetConfig.activeModelId
+        activeLaunchId: nextActiveLaunchId,
+        activeModelId: providerKindChanged ? nextDefaultModel : targetConfig.activeModelId
       });
       applyConfig(config);
       if (config.id === activeConfig.id) {
@@ -3018,8 +3091,7 @@ export function App() {
         text: config.lastModelDiscoveryError ? config.lastModelDiscoveryError : copy.notices.configSaved
       });
       if (config.id === activeConfig.id && config.apiKeySaved) {
-        hasAutoTestedConnectionRef.current = true;
-        await runConnectionTest({ silent: false, apiKeySaved: config.apiKeySaved });
+        shouldRunConnectionTest = true;
       } else if (config.id === activeConfig.id) {
         setConnectionCheck({ status: "idle" });
       }
@@ -3028,12 +3100,22 @@ export function App() {
     } finally {
       setIsSavingConfig(false);
     }
+    if (shouldRunConnectionTest) {
+      hasAutoTestedConnectionRef.current = true;
+      void runConnectionTest({ silent: false, apiKeySaved: true });
+    }
   }
 
   function changeNewApiAccessKind(kind: ProviderKind) {
     setNewApiAccessKind(kind);
     setNewApiAccessBaseURL(defaultBaseURLForProvider(kind, kind === "custom" ? newApiAccessBaseURL : baseURL));
     setNewApiAccessName((current) => current || providerLabelFromKind(kind));
+  }
+
+  function changeApiAccessKind(kind: ProviderKind) {
+    setSavedApiConfigId(null);
+    resetConnectionCheckForConfigEdit();
+    setApiAccessKind(kind);
   }
 
   async function switchApiAccess(providerId: string) {
@@ -3064,6 +3146,7 @@ export function App() {
   async function addApiAccess() {
     if (!bridge) return;
     setIsSavingConfig(true);
+    let shouldRunConnectionTest = false;
     try {
       await persistCurrentDraft();
       const defaultModel = defaultModelForProvider(newApiAccessKind);
@@ -3091,13 +3174,16 @@ export function App() {
       setConnectionCheck({ status: "idle" });
       setNotice({ kind: "success", text: copy.apiAccessAdded });
       if (nextActiveConfig.apiKeySaved) {
-        hasAutoTestedConnectionRef.current = true;
-        await runConnectionTest({ silent: true, apiKeySaved: nextActiveConfig.apiKeySaved });
+        shouldRunConnectionTest = true;
       }
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
       setIsSavingConfig(false);
+    }
+    if (shouldRunConnectionTest) {
+      hasAutoTestedConnectionRef.current = true;
+      void runConnectionTest({ silent: true, apiKeySaved: true });
     }
   }
 
@@ -5095,7 +5181,106 @@ export function App() {
       </select>
     </label>
   ) : null;
-  const parameterSummary = openAIParams ? (
+  const parameterQuickControls = openAIParams ? (
+    <>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.size}</small>
+        <select
+          aria-label={copy.size}
+          value={sizeSelectValue}
+          onChange={(event) => {
+            const value = event.target.value;
+            updateOpenAIParams({ size: value === "custom" ? customSize : value });
+          }}
+        >
+          {sizePresets.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+          <option value="custom">{copy.custom}</option>
+        </select>
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.quality}</small>
+        <select aria-label={copy.quality} value={openAIParams.quality} onChange={(event) => updateOpenAIParams({ quality: event.target.value as ImageQuality })}>
+          {qualityOptions.map((quality) => (
+            <option key={quality} value={quality}>
+              {quality}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.format}</small>
+        <select aria-label={copy.format} value={openAIParams.outputFormat} onChange={(event) => updateOpenAIParams({ outputFormat: event.target.value as ImageFormat })}>
+          {formatOptions.map((format) => (
+            <option key={format} value={format}>
+              {format.toUpperCase()}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field parameter-route-field" title={imageRouteTitle}>
+        <span className="route-label">
+          <small>{copy.imageRoute}</small>
+          <span className="route-info-icon" aria-label={copy.imageRouteInfo} data-tooltip={copy.imageRouteInfo} title={copy.imageRouteInfo}>
+            <Info size={12} />
+          </span>
+        </span>
+        <select
+          aria-label={copy.imageRoute}
+          value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
+          disabled={requestMode === "inpaint"}
+          onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
+        >
+          <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
+          <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
+          <option value="responses">{copy.imageRouteResponses}</option>
+          <option value="image-api">{copy.imageRouteImageApi}</option>
+        </select>
+      </label>
+    </>
+  ) : geminiParams ? (
+    <>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.aspectRatio}</small>
+        <select aria-label={copy.aspectRatio} value={geminiParams.aspectRatio} onChange={(event) => updateGeminiParams({ aspectRatio: event.target.value as GeminiAspectRatio })}>
+          {GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => (
+            <option key={aspectRatio} value={aspectRatio}>
+              {aspectRatio}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.resolution}</small>
+        <select aria-label={copy.resolution} value={geminiParams.resolution} onChange={(event) => updateGeminiParams({ resolution: event.target.value as GeminiResolution })}>
+          {GEMINI_RESOLUTION_OPTIONS.map((resolution) => (
+            <option key={resolution} value={resolution}>
+              {resolution}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.count}</small>
+        <input aria-label={copy.count} type="number" min="1" max="1" value={geminiParams.outputCount} onChange={() => updateGeminiParams({ outputCount: 1 })} />
+      </label>
+    </>
+  ) : (
+    <>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.model}</small>
+        <input aria-label={copy.model} value={generalParams?.model || copy.generalFallback} readOnly />
+      </label>
+      <label className="parameter-summary-chip parameter-quick-field">
+        <small>{copy.provider}</small>
+        <input aria-label={copy.provider} value={providerLabelFromKind(generalParams?.providerKind ?? activeConfig.kind)} readOnly />
+      </label>
+    </>
+  );
+  const parameterPrimaryControls = openAIParams ? (
     <>
       <label>
         <span>{copy.size}</span>
@@ -5134,7 +5319,7 @@ export function App() {
           ))}
         </select>
       </label>
-      {showAdvanced && openAIImageRouteControl}
+      {openAIImageRouteControl}
     </>
   ) : geminiParams ? (
     <>
@@ -5623,7 +5808,7 @@ export function App() {
       style={
         {
           "--sidebar-width": `${isSidebarCompact ? COMPACT_SIDEBAR_WIDTH : sidebarWidth}px`,
-          "--history-width": `${historyWidth}px`,
+          "--history-width": `${renderedHistoryWidth}px`,
           "--right-rail-thumb-size": `${rightRailThumbSize}px`,
           "--preview-ratio": previewPanelRatio,
           "--sidebar-collapse-button-y": `${sidebarCollapseButtonY}px`,
@@ -5663,10 +5848,7 @@ export function App() {
           <button
             type="button"
             className="icon-button"
-            onClick={() => {
-              setIsSidebarCollapsed(false);
-              setShowAdvanced(true);
-            }}
+            onClick={() => setIsParameterDialogOpen(true)}
             aria-label={copy.parameters}
             data-tooltip={copy.parameters}
           >
@@ -5694,10 +5876,7 @@ export function App() {
 
         <ProviderSummarySection
           copy={copy}
-          activeConfig={activeConfig}
           displayName={apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}
-          providerLabel={providerLabelFromKind(activeConfig.kind)}
-          baseUrlSummary={summarizeBaseURL(activeConfig.baseURL)}
           discoveryText={discoveryText}
           connectionStatus={connectionCheck.status}
           connectionLabel={connectionLabel}
@@ -5710,23 +5889,13 @@ export function App() {
           copy={copy}
           activeConfig={activeConfig}
           activeProviderKind={params.providerKind}
-          activeLaunchDisplay={activeLaunchDisplay}
           launchButtons={launchButtons}
           openLaunchMenuId={openLaunchMenuId}
           saving={isSavingConfig}
-          providerLabelForKind={providerLabelFromKind}
           modelOptionsForLaunch={getLaunchModelOptions}
           onToggleLaunchMenu={(launchId, open) => setOpenLaunchMenuId(open ? launchId : null)}
           onLaunch={(button) => void launchModel(button)}
           onSelectModel={(launchId, model) => void selectLaunchModel(launchId, model)}
-        />
-
-        <ParameterSection
-          copy={copy}
-          expanded={showAdvanced}
-          summary={parameterSummary}
-          controls={advancedControls}
-          onToggle={() => setShowAdvanced((current) => !current)}
         />
 
         <section className="notice-area" data-kind={notice.kind} aria-live={notice.kind === "error" ? "assertive" : "polite"} aria-atomic="true">
@@ -6007,6 +6176,14 @@ export function App() {
               {validationError && <p className="inline-check error">{validationError}</p>}
             </div>
 
+            {!showReferenceTools && (
+              <ParameterConfigLauncher
+                copy={copy}
+                quickControls={parameterQuickControls}
+                onOpen={() => setIsParameterDialogOpen(true)}
+              />
+            )}
+
             {showReferenceTools && (
               <>
                 <div
@@ -6094,6 +6271,17 @@ export function App() {
                     <span>{copy.uploadRightsReminder}</span>
                   </p>
                 )}
+                {showExactMaskRouteNotice && (
+                  <p className="inline-check warning mask-route-notice">
+                    <AlertTriangle size={14} />
+                    <span>{copy.exactMaskRouteNotice}</span>
+                  </p>
+                )}
+                <ParameterConfigLauncher
+                  copy={copy}
+                  quickControls={parameterQuickControls}
+                  onOpen={() => setIsParameterDialogOpen(true)}
+                />
               </>
             )}
 
@@ -6109,7 +6297,7 @@ export function App() {
         aria-orientation="vertical"
         aria-valuemin={MIN_RIGHT_RAIL_WIDTH}
         aria-valuemax={maxHistoryWidth}
-        aria-valuenow={historyWidth}
+        aria-valuenow={renderedHistoryWidth}
         aria-disabled={false}
         tabIndex={0}
         onPointerDown={(event) => {
@@ -6237,6 +6425,7 @@ export function App() {
                         resultSrc={result ? assetSource(result) : undefined}
                         jobError={jobError}
                         active={activeJob?.id === job.id}
+                        hoverOpen={expandedHistoryCardId === job.id}
                         selected={isSelected}
                         batchMode={isHistoryBatchMode}
                         displayName={displayName}
@@ -6259,6 +6448,7 @@ export function App() {
                         copyButtonLabel={buttonFeedback[`copy:${job.id}`] ? copy.clicked : copy.copy}
                         downloadButtonLabel={result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}
                         onToggleSelection={(checked) => toggleHistoryJobSelection(job.id, checked)}
+                        onHoverOpen={() => setExpandedHistoryCardId(job.id)}
                         onOpen={() => {
                           setActiveGalleryAssetId(null);
                           setActiveJob(job);
@@ -6290,7 +6480,14 @@ export function App() {
             {galleryRailPanel}
           </StableGalleryRailPanel>
         )}
-        <div ref={rightRailActionsRef} className={`right-rail-actions ${isRightRailActionDrawerOpen ? "drawer-open" : ""}`}>
+        <div
+          ref={rightRailActionsRef}
+          className={[
+            "right-rail-actions",
+            isRightRailActionDrawerOpen ? "drawer-open" : "",
+            isTagManagerOpen ? "tag-manager-open" : ""
+          ].filter(Boolean).join(" ")}
+        >
           <span className="right-rail-summary">
             {rightRailView === "history"
               ? isHistoryBatchMode ? copy.historySelectionCount(selectedHistoryItemCount) : copy.historyStats(snapshot.history.length)
@@ -6382,6 +6579,7 @@ export function App() {
           discoveringProviderId={discoveringProviderId}
           discoveringAny={isDiscoveringModels}
           connectionErrorText={connectionErrorText}
+          kind={apiAccessKind}
           name={apiAccessName}
           apiKey={apiKey}
           baseURL={baseURL}
@@ -6398,11 +6596,15 @@ export function App() {
           displayNameForConfig={(config) => apiAccessDisplayName(config, copy.apiAccessUntitled)}
           providerLabelForKind={providerLabelFromKind}
           baseUrlSummaryForConfig={(config) => summarizeBaseURL(config.baseURL)}
+          baseUrlSummaryForValue={summarizeBaseURL}
           discoverySummaryForConfig={(config) => discoverySummary(config, copy)}
           discoveryTooltipForConfig={(config) => discoveredModelTooltip(config, copy)}
           modelLabel={discoveredModelLabel}
           connectionBadgeForConfig={renderApiConfigConnectionBadge}
-          onClose={() => setIsActiveApiConfigOpen(false)}
+          onClose={() => {
+            setIsAddingApiAccess(false);
+            setIsActiveApiConfigOpen(false);
+          }}
           onUseConfig={(config) => void switchApiAccess(config.id)}
           onSelectConfig={selectApiConfigForEditing}
           onDeleteConfig={(config) => void deleteApiAccess(config)}
@@ -6414,6 +6616,7 @@ export function App() {
           onNewApiAccessKeyChange={setNewApiAccessKey}
           onAddApiAccess={() => void addApiAccess()}
           onCancelAddApiAccess={() => setIsAddingApiAccess(false)}
+          onKindChange={changeApiAccessKind}
           onNameChange={(value) => {
             setSavedApiConfigId(null);
             setApiAccessName(value);
@@ -6429,6 +6632,14 @@ export function App() {
             setBaseURL(value);
           }}
           onSubmit={() => void saveConfig()}
+        />
+      )}
+      {isParameterDialogOpen && (
+        <ParameterConfigDialog
+          copy={copy}
+          primaryControls={parameterPrimaryControls}
+          controls={advancedControls}
+          onClose={() => setIsParameterDialogOpen(false)}
         />
       )}
       {isTemplatesOpen && (

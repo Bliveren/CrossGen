@@ -64,6 +64,7 @@ interface HistoryItemCardProps {
   resultSrc?: string;
   jobError: string | null;
   active: boolean;
+  hoverOpen: boolean;
   selected: boolean;
   batchMode: boolean;
   displayName: string;
@@ -86,6 +87,7 @@ interface HistoryItemCardProps {
   copyButtonLabel: string;
   downloadButtonLabel: string;
   onToggleSelection: (checked: boolean) => void;
+  onHoverOpen: () => void;
   onOpen: () => void;
   onImageContextMenu: (event: React.MouseEvent<HTMLElement>) => void;
   onStartEditName: () => void;
@@ -279,6 +281,7 @@ export function HistoryItemCard({
   resultSrc,
   jobError,
   active,
+  hoverOpen,
   selected,
   batchMode,
   displayName,
@@ -301,6 +304,7 @@ export function HistoryItemCard({
   copyButtonLabel,
   downloadButtonLabel,
   onToggleSelection,
+  onHoverOpen,
   onOpen,
   onImageContextMenu,
   onStartEditName,
@@ -320,8 +324,18 @@ export function HistoryItemCard({
   onToggleGalleryMenu,
   onDelete
 }: HistoryItemCardProps) {
+  const sourceLabel = job.source === "cli" ? copy.historySourceCli : job.source === "mcp" ? copy.historySourceMcp : null;
   return (
-    <article className={`${active ? "history-item active" : "history-item"} ${selected ? "selected" : ""}`}>
+    <article
+      className={[
+        "history-item",
+        active ? "active" : "",
+        hoverOpen ? "hover-open" : "",
+        selected ? "selected" : ""
+      ].filter(Boolean).join(" ")}
+      onMouseEnter={onHoverOpen}
+      onFocus={onHoverOpen}
+    >
       {batchMode && (
         <input
           className="history-entry-select"
@@ -384,6 +398,7 @@ export function HistoryItemCard({
           </div>
           <div className="history-chip-row history-tag-row" aria-label={copy.historyEditTags}>
             <span className="history-chip system-tag" title={copy.historySystemTag}>{systemTag}</span>
+            {sourceLabel && <span className="history-chip source-tag" title={copy.historySourceTag}>{sourceLabel}</span>}
             {job.tags.map((tag) => (
               <span key={tag} className="history-chip">{tag}</span>
             ))}
