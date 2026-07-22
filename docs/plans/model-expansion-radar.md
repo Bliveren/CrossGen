@@ -21,17 +21,19 @@ v0.3.1 does not add large provider-native adapters. It freezes capability contra
 - `assumed`: model name suggests image capability only.
 - `unknown`: no safe generation claim.
 
-## v0.3.1 Surface Rules
+## Surface Rules
 
 - Callable `mediaKinds` and `outputAssetKinds` are `["image"]`.
 - `animatedGif` and `video` are false/non-callable.
 - Discovered FLUX, SDXL, Recraft, Imagen, Seedream, Qwen, Ideogram, or similar names do not imply edit/reference/inpaint.
 - OpenAI-compatible General fallback uses minimal prompt-only generation.
 - Models requiring public URL input must set `requiresPublicUrl: true`.
+- v0.3.2 is reserved for image task reliability and visibility; model expansion must not become its release promise.
+- A later model-expansion slice may pick one high-value target only after the image queue UI, route diagnostics, and provider timeout behavior are stable.
 
 ## Radar Candidates
 
-| Candidate | Likely contract | v0.3.1 stance | v0.3.2+ entry criteria |
+| Candidate | Likely contract | v0.3.1 stance | Later entry criteria |
 | --- | --- | --- | --- |
 | OpenAI-compatible image models | `openai-compatible-minimal` | conservative General fallback | mock smoke and no edit/reference claims |
 | Additional Gemini image models | `gemini-generate-content` | readonly/discovered unless verified | adapter tests per claimed operation |
@@ -42,6 +44,6 @@ v0.3.1 does not add large provider-native adapters. It freezes capability contra
 | Recraft | provider-native or compatible | radar only | raster-only contract first |
 | Hosted FLUX | provider-native or compatible | radar only | pick one hosted route |
 | Stable Diffusion / SDXL API | `provider-native` | radar only | minimal prompt contract |
-| ComfyUI / local runtime | `local-workflow` | v0.4.0+ | local-runtime permissions and queue stages |
+| ComfyUI / local runtime | `local-workflow` | separate experimental line | local-runtime permissions, service discovery, workflow JSON mapping, and queue stages |
 
 Do not start video/GIF adapter work from this radar.
