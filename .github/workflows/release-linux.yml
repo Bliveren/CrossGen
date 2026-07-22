@@ -18,6 +18,7 @@ jobs:
   linux-appimage:
     name: Build and publish Linux AppImage
     runs-on: ubuntu-latest
+    if: ${{ !contains(github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name, '-rc.') }}
 
     steps:
       - name: Check out repository
