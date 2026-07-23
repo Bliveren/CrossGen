@@ -35,6 +35,8 @@
 
 CrossGen 0.3.1 将桌面生图工作台升级为面向 Agent 的本地运行时。你仍然可以使用完整的可视化应用，同时也可以让 Codex、Claude Code、Cursor 和其他本地 AI Agent 通过 CLI 或 MCP 发现模型、生图或编辑图片、追踪持久化任务，并把结果导出到当前项目。
 
+<img width="1440" height="940" alt="screenshot-20260724-003442" src="https://github.com/user-attachments/assets/aaaaf3d8-cf9b-4320-bdfb-a04ca9f92168" />
+
 桌面应用、CLI 和 MCP Server 共用 API 配置、持久化生图队列、历史记录与图库。CrossGen 只需安装一次；安装包中的 CLI/MCP 不要求用户额外安装 Node.js、npm、pnpm、全局包或本地 HTTP 服务。
 
 它解决的是很实际的工作问题：
