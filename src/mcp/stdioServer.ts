@@ -1114,5 +1114,9 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
       if (trailing && !bufferStartsWithAscii(pending, "content-length:")) enqueueJson(trailing);
       void chain.then(() => resolve(0), () => resolve(1));
     });
+
+    if (typeof input.resume === "function") {
+      input.resume();
+    }
   });
 }

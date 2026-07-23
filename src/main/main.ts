@@ -11,7 +11,7 @@ import {
   type IpcMainInvokeEvent
 } from "electron";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync, watch, type FSWatcher } from "node:fs";
+import { createReadStream, readFileSync, watch, type FSWatcher } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -4612,6 +4612,7 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
   return runReadonlyMcpStdioServer({
     mode: requestedMode,
     serverVersion: getAppVersion(),
+    input: createMcpInputStream(),
     readers: {
       configStatus: async () => buildCliConfigStatus(await readExistingStateForCli(), await readExistingQueueForCli()),
       providerList: async () => buildCliProviderList(await readExistingStateForCli()),
@@ -4773,6 +4774,13 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
     } : undefined,
     sanitizeError: (error) => redactLikelySecrets(normalizeError(error))
   });
+}
+
+function createMcpInputStream() {
+  if (process.platform === "win32" && process.versions.electron) {
+    return createReadStream("", { fd: 0, autoClose: false });
+  }
+  return process.stdin;
 }
 
 function normalizeCliMcpClient(value: string | undefined): McpClientName {

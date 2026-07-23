@@ -9,6 +9,8 @@ function existsAt(paths: string[]) {
 
 const packageRoot = join("repo", "crossgen");
 const localElectron = join(packageRoot, "node_modules", ".bin", "electron");
+const localWindowsElectron = join(packageRoot, "node_modules", "electron", "dist", "electron.exe");
+const localWindowsElectronCmd = join(packageRoot, "node_modules", ".bin", "electron.cmd");
 
 describe("crossgen binary launcher", () => {
   it("forwards CLI commands through a local Electron runtime", () => {
@@ -37,6 +39,22 @@ describe("crossgen binary launcher", () => {
     });
 
     expect(plan.args).toEqual([packageRoot, "--mcp"]);
+  });
+
+  it("prefers the Windows Electron executable over the cmd shim", () => {
+    const plan = buildCrossGenCliLaunchPlan({
+      argv: ["--version", "--json"],
+      env: {},
+      platform: "win32",
+      packageRoot,
+      fileExists: existsAt([localWindowsElectron, localWindowsElectronCmd])
+    });
+
+    expect(plan).toMatchObject({
+      command: localWindowsElectron,
+      args: [packageRoot, "--cli", "--version", "--json"],
+      source: "local-electron"
+    });
   });
 
   it("maps --data-dir to both current and legacy runtime env aliases", () => {

@@ -55,8 +55,13 @@ function commandIfExists(path: string, fileExists: (path: string) => boolean): s
 }
 
 function localElectronCommand(packageRoot: string, platform: NodeJS.Platform, fileExists: (path: string) => boolean): string | null {
-  const executable = platform === "win32" ? "electron.cmd" : "electron";
-  return commandIfExists(join(packageRoot, "node_modules", ".bin", executable), fileExists);
+  if (platform === "win32") {
+    return (
+      commandIfExists(join(packageRoot, "node_modules", "electron", "dist", "electron.exe"), fileExists) ??
+      commandIfExists(join(packageRoot, "node_modules", ".bin", "electron.cmd"), fileExists)
+    );
+  }
+  return commandIfExists(join(packageRoot, "node_modules", ".bin", "electron"), fileExists);
 }
 
 function installedAppCommands(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string[] {
@@ -151,15 +156,32 @@ export async function runCrossGenCli(argv = process.argv.slice(2)): Promise<numb
     return 1;
   }
   return new Promise((resolve) => {
+    const mcpMode = plan.args.includes("--mcp");
+    const needsShell = process.platform === "win32" && /\.(?:cmd|bat)$/i.test(plan.command);
     const child = spawn(plan.command, plan.args, {
-      stdio: "inherit",
-      env: plan.env
+      stdio: [mcpMode ? "pipe" : "ignore", "pipe", "pipe"],
+      env: plan.env,
+      shell: needsShell
     });
+    child.stdout?.pipe(process.stdout);
+    child.stderr?.pipe(process.stderr);
+    if (mcpMode && child.stdin) {
+      process.stdin.pipe(child.stdin);
+    }
+    const cleanupInputPipe = () => {
+      if (mcpMode && child.stdin) {
+        process.stdin.unpipe(child.stdin);
+        if (!child.stdin.destroyed) child.stdin.destroy();
+        if (process.stdin.isTTY) process.stdin.pause();
+      }
+    };
     child.on("error", (error) => {
+      cleanupInputPipe();
       process.stderr.write(`crossgen failed to start: ${error instanceof Error ? error.message : String(error)}\n`);
       resolve(1);
     });
     child.on("exit", (code, signal) => {
+      cleanupInputPipe();
       if (signal) {
         process.stderr.write(`crossgen exited due to signal ${signal}\n`);
         resolve(1);
