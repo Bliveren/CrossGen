@@ -73,17 +73,16 @@ describe("release evidence verifier", () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 11/13 required gate(s) passed.");
-    expect(result.stdout).toContain("Pending required gate(s): product-owner-acceptance, update-manifest-assets");
+    expect(result.stdout).toContain("Release evidence validated: 13/13 required gate(s) passed.");
+    expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
-  it("fails --require-complete for the withdrawn v0.3.1 release ledger", async () => {
+  it("passes --require-complete for the approved v0.3.1 release ledger", async () => {
     const result = await run(["--require-complete"]);
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Required release evidence gates are not passed");
-    expect(result.stderr).toContain("product-owner-acceptance");
-    expect(result.stderr).toContain("update-manifest-assets");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Release evidence validated: 13/13 required gate(s) passed.");
+    expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
   it("fails --require-complete when a required gate is still pending", async () => {
@@ -133,11 +132,11 @@ describe("release evidence verifier", () => {
     const result = await run(["--file", "docs/release/v0.3.1-evidence.json", "--expected-version", "0.3.1"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 11/13 required gate(s) passed.");
-    expect(result.stdout).toContain("Pending required gate(s): product-owner-acceptance, update-manifest-assets");
+    expect(result.stdout).toContain("Release evidence validated: 13/13 required gate(s) passed.");
+    expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
-  it("fails --require-complete for the withdrawn v0.3.1 candidate evidence ledger", async () => {
+  it("passes --require-complete for the approved v0.3.1 candidate evidence ledger", async () => {
     const result = await run([
       "--file",
       "docs/release/v0.3.1-evidence.json",
@@ -146,10 +145,9 @@ describe("release evidence verifier", () => {
       "--require-complete"
     ]);
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Required release evidence gates are not passed");
-    expect(result.stderr).toContain("product-owner-acceptance");
-    expect(result.stderr).toContain("update-manifest-assets");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Release evidence validated: 13/13 required gate(s) passed.");
+    expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
   it("rejects secret-looking values in evidence", async () => {
