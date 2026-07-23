@@ -1,12 +1,12 @@
-<h1 align="center">CrossGen 0.3.0</h1>
+<h1 align="center">CrossGen 0.3.1</h1>
 
 <p align="center">
   <img src="./build/icon.png" width="132" height="132" alt="CrossGen app icon" />
 </p>
 
 <p align="center">
-  <b>One-stop AI image generation manager.</b><br />
-  Configure APIs, generate images, edit results, organize assets, and reuse references in one desktop app.
+  <b>Local-first AI image workspace for people and AI agents.</b><br />
+  Generate, edit, organize, and reuse images from the desktop app, JSON CLI, or MCP-compatible agents.
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="#why-crossgen-030">Why 0.3.0</a> ·
+  <a href="#why-crossgen-031">Why 0.3.1</a> ·
   <a href="#visual-tour">Visual Tour</a> ·
   <a href="#core-workflows">Core Workflows</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -31,11 +31,11 @@
   <a href="#technical-notes">Technical Notes</a>
 </p>
 
-## Why CrossGen 0.3.0
+## Why CrossGen 0.3.1
 
-CrossGen 0.3.0 is the release where Image2Tools becomes CrossGen: a practical desktop workspace for people who generate, edit, compare, and reuse AI images every day.
+CrossGen 0.3.1 turns the desktop image workspace into an agent-ready local runtime. You can still use the full visual app, while Codex, Claude Code, Cursor, and other local AI agents can discover models, generate or edit images, monitor durable jobs, and export results into a project through CLI or MCP.
 
-> **Note:** The agent-ready CLI/MCP runtime described below is part of the upcoming **0.3.1** release, which is still in development and not yet published. The latest published release is **0.3.0**.
+The desktop app, CLI, and MCP server share the same API profiles, durable generation queue, History, and Gallery. Install CrossGen once; installed CLI and MCP use require no separate Node.js, npm, pnpm, global package, or local HTTP service.
 
 <img width="1541" height="974" alt="image" src="https://github.com/user-attachments/assets/10ac6a8a-f8f6-441c-94c6-52f6e036d134" />
 
@@ -49,6 +49,14 @@ It is built for real image-generation work, not just one-off prompting. Designer
 6. generate again.
 
 CrossGen keeps that whole loop inside one app. No repeated file hunting, no scattered browser downloads, no separate folder cleanup before the next image-to-image attempt.
+
+For agent-driven work, the loop becomes equally direct:
+
+1. inspect configured providers and verified model capabilities,
+2. submit text-to-image or reference-image work,
+3. track, cancel, or retry the queue-backed job,
+4. inspect the resulting Gallery asset,
+5. export it into the agent's current project.
 
 ## Visual Tour
 
@@ -136,16 +144,56 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 
 ## Agent Runtime
 
-> **Unreleased (0.3.1, in development):** the agent runtime below is under active development and is not part of the current 0.3.0 release.
+CrossGen 0.3.1 exposes the local image runtime through structured JSON CLI commands and an MCP stdio server. The same queue and Gallery rules protect desktop, CLI, and MCP workflows:
 
-CrossGen exposes the local runtime through JSON CLI commands and an MCP stdio server. The same queue and Gallery rules protect desktop, CLI, and MCP workflows:
-
-- `crossgen doctor --agent --json` reports the app path, data directory, provider readiness, worker status, and MCP launch hints.
+- `crossgen doctor --agent --json` reports the app path, data directory, provider readiness, queue configuration, and MCP launch hints.
 - `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` prints client-ready MCP configuration.
-- `crossgen generate ... --yes --wait --json` and MCP `generate_image` submit work through the durable queue.
+- `crossgen generate ... --yes --wait --json` and MCP `crossgen_generate_image` submit work through the durable queue.
 - `crossgen asset export <asset-id> --to <path> --yes --json` copies a managed image into a project without moving the Gallery source.
 
 CLI and MCP are separate entry points. MCP can point directly at the installed CrossGen app executable with `--mcp` and does not require a CLI wrapper. The packaged CLI launcher forwards to the app executable and does not require Node.js, npm, pnpm, or a global package. CLI and MCP default to read-only behavior. Write and generation modes are explicit, paid generation requires confirmation, and local path disclosure is opt-in.
+
+### Generate from a local agent or terminal
+
+After configuring an API profile in the desktop app, use the packaged `crossgen` launcher:
+
+```bash
+crossgen doctor --agent --json
+crossgen models list --json
+crossgen generate --prompt "A precise isometric app icon" --yes --wait --json
+crossgen job status <job-id> --json
+crossgen asset export <asset-id> --to ./assets/app-icon.png --yes --json
+```
+
+Image editing uses the same queue and can accept a local reference image:
+
+```bash
+crossgen edit \
+  --prompt "Keep the composition and change the background to white" \
+  --input ./reference.png --yes --wait --json
+```
+
+All machine-facing responses are JSON. Read-only inspection omits API keys and absolute asset paths; paid generation, destructive actions, queue-control changes, exports, and path disclosure require explicit confirmation.
+
+### Connect Codex, Claude Code, Cursor, or another MCP host
+
+CrossGen can generate client-ready MCP configuration:
+
+```bash
+crossgen mcp config --client codex --mode readonly --json
+crossgen mcp config --client claude-code --mode generate --json
+crossgen mcp config --client cursor --mode generate --json
+```
+
+MCP connects directly to the installed CrossGen executable with `--mcp`; enabling the `crossgen` shell command is not required. Choose the smallest permission mode that fits the workflow:
+
+| Mode | Agent capabilities |
+| --- | --- |
+| `readonly` | Inspect providers, models, capabilities, queue, jobs, folders, and Gallery assets |
+| `write` | Read-only tools plus controlled Gallery and folder changes |
+| `generate` | Write tools plus queue-backed image generation and editing |
+
+Typical agent workflows include generating UI assets during coding, producing several visual directions and polling them as durable jobs, editing an existing reference image, and exporting selected Gallery results directly into a repository.
 
 See [`docs/cli-mcp.md`](./docs/cli-mcp.md) for command examples and [`docs/KNOWN_LIMITATIONS.md`](./docs/KNOWN_LIMITATIONS.md) for current agent/runtime limits.
 
@@ -177,11 +225,11 @@ If Windows SmartScreen appears, choose **More info** and then **Run anyway**.
 
 ## Brand
 
-CrossGen means a cross-model, cross-step generation workspace: one place for API access, generation, editing, Gallery management, and repeated image-to-image iteration.
+CrossGen means a cross-model, cross-step generation workspace: one local runtime for API access, generation, editing, Gallery management, repeated image-to-image iteration, and AI-agent workflows.
 
 The product promise is deliberately practical:
 
-> configure once, generate quickly, keep useful images organized, edit without friction, and reuse everything in the next round.
+> configure once, generate from the app or an agent, keep useful images organized, and reuse or export every result.
 
 CrossGen is maintained by [Nowo](https://www.nowo.com/) and [Corgnitor](https://www.corgnitor.com/). Nowo focuses on AI-native product design and applied workflows. Corgnitor focuses on AI engineering and productization.
 
