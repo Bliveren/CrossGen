@@ -37,7 +37,7 @@ CrossGen 0.3.1 turns the desktop image workspace into an agent-ready local runti
 
 The desktop app, CLI, and MCP server share the same API profiles, durable generation queue, History, and Gallery. Install CrossGen once; installed CLI and MCP use require no separate Node.js, npm, pnpm, global package, or local HTTP service.
 
-<img width="1541" height="974" alt="image" src="https://github.com/user-attachments/assets/10ac6a8a-f8f6-441c-94c6-52f6e036d134" />
+<img width="1440" height="940" alt="screenshot-20260724-003442" src="https://github.com/user-attachments/assets/53a63a11-7430-4b80-a749-2b67d29e5962" />
 
 It is built for real image-generation work, not just one-off prompting. Designers, comic and storyboarding teams, UI makers, operators, product teams, and AI image hobbyists often need the same loop:
 
