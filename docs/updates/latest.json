@@ -1,22 +1,30 @@
 {
-  "version": "0.3.0",
-  "pubDate": "2026-07-12T15:48:06.000Z",
-  "notes": "CrossGen 0.3.0 introduces the one-stop AI image generation manager: API access management, automatic model and route probing, Gallery and History reuse, prompt templates, lightweight image editing, and dark mode.",
+  "version": "0.3.1",
+  "pubDate": "2026-07-23T13:40:38.000Z",
+  "notes": "CrossGen 0.3.1 makes the desktop app, CLI, and AI Agent share a reliable image task runtime with durable queue execution, Gallery/History reuse, and packaged MCP integration.",
   "assets": [
     {
       "platform": "darwin",
-      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-0.3.0-mac-arm64.dmg",
-      "fileName": "CrossGen-0.3.0-mac-arm64.dmg",
-      "sha256": "3e379ea62c849c949b2d756c4dc60c0c1ef1b4f78b82506a9b47213fb31c3d30",
-      "sizeBytes": 103573862,
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-mac-arm64.dmg",
+      "fileName": "CrossGen-0.3.1-mac-arm64.dmg",
+      "sha256": "88387884aedea0ba14c095ce775e1136c51926383b86a74a0ff40ab9f04fb808",
+      "sizeBytes": 103952131,
       "arch": "arm64"
     },
     {
       "platform": "win32",
-      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.0/CrossGen-Setup.exe",
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-Setup.exe",
       "fileName": "CrossGen-Setup.exe",
-      "sha256": "5c7781c761888fbf9828c4947fa0be7fc330149c8fbf344912f583f7616ccd53",
-      "sizeBytes": 98758475,
+      "sha256": "26b3cfa67589b0b0236241dc7e254c66ec7e4e54b118872abfdfc36e1a92401b",
+      "sizeBytes": 99157094,
+      "arch": "x64"
+    },
+    {
+      "platform": "linux",
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-linux-x86_64.AppImage",
+      "fileName": "CrossGen-0.3.1-linux-x86_64.AppImage",
+      "sha256": "22eba75aaab6b81ba2d992f9fee610205e7d6e43990e3d20c3d35642fbc3de62",
+      "sizeBytes": 120847964,
       "arch": "x64"
     }
   ]
