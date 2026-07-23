@@ -1,6 +1,6 @@
 # CrossGen Known Limitations
 
-Last updated: 2026-07-14 for the withdrawn v0.3.1 candidate.
+Last updated: 2026-07-23 for the published v0.3.1 release.
 
 This document tracks the current user-facing limits for the released app and
 agent runtime surfaces.
@@ -17,8 +17,9 @@ agent runtime surfaces.
    - CLI and MCP default to read-only behavior.
    - MCP image generation is available only when the server is launched in
      `generate` mode.
-   - Paid or state-mutating operations require explicit confirmation such as
-     `--yes` or MCP `confirm: true`.
+   - Paid generation, destructive actions, queue-control changes, exports, and
+     absolute-path disclosure require explicit confirmation such as `--yes` or
+     MCP `confirm: true`.
 
 3. **No HTTP server or background daemon**
    - MCP uses stdio only.
@@ -52,12 +53,9 @@ agent runtime surfaces.
    - The Linux AppImage is published and release-verified in CI.
    - The primary interactive desktop target remains macOS and Windows.
 
-## Resolved In v0.3.1
+## Released In v0.3.1
 
-   - The v0.3.1 GitHub Release was withdrawn back to draft before product-owner
-     acceptance.
-   - The macOS arm64 DMG remains signed and notarized as historical packaging
-     evidence, but it is not an approved public release.
-   - CLI/MCP release smoke, agent integration smoke, queue concurrency smoke,
-     and Gallery mutation smoke remain historical candidate evidence until a
-     product-approved release is reissued.
+- The product-approved v0.3.1 release is available for macOS arm64, Windows x64,
+  and Linux x64.
+- CLI/MCP release smoke, agent integration smoke, queue concurrency smoke, and
+  Gallery mutation smoke are part of the v0.3.1 release evidence.
