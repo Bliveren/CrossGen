@@ -1,6 +1,6 @@
 # CrossGen Known Limitations
 
-Last updated: 2026-07-23 for the published v0.3.1 release.
+Last updated: 2026-07-24 for the published v0.3.1 release.
 
 This document tracks the current user-facing limits for the released app and
 agent runtime surfaces.
@@ -30,7 +30,7 @@ agent runtime surfaces.
      the background.
 
 4. **Windows installer is not code-signed**
-   - The Windows x64 installer is published and verified, but it is not yet
+   - The Windows x64 NSIS installer is published and verified, but it is not yet
      Authenticode-signed.
    - Windows SmartScreen may warn on first launch.
    - macOS arm64 release assets are Developer ID signed and notarized.
@@ -57,5 +57,12 @@ agent runtime surfaces.
 
 - The product-approved v0.3.1 release is available for macOS arm64, Windows x64,
   and Linux x64.
-- CLI/MCP release smoke, agent integration smoke, queue concurrency smoke, and
-  Gallery mutation smoke are part of the v0.3.1 release evidence.
+- macOS arm64 DMG/ZIP assets are Developer ID signed, Apple-notarized, stapled,
+  and accepted by Gatekeeper.
+- Windows x64 is published as an NSIS installer, and Linux x64 is published as
+  an AppImage.
+- CLI/MCP release smoke, agent integration smoke, queue concurrency smoke,
+  and Gallery mutation smoke have all passed as part of the approved RC4
+  testing line.
+- The previous withdrawn-draft status is resolved; this is a full public
+  release.

@@ -1,14 +1,14 @@
 {
   "version": "0.3.1",
-  "pubDate": "2026-07-23T13:40:38.000Z",
+  "pubDate": "2026-07-24T05:00:00.000Z",
   "notes": "CrossGen 0.3.1 makes the desktop app, CLI, and AI Agent share a reliable image task runtime with durable queue execution, Gallery/History reuse, and packaged MCP integration.",
   "assets": [
     {
       "platform": "darwin",
       "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-mac-arm64.dmg",
       "fileName": "CrossGen-0.3.1-mac-arm64.dmg",
-      "sha256": "88387884aedea0ba14c095ce775e1136c51926383b86a74a0ff40ab9f04fb808",
-      "sizeBytes": 103952131,
+      "sha256": "8ee5d1d863a0dd11e568ea3bb37f37904279d7975d9e6a8fbac3bd3f0f5f6eef",
+      "sizeBytes": 103962233,
       "arch": "arm64"
     },
     {

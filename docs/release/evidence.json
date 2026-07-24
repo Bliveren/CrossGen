@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.1",
-  "lastUpdated": "2026-07-23T13:40:38.000Z",
+  "lastUpdated": "2026-07-24T05:00:00.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -157,8 +157,8 @@
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-23T13:40:38.000Z",
-        "commit": "401351bf890b1ef6ced4cadd0284217e6eedb6de",
+        "verifiedAt": "2026-07-24T05:00:00.000Z",
+        "commit": "e2fccb65628ad00269e2b4c33d150ebad11baf12",
         "environment": "macOS arm64 local Developer ID signed release build with Apple notarization and stapling enabled.",
         "commands": [
           "pnpm verify:signing-ready",
@@ -167,6 +167,8 @@
           "codesign --verify --deep --strict --verbose=4 release/mac-arm64/CrossGen.app",
           "spctl --assess --type execute --verbose=4 release/mac-arm64/CrossGen.app",
           "xcrun stapler validate release/mac-arm64/CrossGen.app",
+          "codesign --force --sign \"$CSC_NAME\" --timestamp --verbose=4 release/CrossGen-0.3.1-mac-arm64.dmg",
+          "codesign --verify --verbose=4 release/CrossGen-0.3.1-mac-arm64.dmg",
           "shasum -a 256 release/CrossGen-0.3.1-mac-arm64.dmg release/CrossGen-0.3.1-mac-arm64.zip release/CrossGen-0.3.1-mac-arm64.dmg.blockmap release/CrossGen-0.3.1-mac-arm64.zip.blockmap",
           "wc -c release/CrossGen-0.3.1-mac-arm64.dmg release/CrossGen-0.3.1-mac-arm64.zip release/CrossGen-0.3.1-mac-arm64.dmg.blockmap release/CrossGen-0.3.1-mac-arm64.zip.blockmap"
         ],
@@ -180,37 +182,37 @@
           {
             "kind": "release-artifact",
             "path": "release/CrossGen-0.3.1-mac-arm64.dmg",
-            "sha256": "88387884aedea0ba14c095ce775e1136c51926383b86a74a0ff40ab9f04fb808",
-            "size": 103952131,
+            "sha256": "8ee5d1d863a0dd11e568ea3bb37f37904279d7975d9e6a8fbac3bd3f0f5f6eef",
+            "size": 103962233,
             "public": true,
-            "description": "Developer ID signed and notarized macOS arm64 DMG."
+            "description": "Developer ID signed, Apple-notarized, and stapled macOS arm64 DMG. The DMG shell is also Developer ID signed and accepted by Gatekeeper."
           },
           {
             "kind": "release-artifact",
             "path": "release/CrossGen-0.3.1-mac-arm64.zip",
-            "sha256": "ed2bf5ffdc8094a3e2dfebfd536501ce963093dc38daed98934f84cf8f2ee591",
-            "size": 99641838,
+            "sha256": "da9a9bfadfe4244edd94d78b8a22e7c1542d7c0240bccbf771cd9c6e86d4cc8c",
+            "size": 99641818,
             "public": true,
-            "description": "Developer ID signed macOS arm64 ZIP."
+            "description": "Developer ID signed macOS arm64 ZIP generated with the notarized app bundle."
           },
           {
             "kind": "release-artifact",
             "path": "release/CrossGen-0.3.1-mac-arm64.dmg.blockmap",
-            "sha256": "1ab55eb141f9f94f4331f8f31a2e5839a17b8e4839bddb13cf9884de15e0c53c",
-            "size": 109945,
+            "sha256": "23ff2ab296624c002fc8cd67af45a460b160026ca0026893594510bbf6a20a79",
+            "size": 109987,
             "public": true,
-            "description": "Blockmap regenerated after DMG stapling."
+            "description": "Blockmap regenerated after the signed DMG was notarized and stapled."
           },
           {
             "kind": "release-artifact",
             "path": "release/CrossGen-0.3.1-mac-arm64.zip.blockmap",
-            "sha256": "e29c2a06bd46266e2c8d3af7e23196d7ecdcd4626c2e5b2ae6f9174225e137a5",
-            "size": 104476,
+            "sha256": "de83351eec5bcf8adb2ac865b933b9a5efe8017cbb221783af0db3df1436f5a5",
+            "size": 104603,
             "public": true,
-            "description": "ZIP blockmap for the signed macOS arm64 ZIP."
+            "description": "ZIP blockmap for the final signed macOS arm64 ZIP."
           }
         ],
-        "summary": "Passed on the approved RC4 build. Developer ID signing, codesign verification, Gatekeeper assessment, Apple stapler validation, and macOS release verification all passed for the exact macOS arm64 package tested before publication."
+        "summary": "Passed on commit e2fccb65628ad00269e2b4c33d150ebad11baf12. The app bundle is Developer ID signed, notarized, stapled, and accepted by Gatekeeper. The final DMG shell was also Developer ID signed before notarization, then stapled and accepted by Gatekeeper. macOS release verification launched the app successfully in two install cycles."
       }
     },
     {
@@ -225,18 +227,18 @@
         "spctl verification reports an accepted notarized Developer ID source."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-23T13:40:38.000Z",
-        "commit": "401351bf890b1ef6ced4cadd0284217e6eedb6de",
+        "verifiedAt": "2026-07-24T05:00:00.000Z",
+        "commit": "e2fccb65628ad00269e2b4c33d150ebad11baf12",
         "environment": "macOS arm64 local Developer ID signed release build with Apple notarization and stapling enabled.",
         "commands": [
-          "pnpm verify:signing-ready",
           "pnpm package:mac:signed",
-          "pnpm verify:release:mac",
-          "codesign --verify --deep --strict --verbose=4 release/mac-arm64/CrossGen.app",
-          "spctl --assess --type execute --verbose=4 release/mac-arm64/CrossGen.app",
           "xcrun stapler validate release/mac-arm64/CrossGen.app",
-          "shasum -a 256 release/CrossGen-0.3.1-mac-arm64.dmg release/CrossGen-0.3.1-mac-arm64.zip release/CrossGen-0.3.1-mac-arm64.dmg.blockmap release/CrossGen-0.3.1-mac-arm64.zip.blockmap",
-          "wc -c release/CrossGen-0.3.1-mac-arm64.dmg release/CrossGen-0.3.1-mac-arm64.zip release/CrossGen-0.3.1-mac-arm64.dmg.blockmap release/CrossGen-0.3.1-mac-arm64.zip.blockmap"
+          "codesign --force --sign \"$CSC_NAME\" --timestamp --verbose=4 release/CrossGen-0.3.1-mac-arm64.dmg",
+          "xcrun notarytool submit release/CrossGen-0.3.1-mac-arm64.dmg --apple-id \"$APPLE_ID\" --password \"$APPLE_APP_SPECIFIC_PASSWORD\" --team-id \"$APPLE_TEAM_ID\" --wait --output-format json",
+          "xcrun stapler staple release/CrossGen-0.3.1-mac-arm64.dmg",
+          "xcrun stapler validate release/CrossGen-0.3.1-mac-arm64.dmg",
+          "spctl --assess --type open --context context:primary-signature --verbose=4 release/CrossGen-0.3.1-mac-arm64.dmg",
+          "node_modules/.pnpm/app-builder-bin@5.0.0-alpha.12/node_modules/app-builder-bin/mac/app-builder_arm64 blockmap --input=release/CrossGen-0.3.1-mac-arm64.dmg --output=release/CrossGen-0.3.1-mac-arm64.dmg.blockmap --compression=gzip"
         ],
         "references": [
           {
@@ -248,37 +250,37 @@
           {
             "kind": "release-artifact",
             "path": "release/CrossGen-0.3.1-mac-arm64.dmg",
-            "sha256": "88387884aedea0ba14c095ce775e1136c51926383b86a74a0ff40ab9f04fb808",
-            "size": 103952131,
+            "sha256": "8ee5d1d863a0dd11e568ea3bb37f37904279d7975d9e6a8fbac3bd3f0f5f6eef",
+            "size": 103962233,
             "public": true,
-            "description": "Developer ID signed and notarized macOS arm64 DMG."
+            "description": "Developer ID signed, Apple-notarized, and stapled macOS arm64 DMG. The DMG shell is also Developer ID signed and accepted by Gatekeeper."
           },
           {
             "kind": "release-artifact",
             "path": "release/CrossGen-0.3.1-mac-arm64.zip",
-            "sha256": "ed2bf5ffdc8094a3e2dfebfd536501ce963093dc38daed98934f84cf8f2ee591",
-            "size": 99641838,
+            "sha256": "da9a9bfadfe4244edd94d78b8a22e7c1542d7c0240bccbf771cd9c6e86d4cc8c",
+            "size": 99641818,
             "public": true,
-            "description": "Developer ID signed macOS arm64 ZIP."
+            "description": "Developer ID signed macOS arm64 ZIP generated with the notarized app bundle."
           },
           {
             "kind": "release-artifact",
             "path": "release/CrossGen-0.3.1-mac-arm64.dmg.blockmap",
-            "sha256": "1ab55eb141f9f94f4331f8f31a2e5839a17b8e4839bddb13cf9884de15e0c53c",
-            "size": 109945,
+            "sha256": "23ff2ab296624c002fc8cd67af45a460b160026ca0026893594510bbf6a20a79",
+            "size": 109987,
             "public": true,
-            "description": "Blockmap regenerated after DMG stapling."
+            "description": "Blockmap regenerated after the signed DMG was notarized and stapled."
           },
           {
             "kind": "release-artifact",
             "path": "release/CrossGen-0.3.1-mac-arm64.zip.blockmap",
-            "sha256": "e29c2a06bd46266e2c8d3af7e23196d7ecdcd4626c2e5b2ae6f9174225e137a5",
-            "size": 104476,
+            "sha256": "de83351eec5bcf8adb2ac865b933b9a5efe8017cbb221783af0db3df1436f5a5",
+            "size": 104603,
             "public": true,
-            "description": "ZIP blockmap for the signed macOS arm64 ZIP."
+            "description": "ZIP blockmap for the final signed macOS arm64 ZIP."
           }
         ],
-        "summary": "Passed. Apple notarization accepted the approved macOS arm64 build, stapler validation passed for the app and DMG, and Gatekeeper reported an accepted notarized Developer ID source."
+        "summary": "Passed. electron-builder notarized and stapled the app bundle. The DMG was then Developer ID signed, submitted to Apple notarytool, accepted under submission ed4d1621-2ca2-418b-8194-f5efae2f8fe7, stapled, and accepted by Gatekeeper as Notarized Developer ID. An earlier unsigned-DMG submission e210223d-130b-4b30-8ccb-e7b2b7d03fe5 was accepted but not used as the final distribution artifact because the DMG shell still lacked a usable signature."
       }
     },
     {
@@ -418,12 +420,15 @@
         "The app update downloader verifies downloaded asset size and SHA-256 before opening it."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-23T13:40:38.000Z",
-        "commit": "401351bf890b1ef6ced4cadd0284217e6eedb6de",
+        "verifiedAt": "2026-07-24T05:00:00.000Z",
+        "commit": "e2fccb65628ad00269e2b4c33d150ebad11baf12",
         "environment": "Release assets prepared from the product-approved RC4 macOS package and current main-commit Windows/Linux package outputs. Final public release downloads are verified again after upload before the manifest is committed.",
         "commands": [
-          "shasum -a 256 release/CrossGen-0.3.1-mac-arm64.dmg release/CrossGen-Setup.exe release/CrossGen-0.3.1-linux-x86_64.AppImage",
-          "wc -c release/CrossGen-0.3.1-mac-arm64.dmg release/CrossGen-Setup.exe release/CrossGen-0.3.1-linux-x86_64.AppImage"
+          "gh release upload v0.3.1 release/CrossGen-0.3.1-mac-arm64.dmg release/CrossGen-0.3.1-mac-arm64.dmg.blockmap release/CrossGen-0.3.1-mac-arm64.zip release/CrossGen-0.3.1-mac-arm64.zip.blockmap --clobber",
+          "gh release view v0.3.1 --json assets",
+          "gh release download v0.3.1 -D /tmp/crossgen-v031-mac-assets --pattern \"CrossGen-0.3.1-mac-arm64*\" --clobber",
+          "shasum -a 256 /tmp/crossgen-v031-mac-assets/*",
+          "wc -c /tmp/crossgen-v031-mac-assets/*"
         ],
         "references": [
           {
@@ -436,10 +441,10 @@
             "kind": "release-artifact",
             "path": "release/CrossGen-0.3.1-mac-arm64.dmg",
             "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-mac-arm64.dmg",
-            "sha256": "88387884aedea0ba14c095ce775e1136c51926383b86a74a0ff40ab9f04fb808",
-            "size": 103952131,
+            "sha256": "8ee5d1d863a0dd11e568ea3bb37f37904279d7975d9e6a8fbac3bd3f0f5f6eef",
+            "size": 103962233,
             "public": false,
-            "description": "darwin arm64 release artifact prepared for final upload."
+            "description": "Developer ID signed, Apple-notarized, and stapled macOS arm64 DMG. The DMG shell is also Developer ID signed and accepted by Gatekeeper."
           },
           {
             "kind": "release-artifact",
@@ -460,7 +465,7 @@
             "description": "linux x64 release artifact prepared for final upload."
           }
         ],
-        "summary": "Prepared. The exact SHA-256 and byte sizes for the approved macOS package and current Windows/Linux package outputs are recorded. The gate will be rechecked against the downloaded public v0.3.1 assets immediately after upload."
+        "summary": "Passed. Public v0.3.1 macOS release assets were replaced with the final Developer ID signed, notarized, stapled DMG/ZIP package outputs, then downloaded again from GitHub and verified against docs/updates/latest.json metadata."
       }
     },
     {
