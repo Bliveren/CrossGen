@@ -2,9 +2,13 @@ import { mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { withExclusiveFileLock } from "./fileLock";
+import { isLockContentionError, withExclusiveFileLock } from "./fileLock";
 
 describe("fileLock", () => {
+  it("treats Windows EPERM as lock contention", () => {
+    expect(isLockContentionError(Object.assign(new Error("denied"), { code: "EPERM" }))).toBe(process.platform === "win32");
+  });
+
   it("serializes access and releases the lock file", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-lock-"));
     const lockPath = path.join(tempDir, "state.lock");

@@ -77,6 +77,12 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
+export function isLockContentionError(error: unknown): boolean {
+  if (!isNodeError(error)) return false;
+  if (error.code === "EEXIST") return true;
+  return process.platform === "win32" && error.code === "EPERM";
+}
+
 async function acquireLock(lockPath: string, options: Required<Pick<FileLockOptions, "timeoutMs" | "staleLockMs" | "pollMs">> & Pick<FileLockOptions, "now" | "pid">): Promise<FileLockHandle> {
   const startedAt = (options.now ?? Date.now)();
   const now = options.now ?? Date.now;
@@ -101,7 +107,7 @@ async function acquireLock(lockPath: string, options: Required<Pick<FileLockOpti
       }
       return { path: lockPath, acquiredAt: now() };
     } catch (error) {
-      if (!isNodeError(error) || error.code !== "EEXIST") throw error;
+      if (!isLockContentionError(error)) throw error;
       const reclaimed = await tryRemoveStaleLock(lockPath, options.staleLockMs, now);
       if (reclaimed) continue;
       if (now() - startedAt > options.timeoutMs) {
