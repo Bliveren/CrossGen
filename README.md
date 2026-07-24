@@ -1,4 +1,4 @@
-<h1 align="center">CrossGen 0.3.1</h1>
+<h1 align="center">CrossGen</h1>
 
 <p align="center">
   <img src="./build/icon.png" width="132" height="132" alt="CrossGen app icon" />
