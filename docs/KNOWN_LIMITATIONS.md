@@ -1,15 +1,15 @@
 # CrossGen Known Limitations
 
-Last updated: 2026-07-24 for the published v0.3.1 release.
+Last updated: 2026-07-29 for v0.3.2 release-candidate validation.
 
-This document tracks the current user-facing limits for the released app and
-agent runtime surfaces.
+This document tracks the current user-facing limits for the released app,
+release-candidate validation, and agent runtime surfaces.
 
 ## Active Limitations
 
 1. **Generation requires network access and a provider API key**
    - CrossGen does not ship an offline image model or local GPU runtime in
-     v0.3.1.
+     the current 0.3.x image runtime.
    - Desktop generation, CLI generation, and MCP generate mode all call the
      configured provider API.
 
@@ -35,10 +35,12 @@ agent runtime surfaces.
    - Windows SmartScreen may warn on first launch.
    - macOS arm64 release assets are Developer ID signed and notarized.
 
-5. **Image-only runtime in v0.3.1**
+5. **Image-only runtime through v0.3.2**
    - Capability metadata contains forward-compatible media fields, but video
-     and animated GIF generation are not callable in v0.3.1.
+     and animated GIF generation are not callable in v0.3.2.
    - Verified model capabilities report image output only.
+   - Video, GIF, ffmpeg, and media-aware asset migration remain planned for
+     later versions.
 
 6. **Third-party compatible endpoints vary**
    - CrossGen probes OpenAI-compatible image routes and supports
@@ -46,10 +48,23 @@ agent runtime surfaces.
    - Some third-party relays only expose text-to-image behavior and do not
      support image edit/reference routes. In that case image-to-image may fail
      even when text-to-image works.
+   - Text-to-image route verification is not treated as proof that
+     image-to-image or guided-region edit is supported.
+   - Mask/guided-region workflows are especially route-sensitive. If a
+     compatible endpoint does not support image edit or guided edit semantics,
+     CrossGen should surface a route/capability diagnostic instead of retrying
+     indefinitely.
    - Use a provider route that supports image edit/reference requests, or use a
      Gemini-compatible image model for image-to-image workflows.
 
-7. **Linux package is verified but newer than the primary desktop target**
+7. **Real provider gates are operation-specific**
+   - v0.3.2 release candidates must be checked by provider kind, model,
+     operation, route, timeout, input image count, mask usage, and output.
+   - A provider-limited operation may be accepted only when the product surface
+     shows a clear diagnostic and a usable next action.
+   - A text-to-image success alone is not enough evidence for release approval.
+
+8. **Linux package is verified but newer than the primary desktop target**
    - The Linux AppImage is published and release-verified in CI.
    - The primary interactive desktop target remains macOS and Windows.
 
