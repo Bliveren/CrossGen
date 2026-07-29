@@ -745,6 +745,29 @@ function autoOpenAIImageRoute(config: ProviderConfig, mode: WorkMode): OpenAIIma
   return probedRoute ?? "chat-completions";
 }
 
+function openAIImageRouteVerified(config: ProviderConfig, mode: WorkMode, route: OpenAIImageRoute): boolean {
+  const probeMode = mode === "generate" ? "generate" : "edit";
+  const probedVerified = config.openAIImageRouting?.probes.some((probe) =>
+    probe.mode === probeMode &&
+    probe.route === route &&
+    (probe.verified === true || (typeof probe.status === "number" && probe.status >= 200 && probe.status < 300))
+  );
+  if (probedVerified) return true;
+  if (mode === "generate" && config.openAIImageRouting?.preferredGenerateRoute === route) {
+    return config.openAIImageRouting.preferredGenerateRouteVerified === true;
+  }
+  if (mode !== "generate" && config.openAIImageRouting?.preferredEditRoute === route) {
+    return config.openAIImageRouting.preferredEditRouteVerified === true;
+  }
+  return false;
+}
+
+function openAIImageRouteStatusText(copy: UiCopy, params: OpenAIImageParams, config: ProviderConfig, mode: WorkMode): string | undefined {
+  if (mode !== "inpaint" && params.imageRoute !== "auto") return undefined;
+  const route = selectedOpenAIImageRoute(params, config, mode);
+  return openAIImageRouteVerified(config, mode, route) ? undefined : copy.imageRouteUnverifiedDefault;
+}
+
 function selectedOpenAIImageRoute(params: OpenAIImageParams, config: ProviderConfig, mode: WorkMode): OpenAIImageRoute {
   if (mode === "inpaint") return "image-api";
   return params.imageRoute === "auto" ? autoOpenAIImageRoute(config, mode) : params.imageRoute;
@@ -1387,7 +1410,7 @@ export function App() {
   const generalModeNotice = generalParams ? generalRuntimeNotice(generalParams.providerKind, copy) : copy.generalRuntimeUnsupported;
   const activeInpaintCapability = inpaintCapabilityForParams(params);
   const usesExactMask = activeInpaintCapability === "exact-mask";
-  const showExactMaskRouteNotice = requestMode === "inpaint" && usesExactMask;
+  const showMaskRouteNotice = requestMode === "inpaint" && Boolean(activeInpaintCapability);
   const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
   const streamDisabledReason = openAIParams ? streamPartialPreviewDisabledReason(openAIParams, activeConfig, requestMode, copy) : undefined;
   const streamPartialsAllowed = openAIParams ? !streamDisabledReason : false;
@@ -5402,10 +5425,11 @@ export function App() {
   const sizeValidation = openAIParams ? validateGptImage2Size(openAIParams.size) : null;
   const maskDescription = activeInpaintCapability === "guided-region" ? copy.guidedRegionDescription : copy.maskDescription;
   const effectiveOpenAIImageRoute = openAIParams ? selectedOpenAIImageRoute(openAIParams, activeConfig, requestMode) : null;
+  const imageRouteStatusText = openAIParams ? openAIImageRouteStatusText(copy, openAIParams, activeConfig, requestMode) : undefined;
   const imageRouteTitle = requestMode === "inpaint"
-    ? copy.imageRouteInpaintLocked
+    ? [copy.imageRouteInpaintLocked, imageRouteStatusText].filter(Boolean).join(" · ")
     : effectiveOpenAIImageRoute
-      ? copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, effectiveOpenAIImageRoute))
+      ? [copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, effectiveOpenAIImageRoute)), imageRouteStatusText].filter(Boolean).join(" · ")
       : undefined;
   const openAIImageRouteControl = openAIParams ? (
     <label title={imageRouteTitle}>
@@ -5714,6 +5738,7 @@ export function App() {
       {effectiveOpenAIImageRoute && (
         <p className="inline-check route-check" title={imageRouteTitle}>
           {copy.imageRoute}: {openAIImageRouteLabel(copy, effectiveOpenAIImageRoute)}
+          {imageRouteStatusText ? ` · ${imageRouteStatusText}` : ""}
         </p>
       )}
     </div>
@@ -6530,7 +6555,7 @@ export function App() {
                     <span>{copy.uploadRightsReminder}</span>
                   </p>
                 )}
-                {showExactMaskRouteNotice && (
+                {showMaskRouteNotice && (
                   <p className="inline-check warning mask-route-notice">
                     <AlertTriangle size={14} />
                     <span>{copy.exactMaskRouteNotice}</span>

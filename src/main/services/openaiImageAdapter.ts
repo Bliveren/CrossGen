@@ -74,6 +74,7 @@ type EditImageFieldName = "image" | "image[]" | "images";
 
 const EDIT_IMAGE_FIELD_NAMES = ["image", "image[]", "images"] as const satisfies readonly EditImageFieldName[];
 const REQUEST_TIMEOUT_MESSAGE = "请求超时，请稍后重试或调高超时时间。";
+const REQUEST_CANCELLED_MESSAGE = "任务已取消。";
 
 export type OpenAIImageRuntime = ImageJobRuntime;
 export type OpenAIImageJob = GenerationJob & { params: OpenAIImageParams };
@@ -168,7 +169,7 @@ export async function fetchWithTimeout(
   timeoutMs: number
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(requestTimeoutError()), timeoutMs);
   const signal = combineAbortSignals(init.signal, controller.signal);
   try {
     return await fetchImpl(url, {
@@ -177,7 +178,13 @@ export async function fetchWithTimeout(
     });
   } catch (error) {
     if (isAbortError(error)) {
-      throw new Error(REQUEST_TIMEOUT_MESSAGE);
+      if (controller.signal.aborted && abortReasonIsTimeout(controller.signal.reason)) {
+        throw requestTimeoutError();
+      }
+      if (abortReasonIsTimeout(signal.reason) || abortReasonIsTimeout(init.signal?.reason)) {
+        throw requestTimeoutError();
+      }
+      throw requestCancelledError();
     }
     throw error;
   } finally {
@@ -188,14 +195,44 @@ export async function fetchWithTimeout(
 function combineAbortSignals(externalSignal: AbortSignal | null | undefined, timeoutSignal: AbortSignal): AbortSignal {
   if (!externalSignal) return timeoutSignal;
   const controller = new AbortController();
-  const abort = () => controller.abort();
+  const abortFrom = (signal: AbortSignal) => {
+    if (!controller.signal.aborted) {
+      controller.abort(signal.reason);
+    }
+  };
   if (externalSignal.aborted || timeoutSignal.aborted) {
-    abort();
+    abortFrom(externalSignal.aborted ? externalSignal : timeoutSignal);
   } else {
-    externalSignal.addEventListener("abort", abort, { once: true });
-    timeoutSignal.addEventListener("abort", abort, { once: true });
+    externalSignal.addEventListener("abort", () => abortFrom(externalSignal), { once: true });
+    timeoutSignal.addEventListener("abort", () => abortFrom(timeoutSignal), { once: true });
   }
   return controller.signal;
+}
+
+function requestTimeoutError(): Error {
+  const error = new Error(REQUEST_TIMEOUT_MESSAGE);
+  error.name = "TimeoutError";
+  return error;
+}
+
+function requestCancelledError(): Error {
+  const error = new Error(REQUEST_CANCELLED_MESSAGE);
+  error.name = "AbortError";
+  return error;
+}
+
+function abortReasonIsTimeout(reason: unknown): boolean {
+  return reason instanceof Error
+    ? isRequestTimeoutError(reason)
+    : reason === REQUEST_TIMEOUT_MESSAGE;
+}
+
+function isRequestTimeoutError(error: unknown): boolean {
+  return error instanceof Error && (error.name === "TimeoutError" || error.message === REQUEST_TIMEOUT_MESSAGE);
+}
+
+function throwIfRequestStopped(error: unknown): void {
+  if (isRequestTimeoutError(error) || isAbortError(error)) throw error;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -281,7 +318,7 @@ export async function runOpenAIImageJob(
 ): Promise<GenerationJob> {
   const requestJob = normalizeOpenAIJobParams(job, options);
   const totalController = new AbortController();
-  const totalTimer = setTimeout(() => totalController.abort(), requestJob.params.timeoutMs);
+  const totalTimer = setTimeout(() => totalController.abort(requestTimeoutError()), requestJob.params.timeoutMs);
   const requestOptions: OpenAIStreamOptions = {
     ...options,
     abortSignal: combineAbortSignals(options.abortSignal, totalController.signal),
@@ -295,7 +332,10 @@ export async function runOpenAIImageJob(
     return await runEdit(requestJob, apiKey, baseURL, runtime, requestOptions);
   } catch (error) {
     if (isAbortError(error)) {
-      throw new Error(REQUEST_TIMEOUT_MESSAGE);
+      if (abortReasonIsTimeout(requestOptions.abortSignal?.reason) || abortReasonIsTimeout(totalController.signal.reason)) {
+        throw requestTimeoutError();
+      }
+      throw requestCancelledError();
     }
     throw error;
   } finally {
@@ -321,6 +361,7 @@ async function runGeneration(
     try {
       return await runPreferredConversationalImageRoute(job, apiKey, baseURL, runtime, preferredRoute, options);
     } catch (error) {
+      throwIfRequestStopped(error);
       preferredRouteError = `${preferredRoute}: ${normalizeAdapterError(error)}`;
     }
   }
@@ -329,6 +370,7 @@ async function runGeneration(
   try {
     response = await fetchGenerationResponse(job, apiKey, baseURL, runtime, options);
   } catch (error) {
+    throwIfRequestStopped(error);
     if (preferredRouteError) {
       throw new Error(`首选路径失败：${preferredRouteError}；Images API 也失败：${normalizeAdapterError(error)}`);
     }
@@ -345,6 +387,7 @@ async function runGeneration(
         (streamJob) => fetchGenerationResponse(streamJob, apiKey, baseURL, runtime, options)
       );
     } catch (error) {
+      throwIfRequestStopped(error);
       if (preferredRouteError) {
         throw new Error(`首选路径失败：${preferredRouteError}；Images API 也失败：${normalizeAdapterError(error)}`);
       }
@@ -366,6 +409,7 @@ async function runGeneration(
       const fallbackResponse = await fetchGenerationResponse(fallbackJob, apiKey, baseURL, runtime, options);
       return handleJsonImagesWithBackfill(fallbackResponse, fallbackJob, runtime, (nextJob) => fetchGenerationResponse(nextJob, apiKey, baseURL, runtime, options));
     } catch (error) {
+      throwIfRequestStopped(error);
       throw new Error(`${streamError}；已尝试降级为非流式请求但仍失败：${normalizeAdapterError(error)}`);
     }
   }
@@ -373,6 +417,7 @@ async function runGeneration(
   try {
     return await handleImagesResponse(response, job, "image_generation", runtime);
   } catch (error) {
+    throwIfRequestStopped(error);
     if (preferredRouteError) {
       throw new Error(`首选路径失败：${preferredRouteError}；Images API 也失败：${normalizeAdapterError(error)}`);
     }
@@ -426,6 +471,7 @@ async function runEdit(
     try {
       return await runPreferredConversationalImageRoute(job, apiKey, baseURL, runtime, preferredRoute, options);
     } catch (error) {
+      throwIfRequestStopped(error);
       preferredRouteError = `${preferredRoute}: ${normalizeAdapterError(error)}`;
     }
   }
@@ -435,6 +481,7 @@ async function runEdit(
       const response = await fetchEditResponse(job, apiKey, baseURL, runtime, initialImageFieldName, options);
       return await handleImagesResponse(response, job, "image_edit", runtime);
     } catch (error) {
+      throwIfRequestStopped(error);
       const fallbackJob: OpenAIImageJob = {
         ...job,
         params: {
@@ -449,6 +496,7 @@ async function runEdit(
           return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName, options);
         }, (streamJob, imageFieldName) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, imageFieldName, options));
       } catch (fallbackError) {
+        throwIfRequestStopped(fallbackError);
         const imagesApiError = new Error(`${normalizeAdapterError(error)}；已尝试降级为非流式图生图请求但仍失败：${normalizeAdapterError(fallbackError)}`);
         if (canUseResponsesImageFallback(fallbackJob)) {
           return runResponsesImageFallback(fallbackJob, apiKey, baseURL, runtime, imagesApiError, preferredRouteError, options);
@@ -464,6 +512,7 @@ async function runEdit(
       return fetchEditResponse(nextJob, apiKey, baseURL, runtime, imageFieldName, options);
     }, (streamJob, imageFieldName) => fetchEditResponse(streamJob, apiKey, baseURL, runtime, imageFieldName, options));
   } catch (error) {
+    throwIfRequestStopped(error);
     if (canUseResponsesImageFallback(job)) {
       return runResponsesImageFallback(job, apiKey, baseURL, runtime, error, preferredRouteError, options);
     }
@@ -556,6 +605,7 @@ async function runResponsesImageFallback(
     const response = await fetchResponsesImageResponse(jsonJob, apiKey, baseURL, runtime, false, options);
     return await handleJsonImagesResponse(response, jsonJob, runtime);
   } catch (jsonError) {
+    throwIfRequestStopped(jsonError);
     const streamJob: OpenAIImageJob = {
       ...job,
       params: {
@@ -573,6 +623,7 @@ async function runResponsesImageFallback(
         params: job.params
       };
     } catch (streamError) {
+      throwIfRequestStopped(streamError);
       try {
         const response = await fetchChatCompletionsImageResponse(streamJob, apiKey, baseURL, runtime, options);
         const result = await handleImagesResponse(response, streamJob, "image_generation", runtime);
@@ -581,6 +632,7 @@ async function runResponsesImageFallback(
           params: job.params
         };
       } catch (chatError) {
+        throwIfRequestStopped(chatError);
         const preferredPrefix = preferredRouteError ? `首选路径失败：${preferredRouteError}；` : "";
         throw new Error(
           `${preferredPrefix}${normalizeAdapterError(priorError)}；已尝试 Responses 图像工具兜底但仍失败：非流式 ${normalizeAdapterError(jsonError)}；流式 ${normalizeAdapterError(streamError)}；已尝试 Chat Completions 图像兜底但仍失败：${normalizeAdapterError(chatError)}`
@@ -1020,6 +1072,7 @@ async function handleJsonGenerationImagesWithFallback(
         };
       }
     } catch (error) {
+      throwIfRequestStopped(error);
       emptyReason = `${emptyReason ?? ""}；已尝试流式生成兜底但仍失败：${normalizeAdapterError(error)}`;
     }
   }
@@ -1072,6 +1125,7 @@ async function handleJsonEditImagesWithFallback(
           return completeJsonBackfill(job, outputs, usage, runtime, (nextJob, purpose) => fetchAdditional(nextJob, imageFieldName, purpose));
         }
       } catch (error) {
+        throwIfRequestStopped(error);
         jsonErrors.push(`${imageFieldName}: ${normalizeAdapterError(error)}`);
       }
     }
@@ -1100,6 +1154,7 @@ async function handleJsonEditImagesWithFallback(
           params: job.params
         };
       } catch (error) {
+        throwIfRequestStopped(error);
         streamErrors.push(`${imageFieldName}: ${normalizeAdapterError(error)}`);
       }
     }
