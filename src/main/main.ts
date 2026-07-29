@@ -5345,7 +5345,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
           pathDisclosureRequiresConfirmation: true
         },
         knownLimitations: [
-          "v0.3.1 CLI/MCP command mode currently exposes readonly discovery, queue inspection/cancellation, Gallery asset management, and generation/edit tools.",
+          "CLI/MCP command mode currently exposes readonly discovery, queue inspection/cancellation, Gallery asset management, and generation/edit tools.",
           "CLI --wait/default command mode can execute the queued job in the current process. MCP generate mode starts a background queue worker and supports waitMs.",
           "Agent generation submit/edit tools require explicit confirmation because they may create paid provider requests when a worker executes them."
         ]

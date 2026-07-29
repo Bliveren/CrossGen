@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 const scriptPath = path.resolve("scripts/verify-release-evidence.mjs");
 const execFileAsync = promisify(execFile);
+const packageVersion = JSON.parse(readFileSync(path.resolve("package.json"), "utf8")).version;
 const checklistFiles = [
   "CHECKLIST.md",
   "MULTI_MODEL_CHECKLIST.md",
@@ -70,7 +72,7 @@ function completeLedger() {
 
 describe("release evidence verifier", () => {
   it("validates the default v0.3.1 release evidence ledger", async () => {
-    const result = await run([]);
+    const result = await run(["--expected-version", "0.3.1"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Release evidence validated: 13/13 required gate(s) passed.");
@@ -78,11 +80,18 @@ describe("release evidence verifier", () => {
   });
 
   it("passes --require-complete for the approved v0.3.1 release ledger", async () => {
-    const result = await run(["--require-complete"]);
+    const result = await run(["--expected-version", "0.3.1", "--require-complete"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Release evidence validated: 13/13 required gate(s) passed.");
     expect(result.stdout).not.toContain("Pending required gate(s):");
+  });
+
+  it("rejects the default evidence ledger after the package version advances", async () => {
+    const result = await run([]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(`release evidence releaseVersion 0.3.1 does not match expected version ${packageVersion}`);
   });
 
   it("fails --require-complete when a required gate is still pending", async () => {
