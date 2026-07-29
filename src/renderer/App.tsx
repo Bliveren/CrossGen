@@ -469,7 +469,19 @@ function mergeTags(existing: string[], additions: string[]): string[] {
 }
 
 function getJobError(job?: GenerationJob | null): string | null {
-  return job?.status === "failed" && job.error ? job.error : null;
+  if (!job || (job.status !== "failed" && job.status !== "interrupted")) return null;
+  return job.error ?? job.diagnostic?.message ?? null;
+}
+
+function isRecoverableHistoryJob(job: GenerationJob): boolean {
+  return job.status === "failed" || job.status === "interrupted";
+}
+
+function historyFailureSummary(job: GenerationJob, copy: UiCopy): string {
+  if (job.error) return job.error;
+  if (job.diagnostic?.message) return job.diagnostic.message;
+  if (job.status === "interrupted") return copy.historyInterruptedSummary;
+  return copy.historyFailureUnknown;
 }
 
 function formatBytes(bytes: number): string {
@@ -1140,6 +1152,7 @@ export function App() {
   const [queueSnapshot, setQueueSnapshot] = useState<QueueSnapshot>(fallbackQueueSnapshot);
   const [isQueuePanelOpen, setIsQueuePanelOpen] = useState(false);
   const [queueDiagnosticTask, setQueueDiagnosticTask] = useState<QueueTaskSummary | null>(null);
+  const [historyDiagnosticJob, setHistoryDiagnosticJob] = useState<GenerationJob | null>(null);
   const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
   const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
   const [generationAttemptIndex, setGenerationAttemptIndex] = useState<number | null>(null);
@@ -3898,6 +3911,57 @@ export function App() {
         setIsQueuePanelOpen(true);
       }
     });
+  }
+
+  function requestHistoryRetry(job: GenerationJob) {
+    if (!bridge) return;
+    requestDangerConfirm({
+      title: copy.historyRetryConfirmTitle,
+      body: copy.queue.retryConfirmBody,
+      confirmLabel: copy.historyRetryConfirm,
+      onConfirm: () => retryHistoryJob(job)
+    });
+  }
+
+  async function retryHistoryJob(job: GenerationJob) {
+    if (!bridge) return;
+
+    setIsRunning(true);
+    setRunningJobId(null);
+    setRunningQueueId(null);
+    resetPartialImages();
+    setGenerationStartedAt(Date.now());
+    setGenerationElapsedSeconds(0);
+    setGenerationAttemptIndex(null);
+    setActiveJob(null);
+    setActiveGalleryAssetId(null);
+    setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[job.mode].action) });
+
+    try {
+      const requestParams = normalizeParamsForOutputCount(job.params);
+      const retriedJob = await bridge.runJob({
+        mode: job.mode,
+        prompt: job.prompt,
+        inputPaths: job.mode === "generate" ? [] : job.inputAssets.map((asset) => asset.path),
+        maskPath: job.mode === "inpaint" ? job.maskAsset?.path : undefined,
+        params: requestParams
+      });
+      const historyJob = stripTransientPreviewsFromJob(retriedJob);
+      setActiveJob(retriedJob);
+      setSnapshot((current) => ({
+        ...current,
+        history: [historyJob, ...current.history.filter((item) => item.id !== historyJob.id)]
+      }));
+      setNotice({ kind: retriedJob.status === "succeeded" ? "success" : "error", text: retriedJob.error ?? copy.notices.actionFinished(modeLabels[job.mode].action) });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsRunning(false);
+      setRunningJobId(null);
+      setRunningQueueId(null);
+      setGenerationStartedAt(null);
+      setGenerationAttemptIndex(null);
+    }
   }
 
   async function downloadAsset(asset?: ImageAsset) {
@@ -6669,12 +6733,14 @@ export function App() {
             >
               {visibleHistory.map((job) => {
                     const result = getBestResult(job);
-                    const jobError = getJobError(job);
+                    const recoverable = isRecoverableHistoryJob(job);
+                    const jobError = recoverable ? historyFailureSummary(job, copy) : getJobError(job);
                     const modelDetails = getHistoryModelDetails(job);
                     const isSelected = selectedHistoryJobIds.has(job.id);
                     const displayName = historyDisplayName(job);
                     const systemTag = historySystemTagLabel(job.mode, language);
                     const isGalleryAdded = historyResultIsInGallery(result);
+                    const statusLabel = copy.queue.status[job.status] ?? job.status;
                     return (
                       <HistoryItemCard
                         key={job.id}
@@ -6683,6 +6749,8 @@ export function App() {
                         result={result}
                         resultSrc={result ? assetSource(result) : undefined}
                         jobError={jobError}
+                        statusLabel={statusLabel}
+                        recoverable={recoverable}
                         active={activeJob?.id === job.id}
                         hoverOpen={expandedHistoryCardId === job.id}
                         selected={isSelected}
@@ -6727,6 +6795,8 @@ export function App() {
                         onReuse={() => reuseJob(job)}
                         onCopyPrompt={() => copyPrompt(job.prompt, `copy:${job.id}`)}
                         onDownload={() => downloadAsset(result)}
+                        onDetails={() => setHistoryDiagnosticJob(job)}
+                        onRetry={() => requestHistoryRetry(job)}
                         onToggleGalleryMenu={() => setHistoryGalleryMenuJobId((current) => current === job.id ? null : job.id)}
                         onDelete={() => deleteJob(job.id)}
                       />
@@ -7157,6 +7227,76 @@ export function App() {
                   {copy.queue.retry}
                 </button>
               )}
+            </div>
+        </DialogShell>
+      )}
+      {historyDiagnosticJob && (
+        <DialogShell className="confirm-dialog queue-diagnostic-dialog history-diagnostic-dialog" labelledBy="history-diagnostic-title" onClose={() => setHistoryDiagnosticJob(null)}>
+            <div>
+              <h2 id="history-diagnostic-title">{copy.historyDiagnosticTitle}</h2>
+              <p>{historyDiagnosticJob.prompt}</p>
+            </div>
+            <dl className="queue-diagnostic-grid">
+              <div>
+                <dt>{copy.queue.category}</dt>
+                <dd>{historyDiagnosticJob.diagnostic?.category ?? historyDiagnosticJob.status}</dd>
+              </div>
+              <div>
+                <dt>{copy.queue.operation}</dt>
+                <dd>{historyDiagnosticJob.diagnostic ? queueOperationLabel(copy, historyDiagnosticJob.diagnostic) : modeLabels[historyDiagnosticJob.mode].title}</dd>
+              </div>
+              <div>
+                <dt>{copy.queue.route}</dt>
+                <dd>{historyDiagnosticJob.diagnostic?.route ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>{copy.queue.inputImages}</dt>
+                <dd>{historyDiagnosticJob.diagnostic?.inputImageCount ?? historyDiagnosticJob.inputAssets.length}{historyDiagnosticJob.diagnostic?.hasMask || historyDiagnosticJob.maskAsset ? ` + ${copy.mask}` : ""}</dd>
+              </div>
+              <div>
+                <dt>{copy.queue.timeout}</dt>
+                <dd>{historyDiagnosticJob.diagnostic ? formatDuration(historyDiagnosticJob.diagnostic.timeoutMs) : formatDuration(historyDiagnosticJob.durationMs)}</dd>
+              </div>
+              <div>
+                <dt>{copy.queue.source}</dt>
+                <dd>{historyDiagnosticJob.source ? copy.queue.sourceLabels[historyDiagnosticJob.source] ?? historyDiagnosticJob.source : copy.historySourceDesktop}</dd>
+              </div>
+            </dl>
+            <div className="queue-diagnostic-message">
+              <strong>{copy.queue.message}</strong>
+              <p>{historyDiagnosticJob.status === "interrupted" ? copy.historyInterruptedExplanation : historyFailureSummary(historyDiagnosticJob, copy)}</p>
+              {historyDiagnosticJob.diagnostic?.providerMessage && (
+                <>
+                  <strong>{copy.queue.providerMessage}</strong>
+                  <p>{historyDiagnosticJob.diagnostic.providerMessage}</p>
+                </>
+              )}
+            </div>
+            <div className="queue-diagnostic-actions">
+              <strong>{copy.queue.nextActions}</strong>
+              {historyDiagnosticJob.diagnostic?.nextActions.length ? (
+                <ul>
+                  {historyDiagnosticJob.diagnostic.nextActions.map((action) => <li key={action}>{action}</li>)}
+                </ul>
+              ) : (
+                <p>{copy.queue.noNextActions}</p>
+              )}
+            </div>
+            <div className="dialog-actions">
+              <button type="button" className="ghost" onClick={() => setHistoryDiagnosticJob(null)}>
+                {copy.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const job = historyDiagnosticJob;
+                  setHistoryDiagnosticJob(null);
+                  requestHistoryRetry(job);
+                }}
+              >
+                <RefreshCw size={16} />
+                {copy.queue.retry}
+              </button>
             </div>
         </DialogShell>
       )}

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,6 +76,17 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector<HTMLButtonElement>(".primary-run")?.dataset.tooltip).toBe("Generate");
     expect(document.querySelector<HTMLButtonElement>(".prompt-template-button")?.dataset.tooltip).toBe("Prompt templates");
     expect(document.querySelector<HTMLButtonElement>(".prompt-copy-button")?.dataset.tooltip).toBe("Copy prompt");
+  });
+
+  it("keeps diagnostics and tag popovers layered above rail paging and actions", () => {
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+
+    expect(css).toMatch(/\.modal-backdrop\s*{[^}]*z-index:\s*20000/s);
+    expect(css).toMatch(/\.preview-modal-backdrop\s*{[^}]*z-index:\s*20000/s);
+    expect(css).toMatch(/\.history-tag-popover\s*{[^}]*z-index:\s*12000/s);
+    expect(css).toMatch(/\.batch-tag-menu\s*{[^}]*z-index:\s*12000/s);
+    expect(css).toMatch(/\.history-page-size-menu\s*{[^}]*z-index:\s*12000/s);
+    expect(css).toMatch(/\.right-rail\.collapsed \.right-rail-action-group\s*{[^}]*z-index:\s*6100/s);
   });
 
   it("disables all launch buttons before an API key is saved", async () => {
@@ -287,6 +299,79 @@ describe("renderer multi-model smoke", () => {
 
     await click(buttonByText("Retry task", ".confirm-dialog button"));
     expect(bridge.retryQueueItem).toHaveBeenCalledWith("queue-retry");
+  });
+
+  it("surfaces History source, duration, failed details, interrupted guidance, and retry confirmation", async () => {
+    const failedJob = geminiJob(10, {
+      id: "history-failed",
+      source: "cli",
+      status: "failed",
+      durationMs: 1530,
+      prompt: "Failed history prompt",
+      error: "Provider returned no image.",
+      outputs: [],
+      diagnostic: {
+        category: "provider_empty_output",
+        message: "Provider returned no image.",
+        providerMessage: "empty data",
+        operation: "image-to-image",
+        providerKind: "openai-compatible",
+        modelId: GPT_IMAGE_2_MODEL_ID,
+        route: "chat",
+        inputImageCount: 1,
+        hasMask: false,
+        timeoutMs: 60000,
+        attemptIndex: 1,
+        retryable: true,
+        chargedRetryRisk: true,
+        nextActions: ["Try a different route."]
+      }
+    });
+    const interruptedJob = geminiJob(11, {
+      id: "history-interrupted",
+      source: "mcp",
+      status: "interrupted",
+      durationMs: 4200,
+      prompt: "Interrupted history prompt",
+      inputAssets: [inputAsset("reference.png")],
+      outputs: []
+    });
+    const bridge = await renderApp(snapshot({ history: [failedJob, interruptedJob] }));
+
+    expect(document.body.textContent).toContain("CLI");
+    expect(document.body.textContent).toContain("MCP");
+    expect(document.body.textContent).toContain("Took 1.5 s");
+    expect(document.body.textContent).toContain("Took 4.2 s");
+    expect(document.body.textContent).toContain("App exit or worker contact was lost.");
+
+    const failedCard = document.querySelector<HTMLElement>('.history-item[data-status="failed"]')!;
+    await click(failedCard.querySelector<HTMLButtonElement>('button[aria-label="Details"]')!);
+
+    expect(document.body.textContent).toContain("History diagnostic");
+    expect(document.body.textContent).toContain("provider_empty_output");
+    expect(document.body.textContent).toContain("empty data");
+    expect(document.body.textContent).toContain("Try a different route.");
+
+    await click(buttonByText("Cancel", ".history-diagnostic-dialog button"));
+
+    const interruptedCard = document.querySelector<HTMLElement>('.history-item[data-status="interrupted"]')!;
+    await click(interruptedCard.querySelector<HTMLButtonElement>('button[aria-label="Details"]')!);
+
+    expect(document.body.textContent).toContain("This job was interrupted because the app exited, crashed, or the worker stopped heartbeating before it could finish.");
+    await click(buttonByText("Retry", ".history-diagnostic-dialog button"));
+
+    expect(document.body.textContent).toContain("Retrying may submit another paid provider request.");
+    expect(bridge.runJob).not.toHaveBeenCalled();
+
+    await click(buttonByText("Retry job", ".confirm-dialog button"));
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "generate",
+        prompt: "Interrupted history prompt",
+        inputPaths: []
+      })
+    );
   });
 
   it("shows queue stage and stop action while generation is waiting", async () => {
@@ -1225,7 +1310,7 @@ describe("renderer multi-model smoke", () => {
 
     const tagRow = document.querySelector<HTMLElement>(".history-tag-row")!;
     const tagChips = [...tagRow.querySelectorAll<HTMLElement>(".history-chip")].map((chip) => chip.textContent);
-    expect(tagChips).toEqual(["Generate", "draft", "Add tag"]);
+    expect(tagChips).toEqual(["Generate", "Desktop", "draft", "Add tag"]);
 
     await click(document.querySelector<HTMLButtonElement>(".history-add-tag-button")!);
     expect(document.querySelector(".history-tag-popover")).not.toBeNull();

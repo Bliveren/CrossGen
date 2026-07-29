@@ -418,10 +418,17 @@ export interface UiCopy {
   historySaveTags: string;
   historySystemTag: string;
   historySourceTag: string;
+  historySourceDesktop: string;
   historySourceCli: string;
   historySourceMcp: string;
   historyImageName: string;
   historyDuration: (duration: string) => string;
+  historyDiagnosticTitle: string;
+  historyInterruptedSummary: string;
+  historyInterruptedExplanation: string;
+  historyFailureUnknown: string;
+  historyRetryConfirmTitle: string;
+  historyRetryConfirm: string;
   historyPageSizeMenu: string;
   historyPageSizeOption: (count: number) => string;
   noJobsYet: string;
@@ -870,10 +877,17 @@ export const translations: Record<Language, UiCopy> = {
     historySaveTags: "Save history tags",
     historySystemTag: "System tag",
     historySourceTag: "Generation channel",
+    historySourceDesktop: "Desktop",
     historySourceCli: "CLI",
     historySourceMcp: "MCP",
     historyImageName: "Image name",
     historyDuration: (duration: string) => `Took ${duration}`,
+    historyDiagnosticTitle: "History diagnostic",
+    historyInterruptedSummary: "App exit or worker contact was lost.",
+    historyInterruptedExplanation: "This job was interrupted because the app exited, crashed, or the worker stopped heartbeating before it could finish. Review the request, then retry when you are ready.",
+    historyFailureUnknown: "No failure details were recorded.",
+    historyRetryConfirmTitle: "Retry this History job?",
+    historyRetryConfirm: "Retry job",
     historyPageSizeMenu: "History page size",
     historyPageSizeOption: (count: number) => `Show ${count} per page`,
     noJobsYet: "No jobs yet.",
@@ -1386,10 +1400,17 @@ export const translations: Record<Language, UiCopy> = {
     historySaveTags: "保存历史标签",
     historySystemTag: "系统标签",
     historySourceTag: "生图渠道",
+    historySourceDesktop: "桌面端",
     historySourceCli: "CLI",
     historySourceMcp: "MCP",
     historyImageName: "图片名称",
     historyDuration: (duration: string) => `耗时 ${duration}`,
+    historyDiagnosticTitle: "历史任务诊断",
+    historyInterruptedSummary: "应用退出或 worker 失联导致中断。",
+    historyInterruptedExplanation: "该任务在完成前被中断，通常是因为应用退出、崩溃，或 worker 停止心跳。请检查请求内容，确认后可重新提交。",
+    historyFailureUnknown: "未记录失败详情。",
+    historyRetryConfirmTitle: "确认重试该历史任务？",
+    historyRetryConfirm: "重试任务",
     historyPageSizeMenu: "历史每页数量",
     historyPageSizeOption: (count: number) => `每页显示 ${count} 条`,
     noJobsYet: "暂无任务。",
