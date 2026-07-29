@@ -1,4 +1,6 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, ArrowDownUp, CheckCircle2, ChevronUp, Copy, Download, FolderInput, Info, RotateCcw, RefreshCw, Save, Search, X } from "lucide-react";
 import type { GenerationJob, ImageAsset } from "../shared/types";
 import type { UiCopy } from "./i18n";
@@ -110,6 +112,118 @@ interface HistoryItemCardProps {
   onRetry: () => void;
   onToggleGalleryMenu: () => void;
   onDelete: () => void;
+}
+
+const POPOVER_MARGIN = 12;
+
+function clampPosition(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function HistoryTagPopover({
+  anchorRef,
+  copy,
+  tagsInput,
+  onTagsInputChange,
+  onSaveTags,
+  onCancelTags,
+  onMoveTagPopoverPointerDown,
+  onMoveToolbarTowardPointer,
+  onResetToolbarDrift
+}: {
+  anchorRef: React.RefObject<HTMLElement | null>;
+  copy: UiCopy;
+  tagsInput: string;
+  onTagsInputChange: (value: string) => void;
+  onSaveTags: () => void;
+  onCancelTags: () => void;
+  onMoveTagPopoverPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
+  onMoveToolbarTowardPointer: (event: React.MouseEvent<HTMLElement>) => void;
+  onResetToolbarDrift: (event: React.MouseEvent<HTMLElement>) => void;
+}) {
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({ visibility: "hidden" });
+
+  useLayoutEffect(() => {
+    const updatePosition = () => {
+      const anchor = anchorRef.current;
+      const popover = popoverRef.current;
+      if (!anchor || !popover) return;
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const popoverRect = popover.getBoundingClientRect();
+      const appRect = document.querySelector(".app-shell")?.getBoundingClientRect();
+      const bounds = appRect && appRect.width > 0 && appRect.height > 0
+        ? appRect
+        : ({ left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight } as DOMRect);
+      const width = Math.min(popoverRect.width || 222, Math.max(180, bounds.width - POPOVER_MARGIN * 2));
+      const height = popoverRect.height || 42;
+      const minLeft = bounds.left + POPOVER_MARGIN;
+      const maxLeft = bounds.right - width - POPOVER_MARGIN;
+      const minTop = bounds.top + POPOVER_MARGIN;
+      const maxTop = bounds.bottom - height - POPOVER_MARGIN;
+      const preferredTop = anchorRect.bottom + 6 + height <= bounds.bottom - POPOVER_MARGIN
+        ? anchorRect.bottom + 6
+        : anchorRect.top - height - 6;
+
+      setStyle({
+        position: "fixed",
+        left: `${clampPosition(anchorRect.left + anchorRect.width / 2 - width / 2, minLeft, Math.max(minLeft, maxLeft))}px`,
+        top: `${clampPosition(preferredTop, minTop, Math.max(minTop, maxTop))}px`,
+        width: `${width}px`,
+        visibility: "visible"
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchorRef]);
+
+  return createPortal(
+    <div
+      ref={popoverRef}
+      className="history-tag-popover"
+      data-drift="subtle"
+      style={style}
+      onPointerDown={onMoveTagPopoverPointerDown}
+      onMouseMove={onMoveToolbarTowardPointer}
+      onMouseLeave={onResetToolbarDrift}
+    >
+      <input
+        value={tagsInput}
+        onChange={(event) => onTagsInputChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            onSaveTags();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onCancelTags();
+          }
+        }}
+        placeholder={copy.templateTags}
+        aria-label={copy.addTag}
+        autoFocus
+      />
+      <button
+        type="button"
+        className="icon-button"
+        disabled={!tagsInput.trim()}
+        onClick={onSaveTags}
+        aria-label={copy.historySaveTags}
+        data-tooltip={copy.historySaveTags}
+      >
+        <Save size={14} />
+      </button>
+    </div>,
+    document.body
+  );
 }
 
 export function HistoryFilterToolbar({
@@ -333,6 +447,7 @@ export function HistoryItemCard({
   onDelete
 }: HistoryItemCardProps) {
   const sourceLabel = job.source === "cli" ? copy.historySourceCli : job.source === "mcp" ? copy.historySourceMcp : copy.historySourceDesktop;
+  const tagAnchorRef = useRef<HTMLSpanElement | null>(null);
   return (
     <article
       className={[
@@ -411,7 +526,7 @@ export function HistoryItemCard({
             {job.tags.map((tag) => (
               <span key={tag} className="history-chip">{tag}</span>
             ))}
-            <span className="history-add-tag-anchor">
+            <span ref={tagAnchorRef} className="history-add-tag-anchor">
               <button
                 type="button"
                 className="history-chip history-add-tag-button"
@@ -422,41 +537,17 @@ export function HistoryItemCard({
                 {copy.addTag}
               </button>
               {editingTags && (
-                <div
-                  className="history-tag-popover"
-                  data-drift="subtle"
-                  onPointerDown={onMoveTagPopoverPointerDown}
-                  onMouseMove={onMoveToolbarTowardPointer}
-                  onMouseLeave={onResetToolbarDrift}
-                >
-                  <input
-                    value={tagsInput}
-                    onChange={(event) => onTagsInputChange(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        onSaveTags();
-                      }
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        onCancelTags();
-                      }
-                    }}
-                    placeholder={copy.templateTags}
-                    aria-label={copy.addTag}
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    className="icon-button"
-                    disabled={!tagsInput.trim()}
-                    onClick={onSaveTags}
-                    aria-label={copy.historySaveTags}
-                    data-tooltip={copy.historySaveTags}
-                  >
-                    <Save size={14} />
-                  </button>
-                </div>
+                <HistoryTagPopover
+                  anchorRef={tagAnchorRef}
+                  copy={copy}
+                  tagsInput={tagsInput}
+                  onTagsInputChange={onTagsInputChange}
+                  onSaveTags={onSaveTags}
+                  onCancelTags={onCancelTags}
+                  onMoveTagPopoverPointerDown={onMoveTagPopoverPointerDown}
+                  onMoveToolbarTowardPointer={onMoveToolbarTowardPointer}
+                  onResetToolbarDrift={onResetToolbarDrift}
+                />
               )}
             </span>
           </div>

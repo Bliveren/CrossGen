@@ -1,9 +1,9 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createQueueStore } from "./queueStore";
-import type { GenerationQueueItem, GenerationQueueWorkerHost } from "../shared/types";
+import type { GenerationQueueItem, GenerationQueueWorkerHost, QueueStage } from "../shared/types";
 
 function queueItem(patch: Partial<GenerationQueueItem> = {}): GenerationQueueItem {
   const now = new Date().toISOString();
@@ -167,6 +167,55 @@ describe("queueStore", () => {
       ["queue-1", "running"],
       ["queue-2", "queued"]
     ]);
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("preserves all queue stage values through normalization", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({
+      queuePath,
+      lockPath: `${queuePath}.lock`
+    });
+    const stages: QueueStage[] = [
+      "queued",
+      "claiming",
+      "preparing_input",
+      "uploading_references",
+      "calling_provider",
+      "awaiting_remote",
+      "downloading",
+      "postprocessing",
+      "retrying",
+      "finalizing"
+    ];
+
+    for (const stage of stages) {
+      await store.appendItem(queueItem({ queueId: `queue-${stage}`, stage }));
+    }
+
+    const queue = await store.read();
+    expect(queue.items.map((item) => item.stage)).toEqual(stages);
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("quarantines corrupt queue JSON and returns an empty default queue", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({
+      queuePath,
+      lockPath: `${queuePath}.lock`
+    });
+
+    await writeFile(queuePath, "{not valid json", "utf8");
+    const queue = await store.read();
+    const files = await readdir(tempDir);
+
+    expect(queue.items).toEqual([]);
+    expect(queue.workerHosts).toEqual([]);
+    expect(files.some((file) => file.startsWith("queue.json.corrupt-"))).toBe(true);
 
     await rm(tempDir, { recursive: true, force: true });
   });

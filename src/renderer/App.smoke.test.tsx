@@ -83,7 +83,8 @@ describe("renderer multi-model smoke", () => {
 
     expect(css).toMatch(/\.modal-backdrop\s*{[^}]*z-index:\s*20000/s);
     expect(css).toMatch(/\.preview-modal-backdrop\s*{[^}]*z-index:\s*20000/s);
-    expect(css).toMatch(/\.history-tag-popover\s*{[^}]*z-index:\s*12000/s);
+    expect(css).toMatch(/\.history-tag-popover\s*{[^}]*z-index:\s*15000/s);
+    expect(css).toMatch(/\.tag-manager-menu\s*{[^}]*z-index:\s*15000/s);
     expect(css).toMatch(/\.batch-tag-menu\s*{[^}]*z-index:\s*12000/s);
     expect(css).toMatch(/\.history-page-size-menu\s*{[^}]*z-index:\s*12000/s);
     expect(css).toMatch(/\.right-rail\.collapsed \.right-rail-action-group\s*{[^}]*z-index:\s*6100/s);
@@ -468,6 +469,49 @@ describe("renderer multi-model smoke", () => {
         })
       })
     );
+  });
+
+  it("uses guided-region probe verification for exact mask route status", async () => {
+    const config = providerConfig({
+      openAIImageRouting: {
+        preferredGenerateRoute: "chat-completions",
+        preferredEditRoute: "chat-completions",
+        preferredGuidedEditRoute: "image-api",
+        preferredGenerateRouteVerified: true,
+        preferredEditRouteVerified: false,
+        preferredGuidedEditRouteVerified: true,
+        probes: [
+          {
+            route: "image-api",
+            mode: "guided-region",
+            endpoint: "/images/edits",
+            ok: true,
+            verified: true,
+            latencyMs: 80,
+            status: 200
+          }
+        ],
+        updatedAt: now
+      }
+    });
+    await renderApp(snapshot({
+      providers: [config],
+      activeProviderId: config.id,
+      draft: {
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        mode: "inpaint",
+        prompt: "Replace the masked area",
+        params: DEFAULT_IMAGE_PARAMS,
+        inputAssets: [inputAsset("mask-source.png")],
+        maskDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+        brushSize: 48,
+        updatedAt: now
+      }
+    }));
+
+    expect(document.querySelector<HTMLSelectElement>(".parameter-route-field select")?.value).toBe("image-api");
+    expect(document.body.textContent).not.toContain("Unverified, using the default strategy");
   });
 
   it("opens the parameter controls from the collapsed left rail", async () => {

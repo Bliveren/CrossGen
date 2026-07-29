@@ -81,8 +81,9 @@ describe("reference preflight", () => {
 
   it("blocks oversized mask requests because masks are not downsampled", () => {
     const summaries = buildReferencePreflightSummaries(
-      [asset({ id: "source", width: 1024, height: 1024, sizeBytes: 2 * 1024 * 1024 })],
-      asset({ id: "mask", name: "mask.png", width: 12000, height: 12000, sizeBytes: 80 * 1024 * 1024 })
+      [asset({ id: "source", width: 12000, height: 12000, sizeBytes: 2 * 1024 * 1024 })],
+      asset({ id: "mask", name: "mask.png", width: 12000, height: 12000, sizeBytes: 80 * 1024 * 1024 }),
+      { limits: { hardPixels: 200_000_000 } }
     );
 
     expect(summaries?.find((summary) => summary.role === "mask")).toMatchObject({
@@ -90,6 +91,33 @@ describe("reference preflight", () => {
       reason: "mask_preserved"
     });
     expect(referencePreflightBlockingMessage(summaries)).toContain("Mask");
+  });
+
+  it("blocks mask requests when source and mask dimensions do not match", () => {
+    const summaries = buildReferencePreflightSummaries(
+      [asset({ id: "source", width: 1024, height: 768, sizeBytes: 2 * 1024 * 1024 })],
+      asset({ id: "mask", name: "mask.png", width: 768, height: 1024, sizeBytes: 512 * 1024 })
+    );
+
+    expect(summaries?.find((summary) => summary.role === "mask")).toMatchObject({
+      blocked: true,
+      reason: "mask_dimension_mismatch",
+      warning: expect.stringContaining("do not match the source image dimensions")
+    });
+    expect(referencePreflightBlockingMessage(summaries)).toContain("same width and height");
+  });
+
+  it("does not block mask requests when dimensions are unavailable", () => {
+    const summaries = buildReferencePreflightSummaries(
+      [asset({ id: "source", width: undefined, height: undefined, sizeBytes: 2 * 1024 * 1024 })],
+      asset({ id: "mask", name: "mask.png", width: 768, height: 1024, sizeBytes: 512 * 1024 })
+    );
+
+    expect(summaries?.find((summary) => summary.role === "mask")).toMatchObject({
+      blocked: false,
+      reason: "mask_preserved"
+    });
+    expect(referencePreflightBlockingMessage(summaries)).toBeUndefined();
   });
 
   it("normalizes persisted preflight summaries", () => {

@@ -571,7 +571,8 @@ function shouldRecoverInterruptedJobsOnRead(): boolean {
 
 async function applyStartupRecovery(state: AppStateFile): Promise<AppStateFile> {
   if (!shouldRecoverInterruptedJobsOnRead()) return state;
-  const queue = await getGenerationQueueStore().read().catch(() => undefined);
+  const queueStore = getGenerationQueueStore();
+  const queue = await queueStore.recoverStaleRunningItems().catch(async () => queueStore.read().catch(() => undefined));
   const result = recoverInterruptedJobs(state.history, new Date().toISOString(), queue);
   recoveredInterruptedJobs = recoveredInterruptedJobs || result.changed;
   return result.changed ? { ...state, history: result.history } : state;

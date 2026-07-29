@@ -69,6 +69,10 @@ export async function readQueueFile(queuePath: string): Promise<GenerationQueueF
     if (isNodeError(error) && error.code === "ENOENT") {
       return structuredClone(DEFAULT_QUEUE_FILE);
     }
+    if (error instanceof SyntaxError) {
+      await quarantineCorruptQueueFile(queuePath);
+      return structuredClone(DEFAULT_QUEUE_FILE);
+    }
     throw error;
   }
 }
@@ -78,6 +82,17 @@ export async function writeQueueFile(queuePath: string, queue: GenerationQueueFi
   const tmpPath = `${queuePath}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmpPath, `${JSON.stringify(queue, null, 2)}\n`, "utf8");
   await fs.rename(tmpPath, queuePath);
+}
+
+async function quarantineCorruptQueueFile(queuePath: string): Promise<void> {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const quarantinePath = `${queuePath}.corrupt-${stamp}-${process.pid}`;
+  try {
+    await fs.rename(queuePath, quarantinePath);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return;
+    throw error;
+  }
 }
 
 export function normalizeQueueFile(raw: Partial<GenerationQueueFile> | null | undefined): GenerationQueueFile {
@@ -159,7 +174,15 @@ function normalizeExecutionKind(value: unknown): QueueExecutionKind {
 }
 
 function normalizeQueueStage(value: unknown): QueueStage {
-  return value === "claiming" || value === "calling_provider" || value === "awaiting_remote" || value === "downloading" || value === "postprocessing" || value === "finalizing"
+  return value === "claiming" ||
+    value === "preparing_input" ||
+    value === "uploading_references" ||
+    value === "calling_provider" ||
+    value === "awaiting_remote" ||
+    value === "downloading" ||
+    value === "postprocessing" ||
+    value === "retrying" ||
+    value === "finalizing"
     ? value
     : "queued";
 }

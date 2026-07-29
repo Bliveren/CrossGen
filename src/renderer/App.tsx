@@ -503,7 +503,7 @@ function formatPreflightAlpha(metadata: ReferencePreflightSummary["original"], c
 }
 
 function formatDuration(ms?: number): string {
-  if (!ms) return "-";
+  if (ms === undefined || ms === null || !Number.isFinite(ms)) return "-";
   if (ms < 1000) return `${ms} ms`;
   return `${(ms / 1000).toFixed(1)} s`;
 }
@@ -786,7 +786,7 @@ function openAIImageRouteLabel(copy: UiCopy, route: OpenAIImageRoute): string {
 }
 
 function autoOpenAIImageRoute(config: ProviderConfig, mode: WorkMode): OpenAIImageRoute {
-  if (mode === "inpaint") return "image-api";
+  if (mode === "inpaint") return config.openAIImageRouting?.preferredGuidedEditRoute ?? "image-api";
   const probedRoute = mode === "generate"
     ? config.openAIImageRouting?.preferredGenerateRoute
     : config.openAIImageRouting?.preferredEditRoute;
@@ -794,7 +794,7 @@ function autoOpenAIImageRoute(config: ProviderConfig, mode: WorkMode): OpenAIIma
 }
 
 function openAIImageRouteVerified(config: ProviderConfig, mode: WorkMode, route: OpenAIImageRoute): boolean {
-  const probeMode = mode === "generate" ? "generate" : "edit";
+  const probeMode = mode === "generate" ? "generate" : mode === "inpaint" ? "guided-region" : "edit";
   const probedVerified = config.openAIImageRouting?.probes.some((probe) =>
     probe.mode === probeMode &&
     probe.route === route &&
@@ -804,8 +804,11 @@ function openAIImageRouteVerified(config: ProviderConfig, mode: WorkMode, route:
   if (mode === "generate" && config.openAIImageRouting?.preferredGenerateRoute === route) {
     return config.openAIImageRouting.preferredGenerateRouteVerified === true;
   }
-  if (mode !== "generate" && config.openAIImageRouting?.preferredEditRoute === route) {
+  if (mode === "edit" && config.openAIImageRouting?.preferredEditRoute === route) {
     return config.openAIImageRouting.preferredEditRouteVerified === true;
+  }
+  if (mode === "inpaint" && config.openAIImageRouting?.preferredGuidedEditRoute === route) {
+    return config.openAIImageRouting.preferredGuidedEditRouteVerified === true;
   }
   return false;
 }
@@ -1082,6 +1085,16 @@ function getHistoryModelDetails(job: GenerationJob): HistoryModelDetails {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function clampContextMenuPosition(x: number, y: number, width = 240, height = 260): { x: number; y: number } {
+  const padding = 10;
+  const maxX = Math.max(padding, window.innerWidth - width - padding);
+  const maxY = Math.max(padding, window.innerHeight - height - padding);
+  return {
+    x: clamp(x, padding, maxX),
+    y: clamp(y, padding, maxY)
+  };
 }
 
 function rgbToHex(red: number, green: number, blue: number): string {
@@ -2970,15 +2983,17 @@ export function App() {
   function openGalleryFolderContextMenu(event: React.MouseEvent, folderId: GalleryFolderFilter) {
     event.preventDefault();
     event.stopPropagation();
+    const position = clampContextMenuPosition(event.clientX, event.clientY, 220, 240);
     setGalleryAssetContextMenu(null);
-    setGalleryFolderContextMenu({ x: event.clientX, y: event.clientY, folderId });
+    setGalleryFolderContextMenu({ ...position, folderId });
   }
 
   function openGalleryAssetContextMenu(event: React.MouseEvent, asset: GalleryAsset) {
     event.preventDefault();
     event.stopPropagation();
+    const position = clampContextMenuPosition(event.clientX, event.clientY, 240, 300);
     setGalleryFolderContextMenu(null);
-    setGalleryAssetContextMenu({ x: event.clientX, y: event.clientY, assetId: asset.id });
+    setGalleryAssetContextMenu({ ...position, assetId: asset.id });
   }
 
   function closeGalleryFolderContextMenu() {
@@ -5133,9 +5148,10 @@ export function App() {
   function handleImageContextMenu(event: React.MouseEvent, asset: ImageAsset | undefined, jobPrompt: string) {
     event.preventDefault();
     if (!asset) return;
+    const position = clampContextMenuPosition(event.clientX, event.clientY, 220, 180);
     setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
+      x: position.x,
+      y: position.y,
       asset,
       jobPrompt
     });

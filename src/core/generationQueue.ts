@@ -556,11 +556,13 @@ export function retryGenerationQueueItemInQueue(
       if (item.queueId !== normalizedLookupId && item.historyJobId !== normalizedLookupId) return item;
       found = item;
       if (!RETRYABLE_TERMINAL_STATUSES.has(item.status)) return item;
+      const retryAttempt = Math.max(0, item.attempt);
       retried = {
         ...item,
         status: "queued",
         stage: "queued",
-        attempt: 0,
+        attempt: retryAttempt,
+        maxAttempts: Math.max(item.maxAttempts, retryAttempt + 1),
         startedAt: undefined,
         completedAt: undefined,
         nextRunAt: undefined,

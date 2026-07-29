@@ -2652,6 +2652,7 @@
     max-height: 380px;
     min-height: 220px;
     min-width: 0;
+    overscroll-behavior: contain;
     padding: 1px;
   }
 
@@ -3442,12 +3443,15 @@
 
   .right-rail-actions.tag-manager-open,
   .right-rail.collapsed .right-rail-actions.tag-manager-open {
-    z-index: 11900;
+    z-index: 14900;
   }
 
   .tag-manager-menu {
-    z-index: 12000;
+    z-index: 15000;
     width: min(310px, 82vw);
+    max-height: min(460px, calc(100vh - 104px));
+    overflow: auto;
+    overscroll-behavior: contain;
   }
 
   .tag-manager-section {
@@ -4610,12 +4614,17 @@
     place-items: center;
     background: rgba(32, 39, 43, 0.28);
     padding: 22px;
+    overflow: auto;
+    overscroll-behavior: contain;
   }
 
   .confirm-dialog {
     display: grid;
     gap: 18px;
     width: min(380px, 100%);
+    max-height: min(720px, calc(100vh - 44px));
+    overflow: auto;
+    overscroll-behavior: contain;
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     background: var(--surface-panel);
@@ -5436,6 +5445,9 @@
 
   .queue-diagnostic-dialog {
     width: min(520px, calc(100vw - 36px));
+    max-height: min(760px, calc(100vh - 44px));
+    overflow: auto;
+    overscroll-behavior: contain;
   }
 
   .queue-diagnostic-grid {
@@ -5967,6 +5979,7 @@
     gap: 10px;
     min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding-right: 2px;
     padding-bottom: 58px;
   }
@@ -6280,7 +6293,7 @@
 
   .history-tag-popover {
     position: absolute;
-    z-index: 12000;
+    z-index: 15000;
     top: calc(100% + 6px);
     left: 0;
     display: grid;

@@ -364,7 +364,13 @@ export interface InputAsset {
 
 export type ReferencePreflightRole = "reference" | "mask";
 
-export type ReferencePreflightReason = "within_limits" | "pixel_limit" | "byte_limit" | "provider_limit" | "mask_preserved";
+export type ReferencePreflightReason =
+  | "within_limits"
+  | "pixel_limit"
+  | "byte_limit"
+  | "provider_limit"
+  | "mask_preserved"
+  | "mask_dimension_mismatch";
 
 export interface ReferencePreflightImageMetadata {
   mime: string;

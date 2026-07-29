@@ -109,6 +109,17 @@ function metadataFor(asset: InputAsset): ReferencePreflightImageMetadata {
   };
 }
 
+function dimensionsKnown(metadata: Pick<ReferencePreflightImageMetadata, "width" | "height">): metadata is ReferencePreflightImageMetadata & { width: number; height: number } {
+  return Boolean(metadata.width && metadata.height);
+}
+
+function dimensionsEqual(
+  left: Pick<ReferencePreflightImageMetadata, "width" | "height">,
+  right: Pick<ReferencePreflightImageMetadata, "width" | "height">
+): boolean {
+  return dimensionsKnown(left) && dimensionsKnown(right) && left.width === right.width && left.height === right.height;
+}
+
 function reasonFor(metadata: ReferencePreflightImageMetadata, role: ReferencePreflightRole, limits: ReferencePreflightLimits): ReferencePreflightReason {
   if (role === "mask") return "mask_preserved";
   const pixels = pixelCount(metadata) ?? 0;
@@ -132,6 +143,9 @@ function warningFor(input: {
   const pixels = pixelCount(input.metadata);
   const dimensions = input.metadata.width && input.metadata.height ? `${input.metadata.width}x${input.metadata.height}` : "unknown dimensions";
 
+  if (input.reason === "mask_dimension_mismatch") {
+    return `${label}${name} dimensions (${dimensions}) do not match the source image dimensions. Use a mask with the same width and height as the first reference image before retrying.`;
+  }
   if (input.blocked) {
     return `${label}${name} is too large for a safe provider request (${dimensions}, ${input.metadata.bytes} bytes). Reduce image size before retrying.`;
   }
@@ -166,13 +180,16 @@ export function buildReferencePreflightSummaries(
 
   const limits = normalizedLimits(options.limits);
   const allowReferenceDownsampling = !maskAsset;
+  const firstReference = inputAssets[0] ? metadataFor(inputAssets[0]) : undefined;
+  const maskMetadata = maskAsset ? metadataFor(maskAsset) : undefined;
+  const maskDimensionMismatch = Boolean(firstReference && maskMetadata && dimensionsKnown(firstReference) && dimensionsKnown(maskMetadata) && !dimensionsEqual(firstReference, maskMetadata));
   return assets.map(({ asset, role }) => {
     const original = metadataFor(asset);
-    const reason = reasonFor(original, role, limits);
+    const reason = role === "mask" && maskDimensionMismatch ? "mask_dimension_mismatch" : reasonFor(original, role, limits);
     const pixels = pixelCount(original) ?? 0;
     const hardLimitExceeded = original.bytes > limits.hardBytes || pixels > limits.hardPixels;
     const canDownsample = role === "reference" && allowReferenceDownsampling && Boolean(original.width && original.height);
-    const blocked = hardLimitExceeded && !canDownsample;
+    const blocked = (role === "mask" && maskDimensionMismatch) || (hardLimitExceeded && !canDownsample);
     const summary: ReferencePreflightSummary = {
       id: asset.id,
       role,
@@ -262,7 +279,8 @@ function normalizeReason(value: unknown): ReferencePreflightReason | undefined {
     value === "pixel_limit" ||
     value === "byte_limit" ||
     value === "provider_limit" ||
-    value === "mask_preserved"
+    value === "mask_preserved" ||
+    value === "mask_dimension_mismatch"
     ? value
     : undefined;
 }
