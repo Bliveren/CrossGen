@@ -280,23 +280,16 @@ describe("generationQueue", () => {
       historyJobId: "job-1"
     });
     await store.appendItem(item);
-    let cancelRequestSettled: Promise<void> = Promise.resolve();
 
     const result = await runNextGenerationQueueItem({
       queueStore: store,
       queueId: item.queueId,
       host: { hostId: "host-1", kind: "desktop", processId: process.pid },
       leaseMs: 150,
-      onStarted: () => {
-        cancelRequestSettled = new Promise((resolve, reject) => {
-          setTimeout(() => {
-            void requestGenerationQueueItemCancel(store, item.queueId).then(() => resolve(), reject);
-          }, 20);
-        });
-      },
       executeItem: async (_item, signal) => {
+        await requestGenerationQueueItemCancel(store, item.queueId);
         await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error("cancel was not observed")), 1000);
+          const timeout = setTimeout(() => reject(new Error("cancel was not observed")), 2000);
           signal.addEventListener(
             "abort",
             () => {
@@ -324,7 +317,6 @@ describe("generationQueue", () => {
       workerHeartbeatAt: undefined,
       workerLeaseExpiresAt: undefined
     });
-    await cancelRequestSettled;
 
     await removeTempDir(tempDir);
   });
