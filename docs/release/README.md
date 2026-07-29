@@ -16,6 +16,7 @@ bumped:
 
 ```bash
 pnpm verify:release-evidence:v0.3.1
+pnpm verify:release-evidence:v0.3.2
 ```
 
 The verifier also checks guarded checklist and TODO items. External acceptance
@@ -78,7 +79,9 @@ External gate trackers:
 
 Release-specific preparation:
 
-- `v0.3.1`: [evidence.json](./evidence.json)
+- `v0.3.2`: [evidence.json](./evidence.json)
+- `v0.3.2`: [v0.3.2-pre-rc-evidence.md](./v0.3.2-pre-rc-evidence.md)
+- `v0.3.2`: [v0.3.2-provider-gate-matrix.md](./v0.3.2-provider-gate-matrix.md)
 - `v0.3.1`: [v0.3.1-preflight.md](./v0.3.1-preflight.md)
 - `v0.3.1`: [v0.3.1-evidence.json](./v0.3.1-evidence.json)
 - `v0.3.0`: [v0.3.0-preflight.md](./v0.3.0-preflight.md)
@@ -97,7 +100,7 @@ Rules for updating evidence:
   they are explicitly approved public samples.
 - Do not change checklist items from pending to complete until the matching
   evidence gate is marked `passed` and the validator succeeds.
-- For v0.3.1, `docs/release/evidence.json` is the active release ledger after
-  the `package.json` version bump. Keep `docs/release/v0.3.1-evidence.json`
-  aligned as the version-specific ledger used by compatibility checks while
-  release evidence is still being completed.
+- `docs/release/evidence.json` tracks the current package-version release
+  candidate. Version-specific evidence files such as
+  `docs/release/v0.3.1-evidence.json` remain immutable archives for approved
+  releases and compatibility checks.

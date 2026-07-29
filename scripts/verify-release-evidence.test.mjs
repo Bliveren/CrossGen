@@ -72,7 +72,7 @@ function completeLedger() {
 
 describe("release evidence verifier", () => {
   it("validates the default v0.3.1 release evidence ledger", async () => {
-    const result = await run(["--expected-version", "0.3.1"]);
+    const result = await run(["--file", "docs/release/v0.3.1-evidence.json", "--expected-version", "0.3.1"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Release evidence validated: 13/13 required gate(s) passed.");
@@ -80,15 +80,33 @@ describe("release evidence verifier", () => {
   });
 
   it("passes --require-complete for the approved v0.3.1 release ledger", async () => {
-    const result = await run(["--expected-version", "0.3.1", "--require-complete"]);
+    const result = await run(["--file", "docs/release/v0.3.1-evidence.json", "--expected-version", "0.3.1", "--require-complete"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Release evidence validated: 13/13 required gate(s) passed.");
     expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
-  it("rejects the default evidence ledger after the package version advances", async () => {
+  it("validates the default v0.3.2 ledger with pending release gates", async () => {
     const result = await run([]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Release evidence validated:");
+    expect(result.stdout).toContain("Pending required gate(s):");
+    expect(result.stdout).toContain("real-provider-operation-matrix");
+  });
+
+  it("fails --require-complete for the pending v0.3.2 ledger", async () => {
+    const result = await run(["--require-complete"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Required release evidence gates are not passed");
+    expect(result.stderr).toContain("product-owner-acceptance");
+    expect(result.stderr).toContain("real-provider-operation-matrix");
+  });
+
+  it("rejects v0.3.1 evidence as default evidence after the package version advances", async () => {
+    const result = await run(["--file", "docs/release/v0.3.1-evidence.json"]);
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain(`release evidence releaseVersion 0.3.1 does not match expected version ${packageVersion}`);

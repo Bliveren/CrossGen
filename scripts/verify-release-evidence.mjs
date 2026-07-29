@@ -28,6 +28,14 @@ const v031GateIds = [
   "image-core-regression"
 ];
 
+const v032GateIds = [
+  "real-provider-operation-matrix",
+  "queue-ui-visibility",
+  "provider-diagnostics-timeout",
+  "reference-preflight",
+  "history-gallery-recovery"
+];
+
 const v030ChecklistGuards = [
   {
     file: "docs/release/v0.3.0-preflight.md",
@@ -327,6 +335,9 @@ function isAtLeastVersion(value, minimum) {
 }
 
 function knownGateIdsForRelease(releaseVersion) {
+  if (isAtLeastVersion(releaseVersion, "0.3.2")) {
+    return [...baseGateIds, ...v031GateIds, ...v032GateIds];
+  }
   if (isAtLeastVersion(releaseVersion, "0.3.1")) {
     return [...baseGateIds, ...v031GateIds];
   }
@@ -334,6 +345,9 @@ function knownGateIdsForRelease(releaseVersion) {
 }
 
 function checklistGuardsForRelease(releaseVersion) {
+  if (isAtLeastVersion(releaseVersion, "0.3.2")) {
+    return commonChecklistGuards;
+  }
   if (isAtLeastVersion(releaseVersion, "0.3.1")) {
     return [...v031ChecklistGuards, ...commonChecklistGuards];
   }
