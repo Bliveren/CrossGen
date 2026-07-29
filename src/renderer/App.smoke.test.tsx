@@ -10,6 +10,8 @@ import type {
   GalleryFolder,
   ImageAsset,
   InputAsset,
+  QueueSnapshot,
+  QueueTaskSummary,
   RunJobRequest,
   ProviderConfig,
   UpdateCheckResult,
@@ -208,6 +210,106 @@ describe("renderer multi-model smoke", () => {
         })
       })
     );
+  });
+
+  it("renders queue snapshot counts and failed task diagnostics", async () => {
+    const failedTask = queueTask({
+      queueId: "queue-failed",
+      historyJobId: "history-failed",
+      status: "failed",
+      stage: "finalizing",
+      promptPreview: "Failed queue prompt",
+      inputCount: 1,
+      hasMask: true,
+      retryable: true,
+      chargedRetryRisk: true,
+      canCancel: false,
+      diagnostic: {
+        category: "provider_empty_output",
+        message: "OpenAI API did not return a saveable image.",
+        providerMessage: "data null",
+        operation: "image-to-image",
+        providerKind: "openai-compatible",
+        modelId: GPT_IMAGE_2_MODEL_ID,
+        route: "chat",
+        inputImageCount: 1,
+        hasMask: true,
+        timeoutMs: 60000,
+        attemptIndex: 2,
+        retryable: true,
+        chargedRetryRisk: true,
+        nextActions: ["Switch route or inspect provider compatibility."]
+      }
+    });
+    await renderApp(
+      snapshot(),
+      queueSnapshot({
+        running: [queueTask({ queueId: "queue-running", status: "running", promptPreview: "Running prompt" })],
+        queued: [queueTask({ queueId: "queue-queued", status: "queued", promptPreview: "Queued prompt" })],
+        failed: [failedTask]
+      })
+    );
+    await flushAsync();
+
+    expect(document.body.textContent).toContain("1 running · 1 queued · 1 need attention");
+    await click(document.querySelector<HTMLButtonElement>(".queue-widget-summary")!);
+
+    expect(document.body.textContent).toContain("Running prompt");
+    expect(document.body.textContent).toContain("Queued prompt");
+    expect(document.body.textContent).toContain("Failed queue prompt");
+
+    const failedCard = document.querySelector<HTMLElement>('.queue-task-card[data-status="failed"]')!;
+    await click(failedCard.querySelector<HTMLButtonElement>('button[aria-label="Details"]')!);
+
+    expect(document.body.textContent).toContain("Task diagnostic");
+    expect(document.body.textContent).toContain("provider_empty_output");
+    expect(document.body.textContent).toContain("chat");
+    expect(document.body.textContent).toContain("data null");
+    expect(document.body.textContent).toContain("Switch route or inspect provider compatibility.");
+  });
+
+  it("requires explicit confirmation before retrying queue tasks and can cancel active items", async () => {
+    const failedTask = queueTask({ queueId: "queue-retry", status: "failed", promptPreview: "Retry prompt", retryable: true, chargedRetryRisk: true, canCancel: false });
+    const runningTask = queueTask({ queueId: "queue-cancel", status: "running", promptPreview: "Cancel prompt", canCancel: true });
+    const bridge = await renderApp(snapshot(), queueSnapshot({ running: [runningTask], failed: [failedTask] }));
+    await flushAsync();
+    await click(document.querySelector<HTMLButtonElement>(".queue-widget-summary")!);
+
+    const runningCard = [...document.querySelectorAll<HTMLElement>(".queue-task-card")].find((item) => item.textContent?.includes("Cancel prompt"))!;
+    await click(runningCard.querySelector<HTMLButtonElement>('button[aria-label="Cancel task"]')!);
+    expect(bridge.cancelQueueItem).toHaveBeenCalledWith("queue-cancel");
+
+    const failedCard = [...document.querySelectorAll<HTMLElement>(".queue-task-card")].find((item) => item.textContent?.includes("Retry prompt"))!;
+    await click(failedCard.querySelector<HTMLButtonElement>('button[aria-label="Retry"]')!);
+
+    expect(document.body.textContent).toContain("Retrying may submit another paid provider request.");
+    expect(bridge.retryQueueItem).not.toHaveBeenCalled();
+
+    await click(buttonByText("Retry task", ".confirm-dialog button"));
+    expect(bridge.retryQueueItem).toHaveBeenCalledWith("queue-retry");
+  });
+
+  it("shows queue stage and stop action while generation is waiting", async () => {
+    const runningTask = queueTask({
+      queueId: "queue-overlay",
+      status: "running",
+      stage: "calling_provider",
+      promptPreview: "Overlay prompt",
+      attemptIndex: 2,
+      maxAttempts: 3,
+      canCancel: true
+    });
+    const bridge = await renderApp(snapshot(), queueSnapshot({ running: [runningTask] }));
+    vi.mocked(bridge.runJob).mockImplementationOnce(async () => new Promise<GenerationJob>(() => undefined));
+
+    await click(buttonByText("Generate", ".primary-run"));
+    await flushAsync();
+
+    expect(document.body.textContent).toContain("Calling provider");
+    expect(document.body.textContent).toContain("Generation attempt 2");
+
+    await click(document.querySelector<HTMLButtonElement>(".generation-overlay-stop")!);
+    expect(bridge.cancelQueueItem).toHaveBeenCalledWith("queue-overlay");
   });
 
   it("keeps the PNG compression note in a tooltip instead of inline text", async () => {
@@ -2414,10 +2516,10 @@ describe("renderer multi-model smoke", () => {
   });
 });
 
-async function renderApp(initialSnapshot: AppSnapshot): Promise<AppBridge> {
+async function renderApp(initialSnapshot: AppSnapshot, initialQueueSnapshot = queueSnapshot()): Promise<AppBridge> {
   container = document.createElement("div");
   document.body.append(container);
-  const bridge = createBridge(initialSnapshot);
+  const bridge = createBridge(initialSnapshot, initialQueueSnapshot);
   window.crossgen = bridge;
   await act(async () => {
     root = createRoot(container!);
@@ -2443,8 +2545,10 @@ async function renderAppWithoutBridge() {
   });
 }
 
-function createBridge(initialSnapshot: AppSnapshot): AppBridge {
+function createBridge(initialSnapshot: AppSnapshot, initialQueueSnapshot: QueueSnapshot): AppBridge {
   let currentSnapshot = initialSnapshot;
+  let currentQueueSnapshot = initialQueueSnapshot;
+  const queueSnapshotListeners: Array<(snapshot: QueueSnapshot) => void> = [];
   const updateCheckResult: UpdateCheckResult = {
     status: "not-configured",
     currentVersion: "0.1.0",
@@ -2455,9 +2559,14 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
 
   const activeConfig = () => currentSnapshot.providers.find(p => p.id === currentSnapshot.activeProviderId) ?? currentSnapshot.providers[0];
   const configById = (providerId?: string) => currentSnapshot.providers.find(p => p.id === providerId) ?? activeConfig();
+  const emitQueueSnapshot = (next: QueueSnapshot) => {
+    currentQueueSnapshot = next;
+    queueSnapshotListeners.forEach((listener) => listener(next));
+  };
 
   return {
     getSnapshot: vi.fn(async () => currentSnapshot),
+    getQueueSnapshot: vi.fn(async () => currentQueueSnapshot),
     saveConfig: vi.fn(async (input) => {
       const config = configById(input.providerId);
       const nextConfig: ProviderConfig = {
@@ -2631,6 +2740,16 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
       return job;
     }),
     cancelJob: vi.fn(async () => true),
+    cancelQueueItem: vi.fn(async (queueId) => {
+      const next = mapQueueSnapshotTasks(currentQueueSnapshot, (task) => task.queueId === queueId ? { ...task, cancelRequested: true } : task);
+      emitQueueSnapshot(next);
+      return next;
+    }),
+    retryQueueItem: vi.fn(async (jobId) => {
+      const next = mapQueueSnapshotTasks(currentQueueSnapshot, (task) => task.queueId === jobId || task.historyJobId === jobId ? { ...task, status: "queued", retryable: false, cancelRequested: false } : task);
+      emitQueueSnapshot(next);
+      return next;
+    }),
     downloadAsset: vi.fn(async () => "/tmp/downloaded.png"),
     downloadEditedImage: vi.fn(async () => "/tmp/edited.png"),
     openAssetFolder: vi.fn(async () => undefined),
@@ -2652,6 +2771,13 @@ function createBridge(initialSnapshot: AppSnapshot): AppBridge {
     }),
     clearHistory: vi.fn(async () => []),
     onJobEvent: vi.fn(() => () => undefined),
+    onQueueSnapshot: vi.fn((callback) => {
+      queueSnapshotListeners.push(callback);
+      return () => {
+        const index = queueSnapshotListeners.indexOf(callback);
+        if (index >= 0) queueSnapshotListeners.splice(index, 1);
+      };
+    }),
     onGalleryEvent: vi.fn(() => () => undefined),
     onSnapshotChange: vi.fn(() => () => undefined),
     addProvider: vi.fn(async (input) => {
@@ -2732,6 +2858,117 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     },
     ...patch
   };
+}
+
+function queueTask(patch: Partial<QueueTaskSummary> = {}): QueueTaskSummary {
+  const status = patch.status ?? "queued";
+  return {
+    queueId: "queue-1",
+    source: "desktop",
+    providerId: "test-provider",
+    status,
+    stage: status === "running" ? "calling_provider" : "queued",
+    mode: "generate",
+    promptPreview: "Queue prompt",
+    inputCount: 0,
+    hasMask: false,
+    createdAt: now,
+    startedAt: status === "running" ? now : undefined,
+    updatedAt: now,
+    completedAt: status === "failed" || status === "interrupted" || status === "cancelled" ? now : undefined,
+    elapsedMs: status === "running" || status === "failed" ? 4200 : undefined,
+    ageMs: 4200,
+    attempt: status === "queued" ? 0 : 1,
+    attemptIndex: status === "queued" ? 1 : 2,
+    maxAttempts: 3,
+    completedAttempts: status === "queued" ? 0 : 1,
+    remainingAttempts: status === "queued" ? 3 : 2,
+    retryable: status === "failed" || status === "interrupted" || status === "cancelled",
+    chargedRetryRisk: status === "failed" || status === "interrupted" || status === "cancelled",
+    canCancel: status === "queued" || status === "running",
+    cancelRequested: false,
+    historyJobId: "history-job-1",
+    outputAssetIds: [],
+    partialAssetIds: [],
+    galleryAssetIds: [],
+    targetGalleryFolderId: null,
+    executionKind: "sync-provider",
+    outputMediaKinds: ["image"],
+    sourceAssetIds: [],
+    ...patch
+  };
+}
+
+function queueSnapshot(patch: Partial<QueueSnapshot> = {}): QueueSnapshot {
+  const queued = patch.queued ?? [];
+  const running = patch.running ?? [];
+  const failed = patch.failed ?? [];
+  const cancelled = patch.cancelled ?? [];
+  const interrupted = patch.interrupted ?? [];
+  const succeededRecent = patch.succeededRecent ?? [];
+  const recentJobs = patch.recentJobs ?? [...running, ...queued, ...failed, ...interrupted, ...cancelled, ...succeededRecent];
+  const allKnown = [...recentJobs];
+  return {
+    schemaVersion: 1,
+    updatedAt: patch.updatedAt ?? now,
+    generatedAt: patch.generatedAt ?? now,
+    counts: {
+      total: allKnown.length,
+      active: queued.length + running.length,
+      terminal: allKnown.length - queued.length - running.length,
+      queued: queued.length,
+      running: running.length,
+      succeeded: succeededRecent.length,
+      succeededRecent: succeededRecent.length,
+      failed: failed.length,
+      cancelled: cancelled.length,
+      interrupted: interrupted.length,
+      retryable: allKnown.filter((task) => task.retryable).length,
+      cancelRequested: allKnown.filter((task) => task.cancelRequested).length
+    },
+    concurrency: patch.concurrency ?? {
+      maxGlobal: 2,
+      runningGlobal: running.length,
+      availableGlobal: Math.max(0, 2 - running.length),
+      providerConcurrency: {}
+    },
+    workers: patch.workers ?? {
+      total: 1,
+      online: 1,
+      offline: 0,
+      hosts: [{
+        hostId: "desktop-host",
+        kind: "desktop",
+        processId: 1,
+        mode: "generate",
+        heartbeatAt: now,
+        leaseExpiresAt: new Date(Date.now() + 30000).toISOString(),
+        online: true,
+        lastHeartbeatAgeMs: 100,
+        leaseRemainingMs: 30000
+      }]
+    },
+    queued,
+    running,
+    succeededRecent,
+    failed,
+    cancelled,
+    interrupted,
+    recentJobs
+  };
+}
+
+function mapQueueSnapshotTasks(snapshot: QueueSnapshot, mapper: (task: QueueTaskSummary) => QueueTaskSummary): QueueSnapshot {
+  return queueSnapshot({
+    ...snapshot,
+    queued: snapshot.queued.map(mapper),
+    running: snapshot.running.map(mapper),
+    failed: snapshot.failed.map(mapper),
+    cancelled: snapshot.cancelled.map(mapper),
+    interrupted: snapshot.interrupted.map(mapper),
+    succeededRecent: snapshot.succeededRecent.map(mapper),
+    recentJobs: snapshot.recentJobs.map(mapper)
+  });
 }
 
 function providerConfig(patch: Partial<ProviderConfig> = {}): ProviderConfig {

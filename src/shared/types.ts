@@ -763,6 +763,9 @@ export interface AppBridge {
   selectMask: () => Promise<InputAsset | null>;
   runJob: (request: RunJobRequest) => Promise<GenerationJob>;
   cancelJob: (jobId: string) => Promise<boolean>;
+  getQueueSnapshot: () => Promise<QueueSnapshot>;
+  cancelQueueItem: (queueId: string) => Promise<QueueSnapshot>;
+  retryQueueItem: (jobId: string) => Promise<QueueSnapshot>;
   downloadAsset: (request: DownloadRequest) => Promise<string | null>;
   downloadEditedImage: (request: EditedImageDownloadRequest) => Promise<string | null>;
   openAssetFolder: (assetPath: string) => Promise<void>;
@@ -774,6 +777,7 @@ export interface AppBridge {
   updateHistoryJob: (jobId: string, patch: HistoryJobPatch) => Promise<GenerationJob>;
   clearHistory: () => Promise<GenerationJob[]>;
   onJobEvent: (callback: (event: JobProgressEvent) => void) => () => void;
+  onQueueSnapshot: (callback: (snapshot: QueueSnapshot) => void) => () => void;
   onGalleryEvent: (callback: (event: GallerySyncEvent) => void) => () => void;
   onSnapshotChange: (callback: (snapshot: AppSnapshot) => void) => () => void;
 }

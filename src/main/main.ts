@@ -46,6 +46,7 @@ import type {
   PromptTemplateInput,
   ProviderConfig,
   ProviderConfigInput,
+  QueueSnapshot,
   QueueSource,
   ReferencePreflightSummary,
   RunJobRequest,
@@ -118,6 +119,7 @@ import {
   type QueueRuntimeConfigPatch
 } from "../core/queueConfig.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
+import { buildQueueSnapshot } from "../core/queueSnapshot.js";
 import { buildTaskDiagnostic, defaultRouteForRequest, queueErrorCategoryForTaskDiagnostic } from "../core/providerDiagnostics.js";
 import { DEFAULT_REFERENCE_PREFLIGHT_LIMITS, buildReferencePreflightSummaries, referencePreflightBlockingMessage } from "../core/referencePreflight.js";
 import { createJsonStateStore, type JsonStateStore } from "../core/stateStore.js";
@@ -650,6 +652,7 @@ async function mutateStateAndQueue<TResult>(
   stateWriteCount += 1;
   lastSelfWriteAt = Date.now();
   stateCache = transaction.state;
+  void broadcastQueueSnapshot(transaction.queue).catch(() => undefined);
   return transaction;
 }
 
@@ -1422,6 +1425,7 @@ function sendJobEvent(event: JobProgressEvent): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("job:event", event);
   }
+  void broadcastQueueSnapshot().catch(() => undefined);
 }
 
 function sendGalleryEvent(state: AppStateFile, reason: "disk" | "mutation"): void {
@@ -1444,6 +1448,28 @@ function broadcastSnapshot(state: AppStateFile): void {
   for (const window of windows) {
     window.webContents.send("app:snapshot", snapshot);
   }
+}
+
+async function buildDesktopQueueSnapshot(queue?: GenerationQueueFile): Promise<QueueSnapshot> {
+  const [queueFile, queueConfig] = await Promise.all([
+    queue ? Promise.resolve(queue) : readExistingQueueForCli(),
+    readQueueRuntimeConfigForCli()
+  ]);
+  return buildQueueSnapshot(queueFile, queueConfig, { recentLimit: 30, statusLimit: 30 });
+}
+
+function sendQueueSnapshot(snapshot: QueueSnapshot): void {
+  const windows = BrowserWindow.getAllWindows();
+  if (windows.length === 0) return;
+  for (const window of windows) {
+    window.webContents.send("queue:snapshot", snapshot);
+  }
+}
+
+async function broadcastQueueSnapshot(queue?: GenerationQueueFile): Promise<void> {
+  const windows = BrowserWindow.getAllWindows();
+  if (windows.length === 0) return;
+  sendQueueSnapshot(await buildDesktopQueueSnapshot(queue));
 }
 
 async function mutateDesktopGalleryState<TResult>(
@@ -1470,6 +1496,10 @@ async function mutateDesktopGalleryState<TResult>(
 async function handleGetSnapshot(): Promise<AppSnapshot> {
   const state = await syncGalleryForRead(await readState());
   return snapshotFromState(state);
+}
+
+async function handleGetQueueSnapshot(): Promise<QueueSnapshot> {
+  return buildDesktopQueueSnapshot();
 }
 
 function snapshotFromState(state: AppStateFile): AppSnapshot {
@@ -3360,6 +3390,59 @@ async function handleCancelJob(jobId: string): Promise<boolean> {
     sendJobEvent({ jobId, queueId, type: "failed", error: "任务已取消。" });
   }
   return true;
+}
+
+async function handleCancelQueueItem(_event: IpcMainInvokeEvent, queueId: string): Promise<QueueSnapshot> {
+  if (typeof queueId !== "string" || !queueId.trim()) {
+    throw new Error("队列任务 ID 无效。");
+  }
+
+  const result = await cancelGenerationQueueItemWithState(queueId);
+  if (!result.item) {
+    throw new Error("队列任务不存在。");
+  }
+
+  const controller = runningQueueControllers.get(queueId);
+  if (controller) {
+    controller.abort();
+  }
+
+  if (result.item.historyJobId && result.item.status === "cancelled") {
+    queuedJobIds.delete(result.item.historyJobId);
+    sendJobEvent({ jobId: result.item.historyJobId, queueId, type: "failed", error: "任务已取消。" });
+  }
+  broadcastSnapshot(result.state);
+  const snapshot = await buildDesktopQueueSnapshot(result.queue);
+  sendQueueSnapshot(snapshot);
+  return snapshot;
+}
+
+async function handleRetryQueueItem(_event: IpcMainInvokeEvent, jobId: string): Promise<QueueSnapshot> {
+  if (typeof jobId !== "string" || !jobId.trim()) {
+    throw new Error("队列任务 ID 无效。");
+  }
+
+  const result = await retryGenerationQueueItemWithState(jobId);
+  if (result.action === "not_found") {
+    throw new Error("队列任务不存在。");
+  }
+  if (result.action === "not_retryable") {
+    throw new Error("该任务当前不可重试。");
+  }
+
+  const retriedItem = result.item;
+  if (!retriedItem) {
+    throw new Error("队列任务不存在。");
+  }
+
+  if (retriedItem.historyJobId) {
+    queuedJobIds.set(retriedItem.historyJobId, retriedItem.queueId);
+  }
+  broadcastSnapshot(result.state);
+  scheduleDesktopQueueWorker(0);
+  const snapshot = await buildDesktopQueueSnapshot(result.queue);
+  sendQueueSnapshot(snapshot);
+  return snapshot;
 }
 
 function canRunRequestWithConfig(request: RunJobRequest, config: StoredProviderConfig): boolean {
@@ -5726,6 +5809,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle("dialog:selectMask", handleSelectMask);
   ipcMain.handle("job:run", handleRunJob);
   ipcMain.handle("job:cancel", (_event, jobId: string) => handleCancelJob(jobId));
+  ipcMain.handle("queue:getSnapshot", handleGetQueueSnapshot);
+  ipcMain.handle("queue:cancel", handleCancelQueueItem);
+  ipcMain.handle("queue:retry", handleRetryQueueItem);
   ipcMain.handle("asset:download", handleDownloadAsset);
   ipcMain.handle("asset:downloadEdited", handleDownloadEditedImage);
   ipcMain.handle("asset:openFolder", handleOpenAssetFolder);

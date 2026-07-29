@@ -90,7 +90,10 @@ import type {
   PromptTemplateInput,
   ProviderConfig,
   ProviderKind,
+  QueueSnapshot,
+  QueueTaskSummary,
   StorageKind,
+  TaskDiagnostic,
   WorkMode,
   UpdateCheckResult,
   HistoryJobPatch,
@@ -376,6 +379,45 @@ const fallbackSnapshot: AppSnapshot = {
   }
 };
 
+const fallbackQueueSnapshot: QueueSnapshot = {
+  schemaVersion: 1,
+  updatedAt: new Date(0).toISOString(),
+  generatedAt: new Date(0).toISOString(),
+  counts: {
+    total: 0,
+    active: 0,
+    terminal: 0,
+    queued: 0,
+    running: 0,
+    succeeded: 0,
+    succeededRecent: 0,
+    failed: 0,
+    cancelled: 0,
+    interrupted: 0,
+    retryable: 0,
+    cancelRequested: 0
+  },
+  concurrency: {
+    maxGlobal: 1,
+    runningGlobal: 0,
+    availableGlobal: 1,
+    providerConcurrency: {}
+  },
+  workers: {
+    total: 0,
+    online: 0,
+    offline: 0,
+    hosts: []
+  },
+  queued: [],
+  running: [],
+  succeededRecent: [],
+  failed: [],
+  cancelled: [],
+  interrupted: [],
+  recentJobs: []
+};
+
 function getBridge() {
   return window.crossgen ?? window.image2tools;
 }
@@ -450,6 +492,137 @@ function formatDate(value: string): string {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function queueStatusLabel(copy: UiCopy, task: QueueTaskSummary): string {
+  return copy.queue.status[task.status] ?? task.status;
+}
+
+function queueStageLabel(copy: UiCopy, task?: QueueTaskSummary | null): string | undefined {
+  if (!task) return undefined;
+  return copy.queue.stage[task.stage] ?? task.stage;
+}
+
+function queueSourceLabel(copy: UiCopy, task: QueueTaskSummary): string {
+  return copy.queue.sourceLabels[task.source] ?? task.source;
+}
+
+function queueOperationLabel(copy: UiCopy, diagnostic?: TaskDiagnostic): string {
+  if (!diagnostic) return "-";
+  return copy.queue.operationLabels[diagnostic.operation] ?? diagnostic.operation;
+}
+
+function visibleQueueTasks(snapshot: QueueSnapshot): QueueTaskSummary[] {
+  const tasks = [
+    ...snapshot.running,
+    ...snapshot.queued,
+    ...snapshot.failed,
+    ...snapshot.interrupted,
+    ...snapshot.cancelled,
+    ...snapshot.recentJobs
+  ];
+  const seen = new Set<string>();
+  return tasks.filter((task) => {
+    if (seen.has(task.queueId)) return false;
+    seen.add(task.queueId);
+    return task.status !== "succeeded";
+  }).slice(0, 8);
+}
+
+function findActiveGenerationTask(snapshot: QueueSnapshot, runningQueueId: string | null, runningJobId: string | null): QueueTaskSummary | undefined {
+  const candidates = [...snapshot.running, ...snapshot.queued, ...snapshot.recentJobs];
+  return candidates.find((task) => task.queueId === runningQueueId || (runningJobId && task.historyJobId === runningJobId))
+    ?? snapshot.running[0]
+    ?? snapshot.queued[0];
+}
+
+function QueueStatusPanel({
+  copy,
+  snapshot,
+  expanded,
+  formatDurationLabel,
+  onToggle,
+  onCancel,
+  onRetry,
+  onDetails
+}: {
+  copy: UiCopy;
+  snapshot: QueueSnapshot;
+  expanded: boolean;
+  formatDurationLabel: (ms?: number) => string;
+  onToggle: () => void;
+  onCancel: (task: QueueTaskSummary) => void;
+  onRetry: (task: QueueTaskSummary) => void;
+  onDetails: (task: QueueTaskSummary) => void;
+}) {
+  const tasks = visibleQueueTasks(snapshot);
+  const needsAttention = snapshot.counts.failed + snapshot.counts.interrupted > 0;
+  return (
+    <section className="queue-widget" data-expanded={expanded ? "true" : "false"} data-attention={needsAttention ? "true" : "false"} aria-label={copy.queue.title}>
+      <button type="button" className="queue-widget-summary" onClick={onToggle} aria-expanded={expanded} aria-label={expanded ? copy.queue.closePanel : copy.queue.openPanel}>
+        <span className="queue-widget-icon">
+          {snapshot.counts.running > 0 ? <Loader2 className="spin" size={16} /> : needsAttention ? <AlertTriangle size={16} /> : <List size={16} />}
+        </span>
+        <span className="queue-widget-title">
+          <strong>{copy.queue.title}</strong>
+          <small>{copy.queue.counts(snapshot.counts.running, snapshot.counts.queued, snapshot.counts.failed, snapshot.counts.interrupted)}</small>
+        </span>
+        <span className="queue-widget-meta">
+          <small>{copy.queue.concurrency(snapshot.concurrency.runningGlobal, snapshot.concurrency.maxGlobal)}</small>
+          <small>{copy.queue.workers(snapshot.workers.online, snapshot.workers.total)}</small>
+        </span>
+      </button>
+      {expanded && (
+        <div className="queue-panel">
+          <div className="queue-panel-header">
+            <strong>{copy.queue.subtitle}</strong>
+            <span>{copy.queue.workers(snapshot.workers.online, snapshot.workers.total)}</span>
+          </div>
+          {tasks.length === 0 ? (
+            <p className="queue-empty">{copy.queue.empty}</p>
+          ) : (
+            <div className="queue-task-list">
+              {tasks.map((task) => (
+                <article key={task.queueId} className="queue-task-card" data-status={task.status}>
+                  <div className="queue-task-main">
+                    <span className="queue-task-status">{queueStatusLabel(copy, task)}</span>
+                    <strong>{task.promptPreview || task.queueId}</strong>
+                    <small>{queueStageLabel(copy, task)} · {copy.queue.attempt(task.attemptIndex, task.maxAttempts)} · {copy.queue.elapsed(formatDurationLabel(task.elapsedMs))}</small>
+                  </div>
+                  <div className="queue-task-side">
+                    <span>{queueSourceLabel(copy, task)}</span>
+                    <span>{task.inputCount}{task.hasMask ? ` + ${copy.mask}` : ""}</span>
+                  </div>
+                  <div className="queue-task-actions">
+                    <button type="button" className="icon-button" onClick={() => onDetails(task)} aria-label={copy.queue.details} data-tooltip={copy.queue.details}>
+                      <Info size={14} />
+                    </button>
+                    {task.canCancel && (
+                      <button
+                        type="button"
+                        className="icon-button"
+                        onClick={() => onCancel(task)}
+                        disabled={task.cancelRequested}
+                        aria-label={task.cancelRequested ? copy.queue.cancelRequested : copy.queue.cancel}
+                        data-tooltip={task.cancelRequested ? copy.queue.cancelRequested : copy.queue.cancel}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                    {task.retryable && (
+                      <button type="button" className="icon-button" onClick={() => onRetry(task)} aria-label={copy.queue.retry} data-tooltip={copy.queue.retry}>
+                        <RefreshCw size={14} />
+                      </button>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function stringFromRuntime(value: unknown): string | undefined {
@@ -963,6 +1136,10 @@ export function App() {
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck>({ status: "idle" });
   const [isRunning, setIsRunning] = useState(false);
   const [runningJobId, setRunningJobId] = useState<string | null>(null);
+  const [runningQueueId, setRunningQueueId] = useState<string | null>(null);
+  const [queueSnapshot, setQueueSnapshot] = useState<QueueSnapshot>(fallbackQueueSnapshot);
+  const [isQueuePanelOpen, setIsQueuePanelOpen] = useState(false);
+  const [queueDiagnosticTask, setQueueDiagnosticTask] = useState<QueueTaskSummary | null>(null);
   const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
   const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
   const [generationAttemptIndex, setGenerationAttemptIndex] = useState<number | null>(null);
@@ -1655,6 +1832,12 @@ export function App() {
   const savedApiConfigs = snapshot.providers;
   const canDeleteActiveApiAccess = snapshot.providers.length > 1;
   const canDeleteSelectedApiAccess = snapshot.providers.length > 1;
+  const activeGenerationQueueTask = useMemo(
+    () => findActiveGenerationTask(queueSnapshot, runningQueueId, runningJobId),
+    [queueSnapshot, runningJobId, runningQueueId]
+  );
+  const generationStageLabel = queueStageLabel(copy, activeGenerationQueueTask);
+  const displayedGenerationAttemptIndex = generationAttemptIndex ?? activeGenerationQueueTask?.attemptIndex ?? null;
 
   useEffect(() => {
     window.localStorage.setItem("image2tools.language", language);
@@ -2188,11 +2371,13 @@ export function App() {
     return bridge.onJobEvent((event) => {
       if (event.type === "started") {
         setRunningJobId(event.jobId);
+        setRunningQueueId(event.queueId ?? null);
         setNotice({ kind: "info", text: copy.notices.jobStarted });
       }
       if (event.type === "attempt") {
         const attemptIndex = event.attemptIndex ?? 1;
         setGenerationAttemptIndex(attemptIndex);
+        if (event.queueId) setRunningQueueId(event.queueId);
         setNotice({ kind: "info", text: copy.notices.generationAttempt(attemptIndex) });
       }
       if (event.type === "partial" && event.image) {
@@ -2203,14 +2388,40 @@ export function App() {
       }
       if (event.type === "completed") {
         setRunningJobId(null);
+        setRunningQueueId(null);
         setNotice({ kind: "success", text: copy.notices.imageCompleted });
       }
       if (event.type === "failed") {
         setRunningJobId(null);
+        setRunningQueueId(null);
         setNotice({ kind: "error", text: event.error ?? copy.jobFailed });
       }
     });
   }, [bridge, copy]);
+
+  useEffect(() => {
+    if (!bridge?.getQueueSnapshot) return undefined;
+    let cancelled = false;
+    const refreshQueueSnapshot = () => {
+      bridge
+        .getQueueSnapshot()
+        .then((next) => {
+          if (!cancelled) setQueueSnapshot(next);
+        })
+        .catch(() => undefined);
+    };
+
+    refreshQueueSnapshot();
+    const unsubscribe = bridge.onQueueSnapshot?.((next) => {
+      if (!cancelled) setQueueSnapshot(next);
+    }) ?? (() => undefined);
+    const timer = window.setInterval(refreshQueueSnapshot, 2500);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      window.clearInterval(timer);
+    };
+  }, [bridge]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -3602,6 +3813,7 @@ export function App() {
 
     setIsRunning(true);
     setRunningJobId(null);
+    setRunningQueueId(null);
     resetPartialImages();
     setGenerationStartedAt(Date.now());
     setGenerationElapsedSeconds(0);
@@ -3639,6 +3851,7 @@ export function App() {
     } finally {
       setIsRunning(false);
       setRunningJobId(null);
+      setRunningQueueId(null);
       setGenerationStartedAt(null);
       setGenerationAttemptIndex(null);
     }
@@ -3652,6 +3865,39 @@ export function App() {
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
+  }
+
+  async function cancelQueueTask(task: QueueTaskSummary) {
+    if (!bridge?.cancelQueueItem) return;
+    setNotice({ kind: "info", text: copy.notices.cancelRequested });
+    try {
+      const next = await bridge.cancelQueueItem(task.queueId);
+      setQueueSnapshot(next);
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function cancelActiveGeneration() {
+    if (activeGenerationQueueTask?.canCancel) {
+      await cancelQueueTask(activeGenerationQueueTask);
+      return;
+    }
+    await cancelRunningJob();
+  }
+
+  function requestQueueRetry(task: QueueTaskSummary) {
+    if (!bridge?.retryQueueItem) return;
+    requestDangerConfirm({
+      title: copy.queue.retryConfirmTitle,
+      body: task.chargedRetryRisk ? `${copy.queue.retryConfirmBody}\n${copy.queue.chargedRetryRisk}` : copy.queue.retryConfirmBody,
+      confirmLabel: copy.queue.retryConfirm,
+      onConfirm: async () => {
+        const next = await bridge.retryQueueItem(task.queueId);
+        setQueueSnapshot(next);
+        setIsQueuePanelOpen(true);
+      }
+    });
   }
 
   async function downloadAsset(asset?: ImageAsset) {
@@ -5976,7 +6222,7 @@ export function App() {
             activeJobError={activeJobError}
             isGenerating={isRunning}
             generationElapsedSeconds={generationElapsedSeconds}
-            generationAttemptIndex={generationAttemptIndex}
+            generationAttemptIndex={displayedGenerationAttemptIndex}
             activeImage={activeImage}
             activeResults={activeResults}
             partialImages={partialImages}
@@ -6062,6 +6308,9 @@ export function App() {
             onResetPreviewView={resetPreviewView}
             onSelectResult={setSelectedResultId}
             onActivatePartialImage={activatePartialImage}
+            generationStageLabel={generationStageLabel}
+            isGenerationCancelEnabled={Boolean(activeGenerationQueueTask?.canCancel) || canCancelRun}
+            onCancelGeneration={() => void cancelActiveGeneration()}
           />
 
           <div
@@ -6174,6 +6423,16 @@ export function App() {
                 </div>
               </div>
               {validationError && <p className="inline-check error">{validationError}</p>}
+              <QueueStatusPanel
+                copy={copy}
+                snapshot={queueSnapshot}
+                expanded={isQueuePanelOpen}
+                formatDurationLabel={formatDuration}
+                onToggle={() => setIsQueuePanelOpen((current) => !current)}
+                onCancel={(task) => void cancelQueueTask(task)}
+                onRetry={requestQueueRetry}
+                onDetails={setQueueDiagnosticTask}
+              />
             </div>
 
             {!showReferenceTools && (
@@ -6825,6 +7084,79 @@ export function App() {
                 <X size={16} />
                 {confirmDialog.confirmLabel}
               </button>
+            </div>
+        </DialogShell>
+      )}
+      {queueDiagnosticTask && (
+        <DialogShell className="confirm-dialog queue-diagnostic-dialog" labelledBy="queue-diagnostic-title" onClose={() => setQueueDiagnosticTask(null)}>
+            <div>
+              <h2 id="queue-diagnostic-title">{copy.queue.diagnosticTitle}</h2>
+              <p>{queueDiagnosticTask.promptPreview}</p>
+            </div>
+            <dl className="queue-diagnostic-grid">
+              <div>
+                <dt>{copy.queue.category}</dt>
+                <dd>{queueDiagnosticTask.diagnostic?.category ?? queueDiagnosticTask.status}</dd>
+              </div>
+              <div>
+                <dt>{copy.queue.operation}</dt>
+                <dd>{queueOperationLabel(copy, queueDiagnosticTask.diagnostic)}</dd>
+              </div>
+              <div>
+                <dt>{copy.queue.route}</dt>
+                <dd>{queueDiagnosticTask.diagnostic?.route ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>{copy.queue.inputImages}</dt>
+                <dd>{queueDiagnosticTask.diagnostic?.inputImageCount ?? queueDiagnosticTask.inputCount}{queueDiagnosticTask.hasMask ? ` + ${copy.mask}` : ""}</dd>
+              </div>
+              <div>
+                <dt>{copy.queue.timeout}</dt>
+                <dd>{queueDiagnosticTask.diagnostic ? formatDuration(queueDiagnosticTask.diagnostic.timeoutMs) : "-"}</dd>
+              </div>
+              <div>
+                <dt>{copy.queue.source}</dt>
+                <dd>{queueSourceLabel(copy, queueDiagnosticTask)}</dd>
+              </div>
+            </dl>
+            <div className="queue-diagnostic-message">
+              <strong>{copy.queue.message}</strong>
+              <p>{queueDiagnosticTask.diagnostic?.message ?? queueDiagnosticTask.diagnostic?.error ?? queueDiagnosticTask.status}</p>
+              {queueDiagnosticTask.diagnostic?.providerMessage && (
+                <>
+                  <strong>{copy.queue.providerMessage}</strong>
+                  <p>{queueDiagnosticTask.diagnostic.providerMessage}</p>
+                </>
+              )}
+            </div>
+            <div className="queue-diagnostic-actions">
+              <strong>{copy.queue.nextActions}</strong>
+              {queueDiagnosticTask.diagnostic?.nextActions.length ? (
+                <ul>
+                  {queueDiagnosticTask.diagnostic.nextActions.map((action) => <li key={action}>{action}</li>)}
+                </ul>
+              ) : (
+                <p>{copy.queue.noNextActions}</p>
+              )}
+              {queueDiagnosticTask.chargedRetryRisk && <p className="inline-check error">{copy.queue.chargedRetryRisk}</p>}
+            </div>
+            <div className="dialog-actions">
+              <button type="button" className="ghost" onClick={() => setQueueDiagnosticTask(null)}>
+                {copy.cancel}
+              </button>
+              {queueDiagnosticTask.retryable && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const task = queueDiagnosticTask;
+                    setQueueDiagnosticTask(null);
+                    requestQueueRetry(task);
+                  }}
+                >
+                  <RefreshCw size={16} />
+                  {copy.queue.retry}
+                </button>
+              )}
             </div>
         </DialogShell>
       )}

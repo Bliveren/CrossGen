@@ -41,6 +41,42 @@ interface NoticeCopy {
   launchSelected: (model: string) => string;
 }
 
+interface QueueCopy {
+  title: string;
+  subtitle: string;
+  openPanel: string;
+  closePanel: string;
+  empty: string;
+  counts: (running: number, queued: number, failed: number, interrupted: number) => string;
+  workers: (online: number, total: number) => string;
+  concurrency: (running: number, max: number) => string;
+  attempt: (attempt: number, max: number) => string;
+  elapsed: (duration: string) => string;
+  details: string;
+  retry: string;
+  cancel: string;
+  cancelRequested: string;
+  retryConfirmTitle: string;
+  retryConfirmBody: string;
+  retryConfirm: string;
+  diagnosticTitle: string;
+  category: string;
+  message: string;
+  providerMessage: string;
+  route: string;
+  operation: string;
+  inputImages: string;
+  timeout: string;
+  source: string;
+  nextActions: string;
+  noNextActions: string;
+  chargedRetryRisk: string;
+  status: Record<string, string>;
+  stage: Record<string, string>;
+  sourceLabels: Record<string, string>;
+  operationLabels: Record<string, string>;
+}
+
 interface ValidationCopy {
   promptInvalid: string;
   promptRequired: string;
@@ -72,6 +108,7 @@ interface ValidationCopy {
 }
 
 export interface UiCopy {
+  queue: QueueCopy;
   language: string;
   theme: string;
   themeSystem: string;
@@ -465,6 +502,64 @@ export interface UiCopy {
 
 export const translations: Record<Language, UiCopy> = {
   en: {
+    queue: {
+      title: "Image queue",
+      subtitle: "Visible task execution",
+      openPanel: "Open queue",
+      closePanel: "Close queue",
+      empty: "No queued image tasks.",
+      counts: (running: number, queued: number, failed: number, interrupted: number) => `${running} running · ${queued} queued · ${failed + interrupted} need attention`,
+      workers: (online: number, total: number) => `${online}/${total} worker online`,
+      concurrency: (running: number, max: number) => `${running}/${max} running`,
+      attempt: (attempt: number, max: number) => `Attempt ${attempt}/${max}`,
+      elapsed: (duration: string) => `Elapsed ${duration}`,
+      details: "Details",
+      retry: "Retry",
+      cancel: "Cancel task",
+      cancelRequested: "Cancel requested",
+      retryConfirmTitle: "Retry this task?",
+      retryConfirmBody: "Retrying may submit another paid provider request. Continue only if you intend to spend another request.",
+      retryConfirm: "Retry task",
+      diagnosticTitle: "Task diagnostic",
+      category: "Category",
+      message: "Message",
+      providerMessage: "Provider message",
+      route: "Route",
+      operation: "Operation",
+      inputImages: "Input images",
+      timeout: "Timeout",
+      source: "Source",
+      nextActions: "Next actions",
+      noNextActions: "No suggested action.",
+      chargedRetryRisk: "Retry may make another paid provider request.",
+      status: {
+        queued: "Queued",
+        running: "Running",
+        succeeded: "Succeeded",
+        failed: "Failed",
+        cancelled: "Cancelled",
+        interrupted: "Interrupted"
+      },
+      stage: {
+        queued: "Queued",
+        claiming: "Claiming task",
+        calling_provider: "Calling provider",
+        awaiting_remote: "Waiting for provider",
+        downloading: "Downloading result",
+        postprocessing: "Post-processing",
+        finalizing: "Finalizing"
+      },
+      sourceLabels: {
+        desktop: "Desktop",
+        cli: "CLI",
+        mcp: "MCP"
+      },
+      operationLabels: {
+        "text-to-image": "Text to image",
+        "image-to-image": "Image to image",
+        "guided-region": "Guided region"
+      }
+    },
     language: "Language",
     theme: "Theme",
     themeSystem: "System",
@@ -923,6 +1018,64 @@ export const translations: Record<Language, UiCopy> = {
     }
   },
   zh: {
+    queue: {
+      title: "生图队列",
+      subtitle: "任务执行状态",
+      openPanel: "展开队列",
+      closePanel: "收起队列",
+      empty: "暂无生图队列任务。",
+      counts: (running: number, queued: number, failed: number, interrupted: number) => `${running} 运行中 · ${queued} 排队中 · ${failed + interrupted} 需处理`,
+      workers: (online: number, total: number) => `${online}/${total} 个 worker 在线`,
+      concurrency: (running: number, max: number) => `${running}/${max} 运行中`,
+      attempt: (attempt: number, max: number) => `第 ${attempt}/${max} 次尝试`,
+      elapsed: (duration: string) => `已耗时 ${duration}`,
+      details: "详情",
+      retry: "重试",
+      cancel: "取消任务",
+      cancelRequested: "已请求取消",
+      retryConfirmTitle: "确认重试该任务？",
+      retryConfirmBody: "重试可能会再次向服务商提交付费请求。请确认你愿意重新消耗一次请求后再继续。",
+      retryConfirm: "确认重试",
+      diagnosticTitle: "任务诊断",
+      category: "分类",
+      message: "信息",
+      providerMessage: "服务商返回",
+      route: "路径",
+      operation: "操作",
+      inputImages: "输入图片",
+      timeout: "超时",
+      source: "来源",
+      nextActions: "建议处理",
+      noNextActions: "暂无建议处理动作。",
+      chargedRetryRisk: "重试可能会再次产生一次服务商请求。",
+      status: {
+        queued: "排队中",
+        running: "运行中",
+        succeeded: "已完成",
+        failed: "失败",
+        cancelled: "已取消",
+        interrupted: "已中断"
+      },
+      stage: {
+        queued: "排队中",
+        claiming: "领取任务",
+        calling_provider: "调用服务商",
+        awaiting_remote: "等待服务商返回",
+        downloading: "下载结果",
+        postprocessing: "后处理",
+        finalizing: "收尾保存"
+      },
+      sourceLabels: {
+        desktop: "桌面端",
+        cli: "CLI",
+        mcp: "MCP"
+      },
+      operationLabels: {
+        "text-to-image": "文生图",
+        "image-to-image": "图生图",
+        "guided-region": "局部引导"
+      }
+    },
     language: "语言",
     theme: "外观",
     themeSystem: "跟随系统",
