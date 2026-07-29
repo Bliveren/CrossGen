@@ -23,6 +23,7 @@ function recoverJobFromQueue(job: GenerationJob, item: GenerationQueueItem, reco
       ...job,
       status: "cancelled",
       error: item.lastError ?? CANCELLED_JOB_MESSAGE,
+      referencePreflight: item.referencePreflight ?? job.referencePreflight,
       updatedAt: item.updatedAt || recoveredAt
     };
   }
@@ -31,6 +32,7 @@ function recoverJobFromQueue(job: GenerationJob, item: GenerationQueueItem, reco
     ...job,
     status: "failed",
     error: item.lastError ?? INTERRUPTED_JOB_MESSAGE,
+    referencePreflight: item.referencePreflight ?? job.referencePreflight,
     updatedAt: item.updatedAt || recoveredAt
   };
 }

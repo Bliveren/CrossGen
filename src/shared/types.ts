@@ -57,6 +57,7 @@ export interface TaskDiagnostic {
   retryable: boolean;
   chargedRetryRisk: boolean;
   nextActions: string[];
+  referencePreflight?: ReferencePreflightSummary[];
 }
 
 export interface QueueRuntimeConfig {
@@ -117,6 +118,7 @@ export interface QueueTaskSummary {
   requestId?: string;
   correlationId?: string;
   diagnostic?: TaskDiagnostic;
+  referencePreflight?: ReferencePreflightSummary[];
 }
 
 export interface QueueWorkerSummary {
@@ -349,6 +351,30 @@ export interface InputAsset {
   height?: number;
 }
 
+export type ReferencePreflightRole = "reference" | "mask";
+
+export type ReferencePreflightReason = "within_limits" | "pixel_limit" | "byte_limit" | "provider_limit" | "mask_preserved";
+
+export interface ReferencePreflightImageMetadata {
+  mime: string;
+  width?: number;
+  height?: number;
+  bytes: number;
+}
+
+export interface ReferencePreflightSummary {
+  id: string;
+  role: ReferencePreflightRole;
+  name?: string;
+  original: ReferencePreflightImageMetadata;
+  request: ReferencePreflightImageMetadata & {
+    downsampled: boolean;
+  };
+  reason?: ReferencePreflightReason;
+  warning?: string;
+  blocked?: boolean;
+}
+
 export interface ImageAsset {
   id: string;
   jobId: string;
@@ -481,6 +507,7 @@ export interface GenerationJob {
   usage?: UsageDetails;
   providerMetadata?: Record<string, unknown>;
   diagnostic?: TaskDiagnostic;
+  referencePreflight?: ReferencePreflightSummary[];
 }
 
 export interface RunJobRequest {
@@ -533,6 +560,7 @@ export interface GenerationQueueItem {
   idempotencyKey?: string;
   requestId?: string;
   correlationId?: string;
+  referencePreflight?: ReferencePreflightSummary[];
 }
 
 export interface GenerationQueueWorkerHost {

@@ -76,7 +76,15 @@ describe("queueStore", () => {
       leaseMs: 10
     });
 
-    const item = queueItem({ targetGalleryFolderId: "folder-1", galleryAssetIds: ["gallery-1"] });
+    const referencePreflight = [{
+      id: "source",
+      role: "reference" as const,
+      original: { mime: "image/png", width: 8000, height: 6000, bytes: 40_000_000 },
+      request: { mime: "image/png", width: 4096, height: 3072, bytes: 10_000_000, downsampled: true },
+      reason: "provider_limit" as const,
+      blocked: false
+    }];
+    const item = queueItem({ targetGalleryFolderId: "folder-1", galleryAssetIds: ["gallery-1"], referencePreflight });
 
     await store.appendItem(item);
     const claimed = await store.claimRunnableItems({ host: { hostId: "host-1", kind: "desktop", processId: process.pid }, limit: 1 });
@@ -84,6 +92,7 @@ describe("queueStore", () => {
     expect(claimed[0].attempt).toBe(1);
     expect(claimed[0].targetGalleryFolderId).toBe("folder-1");
     expect(claimed[0].galleryAssetIds).toEqual(["gallery-1"]);
+    expect(claimed[0].referencePreflight).toEqual(referencePreflight);
 
     const recovered = await store.recoverStaleRunningItems(Date.now() + 1000);
     expect(recovered.items[0].status).toBe("interrupted");

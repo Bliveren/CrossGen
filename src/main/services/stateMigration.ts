@@ -17,6 +17,7 @@ import type {
 } from "../../shared/types.js";
 import { DEFAULT_QUEUE_RUNTIME_CONFIG, normalizeQueueRuntimeConfig } from "../../core/queueConfig.js";
 import { normalizeTaskDiagnosticValue } from "../../core/providerDiagnostics.js";
+import { normalizeReferencePreflightValue } from "../../core/referencePreflight.js";
 import path from "node:path";
 import {
   DEFAULT_BASE_URL,
@@ -421,7 +422,8 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
     modelId,
     modelDisplayName: nonEmptyString(input.modelDisplayName, getModelDisplayName(launchId, modelId)),
     params,
-    diagnostic: normalizeTaskDiagnosticValue(input.diagnostic)
+    diagnostic: normalizeTaskDiagnosticValue(input.diagnostic),
+    referencePreflight: normalizeReferencePreflightValue(input.referencePreflight)
   };
 }
 

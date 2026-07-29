@@ -165,7 +165,8 @@ function publicQueueJob(item: GenerationQueueItem, options: BuildQueueSnapshotOp
     sourceAssetIds: item.sourceAssetIds,
     requestId: item.requestId,
     correlationId: item.correlationId,
-    diagnostic: summary.diagnostic
+    diagnostic: summary.diagnostic,
+    referencePreflight: item.referencePreflight
   };
 }
 
@@ -188,6 +189,7 @@ function publicHistoryJob(job: GenerationJob) {
     durationMs: job.durationMs,
     error: job.error,
     diagnostic: job.diagnostic,
+    referencePreflight: job.referencePreflight,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
     outputCount: job.outputs.length,
