@@ -5469,18 +5469,62 @@
   }
 
   .queue-diagnostic-message,
+  .queue-reference-preflight,
   .queue-diagnostic-actions {
     display: grid;
     gap: 6px;
   }
 
   .queue-diagnostic-message p,
+  .queue-reference-preflight p,
   .queue-diagnostic-actions p,
   .queue-diagnostic-actions ul {
     margin: 0;
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 1.45;
+  }
+
+  .queue-reference-preflight-list {
+    display: grid;
+    gap: 6px;
+    max-height: min(220px, 28vh);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .queue-reference-preflight-item {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-panel);
+    padding: 7px;
+  }
+
+  .queue-reference-preflight-item > span {
+    color: var(--accent-strong);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .queue-reference-preflight-item strong,
+  .queue-reference-preflight-item small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .queue-reference-preflight-item strong {
+    font-size: 12px;
+  }
+
+  .queue-reference-preflight-item small {
+    color: var(--text-muted);
+    font-size: 11px;
   }
 
   .queue-diagnostic-actions ul {

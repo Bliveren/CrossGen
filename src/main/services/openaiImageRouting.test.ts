@@ -31,6 +31,15 @@ describe("OpenAI image route probing", () => {
       }
     });
 
+    expect(buildOpenAIImageRouteProbeRequest("responses", "guided-region", "gpt-image-2")).toMatchObject({
+      endpoint: "/responses",
+      body: {
+        model: "gpt-image-2",
+        input: [],
+        tools: [{ type: "image_generation", action: "edit" }]
+      }
+    });
+
     expect(buildOpenAIImageRouteProbeRequest("chat-completions", "generate", "gpt-image-2")).toMatchObject({
       endpoint: "/chat/completions",
       body: {
@@ -102,19 +111,24 @@ describe("OpenAI image route probing", () => {
       () => "2026-07-19T12:00:00.000Z"
     );
 
-    expect(routing?.probes).toHaveLength(6);
+    expect(routing?.probes).toHaveLength(9);
     expect(routing?.probes.every((probe) => probe.ok)).toBe(true);
     expect(routing?.probes.every((probe) => probe.verified === false)).toBe(true);
     expect(routing?.preferredGenerateRoute).toBe("chat-completions");
     expect(routing?.preferredEditRoute).toBe("chat-completions");
+    expect(routing?.preferredGuidedEditRoute).toBe("chat-completions");
     expect(routing?.preferredGenerateRouteVerified).toBe(false);
     expect(routing?.preferredEditRouteVerified).toBe(false);
+    expect(routing?.preferredGuidedEditRouteVerified).toBe(false);
     expect(routing?.updatedAt).toBe("2026-07-19T12:00:00.000Z");
     expect(requests.map((request) => request.url)).toEqual([
       "https://api.test/v1/images/generations",
       "https://api.test/v1/images/edits",
+      "https://api.test/v1/images/edits",
       "https://api.test/v1/responses",
       "https://api.test/v1/responses",
+      "https://api.test/v1/responses",
+      "https://api.test/v1/chat/completions",
       "https://api.test/v1/chat/completions",
       "https://api.test/v1/chat/completions"
     ]);
@@ -151,5 +165,7 @@ describe("OpenAI image route probing", () => {
     expect(routing?.preferredGenerateRouteVerified).toBe(true);
     expect(routing?.preferredEditRoute).toBe("chat-completions");
     expect(routing?.preferredEditRouteVerified).toBe(false);
+    expect(routing?.preferredGuidedEditRoute).toBe("chat-completions");
+    expect(routing?.preferredGuidedEditRouteVerified).toBe(false);
   });
 });

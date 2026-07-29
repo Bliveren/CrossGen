@@ -128,6 +128,7 @@ async function runOpenAICompatibleGeneralImageJob(
     throw new Error(GENERAL_PROMPT_ONLY_MESSAGE);
   }
 
+  const deadlineMs = Date.now() + job.params.timeoutMs;
   const response = await fetchWithTimeout(
     runtime.fetch,
     buildEndpoint(baseURL, "/images/generations"),
@@ -141,7 +142,7 @@ async function runOpenAICompatibleGeneralImageJob(
       },
       body: JSON.stringify(buildOpenAICompatibleGeneralRequestBody(job.params, job.prompt))
     },
-    job.params.timeoutMs
+    remainingTimeoutMs(deadlineMs)
   );
 
   if (!response.ok) {
@@ -160,7 +161,7 @@ async function runOpenAICompatibleGeneralImageJob(
     throw new Error("OpenAI 兼容图片结果不是有效 JSON。请检查 Base URL 是否指向 OpenAI 兼容的 /v1 接口。");
   }
 
-  const outputs = await saveOpenAICompatibleGeneralImages(job, payload.data ?? [], runtime);
+  const outputs = await saveOpenAICompatibleGeneralImages(job, payload.data ?? [], runtime, deadlineMs);
   if (outputs.length === 0) {
     throw new Error("OpenAI 兼容 API 没有返回可保存的图片。");
   }
@@ -181,11 +182,12 @@ async function runOpenAICompatibleGeneralImageJob(
 async function saveOpenAICompatibleGeneralImages(
   job: GenerationJob,
   items: Array<{ b64_json?: string; url?: string }>,
-  runtime: ImageJobRuntime
+  runtime: ImageJobRuntime,
+  deadlineMs: number
 ): Promise<ImageAsset[]> {
   const outputs: ImageAsset[] = [];
   for (const [index, item] of items.entries()) {
-    const image = await openAICompatibleGeneralItemToBuffer(item, runtime);
+    const image = await openAICompatibleGeneralItemToBuffer(item, runtime, deadlineMs);
     if (!image) continue;
     outputs.push(await saveOpenAICompatibleGeneralImage(job.id, image.buffer, image.mimeType, index, runtime));
   }
@@ -194,7 +196,8 @@ async function saveOpenAICompatibleGeneralImages(
 
 async function openAICompatibleGeneralItemToBuffer(
   item: { b64_json?: string; url?: string },
-  runtime: ImageJobRuntime
+  runtime: ImageJobRuntime,
+  deadlineMs: number
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   if (item.b64_json) {
     return { buffer: Buffer.from(item.b64_json, "base64"), mimeType: "image/png" };
@@ -208,7 +211,18 @@ async function openAICompatibleGeneralItemToBuffer(
     };
   }
 
-  const response = await runtime.fetch(item.url);
+  const response = await fetchWithTimeout(
+    runtime.fetch,
+    item.url,
+    {
+      method: "GET",
+      signal: runtime.abortSignal,
+      headers: {
+        Accept: "image/*"
+      }
+    },
+    remainingTimeoutMs(deadlineMs)
+  );
   if (!response.ok) {
     throw new Error(`OpenAI 兼容 API 返回了图片 URL，但下载失败：HTTP ${response.status}。`);
   }
@@ -216,6 +230,10 @@ async function openAICompatibleGeneralItemToBuffer(
     buffer: Buffer.from(await response.arrayBuffer()),
     mimeType: normalizeOutputMimeType(response.headers.get("content-type"))
   };
+}
+
+function remainingTimeoutMs(deadlineMs: number): number {
+  return Math.max(1, deadlineMs - Date.now());
 }
 
 async function saveOpenAICompatibleGeneralImage(

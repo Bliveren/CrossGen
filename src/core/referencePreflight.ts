@@ -104,7 +104,8 @@ function metadataFor(asset: InputAsset): ReferencePreflightImageMetadata {
     mime: asset.mimeType || "application/octet-stream",
     width: positiveInteger(asset.width),
     height: positiveInteger(asset.height),
-    bytes: safeBytes(asset.sizeBytes)
+    bytes: safeBytes(asset.sizeBytes),
+    hasAlpha: typeof asset.hasAlpha === "boolean" ? asset.hasAlpha : undefined
   };
 }
 
@@ -234,7 +235,8 @@ function normalizeMetadata(value: unknown): ReferencePreflightImageMetadata | un
     mime,
     width: positiveInteger(value.width),
     height: positiveInteger(value.height),
-    bytes: safeBytes(value.bytes)
+    bytes: safeBytes(value.bytes),
+    hasAlpha: typeof value.hasAlpha === "boolean" ? value.hasAlpha : undefined
   };
 }
 
@@ -250,6 +252,7 @@ function normalizeRequestMetadata(value: unknown, fallback: ReferencePreflightIm
     width: positiveInteger(value.width) ?? fallback.width,
     height: positiveInteger(value.height) ?? fallback.height,
     bytes: safeBytes(value.bytes) || fallback.bytes,
+    hasAlpha: typeof value.hasAlpha === "boolean" ? value.hasAlpha : fallback.hasAlpha,
     downsampled: Boolean(value.downsampled)
   };
 }

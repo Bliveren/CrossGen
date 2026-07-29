@@ -247,6 +247,7 @@ export async function runGeminiImageJob(
   }
 
   const inlineDataParts = await inputAssetsToInlineDataParts(job.inputAssets, job.maskAsset);
+  const deadlineMs = Date.now() + job.params.timeoutMs;
   const response = await fetchWithTimeout(
     runtime.fetch,
     buildGeminiGenerateContentEndpoint(baseURL, job.params.model),
@@ -256,10 +257,10 @@ export async function runGeminiImageJob(
       headers: geminiJsonHeaders(apiKey),
       body: JSON.stringify(buildGeminiGenerateContentBody(job.params, job.prompt, inlineDataParts))
     },
-    job.params.timeoutMs
+    remainingTimeoutMs(deadlineMs)
   );
 
-  return handleGeminiGenerateContentResponse(response, job, runtime);
+  return handleGeminiGenerateContentResponse(response, job, runtime, deadlineMs);
 }
 
 async function inputAssetsToInlineDataParts(inputAssets: InputAsset[], maskAsset?: InputAsset): Promise<GeminiInlineData[]> {
@@ -286,7 +287,8 @@ async function inputAssetToInlineData(asset: InputAsset): Promise<GeminiInlineDa
 async function handleGeminiGenerateContentResponse(
   response: Response,
   job: GeminiImageJob,
-  runtime: GeminiImageRuntime
+  runtime: GeminiImageRuntime,
+  deadlineMs: number
 ): Promise<GenerationJob> {
   if (!response.ok) {
     throw new Error(await readGeminiApiError(response));
@@ -305,7 +307,7 @@ async function handleGeminiGenerateContentResponse(
   }
 
   const parsed = collectGeminiResponseParts(payload);
-  const outputs = await saveGeminiImages(job.id, parsed.images, runtime);
+  const outputs = await saveGeminiImages(job.id, parsed.images, runtime, deadlineMs);
   if (outputs.length === 0) {
     throw new Error(geminiNoImageMessage(parsed));
   }
@@ -442,10 +444,10 @@ function dataImageUrlPattern(): RegExp {
   return /data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/_=-]+)/gi;
 }
 
-async function saveGeminiImages(jobId: string, images: GeminiImageSource[], runtime: GeminiImageRuntime): Promise<ImageAsset[]> {
+async function saveGeminiImages(jobId: string, images: GeminiImageSource[], runtime: GeminiImageRuntime, deadlineMs: number): Promise<ImageAsset[]> {
   const outputs: ImageAsset[] = [];
   for (const [index, image] of images.entries()) {
-    outputs.push(await saveBase64Image(jobId, image, index, runtime));
+    outputs.push(await saveBase64Image(jobId, image, index, runtime, deadlineMs));
   }
   return outputs;
 }
@@ -454,13 +456,14 @@ async function saveBase64Image(
   jobId: string,
   image: GeminiImageSource,
   index: number,
-  runtime: GeminiImageRuntime
+  runtime: GeminiImageRuntime,
+  deadlineMs: number
 ): Promise<ImageAsset> {
   await runtime.ensureDir(runtime.imagesDir);
   const mimeType = normalizeSupportedGeminiMimeType(image.mimeType);
   const fileName = `${jobId}-result-${index}.${extensionForMimeType(mimeType)}`;
   const filePath = path.join(runtime.imagesDir, fileName);
-  const b64Json = await geminiImageSourceToBase64(image, runtime);
+  const b64Json = await geminiImageSourceToBase64(image, runtime, deadlineMs);
   await fs.writeFile(filePath, Buffer.from(b64Json, "base64"));
 
   return {
@@ -477,7 +480,7 @@ async function saveBase64Image(
   };
 }
 
-async function geminiImageSourceToBase64(image: GeminiImageSource, runtime: GeminiImageRuntime): Promise<string> {
+async function geminiImageSourceToBase64(image: GeminiImageSource, runtime: GeminiImageRuntime, deadlineMs: number): Promise<string> {
   if (image.data) return image.data.startsWith("data:image/") ? dataUrlToBase64(image.data) : image.data;
   if (!image.url) return "";
   if (image.url.startsWith("data:image/")) return dataUrlToBase64(image.url);
@@ -491,13 +494,17 @@ async function geminiImageSourceToBase64(image: GeminiImageSource, runtime: Gemi
         Accept: image.mimeType
       }
     },
-    30000
+    remainingTimeoutMs(deadlineMs)
   );
   if (!response.ok) {
     throw new Error(`Gemini API 返回了图片 URL，但下载失败：HTTP ${response.status}。`);
   }
   const buffer = Buffer.from(await response.arrayBuffer());
   return buffer.toString("base64");
+}
+
+function remainingTimeoutMs(deadlineMs: number): number {
+  return Math.max(1, deadlineMs - Date.now());
 }
 
 async function readGeminiModelsResponse(response: Response): Promise<DiscoveredModel[]> {

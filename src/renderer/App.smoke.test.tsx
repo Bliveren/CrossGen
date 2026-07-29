@@ -250,7 +250,18 @@ describe("renderer multi-model smoke", () => {
         attemptIndex: 2,
         retryable: true,
         chargedRetryRisk: true,
-        nextActions: ["Switch route or inspect provider compatibility."]
+        nextActions: ["Switch route or inspect provider compatibility."],
+        referencePreflight: [
+          {
+            id: "reference-1",
+            role: "reference",
+            name: "large-reference.png",
+            original: { mime: "image/png", width: 8000, height: 6000, bytes: 20 * 1024 * 1024, hasAlpha: true },
+            request: { mime: "image/png", width: 4096, height: 3072, bytes: 6 * 1024 * 1024, hasAlpha: true, downsampled: true },
+            reason: "pixel_limit",
+            warning: "Temporary request copy used."
+          }
+        ]
       }
     });
     await renderApp(
@@ -278,6 +289,11 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("chat");
     expect(document.body.textContent).toContain("data null");
     expect(document.body.textContent).toContain("Switch route or inspect provider compatibility.");
+    expect(document.body.textContent).toContain("Reference preflight");
+    expect(document.body.textContent).toContain("large-reference.png");
+    expect(document.body.textContent).toContain("8000x6000");
+    expect(document.body.textContent).toContain("Downsampled request copy");
+    expect(document.body.textContent).toContain("Alpha: has alpha");
   });
 
   it("requires explicit confirmation before retrying queue tasks and can cancel active items", async () => {
@@ -324,7 +340,18 @@ describe("renderer multi-model smoke", () => {
         attemptIndex: 1,
         retryable: true,
         chargedRetryRisk: true,
-        nextActions: ["Try a different route."]
+        nextActions: ["Try a different route."],
+        referencePreflight: [
+          {
+            id: "history-reference",
+            role: "reference",
+            name: "history-reference.jpg",
+            original: { mime: "image/jpeg", width: 3000, height: 2000, bytes: 4 * 1024 * 1024, hasAlpha: false },
+            request: { mime: "image/jpeg", width: 3000, height: 2000, bytes: 4 * 1024 * 1024, hasAlpha: false, downsampled: false },
+            reason: "within_limits",
+            blocked: false
+          }
+        ]
       }
     });
     const interruptedJob = geminiJob(11, {
@@ -342,7 +369,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("MCP");
     expect(document.body.textContent).toContain("Took 1.5 s");
     expect(document.body.textContent).toContain("Took 4.2 s");
-    expect(document.body.textContent).toContain("App exit or worker contact was lost.");
+    expect(document.body.textContent).not.toContain("Provider returned no image.");
 
     const failedCard = document.querySelector<HTMLElement>('.history-item[data-status="failed"]')!;
     await click(failedCard.querySelector<HTMLButtonElement>('button[aria-label="Details"]')!);
@@ -351,6 +378,9 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("provider_empty_output");
     expect(document.body.textContent).toContain("empty data");
     expect(document.body.textContent).toContain("Try a different route.");
+    expect(document.body.textContent).toContain("Reference preflight");
+    expect(document.body.textContent).toContain("history-reference.jpg");
+    expect(document.body.textContent).toContain("Alpha: opaque");
 
     await click(buttonByText("Cancel", ".history-diagnostic-dialog button"));
 
@@ -391,7 +421,7 @@ describe("renderer multi-model smoke", () => {
     await flushAsync();
 
     expect(document.body.textContent).toContain("Calling provider");
-    expect(document.body.textContent).toContain("Generation attempt 2");
+    expect(document.body.textContent).toContain("Attempt 2/3");
 
     await click(document.querySelector<HTMLButtonElement>(".generation-overlay-stop")!);
     expect(bridge.cancelQueueItem).toHaveBeenCalledWith("queue-overlay");

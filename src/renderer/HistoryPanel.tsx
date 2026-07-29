@@ -462,9 +462,9 @@ export function HistoryItemCard({
           </div>
           <p>{job.prompt}</p>
           {recoverable && (
-            <div className="history-recovery-strip" data-status={job.status}>
+            <div className="history-recovery-strip" data-status={job.status} title={jobError ?? statusLabel}>
               <AlertTriangle size={13} />
-              <span>{jobError ?? statusLabel}</span>
+              <span>{statusLabel}</span>
               <button type="button" className="icon-button" onClick={onDetails} aria-label={copy.queue.details} data-tooltip={copy.queue.details}>
                 <Info size={13} />
               </button>

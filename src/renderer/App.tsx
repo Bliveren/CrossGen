@@ -92,6 +92,7 @@ import type {
   ProviderKind,
   QueueSnapshot,
   QueueTaskSummary,
+  ReferencePreflightSummary,
   StorageKind,
   TaskDiagnostic,
   WorkMode,
@@ -491,6 +492,16 @@ function formatBytes(bytes: number): string {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
+function formatPreflightImageMetadata(metadata: ReferencePreflightSummary["original"]): string {
+  const dimensions = metadata.width && metadata.height ? `${metadata.width}x${metadata.height}` : "-";
+  return `${dimensions}, ${formatBytes(metadata.bytes)}`;
+}
+
+function formatPreflightAlpha(metadata: ReferencePreflightSummary["original"], copy: UiCopy): string | undefined {
+  if (typeof metadata.hasAlpha !== "boolean") return undefined;
+  return `${copy.queue.alpha}: ${metadata.hasAlpha ? copy.queue.alphaPresent : copy.queue.alphaAbsent}`;
+}
+
 function formatDuration(ms?: number): string {
   if (!ms) return "-";
   if (ms < 1000) return `${ms} ms`;
@@ -522,6 +533,31 @@ function queueSourceLabel(copy: UiCopy, task: QueueTaskSummary): string {
 function queueOperationLabel(copy: UiCopy, diagnostic?: TaskDiagnostic): string {
   if (!diagnostic) return "-";
   return copy.queue.operationLabels[diagnostic.operation] ?? diagnostic.operation;
+}
+
+function ReferencePreflightDetails({ copy, items }: { copy: UiCopy; items?: ReferencePreflightSummary[] }) {
+  if (!items?.length) return null;
+  return (
+    <div className="queue-reference-preflight">
+      <strong>{copy.queue.referencePreflight}</strong>
+      <div className="queue-reference-preflight-list">
+        {items.map((item) => {
+          const originalAlpha = formatPreflightAlpha(item.original, copy);
+          const requestAlpha = formatPreflightAlpha(item.request, copy);
+          return (
+            <article key={`${item.role}-${item.id}`} className="queue-reference-preflight-item" data-role={item.role}>
+              <span>{item.role === "mask" ? copy.queue.maskRole : copy.queue.referenceRole}</span>
+              <strong>{item.name ?? item.id}</strong>
+              <small>{`${copy.queue.originalRequest}: ${formatPreflightImageMetadata(item.original)} -> ${formatPreflightImageMetadata(item.request)}`}</small>
+              {(originalAlpha || requestAlpha) && <small>{[originalAlpha, requestAlpha].filter(Boolean).join(" -> ")}</small>}
+              {item.request.downsampled && <small>{copy.queue.downsampled}</small>}
+              {item.warning && <p>{item.warning}</p>}
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function visibleQueueTasks(snapshot: QueueSnapshot): QueueTaskSummary[] {
@@ -1874,6 +1910,11 @@ export function App() {
   );
   const generationStageLabel = queueStageLabel(copy, activeGenerationQueueTask);
   const displayedGenerationAttemptIndex = generationAttemptIndex ?? activeGenerationQueueTask?.attemptIndex ?? null;
+  const displayedGenerationAttemptLabel = displayedGenerationAttemptIndex
+    ? activeGenerationQueueTask
+      ? copy.queue.attempt(displayedGenerationAttemptIndex, activeGenerationQueueTask.maxAttempts)
+      : copy.notices.generationAttempt(displayedGenerationAttemptIndex)
+    : undefined;
 
   useEffect(() => {
     window.localStorage.setItem("image2tools.language", language);
@@ -6312,6 +6353,7 @@ export function App() {
             isGenerating={isRunning}
             generationElapsedSeconds={generationElapsedSeconds}
             generationAttemptIndex={displayedGenerationAttemptIndex}
+            generationAttemptLabel={displayedGenerationAttemptLabel}
             activeImage={activeImage}
             activeResults={activeResults}
             partialImages={partialImages}
@@ -7224,6 +7266,7 @@ export function App() {
                 </>
               )}
             </div>
+            <ReferencePreflightDetails copy={copy} items={queueDiagnosticTask.diagnostic?.referencePreflight ?? queueDiagnosticTask.referencePreflight} />
             <div className="queue-diagnostic-actions">
               <strong>{copy.queue.nextActions}</strong>
               {queueDiagnosticTask.diagnostic?.nextActions.length ? (
@@ -7297,6 +7340,7 @@ export function App() {
                 </>
               )}
             </div>
+            <ReferencePreflightDetails copy={copy} items={historyDiagnosticJob.diagnostic?.referencePreflight ?? historyDiagnosticJob.referencePreflight} />
             <div className="queue-diagnostic-actions">
               <strong>{copy.queue.nextActions}</strong>
               {historyDiagnosticJob.diagnostic?.nextActions.length ? (

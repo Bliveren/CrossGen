@@ -7,7 +7,7 @@ import { buildEndpoint, fetchWithTimeout } from "./openaiImageAdapter.js";
 import { redactLikelySecrets } from "./providerHttp.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 
-type ProbeMode = "generate" | "edit";
+type ProbeMode = "generate" | "edit" | "guided-region";
 type ProbeEndpoint = "/images/generations" | "/images/edits" | "/responses" | "/chat/completions";
 
 interface OpenAIImageRouteProbeRequest {
@@ -42,7 +42,7 @@ export function buildOpenAIImageRouteProbeRequest(route: OpenAIImageRoute, mode:
       body: {
         model,
         input: [],
-        tools: [{ type: "image_generation", action: mode }]
+        tools: [{ type: "image_generation", action: mode === "guided-region" ? "edit" : mode }]
       }
     };
   }
@@ -82,9 +82,12 @@ export async function probeOpenAIImageRouting(
   const routes: Array<[OpenAIImageRoute, ProbeMode]> = [
     ["image-api", "generate"],
     ["image-api", "edit"],
+    ["image-api", "guided-region"],
     ["responses", "edit"],
+    ["responses", "guided-region"],
     ["responses", "generate"],
     ["chat-completions", "edit"],
+    ["chat-completions", "guided-region"],
     ["chat-completions", "generate"]
   ];
   const probes = await Promise.all(
@@ -94,8 +97,10 @@ export async function probeOpenAIImageRouting(
   return {
     preferredGenerateRoute: preferredOpenAIImageRoute(probes, "generate"),
     preferredEditRoute: preferredOpenAIImageRoute(probes, "edit"),
+    preferredGuidedEditRoute: preferredOpenAIImageRoute(probes, "guided-region"),
     preferredGenerateRouteVerified: preferredOpenAIImageRouteVerified(probes, "generate"),
     preferredEditRouteVerified: preferredOpenAIImageRouteVerified(probes, "edit"),
+    preferredGuidedEditRouteVerified: preferredOpenAIImageRouteVerified(probes, "guided-region"),
     probes,
     updatedAt: nowIso()
   };

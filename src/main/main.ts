@@ -105,6 +105,7 @@ import {
 } from "../core/gallery.js";
 import {
   completeGenerationQueueItemInQueue,
+  recordGenerationQueueItemStage,
   recordGenerationQueuePartialOutput,
   requestGenerationQueueItemCancelInQueue,
   retryGenerationQueueItemInQueue,
@@ -1112,11 +1113,25 @@ function createAssetId(filePath: string): string {
   return `asset_${hash}`;
 }
 
-async function imageDimensionsForFile(filePath: string): Promise<{ width?: number; height?: number }> {
+function hasNonOpaqueAlpha(image: ReturnType<typeof nativeImage.createFromPath>): boolean | undefined {
+  if (image.isEmpty()) return undefined;
+  const bitmap = image.toBitmap();
+  if (bitmap.length < 4) return undefined;
+  const sampleCount = Math.min(4096, Math.floor(bitmap.length / 4));
+  const pixelStep = Math.max(1, Math.floor(bitmap.length / 4 / Math.max(1, sampleCount)));
+  for (let pixel = 0; pixel < bitmap.length / 4; pixel += pixelStep) {
+    if (bitmap[pixel * 4 + 3] < 255) return true;
+  }
+  return false;
+}
+
+async function imageMetadataForFile(filePath: string): Promise<{ width?: number; height?: number; hasAlpha?: boolean }> {
   const image = nativeImage.createFromPath(filePath);
   if (!image.isEmpty()) {
     const size = image.getSize();
-    if (size.width > 0 && size.height > 0) return { width: size.width, height: size.height };
+    if (size.width > 0 && size.height > 0) {
+      return { width: size.width, height: size.height, hasAlpha: hasNonOpaqueAlpha(image) };
+    }
   }
 
   try {
@@ -1124,7 +1139,7 @@ async function imageDimensionsForFile(filePath: string): Promise<{ width?: numbe
     const fromBuffer = nativeImage.createFromBuffer(content);
     if (fromBuffer.isEmpty()) return {};
     const size = fromBuffer.getSize();
-    return size.width > 0 && size.height > 0 ? { width: size.width, height: size.height } : {};
+    return size.width > 0 && size.height > 0 ? { width: size.width, height: size.height, hasAlpha: hasNonOpaqueAlpha(fromBuffer) } : {};
   } catch {
     return {};
   }
@@ -1133,15 +1148,16 @@ async function imageDimensionsForFile(filePath: string): Promise<{ width?: numbe
 async function toInputAsset(filePath: string, includePreview: boolean): Promise<InputAsset> {
   const stat = await fs.stat(filePath);
   const mimeType = mimeTypeForFile(filePath);
-  const dimensions = await imageDimensionsForFile(filePath);
+  const metadata = await imageMetadataForFile(filePath);
   const asset: InputAsset = {
     id: createAssetId(filePath),
     name: path.basename(filePath),
     path: filePath,
     mimeType,
     sizeBytes: stat.size,
-    width: dimensions.width,
-    height: dimensions.height
+    width: metadata.width,
+    height: metadata.height,
+    hasAlpha: metadata.hasAlpha
   };
 
   if (includePreview) {
@@ -1276,6 +1292,7 @@ async function downsampleReferenceAssetForRequest(
     sizeBytes: stat.size,
     width: size.width,
     height: size.height,
+    hasAlpha: hasNonOpaqueAlpha(resized),
     dataUrl: undefined,
     previewUrl: undefined
   };
@@ -1290,6 +1307,7 @@ async function downsampleReferenceAssetForRequest(
         width: size.width,
         height: size.height,
         bytes: stat.size,
+        hasAlpha: requestAsset.hasAlpha,
         downsampled: true
       },
       warning: `Reference image "${asset.name}" uses a temporary downsampled request copy; the original file is unchanged.`,
@@ -2838,7 +2856,7 @@ function isOpenAIImageRouteValue(value: string | undefined): value is OpenAIImag
   return value === "image-api" || value === "responses" || value === "chat-completions";
 }
 
-function storedOpenAIImageRouteProbeVerified(provider: StoredProviderConfig, mode: "generate" | "edit", route: OpenAIImageRoute): boolean {
+function storedOpenAIImageRouteProbeVerified(provider: StoredProviderConfig, mode: "generate" | "edit" | "guided-region", route: OpenAIImageRoute): boolean {
   return Boolean(provider.openAIImageRouting?.probes.some((probe) =>
     probe.mode === mode &&
     probe.route === route &&
@@ -2853,10 +2871,17 @@ function routeVerifiedForQueueDiagnostic(provider: StoredProviderConfig | undefi
 
   const resolvedRoute = isOpenAIImageRouteValue(route) ? route : defaultRouteForRequest(request, provider.kind);
   if (!isOpenAIImageRouteValue(resolvedRoute)) return undefined;
-  const probeMode = request.mode === "generate" ? "generate" : "edit";
+  const probeMode = request.mode === "generate" ? "generate" : request.mode === "inpaint" ? "guided-region" : "edit";
 
   if (request.mode === "inpaint") {
-    return storedOpenAIImageRouteProbeVerified(provider, "edit", "image-api");
+    if (request.params.imageRoute !== "auto") {
+      return storedOpenAIImageRouteProbeVerified(provider, "guided-region", resolvedRoute) ? true : undefined;
+    }
+    if (!provider.openAIImageRouting) return false;
+    if (provider.openAIImageRouting.preferredGuidedEditRoute === resolvedRoute) {
+      return provider.openAIImageRouting.preferredGuidedEditRouteVerified ?? storedOpenAIImageRouteProbeVerified(provider, "guided-region", resolvedRoute);
+    }
+    return storedOpenAIImageRouteProbeVerified(provider, "guided-region", resolvedRoute);
   }
 
   if (request.params.imageRoute !== "auto") {
@@ -2997,6 +3022,7 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
     if (event.type === "attempt") {
       lastRoute = event.route ?? lastRoute;
       lastAttemptIndex = Math.max(1, event.attemptIndex ?? lastAttemptIndex);
+      void recordGenerationQueueItemStage(getGenerationQueueStore(), item.queueId, "awaiting_remote").catch(() => undefined);
     }
     if (event.type === "partial" && event.image) {
       partialAssets.push(event.image);
@@ -3017,6 +3043,7 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
     const imagesDir = getImagesDir(state);
     job = await getOrCreateHistoryJobForQueueItem(state, item, provider, request);
     lastRoute = defaultRouteForRequest(request, provider.kind);
+    await recordGenerationQueueItemStage(getGenerationQueueStore(), item.queueId, "preparing_input");
     const preparedRequest = await prepareReferenceRequestJob(job);
     referenceCleanupPaths.push(...preparedRequest.cleanupPaths);
     currentReferencePreflight = preparedRequest.referencePreflight;
@@ -3039,6 +3066,11 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       status: "running" as const,
       updatedAt: job.updatedAt
     };
+    await recordGenerationQueueItemStage(
+      getGenerationQueueStore(),
+      item.queueId,
+      providerJob.inputAssets.length > 0 || providerJob.maskAsset ? "uploading_references" : "calling_provider"
+    );
     const providerResult = await adapter.runJob(providerJob, apiKey, provider, {
       fetch,
       imagesDir,
@@ -3046,6 +3078,7 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       sendJobEvent: sendQueuedJobEvent,
       abortSignal
     });
+    await recordGenerationQueueItemStage(getGenerationQueueStore(), item.queueId, "postprocessing");
     job = {
       ...providerResult,
       inputAssets: job.inputAssets,
@@ -3091,6 +3124,7 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
         }
       };
     }
+    await recordGenerationQueueItemStage(getGenerationQueueStore(), item.queueId, "finalizing");
     return {
       status: job.status === "succeeded" ? "succeeded" as const : "failed" as const,
       value: job,

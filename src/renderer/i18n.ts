@@ -71,6 +71,14 @@ interface QueueCopy {
   nextActions: string;
   noNextActions: string;
   chargedRetryRisk: string;
+  referencePreflight: string;
+  referenceRole: string;
+  maskRole: string;
+  originalRequest: string;
+  alpha: string;
+  alphaPresent: string;
+  alphaAbsent: string;
+  downsampled: string;
   status: Record<string, string>;
   stage: Record<string, string>;
   sourceLabels: Record<string, string>;
@@ -540,6 +548,14 @@ export const translations: Record<Language, UiCopy> = {
       nextActions: "Next actions",
       noNextActions: "No suggested action.",
       chargedRetryRisk: "Retry may make another paid provider request.",
+      referencePreflight: "Reference preflight",
+      referenceRole: "Reference",
+      maskRole: "Mask",
+      originalRequest: "Original -> request",
+      alpha: "Alpha",
+      alphaPresent: "has alpha",
+      alphaAbsent: "opaque",
+      downsampled: "Downsampled request copy",
       status: {
         queued: "Queued",
         running: "Running",
@@ -551,10 +567,13 @@ export const translations: Record<Language, UiCopy> = {
       stage: {
         queued: "Queued",
         claiming: "Claiming task",
+        preparing_input: "Preparing input",
+        uploading_references: "Uploading references",
         calling_provider: "Calling provider",
         awaiting_remote: "Waiting for provider",
         downloading: "Downloading result",
         postprocessing: "Post-processing",
+        retrying: "Retry scheduled",
         finalizing: "Finalizing"
       },
       sourceLabels: {
@@ -1064,6 +1083,14 @@ export const translations: Record<Language, UiCopy> = {
       nextActions: "建议处理",
       noNextActions: "暂无建议处理动作。",
       chargedRetryRisk: "重试可能会再次产生一次服务商请求。",
+      referencePreflight: "参考图预检",
+      referenceRole: "参考图",
+      maskRole: "蒙版",
+      originalRequest: "原图 -> 请求",
+      alpha: "透明通道",
+      alphaPresent: "有透明通道",
+      alphaAbsent: "无透明通道",
+      downsampled: "已使用降采样请求副本",
       status: {
         queued: "排队中",
         running: "运行中",
@@ -1075,10 +1102,13 @@ export const translations: Record<Language, UiCopy> = {
       stage: {
         queued: "排队中",
         claiming: "领取任务",
+        preparing_input: "准备输入",
+        uploading_references: "上传参考图",
         calling_provider: "调用服务商",
         awaiting_remote: "等待服务商返回",
         downloading: "下载结果",
         postprocessing: "后处理",
+        retrying: "等待重试",
         finalizing: "收尾保存"
       },
       sourceLabels: {

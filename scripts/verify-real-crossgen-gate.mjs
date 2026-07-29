@@ -337,11 +337,11 @@ async function main() {
     acceptanceId: randomUUID(),
     verifiedAt: new Date().toISOString(),
     commit: currentCommit(),
-    command: cliCommand,
-    cliArgs: cliPrefixArgs,
-    dataDir: doctor.dataDir,
+    command: path.basename(cliCommand),
+    cliArgs: cliPrefixArgs.map(publicCliArg),
+    dataDirFound: Boolean(doctor.dataDir),
     stateFound: doctor.stateFound,
-    activeProvider: doctor.activeProvider,
+    activeProvider: publicActiveProvider(doctor.activeProvider),
     selectedProviders: {
       openAI: publicSelectedProvider(openAIProvider),
       gemini: publicSelectedProvider(geminiProvider)
@@ -517,6 +517,21 @@ function selectProviderById(providers, id, predicate) {
   return providers.find((provider) => provider.id === id && predicate(provider)) ?? null;
 }
 
+function publicCliArg(arg) {
+  return String(arg).includes(path.sep) ? path.basename(String(arg)) : String(arg);
+}
+
+function publicActiveProvider(provider) {
+  if (!provider) return null;
+  return {
+    kind: provider.kind,
+    activeLaunchId: provider.activeLaunchId,
+    activeModelId: provider.activeModelId,
+    defaultModel: provider.defaultModel,
+    apiKeyAvailable: Boolean(provider.apiKeyAvailable ?? provider.apiKeySaved)
+  };
+}
+
 function isOpenAIProvider(provider) {
   if (!provider?.enabled || !provider.apiKeySaved) return false;
   return provider.kind === "openai" || provider.activeLaunchId === "gpt-image-2" || /gpt-image/i.test(provider.activeModelId ?? provider.defaultModel ?? "");
@@ -530,9 +545,7 @@ function isGeminiProvider(provider) {
 function publicSelectedProvider(provider) {
   if (!provider) return null;
   return {
-    id: provider.id,
     kind: provider.kind,
-    name: provider.name,
     activeLaunchId: provider.activeLaunchId,
     activeModelId: provider.activeModelId,
     defaultModel: provider.defaultModel,

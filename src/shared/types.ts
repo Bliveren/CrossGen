@@ -70,10 +70,13 @@ export interface QueueRuntimeConfig {
 export type QueueStage =
   | "queued"
   | "claiming"
+  | "preparing_input"
+  | "uploading_references"
   | "calling_provider"
   | "awaiting_remote"
   | "downloading"
   | "postprocessing"
+  | "retrying"
   | "finalizing";
 
 export interface QueueTaskSummary {
@@ -268,7 +271,7 @@ export type OpenAIImageRouteSelection = "auto" | OpenAIImageRoute;
 
 export interface OpenAIImageRouteProbe {
   route: OpenAIImageRoute;
-  mode: "generate" | "edit";
+  mode: "generate" | "edit" | "guided-region";
   endpoint: string;
   ok: boolean;
   verified?: boolean;
@@ -280,8 +283,10 @@ export interface OpenAIImageRouteProbe {
 export interface OpenAIImageRouting {
   preferredGenerateRoute?: OpenAIImageRoute;
   preferredEditRoute?: OpenAIImageRoute;
+  preferredGuidedEditRoute?: OpenAIImageRoute;
   preferredGenerateRouteVerified?: boolean;
   preferredEditRouteVerified?: boolean;
+  preferredGuidedEditRouteVerified?: boolean;
   probes: OpenAIImageRouteProbe[];
   updatedAt: string;
 }
@@ -354,6 +359,7 @@ export interface InputAsset {
   previewUrl?: string;
   width?: number;
   height?: number;
+  hasAlpha?: boolean;
 }
 
 export type ReferencePreflightRole = "reference" | "mask";
@@ -365,6 +371,7 @@ export interface ReferencePreflightImageMetadata {
   width?: number;
   height?: number;
   bytes: number;
+  hasAlpha?: boolean;
 }
 
 export interface ReferencePreflightSummary {

@@ -47,6 +47,7 @@ interface ImageEditorProps {
   isGenerating: boolean;
   generationElapsedSeconds: number;
   generationAttemptIndex: number | null;
+  generationAttemptLabel?: string;
   generationStageLabel?: string;
   isGenerationCancelEnabled: boolean;
   activeImage?: ImageAsset;
@@ -136,6 +137,7 @@ export function ImageEditor({
   isGenerating,
   generationElapsedSeconds,
   generationAttemptIndex,
+  generationAttemptLabel,
   generationStageLabel,
   isGenerationCancelEnabled,
   activeImage,
@@ -548,7 +550,7 @@ export function ImageEditor({
           <div className="generation-status-overlay" role="status" aria-live="polite" aria-atomic="true">
             <Loader2 className="spin" size={20} />
             <span>{copy.generatingElapsed(generationElapsedSeconds)}</span>
-            {generationAttemptIndex ? <small>{copy.generationAttempt(generationAttemptIndex)}</small> : null}
+            {generationAttemptIndex ? <small>{generationAttemptLabel ?? copy.generationAttempt(generationAttemptIndex)}</small> : null}
             {generationStageLabel ? <small>{generationStageLabel}</small> : null}
             <button
               type="button"

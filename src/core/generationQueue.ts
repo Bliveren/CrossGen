@@ -1,4 +1,4 @@
-import type { GenerationQueueFile, GenerationQueueItem, GenerationQueueWorkerHost, JobStatus, QueueErrorCategory, TaskDiagnostic } from "../shared/types.js";
+import type { GenerationQueueFile, GenerationQueueItem, GenerationQueueWorkerHost, JobStatus, QueueErrorCategory, QueueStage, TaskDiagnostic } from "../shared/types.js";
 import type { QueueHostIdentity, QueueStore } from "./queueStore.js";
 
 export interface GenerationQueueFailureClassification {
@@ -97,6 +97,10 @@ function makeWorkerHost(host: QueueHostIdentity, nowMs: number, leaseMs: number)
 }
 
 async function markClaimedItemStage(queueStore: QueueStore, queueId: string, nowMs: number): Promise<void> {
+  await recordGenerationQueueItemStage(queueStore, queueId, "preparing_input", nowMs);
+}
+
+export async function recordGenerationQueueItemStage(queueStore: QueueStore, queueId: string, stage: QueueStage, nowMs = Date.now()): Promise<void> {
   await queueStore.mutate((queue) => ({
     ...queue,
     updatedAt: iso(nowMs),
@@ -104,7 +108,7 @@ async function markClaimedItemStage(queueStore: QueueStore, queueId: string, now
       item.queueId === queueId
         ? {
             ...item,
-            stage: "calling_provider",
+            stage,
             updatedAt: iso(nowMs)
           }
         : item
@@ -287,7 +291,7 @@ async function scheduleRetry(
       requeued = {
         ...current,
         status: "queued",
-        stage: "queued",
+        stage: "retrying",
         nextRunAt: iso(nowMs + Math.max(0, retryBackoffMs)),
         updatedAt: iso(nowMs),
         lastError: message,

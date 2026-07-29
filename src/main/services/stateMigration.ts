@@ -195,7 +195,7 @@ function normalizeOpenAIImageRouting(value: unknown): OpenAIImageRouting | undef
     ? value.probes.flatMap((probe) => {
         if (!isRecord(probe)) return [];
         const route = optionalOneOf(probe.route, ["image-api", "responses", "chat-completions"] as const);
-        const mode = optionalOneOf(probe.mode, ["generate", "edit"] as const);
+        const mode = optionalOneOf(probe.mode, ["generate", "edit", "guided-region"] as const);
         const endpoint = optionalString(probe.endpoint);
         if (!route || !mode || !endpoint) return [];
         return [{
@@ -213,8 +213,10 @@ function normalizeOpenAIImageRouting(value: unknown): OpenAIImageRouting | undef
   return {
     preferredGenerateRoute: optionalOneOf(value.preferredGenerateRoute, ["image-api", "responses", "chat-completions"] as const),
     preferredEditRoute: optionalOneOf(value.preferredEditRoute, ["image-api", "responses", "chat-completions"] as const),
+    preferredGuidedEditRoute: optionalOneOf(value.preferredGuidedEditRoute, ["image-api", "responses", "chat-completions"] as const),
     preferredGenerateRouteVerified: typeof value.preferredGenerateRouteVerified === "boolean" ? value.preferredGenerateRouteVerified : undefined,
     preferredEditRouteVerified: typeof value.preferredEditRouteVerified === "boolean" ? value.preferredEditRouteVerified : undefined,
+    preferredGuidedEditRouteVerified: typeof value.preferredGuidedEditRouteVerified === "boolean" ? value.preferredGuidedEditRouteVerified : undefined,
     probes,
     updatedAt: nonEmptyString(value.updatedAt, new Date(0).toISOString())
   };

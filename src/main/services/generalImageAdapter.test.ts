@@ -225,6 +225,29 @@ describe("General image adapter", () => {
     );
   });
 
+  it("keeps OpenAI-compatible URL downloads inside the configured timeout budget", async () => {
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/images/generations")) {
+        return Response.json({ data: [{ url: "https://files.example.com/generated.png" }] });
+      }
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(
+      runGeneralImageJob(
+        job("openai", "dall-e-3", {
+          params: { ...(job("openai", "dall-e-3").params as GeneralImageParams), timeoutMs: 1 }
+        }),
+        "sk-test-key",
+        config("openai", "dall-e-3"),
+        runtime
+      )
+    ).rejects.toThrow("请求超时");
+  });
+
   it("rejects OpenAI-compatible General reference edits before making a request", async () => {
     const fetchImpl = (async () => {
       throw new Error("fetch should not be called");

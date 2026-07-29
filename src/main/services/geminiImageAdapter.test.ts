@@ -398,4 +398,28 @@ describe("Gemini image adapter", () => {
       runGeminiImageJob(job({ params: params({ timeoutMs: 1 }) }), "mock-gemini-key", "https://api.test/v1beta", runtime)
     ).rejects.toThrow("请求超时");
   });
+
+  it("keeps downloaded image URLs inside the configured timeout budget", async () => {
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url) === "https://files.example.com/generated.png") {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+        });
+      }
+      return Response.json({
+        candidates: [
+          {
+            content: {
+              parts: [{ fileData: { mimeType: "image/png", fileUri: "https://files.example.com/generated.png" } }]
+            }
+          }
+        ]
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(
+      runGeminiImageJob(job({ params: params({ timeoutMs: 1 }) }), "mock-gemini-key", "https://api.test/v1beta", runtime)
+    ).rejects.toThrow("请求超时");
+  });
 });

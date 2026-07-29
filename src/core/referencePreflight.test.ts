@@ -15,7 +15,8 @@ function asset(patch: Partial<InputAsset> = {}): InputAsset {
     mimeType: patch.mimeType ?? "image/png",
     sizeBytes: patch.sizeBytes ?? 1024,
     width: patch.width,
-    height: patch.height
+    height: patch.height,
+    hasAlpha: patch.hasAlpha
   };
 }
 
@@ -97,8 +98,8 @@ describe("reference preflight", () => {
         id: "asset-1",
         role: "mask",
         name: " mask.png ",
-        original: { mime: "image/png", width: 512, height: 512, bytes: 1200 },
-        request: { mime: "image/png", width: 512, height: 512, bytes: 1200, downsampled: false },
+        original: { mime: "image/png", width: 512, height: 512, bytes: 1200, hasAlpha: true },
+        request: { mime: "image/png", width: 512, height: 512, bytes: 1200, hasAlpha: true, downsampled: false },
         reason: "mask_preserved",
         blocked: false
       },
@@ -110,9 +111,21 @@ describe("reference preflight", () => {
         id: "asset-1",
         role: "mask",
         reason: "mask_preserved",
-        original: { mime: "image/png", width: 512, height: 512, bytes: 1200 }
+        original: { mime: "image/png", width: 512, height: 512, bytes: 1200, hasAlpha: true },
+        request: expect.objectContaining({ hasAlpha: true })
       })
     ]);
+  });
+
+  it("carries alpha metadata into request summaries", () => {
+    const summaries = buildReferencePreflightSummaries([
+      asset({ id: "transparent", mimeType: "image/png", width: 1024, height: 1024, sizeBytes: 1024, hasAlpha: true })
+    ]);
+
+    expect(summaries?.[0]).toMatchObject({
+      original: { hasAlpha: true },
+      request: { hasAlpha: true }
+    });
   });
 
   it("computes bounded target dimensions without changing aspect ratio materially", () => {
