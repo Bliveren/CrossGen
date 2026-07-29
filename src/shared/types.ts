@@ -36,6 +36,113 @@ export type QueueStage =
   | "postprocessing"
   | "finalizing";
 
+export interface TaskDiagnostic {
+  error?: string;
+  errorCategory?: QueueErrorCategory;
+  retryable?: boolean;
+  chargedRetryRisk?: boolean;
+  nextActions?: string[];
+}
+
+export interface QueueTaskSummary {
+  queueId: string;
+  source: QueueSource;
+  providerId: string;
+  status: JobStatus;
+  stage: QueueStage;
+  mode: WorkMode;
+  promptPreview: string;
+  inputCount: number;
+  hasMask: boolean;
+  createdAt: string;
+  startedAt?: string;
+  updatedAt: string;
+  completedAt?: string;
+  nextRunAt?: string;
+  elapsedMs?: number;
+  ageMs: number;
+  attempt: number;
+  attemptIndex: number;
+  maxAttempts: number;
+  completedAttempts: number;
+  remainingAttempts: number;
+  retryable: boolean;
+  chargedRetryRisk: boolean;
+  canCancel: boolean;
+  cancelRequested: boolean;
+  workerHostId?: string;
+  workerProcessId?: number;
+  workerHeartbeatAt?: string;
+  workerLeaseExpiresAt?: string;
+  historyJobId?: string;
+  outputAssetIds: string[];
+  partialAssetIds: string[];
+  galleryAssetIds: string[];
+  targetGalleryFolderId?: string | null;
+  executionKind: QueueExecutionKind;
+  remoteProviderStatus?: string;
+  lastPollAt?: string;
+  localStep?: string;
+  outputMediaKinds: MediaKind[];
+  sourceAssetIds: string[];
+  requestId?: string;
+  correlationId?: string;
+  diagnostic?: TaskDiagnostic;
+}
+
+export interface QueueWorkerSummary {
+  hostId: string;
+  kind: GenerationQueueWorkerHost["kind"];
+  processId: number;
+  mode: GenerationQueueWorkerHost["mode"];
+  heartbeatAt: string;
+  leaseExpiresAt: string;
+  online: boolean;
+  lastHeartbeatAgeMs?: number;
+  leaseRemainingMs?: number;
+}
+
+export interface QueueSnapshotCounts {
+  total: number;
+  active: number;
+  terminal: number;
+  queued: number;
+  running: number;
+  succeeded: number;
+  succeededRecent: number;
+  failed: number;
+  cancelled: number;
+  interrupted: number;
+  retryable: number;
+  cancelRequested: number;
+}
+
+export interface QueueSnapshot {
+  schemaVersion: 1;
+  updatedAt: string;
+  generatedAt: string;
+  counts: QueueSnapshotCounts;
+  concurrency: {
+    maxGlobal: number;
+    runningGlobal: number;
+    availableGlobal: number;
+    providerConcurrency: Record<string, number>;
+  };
+  workers: {
+    total: number;
+    online: number;
+    offline: number;
+    hosts: QueueWorkerSummary[];
+  };
+  queued: QueueTaskSummary[];
+  running: QueueTaskSummary[];
+  succeededRecent: QueueTaskSummary[];
+  failed: QueueTaskSummary[];
+  cancelled: QueueTaskSummary[];
+  interrupted: QueueTaskSummary[];
+  recentJobs: QueueTaskSummary[];
+}
+
 export type ImageCapabilityContractKind =
   | "openai-image"
   | "gemini-generate-content"

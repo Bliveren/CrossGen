@@ -60,7 +60,111 @@ describe("readonly CLI builders", () => {
     });
     expect(buildCliQueueStatus(queue, state.queueConfig)).toMatchObject({
       config: { maxGlobalRunning: 3, providerConcurrency: { "provider-1": 2 } },
-      totalItems: 0
+      totalItems: 0,
+      statusCounts: {},
+      liveWorkerHosts: 0,
+      workerHosts: [],
+      snapshot: {
+        counts: { total: 0 },
+        concurrency: { maxGlobal: 3, runningGlobal: 0 },
+        workers: { online: 0, offline: 0 }
+      }
+    });
+  });
+
+  it("adds queue snapshot fields while keeping legacy queue status fields", () => {
+    const now = Date.parse("2026-07-14T00:03:00.000Z");
+    const queue = {
+      schemaVersion: 1 as const,
+      updatedAt: "2026-07-14T00:03:00.000Z",
+      workerHosts: [
+        {
+          hostId: "host-live",
+          kind: "mcp" as const,
+          processId: 456,
+          mode: "generate" as const,
+          heartbeatAt: "2026-07-14T00:02:50.000Z",
+          leaseExpiresAt: "2026-07-14T00:03:30.000Z"
+        },
+        {
+          hostId: "host-offline",
+          kind: "desktop" as const,
+          processId: 123,
+          mode: "generate" as const,
+          heartbeatAt: "2026-07-14T00:00:00.000Z",
+          leaseExpiresAt: "2026-07-14T00:01:00.000Z"
+        }
+      ],
+      items: [
+        {
+          queueId: "queue-running",
+          source: "mcp" as const,
+          providerId: "provider-1",
+          request: request(),
+          status: "running" as const,
+          priority: 0,
+          attempt: 1,
+          maxAttempts: 2,
+          createdAt: "2026-07-14T00:00:00.000Z",
+          startedAt: "2026-07-14T00:02:00.000Z",
+          updatedAt: "2026-07-14T00:02:30.000Z",
+          outputAssetIds: [],
+          partialAssetIds: [],
+          galleryAssetIds: [],
+          cancelRequested: false,
+          costConfirmed: true,
+          workerHostId: "host-live",
+          workerProcessId: 456,
+          workerHeartbeatAt: "2026-07-14T00:02:50.000Z",
+          workerLeaseExpiresAt: "2026-07-14T00:03:30.000Z",
+          executionKind: "sync-provider" as const,
+          stage: "calling_provider" as const,
+          sourceAssetIds: [],
+          outputMediaKinds: ["image" as const]
+        },
+        {
+          queueId: "queue-failed",
+          source: "cli" as const,
+          providerId: "provider-1",
+          request: request(),
+          status: "failed" as const,
+          priority: 0,
+          attempt: 1,
+          maxAttempts: 2,
+          createdAt: "2026-07-14T00:00:00.000Z",
+          startedAt: "2026-07-14T00:00:10.000Z",
+          updatedAt: "2026-07-14T00:00:40.000Z",
+          completedAt: "2026-07-14T00:00:40.000Z",
+          lastError: "provider returned no image",
+          lastErrorCategory: "transient" as const,
+          lastErrorRetryable: true,
+          outputAssetIds: [],
+          partialAssetIds: [],
+          galleryAssetIds: [],
+          cancelRequested: false,
+          costConfirmed: true,
+          executionKind: "sync-provider" as const,
+          stage: "finalizing" as const,
+          sourceAssetIds: [],
+          outputMediaKinds: ["image" as const]
+        }
+      ]
+    };
+
+    const status = buildCliQueueStatus(queue, { maxGlobalRunning: 3, providerConcurrency: { "provider-1": 2 } }, { now });
+
+    expect(status).toMatchObject({
+      totalItems: 2,
+      statusCounts: { running: 1, failed: 1 },
+      liveWorkerHosts: 1,
+      workerHosts: [{ hostId: "host-live" }, { hostId: "host-offline" }],
+      snapshot: {
+        counts: { total: 2, running: 1, failed: 1, retryable: 1 },
+        concurrency: { maxGlobal: 3, runningGlobal: 1, availableGlobal: 2 },
+        workers: { online: 1, offline: 1 },
+        running: [{ queueId: "queue-running", elapsedMs: 60000, attemptIndex: 1 }],
+        failed: [{ queueId: "queue-failed", retryable: true, chargedRetryRisk: true }]
+      }
     });
   });
 
@@ -152,6 +256,15 @@ describe("readonly CLI builders", () => {
     };
 
     expect(buildCliJobList(queue, { status: "failed" }).jobs.map((job) => job.queueId)).toEqual(["queue-failed"]);
+    expect(buildCliJobList(queue, { status: "failed" }).jobs[0]).toMatchObject({
+      queueId: "queue-failed",
+      attempt: 1,
+      attemptIndex: 1,
+      maxAttempts: 2,
+      retryable: true,
+      chargedRetryRisk: true,
+      canCancel: false
+    });
     expect(buildCliGalleryList(state, { folderId: "child", tags: ["generated"], query: "hero" }).assets.map((asset) => asset.id)).toEqual(["asset-1"]);
     expect(buildCliFolderTree(state).folders).toMatchObject([
       { id: "root", children: [{ id: "child", children: [] }] }
@@ -238,6 +351,11 @@ describe("readonly CLI builders", () => {
         queueId: "queue-1",
         historyJobId: "history-1",
         status: "running",
+        attemptIndex: 1,
+        maxAttempts: 2,
+        retryable: false,
+        chargedRetryRisk: false,
+        canCancel: true,
         inputCount: 1,
         outputAssetIds: ["asset-1"],
         galleryAssetIds: ["gallery-1"],

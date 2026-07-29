@@ -28,7 +28,15 @@ function readers(): ReadonlyMcpReaders {
     configStatus: async () => ({ stateFound: true, providerCount: 1 }),
     providerList: async () => ({ providers: [{ id: "default", name: "OpenAI" }] }),
     modelsList: async () => ({ providers: [] }),
-    queueStatus: async () => ({ totalItems: 0 }),
+    queueStatus: async () => ({
+      totalItems: 0,
+      snapshot: {
+        counts: { total: 0, queued: 0, running: 0, failed: 0 },
+        concurrency: { maxGlobal: 1, runningGlobal: 0 },
+        workers: { online: 0, offline: 0 },
+        recentJobs: []
+      }
+    }),
     queueConfig: async () => ({ config: { maxGlobalRunning: 1, providerConcurrency: {} } }),
     jobList: async (options) => ({ filters: options ?? {}, jobs: options?.status ? [{ queueId: "queue-filtered", status: options.status }] : [] }),
     jobStatus: async (jobId) => (jobId === "queue-1" ? { lookupId: "queue-1", queueItem: { queueId: "queue-1", status: "running" } } : null),
@@ -168,7 +176,8 @@ describe("readonly MCP stdio server", () => {
       [
         JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "crossgen_config_status", arguments: {} } }),
         JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "crossgen_asset_inspect", arguments: {} } }),
-        JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "crossgen_job_status", arguments: { jobId: "queue-1" } } })
+        JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "crossgen_job_status", arguments: { jobId: "queue-1" } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "crossgen_queue_status", arguments: {} } })
       ].join("\n")
     );
 
@@ -201,6 +210,23 @@ describe("readonly MCP stdio server", () => {
             job: {
               lookupId: "queue-1",
               queueItem: { queueId: "queue-1", status: "running" }
+            }
+          }
+        }
+      }
+    });
+    expect(responses[3]).toMatchObject({
+      id: 4,
+      result: {
+        structuredContent: {
+          schemaVersion: 1,
+          data: {
+            totalItems: 0,
+            snapshot: {
+              counts: { total: 0 },
+              concurrency: { maxGlobal: 1, runningGlobal: 0 },
+              workers: { online: 0, offline: 0 },
+              recentJobs: []
             }
           }
         }

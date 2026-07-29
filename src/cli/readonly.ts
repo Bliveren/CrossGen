@@ -1,5 +1,6 @@
 import { listProviderModelCapabilitySummaries } from "../core/modelCapabilities.js";
 import { DEFAULT_QUEUE_RUNTIME_CONFIG, normalizeQueueRuntimeConfig } from "../core/queueConfig.js";
+import { buildQueueSnapshot, buildQueueTaskSummary, type BuildQueueSnapshotOptions } from "../core/queueSnapshot.js";
 import type {
   GalleryAsset,
   GalleryFolder,
@@ -114,7 +115,8 @@ export function buildCliQueueConfig(state: ReadonlyAppState | null) {
   return normalizeQueueRuntimeConfig(state?.queueConfig ?? DEFAULT_QUEUE_RUNTIME_CONFIG);
 }
 
-function publicQueueJob(item: GenerationQueueItem) {
+function publicQueueJob(item: GenerationQueueItem, options: BuildQueueSnapshotOptions = {}) {
+  const summary = buildQueueTaskSummary(item, options);
   return {
     queueId: item.queueId,
     source: item.source,
@@ -122,7 +124,15 @@ function publicQueueJob(item: GenerationQueueItem) {
     status: item.status,
     priority: item.priority,
     attempt: item.attempt,
+    attemptIndex: summary.attemptIndex,
     maxAttempts: item.maxAttempts,
+    completedAttempts: summary.completedAttempts,
+    remainingAttempts: summary.remainingAttempts,
+    elapsedMs: summary.elapsedMs,
+    ageMs: summary.ageMs,
+    retryable: summary.retryable,
+    chargedRetryRisk: summary.chargedRetryRisk,
+    canCancel: summary.canCancel,
     mode: item.request.mode,
     promptPreview: promptPreview(item.request.prompt),
     inputCount: item.request.inputPaths.length,
@@ -153,7 +163,8 @@ function publicQueueJob(item: GenerationQueueItem) {
     outputMediaKinds: item.outputMediaKinds,
     sourceAssetIds: item.sourceAssetIds,
     requestId: item.requestId,
-    correlationId: item.correlationId
+    correlationId: item.correlationId,
+    diagnostic: summary.diagnostic
   };
 }
 
@@ -298,14 +309,19 @@ export function buildCliModelsList(state: ReadonlyAppState | null) {
   };
 }
 
-export function buildCliQueueStatus(queue: GenerationQueueFile, queueConfig: QueueRuntimeConfig = DEFAULT_QUEUE_RUNTIME_CONFIG) {
+export function buildCliQueueStatus(
+  queue: GenerationQueueFile,
+  queueConfig: QueueRuntimeConfig = DEFAULT_QUEUE_RUNTIME_CONFIG,
+  options: BuildQueueSnapshotOptions = {}
+) {
+  const snapshot = buildQueueSnapshot(queue, queueConfig, options);
   return {
     schemaVersion: queue.schemaVersion,
     updatedAt: queue.updatedAt,
     config: normalizeQueueRuntimeConfig(queueConfig),
     totalItems: queue.items.length,
     statusCounts: queueStatusCounts(queue),
-    liveWorkerHosts: liveWorkerHosts(queue),
+    liveWorkerHosts: snapshot.workers.online,
     workerHosts: queue.workerHosts.map((host) => ({
       hostId: host.hostId,
       kind: host.kind,
@@ -313,22 +329,28 @@ export function buildCliQueueStatus(queue: GenerationQueueFile, queueConfig: Que
       mode: host.mode,
       heartbeatAt: host.heartbeatAt,
       leaseExpiresAt: host.leaseExpiresAt
-    }))
+    })),
+    snapshot
   };
 }
 
-export function buildCliJobList(queue: GenerationQueueFile, options: CliJobListOptions = {}) {
+export function buildCliJobList(queue: GenerationQueueFile, options: CliJobListOptions & BuildQueueSnapshotOptions = {}) {
   const statuses = new Set(Array.isArray(options.status) ? options.status : options.status ? [options.status] : []);
   const items = statuses.size > 0 ? queue.items.filter((item) => statuses.has(item.status)) : queue.items;
   return {
     filters: {
       status: statuses.size > 0 ? [...statuses] : null
     },
-    jobs: items.map(publicQueueJob)
+    jobs: items.map((item) => publicQueueJob(item, options))
   };
 }
 
-export function buildCliJobStatus(queue: GenerationQueueFile, state: ReadonlyAppState | null, jobId: string) {
+export function buildCliJobStatus(
+  queue: GenerationQueueFile,
+  state: ReadonlyAppState | null,
+  jobId: string,
+  options: BuildQueueSnapshotOptions = {}
+) {
   const lookupId = jobId.trim();
   const queueItem = queue.items.find((item) => item.queueId === lookupId || item.historyJobId === lookupId);
   const historyJob = state?.history.find((job) => job.id === lookupId || job.id === queueItem?.historyJobId);
@@ -336,9 +358,11 @@ export function buildCliJobStatus(queue: GenerationQueueFile, state: ReadonlyApp
   return {
     lookupId,
     source: queueItem ? "queue" : "history",
-    queueItem: queueItem ? publicQueueJob(queueItem) : null,
+    queueItem: queueItem ? publicQueueJob(queueItem, options) : null,
     historyJob: historyJob ? publicHistoryJob(historyJob) : null,
     canCancel: queueItem ? queueItem.status === "queued" || queueItem.status === "running" : false,
+    retryable: queueItem ? buildQueueTaskSummary(queueItem, options).retryable : historyJob ? isTerminalStatus(historyJob.status) && historyJob.status !== "succeeded" : false,
+    chargedRetryRisk: queueItem ? buildQueueTaskSummary(queueItem, options).chargedRetryRisk : false,
     terminal: queueItem ? isTerminalStatus(queueItem.status) : historyJob ? isTerminalStatus(historyJob.status) : false
   };
 }
