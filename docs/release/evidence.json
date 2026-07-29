@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-07-29T18:05:39.000Z",
+  "lastUpdated": "2026-07-29T19:24:15.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -232,9 +232,9 @@
         "Known harmless warnings are documented and do not hide failed tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T18:03:39.000Z",
-        "commit": "154a725bccdc14d0de76fd301e63ca43bfec475f",
-        "environment": "macOS local source-tree hardening verification plus prior main CI. CI for this hardening commit starts after push.",
+        "verifiedAt": "2026-07-29T19:24:15.000Z",
+        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
+        "environment": "macOS local source-tree hardening verification plus main CI. GitHub Actions run 30483929425 passed for this commit.",
         "commands": [
           "pnpm build",
           "pnpm verify:mock-api",
@@ -246,8 +246,8 @@
         ],
         "references": [
           {
-            "label": "main CI run 30473696243 before local hardening commit",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473696243"
+            "label": "main CI run 30483929425 after blocker hardening",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
           }
         ],
         "artifacts": [
@@ -255,10 +255,10 @@
             "kind": "local-command-output",
             "path": "terminal transcript: pnpm build",
             "public": false,
-            "description": "Local build passed with 42 test files and 401 tests after v0.3.2 provider diagnostics hardening."
+            "description": "Local build passed with 42 test files and 406 tests after v0.3.2 blocker hardening."
           }
         ],
-        "summary": "Passed locally on the v0.3.2 provider diagnostics hardening commit. Main CI before this commit was green; CI for this commit remains pending until push. jsdom canvas warnings are known harmless warnings and the affected tests passed."
+        "summary": "Passed locally on the v0.3.2 blocker hardening commit. GitHub Actions run 30483929425 passed. jsdom canvas warnings are known harmless warnings and the affected tests passed."
       }
     },
     {
@@ -276,7 +276,7 @@
       "evidence": {
         "verifiedAt": null,
         "commit": null,
-        "environment": "Exact v0.3.2 RC package smoke remains pending. The historical local macOS pre-RC package was built from 200ea00fc43956482b25c90af29a15ed75081c77 and is superseded by 154a725bccdc14d0de76fd301e63ca43bfec475f.",
+        "environment": "Exact v0.3.2 RC package smoke remains pending. The historical local macOS pre-RC package was built from 200ea00fc43956482b25c90af29a15ed75081c77 and is superseded by 830ad09b51a1ad749450dfb96e7bca2775bd9fb4.",
         "commands": [
           "pnpm package:mac",
           "codesign --verify --deep --strict release/mac-arm64/CrossGen.app",
@@ -286,8 +286,8 @@
         ],
         "references": [
           {
-            "label": "Latest main CI package preflight before local hardening commit",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473696243"
+            "label": "Latest main CI package preflight after blocker hardening",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
           },
           {
             "label": "v0.3.2 pre-RC evidence",
@@ -299,13 +299,13 @@
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
             "public": false,
-            "description": "Superseded historical local pre-RC macOS arm64 DMG from 200ea00fc43956482b25c90af29a15ed75081c77. It must not be reused for v0.3.2-rc.1 after 154a725bccdc14d0de76fd301e63ca43bfec475f."
+            "description": "Superseded historical local pre-RC macOS arm64 DMG from 200ea00fc43956482b25c90af29a15ed75081c77. It must not be reused for v0.3.2-rc.1 after 830ad09b51a1ad749450dfb96e7bca2775bd9fb4."
           },
           {
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-mac-arm64.zip",
             "public": false,
-            "description": "Superseded historical local pre-RC macOS arm64 ZIP from 200ea00fc43956482b25c90af29a15ed75081c77. It must not be reused for v0.3.2-rc.1 after 154a725bccdc14d0de76fd301e63ca43bfec475f."
+            "description": "Superseded historical local pre-RC macOS arm64 ZIP from 200ea00fc43956482b25c90af29a15ed75081c77. It must not be reused for v0.3.2-rc.1 after 830ad09b51a1ad749450dfb96e7bca2775bd9fb4."
           }
         ],
         "summary": "Pending exact v0.3.2 release-candidate package smoke. The earlier local non-notarized macOS pre-RC package passed packaged CLI/MCP smoke, but it is superseded by later source changes and cannot be reused as RC evidence."
@@ -324,16 +324,16 @@
         "No CLI/MCP productization UI is required for v0.3.2."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T18:03:39.000Z",
-        "commit": "154a725bccdc14d0de76fd301e63ca43bfec475f",
-        "environment": "macOS local source-tree smoke after v0.3.2 provider diagnostics hardening. CI for this commit starts after push.",
+        "verifiedAt": "2026-07-29T19:24:15.000Z",
+        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
+        "environment": "macOS local source-tree smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
         "commands": [
           "pnpm verify:agent-integration-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30473696243 before local hardening commit",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473696243"
+            "label": "main CI run 30483929425 after blocker hardening",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
           }
         ],
         "artifacts": [
@@ -341,10 +341,10 @@
             "kind": "local-command-output",
             "path": "terminal transcript: pnpm verify:agent-integration-smoke",
             "public": false,
-            "description": "Agent integration smoke passed after v0.3.2 provider diagnostics hardening."
+            "description": "Agent integration smoke passed after v0.3.2 blocker hardening."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 provider diagnostics hardening commit. Agent integration remains backward-compatible with additive queue/status fields."
+        "summary": "Passed locally after the v0.3.2 blocker hardening commit. Agent integration remains backward-compatible with additive queue/status fields."
       }
     },
     {
@@ -360,16 +360,16 @@
         "The smoke passes on the v0.3.2 release evidence ledger commit."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T18:03:39.000Z",
-        "commit": "154a725bccdc14d0de76fd301e63ca43bfec475f",
-        "environment": "macOS local smoke after v0.3.2 provider diagnostics hardening. CI for this commit starts after push.",
+        "verifiedAt": "2026-07-29T19:24:15.000Z",
+        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
+        "environment": "macOS local smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
         "commands": [
           "pnpm verify:queue-concurrency-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30473696243 before local hardening commit",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473696243"
+            "label": "main CI run 30483929425 after blocker hardening",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
           }
         ],
         "artifacts": [
@@ -377,10 +377,10 @@
             "kind": "local-command-output",
             "path": "terminal transcript: pnpm verify:queue-concurrency-smoke",
             "public": false,
-            "description": "Queue concurrency smoke passed with 2 files and 21 tests."
+            "description": "Queue concurrency smoke passed with 2 files and 23 tests."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 provider diagnostics hardening commit."
+        "summary": "Passed locally after the v0.3.2 blocker hardening commit."
       }
     },
     {
@@ -396,16 +396,16 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T18:03:39.000Z",
-        "commit": "154a725bccdc14d0de76fd301e63ca43bfec475f",
-        "environment": "macOS local smoke after v0.3.2 provider diagnostics hardening. CI for this commit starts after push.",
+        "verifiedAt": "2026-07-29T19:24:15.000Z",
+        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
+        "environment": "macOS local smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
         "commands": [
           "pnpm verify:gallery-mutation-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30473696243 before local hardening commit",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473696243"
+            "label": "main CI run 30483929425 after blocker hardening",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
           }
         ],
         "artifacts": [
@@ -416,7 +416,7 @@
             "description": "Gallery mutation smoke passed with 3 files and 24 tests."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 provider diagnostics hardening commit."
+        "summary": "Passed locally after the v0.3.2 blocker hardening commit."
       }
     },
     {
@@ -432,16 +432,16 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T18:03:39.000Z",
-        "commit": "154a725bccdc14d0de76fd301e63ca43bfec475f",
-        "environment": "macOS local smoke after v0.3.2 provider diagnostics hardening. CI for this commit starts after push.",
+        "verifiedAt": "2026-07-29T19:24:15.000Z",
+        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
+        "environment": "macOS local smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
         "commands": [
           "pnpm verify:image-core-regression-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30473696243 before local hardening commit",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473696243"
+            "label": "main CI run 30483929425 after blocker hardening",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
           }
         ],
         "artifacts": [
@@ -449,10 +449,10 @@
             "kind": "local-command-output",
             "path": "terminal transcript: pnpm verify:image-core-regression-smoke",
             "public": false,
-            "description": "Image core regression smoke passed with 5 files and 192 tests."
+            "description": "Image core regression smoke passed with 5 files and 193 tests."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 provider diagnostics hardening commit."
+        "summary": "Passed locally after the v0.3.2 blocker hardening commit."
       }
     },
     {
@@ -486,7 +486,7 @@
             "description": "No-cost saved-config dry-run summaries exist. Paid real provider summaries remain pending."
           }
         ],
-        "summary": "Pending explicit cost acceptance and Gemini-compatible configuration. Latest no-cost dry run on commit 154a725bccdc14d0de76fd301e63ca43bfec475f found OpenAI-compatible G1-G3 ready for paid gate and G4/G5 missing Gemini-compatible config. The dry-run summary is redacted and does not include API keys, full private Base URLs, full dataDir paths, or saved provider ids/names."
+        "summary": "Pending explicit cost acceptance and Gemini-compatible configuration. Latest no-cost dry run on commit 830ad09b51a1ad749450dfb96e7bca2775bd9fb4 found OpenAI-compatible G1-G3 ready for paid gate and G4/G5 missing Gemini-compatible config. The dry-run summary is redacted and does not include API keys, full private Base URLs, full dataDir paths, or saved provider ids/names."
       }
     },
     {
@@ -502,17 +502,17 @@
         "Renderer smoke tests cover the new queue UI states without layout blocker regressions."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T18:03:39.000Z",
-        "commit": "154a725bccdc14d0de76fd301e63ca43bfec475f",
-        "environment": "macOS local build and image-core smoke after v0.3.2 provider diagnostics hardening. CI for this commit starts after push.",
+        "verifiedAt": "2026-07-29T19:24:15.000Z",
+        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
+        "environment": "macOS local build and image-core smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
         "commands": [
           "pnpm build",
           "pnpm verify:image-core-regression-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30473696243 before local hardening commit",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473696243"
+            "label": "main CI run 30483929425 after blocker hardening",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
           }
         ],
         "artifacts": [
@@ -523,7 +523,7 @@
             "description": "Renderer smoke tests passed as part of the full build."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 provider diagnostics hardening commit. Exact-package product testing remains separate and pending."
+        "summary": "Passed locally after the v0.3.2 blocker hardening commit. Exact-package product testing remains separate and pending."
       }
     },
     {
@@ -539,17 +539,17 @@
         "Diagnostics record operation, route, model, input image count, mask usage, attempt count, retryability, charged retry risk, and next actions."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T18:03:39.000Z",
-        "commit": "154a725bccdc14d0de76fd301e63ca43bfec475f",
-        "environment": "macOS local focused tests and full build after v0.3.2 provider diagnostics hardening. CI for this commit starts after push.",
+        "verifiedAt": "2026-07-29T19:24:15.000Z",
+        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
+        "environment": "macOS local focused tests and full build after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
         "commands": [
           "pnpm exec vitest run src/core/referencePreflight.test.ts src/main/services/generalImageAdapter.test.ts src/main/services/geminiImageAdapter.test.ts src/main/services/openaiImageRouting.test.ts src/main/services/stateMigration.test.ts src/renderer/App.smoke.test.tsx",
           "pnpm build"
         ],
         "references": [
           {
-            "label": "main CI run 30473696243 before local hardening commit",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473696243"
+            "label": "main CI run 30483929425 after blocker hardening",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
           }
         ],
         "artifacts": [
@@ -576,17 +576,17 @@
         "Temporary request copies are cleaned up on completion, failure, cancellation, and next startup."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T18:03:39.000Z",
-        "commit": "154a725bccdc14d0de76fd301e63ca43bfec475f",
-        "environment": "macOS local focused tests and full build after v0.3.2 provider diagnostics hardening. CI for this commit starts after push.",
+        "verifiedAt": "2026-07-29T19:24:15.000Z",
+        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
+        "environment": "macOS local focused tests and full build after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
         "commands": [
           "pnpm exec vitest run src/core/referencePreflight.test.ts src/main/services/generalImageAdapter.test.ts src/main/services/geminiImageAdapter.test.ts src/main/services/openaiImageRouting.test.ts src/main/services/stateMigration.test.ts src/renderer/App.smoke.test.tsx",
           "pnpm build"
         ],
         "references": [
           {
-            "label": "main CI run 30473696243 before local hardening commit",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473696243"
+            "label": "main CI run 30483929425 after blocker hardening",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
           }
         ],
         "artifacts": [
@@ -613,9 +613,9 @@
         "History/Gallery recovery paths are covered by smoke or focused tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T18:03:39.000Z",
-        "commit": "154a725bccdc14d0de76fd301e63ca43bfec475f",
-        "environment": "macOS local smoke after v0.3.2 provider diagnostics hardening. CI for this commit starts after push.",
+        "verifiedAt": "2026-07-29T19:24:15.000Z",
+        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
+        "environment": "macOS local smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
         "commands": [
           "pnpm verify:image-core-regression-smoke",
           "pnpm verify:gallery-mutation-smoke",
@@ -623,8 +623,8 @@
         ],
         "references": [
           {
-            "label": "main CI run 30473696243 before local hardening commit",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473696243"
+            "label": "main CI run 30483929425 after blocker hardening",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
           }
         ],
         "artifacts": [
@@ -635,7 +635,7 @@
             "description": "History/Gallery recovery-adjacent smoke tests passed before RC gate preparation."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 provider diagnostics hardening commit. Exact-package product testing remains separate and pending."
+        "summary": "Passed locally after the v0.3.2 blocker hardening commit. Exact-package product testing remains separate and pending."
       }
     }
   ]
