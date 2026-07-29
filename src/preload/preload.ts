@@ -12,6 +12,7 @@ import type {
   JobProgressEvent,
   PromptTemplateInput,
   ProviderConfigInput,
+  QueueSnapshot,
   RunJobRequest,
   WorkspaceDraftInput
 } from "../shared/types.js";
@@ -52,6 +53,9 @@ const bridge: AppBridge = {
   selectMask: () => ipcRenderer.invoke("dialog:selectMask"),
   runJob: (request: RunJobRequest) => ipcRenderer.invoke("job:run", request),
   cancelJob: (jobId: string) => ipcRenderer.invoke("job:cancel", jobId),
+  getQueueSnapshot: () => ipcRenderer.invoke("queue:getSnapshot"),
+  cancelQueueItem: (queueId: string) => ipcRenderer.invoke("queue:cancel", queueId),
+  retryQueueItem: (jobId: string) => ipcRenderer.invoke("queue:retry", jobId),
   downloadAsset: (request: DownloadRequest) => ipcRenderer.invoke("asset:download", request),
   downloadEditedImage: (request: EditedImageDownloadRequest) => ipcRenderer.invoke("asset:downloadEdited", request),
   openAssetFolder: (assetPath: string) => ipcRenderer.invoke("asset:openFolder", assetPath),
@@ -66,6 +70,11 @@ const bridge: AppBridge = {
     const handler = (_event: Electron.IpcRendererEvent, payload: JobProgressEvent) => callback(payload);
     ipcRenderer.on("job:event", handler);
     return () => ipcRenderer.off("job:event", handler);
+  },
+  onQueueSnapshot: (callback: (snapshot: QueueSnapshot) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: QueueSnapshot) => callback(payload);
+    ipcRenderer.on("queue:snapshot", handler);
+    return () => ipcRenderer.off("queue:snapshot", handler);
   },
   onGalleryEvent: (callback: (event: GallerySyncEvent) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: GallerySyncEvent) => callback(payload);

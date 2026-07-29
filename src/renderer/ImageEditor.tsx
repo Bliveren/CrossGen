@@ -47,6 +47,8 @@ interface ImageEditorProps {
   isGenerating: boolean;
   generationElapsedSeconds: number;
   generationAttemptIndex: number | null;
+  generationStageLabel?: string;
+  isGenerationCancelEnabled: boolean;
   activeImage?: ImageAsset;
   activeResults: ImageAsset[];
   partialImages: ImageAsset[];
@@ -118,6 +120,7 @@ interface ImageEditorProps {
   onResetPreviewView: () => void;
   onSelectResult: (assetId: string) => void;
   onActivatePartialImage: (asset: ImageAsset) => void;
+  onCancelGeneration: () => void;
 }
 
 export function ImageEditor({
@@ -133,6 +136,8 @@ export function ImageEditor({
   isGenerating,
   generationElapsedSeconds,
   generationAttemptIndex,
+  generationStageLabel,
+  isGenerationCancelEnabled,
   activeImage,
   activeResults,
   partialImages,
@@ -203,7 +208,8 @@ export function ImageEditor({
   onZoomIn,
   onResetPreviewView,
   onSelectResult,
-  onActivatePartialImage
+  onActivatePartialImage,
+  onCancelGeneration
 }: ImageEditorProps) {
   return (
     <section className="result-stage">
@@ -543,6 +549,16 @@ export function ImageEditor({
             <Loader2 className="spin" size={20} />
             <span>{copy.generatingElapsed(generationElapsedSeconds)}</span>
             {generationAttemptIndex ? <small>{copy.generationAttempt(generationAttemptIndex)}</small> : null}
+            {generationStageLabel ? <small>{generationStageLabel}</small> : null}
+            <button
+              type="button"
+              className="generation-overlay-stop"
+              onClick={onCancelGeneration}
+              disabled={!isGenerationCancelEnabled}
+            >
+              <X size={14} />
+              {copy.cancelGeneration}
+            </button>
           </div>
         )}
       </div>
