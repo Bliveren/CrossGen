@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-07-29T19:24:15.000Z",
+  "lastUpdated": "2026-07-29T19:43:09.607Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -54,7 +54,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "Pending explicit cost acceptance before running real OpenAI-compatible provider gates. Saved-config dry run found an OpenAI-compatible provider for G1-G3."
+        "summary": "Pending explicit cost acceptance before running real OpenAI-compatible provider gates. Latest saved-config dry run on commit b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317 wrote real-api-artifacts/crossgen-gate/2026-07-29T19-43-08-796Z/summary.json and found OpenAI-compatible G1-G3 ready for paid gate."
       }
     },
     {
@@ -81,7 +81,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "Pending Gemini-compatible saved provider configuration or direct endpoint environment. The latest dry run reports G4/G5 as config_missing."
+        "summary": "Pending Gemini-compatible saved provider configuration or direct endpoint environment. Latest saved-config dry run on commit b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317 wrote real-api-artifacts/crossgen-gate/2026-07-29T19-43-08-796Z/summary.json and reports G4/G5 as config_missing."
       }
     },
     {
@@ -232,9 +232,9 @@
         "Known harmless warnings are documented and do not hide failed tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:24:15.000Z",
-        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
-        "environment": "macOS local source-tree hardening verification plus main CI. GitHub Actions run 30483929425 passed for this commit.",
+        "verifiedAt": "2026-07-29T19:40:30.000Z",
+        "commit": "b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317",
+        "environment": "macOS local source-tree hardening verification plus main CI. GitHub Actions runs 30483929425, 30484588228, and 30485183338 passed; 30485183338 is the latest CI run for this commit.",
         "commands": [
           "pnpm build",
           "pnpm verify:mock-api",
@@ -246,8 +246,8 @@
         ],
         "references": [
           {
-            "label": "main CI run 30483929425 after blocker hardening",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
+            "label": "main CI run 30485183338 after RC execution plan update",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30485183338"
           }
         ],
         "artifacts": [
@@ -258,7 +258,7 @@
             "description": "Local build passed with 42 test files and 406 tests after v0.3.2 blocker hardening."
           }
         ],
-        "summary": "Passed locally on the v0.3.2 blocker hardening commit. GitHub Actions run 30483929425 passed. jsdom canvas warnings are known harmless warnings and the affected tests passed."
+        "summary": "Passed locally on the v0.3.2 blocker hardening source and through GitHub Actions run 30485183338 on commit b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317. jsdom canvas warnings are known harmless warnings and the affected tests passed."
       }
     },
     {
@@ -468,10 +468,12 @@
         "Every gate records route, model, timeout, elapsed seconds, input image count, output count, diagnostic category, and next actions without exposing secrets."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-29T19:43:09.607Z",
+        "commit": "b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317",
+        "environment": "macOS local no-cost saved-config dry run. The runner did not submit generation jobs because CROSSGEN_REAL_PROVIDER_ACCEPT_COST was not set. OpenAI-compatible G1-G3 were ready for paid gate; Gemini-compatible G4/G5 remained config_missing.",
+        "commands": [
+          "CROSSGEN_REAL_PROVIDER_DRY_RUN=1 pnpm verify:real-crossgen-gate"
+        ],
         "references": [
           {
             "label": "v0.3.2 provider gate matrix",
@@ -484,9 +486,15 @@
             "path": "real-api-artifacts/crossgen-gate/",
             "public": false,
             "description": "No-cost saved-config dry-run summaries exist. Paid real provider summaries remain pending."
+          },
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/crossgen-gate/2026-07-29T19-43-08-796Z/summary.json",
+            "public": false,
+            "description": "Latest no-cost saved-config dry-run summary for main@b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317. G1-G3 are dry-run ready; G4/G5 report config_missing. The summary is redacted and does not include API keys, full private Base URLs, full dataDir paths, or saved provider ids/names."
           }
         ],
-        "summary": "Pending explicit cost acceptance and Gemini-compatible configuration. Latest no-cost dry run on commit 830ad09b51a1ad749450dfb96e7bca2775bd9fb4 found OpenAI-compatible G1-G3 ready for paid gate and G4/G5 missing Gemini-compatible config. The dry-run summary is redacted and does not include API keys, full private Base URLs, full dataDir paths, or saved provider ids/names."
+        "summary": "Pending explicit cost acceptance and Gemini-compatible configuration. Latest no-cost dry run on commit b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317 wrote real-api-artifacts/crossgen-gate/2026-07-29T19-43-08-796Z/summary.json, found OpenAI-compatible G1-G3 ready for paid gate, and found G4/G5 missing Gemini-compatible config. The dry-run summary is redacted and does not include API keys, full private Base URLs, full dataDir paths, or saved provider ids/names."
       }
     },
     {
