@@ -1,4 +1,5 @@
 import { DEFAULT_QUEUE_RUNTIME_CONFIG, normalizeQueueRuntimeConfig } from "./queueConfig.js";
+import { defaultRouteForRequest, taskDiagnosticCategoryForQueueError, taskOperationForRequest } from "./providerDiagnostics.js";
 import type {
   GenerationQueueFile,
   GenerationQueueItem,
@@ -75,13 +76,26 @@ function nextActionsFor(item: GenerationQueueItem): string[] | undefined {
 }
 
 function diagnosticFor(item: GenerationQueueItem): TaskDiagnostic | undefined {
+  if (item.lastDiagnostic) return item.lastDiagnostic;
   const retryable = isRetryable(item);
+  const category = taskDiagnosticCategoryForQueueError(item.lastErrorCategory) ?? "unknown";
   const diagnostic: TaskDiagnostic = {
+    category,
+    message: item.lastError ?? "图片任务失败。",
+    providerMessage: item.lastError,
     error: item.lastError,
     errorCategory: item.lastErrorCategory,
+    operation: taskOperationForRequest(item.request),
+    providerKind: item.request.params.providerKind,
+    modelId: item.request.params.model,
+    route: defaultRouteForRequest(item.request, item.request.params.providerKind),
+    inputImageCount: item.request.inputPaths.length,
+    hasMask: Boolean(item.request.maskPath || item.request.maskDataUrl),
+    timeoutMs: item.request.params.timeoutMs,
+    attemptIndex: attemptIndex(item),
     retryable,
     chargedRetryRisk: chargedRetryRisk(item),
-    nextActions: nextActionsFor(item)
+    nextActions: nextActionsFor(item) ?? []
   };
   return diagnostic.error || diagnostic.errorCategory || diagnostic.retryable || diagnostic.chargedRetryRisk
     ? diagnostic

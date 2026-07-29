@@ -51,6 +51,7 @@ import type {
   StorageKind,
   StorageFolderOptions,
   StorageSettings,
+  TaskDiagnostic,
   TemplateExportFormat,
   UpdateCheckResult,
   UpdateInstallResult,
@@ -116,6 +117,7 @@ import {
   type QueueRuntimeConfigPatch
 } from "../core/queueConfig.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
+import { buildTaskDiagnostic, defaultRouteForRequest, queueErrorCategoryForTaskDiagnostic } from "../core/providerDiagnostics.js";
 import { createJsonStateStore, type JsonStateStore } from "../core/stateStore.js";
 import { withStateQueueTransaction } from "../core/stateQueueTransaction.js";
 import { parseGenerationPromptFile, type GenerationPromptFileEntry } from "../cli/generationBatch.js";
@@ -2481,6 +2483,7 @@ function terminalJobForQueueExecution(job: GenerationJob, execution: GenerationQ
       ...job,
       status: "cancelled",
       error: execution.error ?? "任务已终止。",
+      diagnostic: execution.diagnostic ?? job.diagnostic,
       updatedAt: nowIso
     };
   }
@@ -2489,6 +2492,7 @@ function terminalJobForQueueExecution(job: GenerationJob, execution: GenerationQ
       ...job,
       status: "failed",
       error: execution.error ?? job.error ?? "任务失败。",
+      diagnostic: execution.diagnostic ?? job.diagnostic,
       updatedAt: nowIso
     };
   }
@@ -2592,11 +2596,51 @@ function cancelledHistoryJob(job: GenerationJob, item: GenerationQueueItem): Gen
 }
 
 function queuedHistoryJobForRetry(job: GenerationJob, item: GenerationQueueItem): GenerationJob {
-  const { error: _error, durationMs: _durationMs, ...rest } = job;
+  const { error: _error, durationMs: _durationMs, diagnostic: _diagnostic, ...rest } = job;
   return {
     ...rest,
     status: "queued",
     updatedAt: item.updatedAt
+  };
+}
+
+function taskDiagnosticForQueueFailure(input: {
+  error: unknown;
+  request: RunJobRequest;
+  provider?: StoredProviderConfig;
+  job?: GenerationJob;
+  route?: string;
+  attemptIndex: number;
+  abortSignal: AbortSignal;
+}): TaskDiagnostic {
+  return buildTaskDiagnostic({
+    error: input.error,
+    request: input.request,
+    providerKind: input.provider?.kind ?? input.request.params.providerKind,
+    baseURL: input.provider?.baseURL,
+    modelId: input.job?.modelId,
+    route: input.route ?? (input.provider ? defaultRouteForRequest(input.request, input.provider.kind) : undefined),
+    attemptIndex: input.attemptIndex,
+    userCancelled: input.abortSignal.aborted
+  });
+}
+
+function jobWithRuntimeRouteMetadata(job: GenerationJob, diagnosticContext: Omit<TaskDiagnostic, "category" | "message" | "providerMessage" | "retryable" | "chargedRetryRisk" | "nextActions">): GenerationJob {
+  return {
+    ...job,
+    providerMetadata: {
+      ...job.providerMetadata,
+      taskRoute: {
+        operation: diagnosticContext.operation,
+        providerKind: diagnosticContext.providerKind,
+        modelId: diagnosticContext.modelId,
+        route: diagnosticContext.route,
+        inputImageCount: diagnosticContext.inputImageCount,
+        hasMask: diagnosticContext.hasMask,
+        timeoutMs: diagnosticContext.timeoutMs,
+        attemptIndex: diagnosticContext.attemptIndex
+      }
+    }
   };
 }
 
@@ -2656,20 +2700,19 @@ async function retryGenerationQueueItemWithState(jobId: string) {
 }
 
 async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal: AbortSignal) {
-  const state = await readState();
-  const provider = selectProviderForQueueItem(state, item);
-  const request = validateAgentRunJobRequest(item.request, provider);
-  const adapter = getImageProviderAdapterForRequest(request);
-  if (!adapter) {
-    throw new Error(unsupportedImageProviderMessage());
-  }
-  const apiKey = getApiKeyForConfigOrThrow(provider);
-  const imagesDir = getImagesDir(state);
   const startedAt = Date.now();
   const partialAssets: ImageAsset[] = [];
-  let job = await getOrCreateHistoryJobForQueueItem(state, item, provider, request);
+  let provider: StoredProviderConfig | undefined;
+  let request: RunJobRequest = item.request;
+  let job: GenerationJob | undefined;
+  let lastRoute: string | undefined;
+  let lastAttemptIndex = Math.max(1, item.attempt);
 
   const sendQueuedJobEvent = (event: JobProgressEvent) => {
+    if (event.type === "attempt") {
+      lastRoute = event.route ?? lastRoute;
+      lastAttemptIndex = Math.max(1, event.attemptIndex ?? lastAttemptIndex);
+    }
     if (event.type === "partial" && event.image) {
       partialAssets.push(event.image);
       void recordGenerationQueuePartialOutput(getGenerationQueueStore(), item.queueId, [event.image.id]);
@@ -2677,15 +2720,27 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
     sendJobEvent({ ...event, queueId: item.queueId });
   };
 
-  job = {
-    ...job,
-    status: "running",
-    updatedAt: new Date().toISOString()
-  };
-  await upsertJob(job);
-  sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "started" });
-
   try {
+    const state = await readState();
+    provider = selectProviderForQueueItem(state, item);
+    request = validateAgentRunJobRequest(item.request, provider);
+    const adapter = getImageProviderAdapterForRequest(request);
+    if (!adapter) {
+      throw new Error(unsupportedImageProviderMessage());
+    }
+    const apiKey = getApiKeyForConfigOrThrow(provider);
+    const imagesDir = getImagesDir(state);
+    job = await getOrCreateHistoryJobForQueueItem(state, item, provider, request);
+    lastRoute = defaultRouteForRequest(request, provider.kind);
+
+    job = {
+      ...job,
+      status: "running",
+      updatedAt: new Date().toISOString()
+    };
+    await upsertJob(job);
+    sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "started" });
+
     job = await adapter.runJob(job, apiKey, provider, {
       fetch,
       imagesDir,
@@ -2693,12 +2748,43 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       sendJobEvent: sendQueuedJobEvent,
       abortSignal
     });
+    const routeDiagnostic = taskDiagnosticForQueueFailure({
+      error: "",
+      request,
+      provider,
+      job,
+      route: lastRoute,
+      attemptIndex: lastAttemptIndex,
+      abortSignal
+    });
+    job = jobWithRuntimeRouteMetadata(job, routeDiagnostic);
     job = {
       ...job,
       name: job.name.trim() || defaultHistoryJobName(job),
       durationMs: Date.now() - startedAt,
       updatedAt: new Date().toISOString()
     };
+    const failureDiagnostic = job.status === "failed"
+      ? taskDiagnosticForQueueFailure({
+          error: job.error ?? "任务失败。",
+          request,
+          provider,
+          job,
+          route: lastRoute,
+          attemptIndex: lastAttemptIndex,
+          abortSignal
+        })
+      : undefined;
+    if (failureDiagnostic) {
+      job = {
+        ...job,
+        diagnostic: failureDiagnostic,
+        providerMetadata: {
+          ...job.providerMetadata,
+          diagnostic: failureDiagnostic
+        }
+      };
+    }
     return {
       status: job.status === "succeeded" ? "succeeded" as const : "failed" as const,
       value: job,
@@ -2706,27 +2792,51 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       outputAssetIds: job.outputs.map((asset) => asset.id),
       galleryAssetIds: item.galleryAssetIds,
       partialAssetIds: job.outputs.filter((asset) => asset.sourceType === "partial").map((asset) => asset.id),
-      error: job.status === "failed" ? job.error : undefined
+      error: job.status === "failed" ? job.error : undefined,
+      errorCategory: failureDiagnostic ? queueErrorCategoryForTaskDiagnostic(failureDiagnostic.category) : undefined,
+      retryable: failureDiagnostic?.retryable,
+      diagnostic: failureDiagnostic
     };
   } catch (error) {
     const message = abortSignal.aborted ? "任务已终止。" : normalizeError(error);
     const status = abortSignal.aborted ? "cancelled" as const : "failed" as const;
-    job = {
-      ...job,
-      status,
-      durationMs: Date.now() - startedAt,
-      error: message,
-      outputs: mergeImageAssets(job.outputs, partialAssets),
-      updatedAt: new Date().toISOString()
-    };
+    const diagnostic = taskDiagnosticForQueueFailure({
+      error,
+      request,
+      provider,
+      job,
+      route: lastRoute,
+      attemptIndex: lastAttemptIndex,
+      abortSignal
+    });
+    const queueErrorCategory = queueErrorCategoryForTaskDiagnostic(diagnostic.category);
+    const existingOutputs = job?.outputs ?? [];
+    job = job
+      ? {
+          ...job,
+          status,
+          durationMs: Date.now() - startedAt,
+          error: message,
+          outputs: mergeImageAssets(existingOutputs, partialAssets),
+          diagnostic,
+          providerMetadata: {
+            ...job.providerMetadata,
+            diagnostic
+          },
+          updatedAt: new Date().toISOString()
+        }
+      : undefined;
     return {
       status,
       value: job,
-      historyJobId: job.id,
-      outputAssetIds: job.outputs.map((asset) => asset.id),
+      historyJobId: job?.id ?? item.historyJobId,
+      outputAssetIds: job?.outputs.map((asset) => asset.id) ?? item.outputAssetIds,
       galleryAssetIds: item.galleryAssetIds,
       partialAssetIds: partialAssets.map((asset) => asset.id),
-      error: message
+      error: message,
+      errorCategory: queueErrorCategory,
+      retryable: diagnostic.retryable,
+      diagnostic
     };
   }
 }
