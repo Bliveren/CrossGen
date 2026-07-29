@@ -50,6 +50,8 @@ export interface TaskDiagnostic {
   providerKind: TaskDiagnosticProviderKind;
   modelId: string;
   route?: string;
+  routeVerified?: boolean;
+  routeNote?: string;
   inputImageCount: number;
   hasMask: boolean;
   timeoutMs: number;
@@ -269,6 +271,7 @@ export interface OpenAIImageRouteProbe {
   mode: "generate" | "edit";
   endpoint: string;
   ok: boolean;
+  verified?: boolean;
   latencyMs: number;
   status?: number;
   error?: string;
@@ -277,6 +280,8 @@ export interface OpenAIImageRouteProbe {
 export interface OpenAIImageRouting {
   preferredGenerateRoute?: OpenAIImageRoute;
   preferredEditRoute?: OpenAIImageRoute;
+  preferredGenerateRouteVerified?: boolean;
+  preferredEditRouteVerified?: boolean;
   probes: OpenAIImageRouteProbe[];
   updatedAt: string;
 }

@@ -42,6 +42,7 @@ import type {
   ImageQuality,
   JobStatus,
   JobProgressEvent,
+  OpenAIImageRoute,
   PromptTemplate,
   PromptTemplateInput,
   ProviderConfig,
@@ -67,6 +68,7 @@ import {
   dataUrlToBase64,
   defaultStreamingPartialsEnabled,
   getValidationError,
+  isOpenAIImageParams,
   stripTransientPreviewsFromJob,
   validateApiKey,
   validateProviderConfigInput,
@@ -2832,6 +2834,45 @@ function queuedHistoryJobForRetry(job: GenerationJob, item: GenerationQueueItem)
   };
 }
 
+function isOpenAIImageRouteValue(value: string | undefined): value is OpenAIImageRoute {
+  return value === "image-api" || value === "responses" || value === "chat-completions";
+}
+
+function storedOpenAIImageRouteProbeVerified(provider: StoredProviderConfig, mode: "generate" | "edit", route: OpenAIImageRoute): boolean {
+  return Boolean(provider.openAIImageRouting?.probes.some((probe) =>
+    probe.mode === mode &&
+    probe.route === route &&
+    (probe.verified === true || (typeof probe.status === "number" && probe.status >= 200 && probe.status < 300))
+  ));
+}
+
+function routeVerifiedForQueueDiagnostic(provider: StoredProviderConfig | undefined, request: RunJobRequest, route: string | undefined): boolean | undefined {
+  if (!provider || provider.kind !== "openai" || !isOpenAIImageParams(request.params) || request.params.launchId !== GPT_IMAGE_2_LAUNCH_ID) {
+    return undefined;
+  }
+
+  const resolvedRoute = isOpenAIImageRouteValue(route) ? route : defaultRouteForRequest(request, provider.kind);
+  if (!isOpenAIImageRouteValue(resolvedRoute)) return undefined;
+  const probeMode = request.mode === "generate" ? "generate" : "edit";
+
+  if (request.mode === "inpaint") {
+    return storedOpenAIImageRouteProbeVerified(provider, "edit", "image-api");
+  }
+
+  if (request.params.imageRoute !== "auto") {
+    return storedOpenAIImageRouteProbeVerified(provider, probeMode, resolvedRoute) ? true : undefined;
+  }
+
+  if (!provider.openAIImageRouting) return false;
+  if (probeMode === "generate" && provider.openAIImageRouting.preferredGenerateRoute === resolvedRoute) {
+    return provider.openAIImageRouting.preferredGenerateRouteVerified ?? storedOpenAIImageRouteProbeVerified(provider, probeMode, resolvedRoute);
+  }
+  if (probeMode === "edit" && provider.openAIImageRouting.preferredEditRoute === resolvedRoute) {
+    return provider.openAIImageRouting.preferredEditRouteVerified ?? storedOpenAIImageRouteProbeVerified(provider, probeMode, resolvedRoute);
+  }
+  return storedOpenAIImageRouteProbeVerified(provider, probeMode, resolvedRoute);
+}
+
 function taskDiagnosticForQueueFailure(input: {
   error: unknown;
   request: RunJobRequest;
@@ -2849,6 +2890,7 @@ function taskDiagnosticForQueueFailure(input: {
     baseURL: input.provider?.baseURL,
     modelId: input.job?.modelId,
     route: input.route ?? (input.provider ? defaultRouteForRequest(input.request, input.provider.kind) : undefined),
+    routeVerified: routeVerifiedForQueueDiagnostic(input.provider, input.request, input.route),
     attemptIndex: input.attemptIndex,
     userCancelled: input.abortSignal.aborted,
     referencePreflight: input.referencePreflight ?? input.job?.referencePreflight

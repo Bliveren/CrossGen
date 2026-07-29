@@ -424,6 +424,7 @@ describe("renderer multi-model smoke", () => {
 
     expect(selectByLabel("API route").selectedOptions[0]?.textContent).toBe("Auto · Chat");
     expect(document.body.textContent).toContain("API route: Chat");
+    expect(document.body.textContent).toContain("Unverified, using the default strategy");
 
     await changeSelect(selectByLabel("API route"), "responses");
     await click(buttonByText("Generate", ".primary-run"));
@@ -1900,7 +1901,7 @@ describe("renderer multi-model smoke", () => {
       }
     }));
 
-    expect(document.body.textContent).toContain("Mask mode uses the official Images API edit route");
+    expect(document.body.textContent).toContain("some compatible endpoints may not support mask editing");
     expect(document.querySelector<HTMLSelectElement>(".parameter-route-field select")?.value).toBe("image-api");
     await openParameterDialog();
     expect(selectByLabel("API route").value).toBe("image-api");

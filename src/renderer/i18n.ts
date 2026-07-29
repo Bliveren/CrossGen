@@ -194,6 +194,7 @@ export interface UiCopy {
   imageRouteResponses: string;
   imageRouteImageApi: string;
   imageRouteInpaintLocked: string;
+  imageRouteUnverifiedDefault: string;
   imageRouteInfo: string;
   hide: string;
   show: string;
@@ -652,6 +653,7 @@ export const translations: Record<Language, UiCopy> = {
     imageRouteResponses: "Responses",
     imageRouteImageApi: "Image API",
     imageRouteInpaintLocked: "Mask edits use Image API.",
+    imageRouteUnverifiedDefault: "Unverified, using the default strategy",
     imageRouteInfo: "CrossGen automatically probes the fastest path after API setup. For aggregator platforms, the chat path is recommended.",
     hide: "Hide",
     show: "Show",
@@ -832,7 +834,7 @@ export const translations: Record<Language, UiCopy> = {
     mask: "Mask",
     maskDescription: "Paint the area to replace. With multiple references, the mask applies to the first image.",
     guidedRegionDescription: "Use the painted region as guidance for the first image.",
-    exactMaskRouteNotice: "Mask mode uses the official Images API edit route because exact masks are only supported there. Aggregation platforms may have a lower success rate on this route.",
+    exactMaskRouteNotice: "Mask and guided edits use image edit capability; some compatible endpoints may not support mask editing.",
     maskBrushSize: "Adjust mask brush size",
     clearPaintedMask: "Clear painted mask",
     sourceForMask: "Source for mask",
@@ -1175,6 +1177,7 @@ export const translations: Record<Language, UiCopy> = {
     imageRouteResponses: "Responses",
     imageRouteImageApi: "Image API",
     imageRouteInpaintLocked: "蒙版编辑固定使用 Image API。",
+    imageRouteUnverifiedDefault: "未验证，按默认策略使用",
     imageRouteInfo: "CrossGen会在用户配置好api后自动探测最快路径，如果使用聚合平台，推荐使用chat路径",
     hide: "收起",
     show: "展开",
@@ -1355,7 +1358,7 @@ export const translations: Record<Language, UiCopy> = {
     mask: "蒙版",
     maskDescription: "涂抹需要替换的区域。多张参考图时，蒙版应用到第一张图片。",
     guidedRegionDescription: "将涂抹区域作为第一张图片的修改引导。",
-    exactMaskRouteNotice: "蒙版模式会使用官方 Images API 编辑通道，因为官方精确 mask 仅支持该通道；聚合平台在该通道下的生图成功率可能下降。",
+    exactMaskRouteNotice: "蒙版和区域引导会使用图片编辑能力；部分兼容端点可能不支持蒙版编辑。",
     maskBrushSize: "调整蒙版画笔大小",
     clearPaintedMask: "清除已绘制蒙版",
     sourceForMask: "蒙版源图",

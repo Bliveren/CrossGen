@@ -1042,6 +1042,47 @@ describe("OpenAI image service", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("stops auto-route fallback and reports cancellation when the user aborts", async () => {
+    const controller = new AbortController();
+    let requests = 0;
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requests += 1;
+      return await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")), { once: true });
+        controller.abort();
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(
+      job({ mode: "generate", params: params({ imageRoute: "auto", timeoutMs: 5000 }) }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime,
+      { abortSignal: controller.signal }
+    )).rejects.toThrow("任务已取消。");
+    expect(requests).toBe(1);
+  });
+
+  it("stops auto-route fallback and reports the configured timeout", async () => {
+    let requests = 0;
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requests += 1;
+      return await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")), { once: true });
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(
+      job({ mode: "generate", params: params({ imageRoute: "auto", timeoutMs: 1 }) }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    )).rejects.toThrow("请求超时");
+    expect(requests).toBe(1);
+  });
+
   it("finishes chat-routed image edits after the final streamed image even when the SSE socket stays open", async () => {
     const source = await sourceAsset();
     let streamCanceled = false;
