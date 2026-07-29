@@ -164,6 +164,55 @@ describe("state migration", () => {
     });
   });
 
+  it("normalizes history reference preflight summaries in v3 state", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "default",
+      providers: [{
+        id: "default",
+        kind: "openai",
+        name: "OpenAI",
+        baseURL: "https://api.openai.com/v1",
+        enabled: true,
+        defaultModel: "gpt-image-2",
+        defaultSize: "auto",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        updatedAt: "2026-01-02T03:04:05.000Z",
+        encryption: "none"
+      }],
+      history: [{
+        id: "job_1",
+        mode: "edit",
+        prompt: "Edit",
+        inputAssets: [],
+        params: DEFAULT_IMAGE_PARAMS,
+        status: "failed",
+        createdAt: "2026-01-02T03:04:05.000Z",
+        updatedAt: "2026-01-02T03:04:06.000Z",
+        outputs: [],
+        referencePreflight: [{
+          id: "source",
+          role: "reference",
+          original: { mime: "image/png", width: 8000, height: 6000, bytes: 40_000_000 },
+          request: { mime: "image/png", width: 4096, height: 3072, bytes: 10_000_000, downsampled: true },
+          reason: "provider_limit",
+          blocked: false
+        }]
+      }],
+      queueConfig: { maxGlobalRunning: 1, providerConcurrency: {} }
+    });
+
+    expect(migrated.history[0].referencePreflight).toEqual([
+      expect.objectContaining({
+        id: "source",
+        role: "reference",
+        reason: "provider_limit",
+        request: expect.objectContaining({ downsampled: true, width: 4096, height: 3072 })
+      })
+    ]);
+  });
+
   it("preserves OpenAI image route probes in v3 provider state", () => {
     const migrated = normalizeState({
       version: 3,

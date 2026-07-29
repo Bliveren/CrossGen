@@ -95,7 +95,8 @@ function diagnosticFor(item: GenerationQueueItem): TaskDiagnostic | undefined {
     attemptIndex: attemptIndex(item),
     retryable,
     chargedRetryRisk: chargedRetryRisk(item),
-    nextActions: nextActionsFor(item) ?? []
+    nextActions: nextActionsFor(item) ?? [],
+    referencePreflight: item.referencePreflight
   };
   return diagnostic.error || diagnostic.errorCategory || diagnostic.retryable || diagnostic.chargedRetryRisk
     ? diagnostic
@@ -158,7 +159,8 @@ export function buildQueueTaskSummary(
     sourceAssetIds: item.sourceAssetIds,
     requestId: item.requestId,
     correlationId: item.correlationId,
-    diagnostic: diagnosticFor(item)
+    diagnostic: diagnosticFor(item),
+    referencePreflight: item.referencePreflight
   };
   return summary;
 }

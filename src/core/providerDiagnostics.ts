@@ -2,6 +2,7 @@ import type {
   ImageParams,
   OpenAIImageRoute,
   ProviderKind,
+  ReferencePreflightSummary,
   QueueErrorCategory,
   RunJobRequest,
   TaskDiagnostic,
@@ -9,6 +10,7 @@ import type {
   TaskDiagnosticOperation,
   TaskDiagnosticProviderKind
 } from "../shared/types.js";
+import { normalizeReferencePreflightValue } from "./referencePreflight.js";
 
 export interface BuildTaskDiagnosticInput {
   error?: unknown;
@@ -21,6 +23,7 @@ export interface BuildTaskDiagnosticInput {
   route?: string;
   attemptIndex?: number;
   userCancelled?: boolean;
+  referencePreflight?: ReferencePreflightSummary[];
 }
 
 const TASK_DIAGNOSTIC_CATEGORIES = new Set<TaskDiagnosticCategory>([
@@ -195,7 +198,8 @@ export function buildTaskDiagnostic(input: BuildTaskDiagnosticInput): TaskDiagno
     attemptIndex: Math.max(1, input.attemptIndex ?? 1),
     retryable: retryableForCategory(category),
     chargedRetryRisk: chargedRetryRiskForCategory(category),
-    nextActions: baseNextActions(input, category)
+    nextActions: baseNextActions(input, category),
+    referencePreflight: input.referencePreflight
   };
 }
 
@@ -240,7 +244,8 @@ export function normalizeTaskDiagnosticValue(value: unknown): TaskDiagnostic | u
     attemptIndex: typeof value.attemptIndex === "number" && Number.isFinite(value.attemptIndex) ? Math.max(1, value.attemptIndex) : 1,
     retryable: typeof value.retryable === "boolean" ? value.retryable : retryableForCategory(category),
     chargedRetryRisk: typeof value.chargedRetryRisk === "boolean" ? value.chargedRetryRisk : chargedRetryRiskForCategory(category),
-    nextActions: normalizeStringArray(value.nextActions)
+    nextActions: normalizeStringArray(value.nextActions),
+    referencePreflight: normalizeReferencePreflightValue(value.referencePreflight)
   };
 }
 

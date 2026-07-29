@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { GenerationQueueItem, MediaKind, QueueSource, RunJobRequest } from "../shared/types.js";
+import type { GenerationQueueItem, MediaKind, QueueSource, ReferencePreflightSummary, RunJobRequest } from "../shared/types.js";
 
 export interface CreateGenerationQueueItemInput {
   source: QueueSource;
@@ -15,6 +15,7 @@ export interface CreateGenerationQueueItemInput {
   idempotencyKey?: string;
   requestId?: string;
   correlationId?: string;
+  referencePreflight?: ReferencePreflightSummary[];
   now?: () => Date;
 }
 
@@ -44,6 +45,7 @@ export function createGenerationQueueItem(input: CreateGenerationQueueItemInput)
     outputMediaKinds: input.outputMediaKinds ?? ["image"],
     idempotencyKey: input.idempotencyKey,
     requestId: input.requestId,
-    correlationId: input.correlationId
+    correlationId: input.correlationId,
+    referencePreflight: input.referencePreflight
   };
 }

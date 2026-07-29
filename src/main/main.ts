@@ -47,6 +47,7 @@ import type {
   ProviderConfig,
   ProviderConfigInput,
   QueueSource,
+  ReferencePreflightSummary,
   RunJobRequest,
   StorageKind,
   StorageFolderOptions,
@@ -118,6 +119,7 @@ import {
 } from "../core/queueConfig.js";
 import { createQueueStore, type QueueStore } from "../core/queueStore.js";
 import { buildTaskDiagnostic, defaultRouteForRequest, queueErrorCategoryForTaskDiagnostic } from "../core/providerDiagnostics.js";
+import { DEFAULT_REFERENCE_PREFLIGHT_LIMITS, buildReferencePreflightSummaries, referencePreflightBlockingMessage } from "../core/referencePreflight.js";
 import { createJsonStateStore, type JsonStateStore } from "../core/stateStore.js";
 import { withStateQueueTransaction } from "../core/stateQueueTransaction.js";
 import { parseGenerationPromptFile, type GenerationPromptFileEntry } from "../cli/generationBatch.js";
@@ -212,6 +214,7 @@ const CLI_SCHEMA_VERSION = 1;
 const DESKTOP_QUEUE_WORKER_INTERVAL_MS = 5000;
 const DESKTOP_QUEUE_WORKER_RECHECK_MS = 250;
 const DESKTOP_QUEUE_WORKER_LEASE_MS = 30000;
+const REFERENCE_PREFLIGHT_TEMP_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -254,6 +257,7 @@ let generationQueueStore: QueueStore | null = null;
 const APP_STATE_LOCK_TIMEOUT_MS = 60000;
 const APP_STATE_LOCK_STALE_MS = 5 * 60 * 1000;
 const desktopWorkerHostId = `desktop_${process.pid}_${randomUUID()}`;
+const referencePreflightTempRunId = `${process.pid}-${randomUUID()}`;
 let desktopQueueWorkerTimer: NodeJS.Timeout | null = null;
 let desktopQueueWorkerRunning = false;
 let desktopQueueWorkerStopped = false;
@@ -1103,15 +1107,36 @@ function createAssetId(filePath: string): string {
   return `asset_${hash}`;
 }
 
+async function imageDimensionsForFile(filePath: string): Promise<{ width?: number; height?: number }> {
+  const image = nativeImage.createFromPath(filePath);
+  if (!image.isEmpty()) {
+    const size = image.getSize();
+    if (size.width > 0 && size.height > 0) return { width: size.width, height: size.height };
+  }
+
+  try {
+    const content = await fs.readFile(filePath);
+    const fromBuffer = nativeImage.createFromBuffer(content);
+    if (fromBuffer.isEmpty()) return {};
+    const size = fromBuffer.getSize();
+    return size.width > 0 && size.height > 0 ? { width: size.width, height: size.height } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function toInputAsset(filePath: string, includePreview: boolean): Promise<InputAsset> {
   const stat = await fs.stat(filePath);
   const mimeType = mimeTypeForFile(filePath);
+  const dimensions = await imageDimensionsForFile(filePath);
   const asset: InputAsset = {
     id: createAssetId(filePath),
     name: path.basename(filePath),
     path: filePath,
     mimeType,
-    sizeBytes: stat.size
+    sizeBytes: stat.size,
+    width: dimensions.width,
+    height: dimensions.height
   };
 
   if (includePreview) {
@@ -1140,6 +1165,174 @@ async function resolveRequestInputs(request: RunJobRequest, imagesDir: string): 
   return { inputs, mask };
 }
 
+function buildReferencePreflightOrThrow(inputs: InputAsset[], mask?: InputAsset): ReferencePreflightSummary[] | undefined {
+  const summary = buildReferencePreflightSummaries(inputs, mask);
+  const blockingMessage = referencePreflightBlockingMessage(summary);
+  if (blockingMessage) {
+    throw new Error(blockingMessage);
+  }
+  return summary;
+}
+
+function referencePreflightTempRoot(): string {
+  return path.join(app.getPath("userData"), "reference-preflight-tmp");
+}
+
+function referencePreflightTempDir(): string {
+  return path.join(referencePreflightTempRoot(), referencePreflightTempRunId);
+}
+
+async function cleanupReferencePreflightTempPaths(filePaths: string[]): Promise<void> {
+  await Promise.all(filePaths.map((filePath) => fs.unlink(filePath).catch(() => undefined)));
+  await fs.rmdir(referencePreflightTempDir()).catch(() => undefined);
+}
+
+async function cleanupStaleReferencePreflightTempDirs(now = Date.now()): Promise<void> {
+  const root = referencePreflightTempRoot();
+  let entries: Array<{ name: string; isDirectory(): boolean }>;
+  try {
+    entries = await fs.readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return;
+    throw error;
+  }
+
+  await Promise.all(entries.flatMap((entry) => {
+    if (!entry.isDirectory()) return [];
+    const dirPath = path.join(root, entry.name);
+    return [fs.stat(dirPath).then((stat) => {
+      if (now - stat.mtimeMs < REFERENCE_PREFLIGHT_TEMP_RETENTION_MS) return undefined;
+      return fs.rm(dirPath, { recursive: true, force: true });
+    }).catch(() => undefined)];
+  }));
+}
+
+function summaryForReferenceAsset(summaries: ReferencePreflightSummary[] | undefined, asset: InputAsset): ReferencePreflightSummary | undefined {
+  return summaries?.find((summary) => summary.role === "reference" && summary.id === asset.id);
+}
+
+function summaryForMaskAsset(summaries: ReferencePreflightSummary[] | undefined, asset: InputAsset): ReferencePreflightSummary | undefined {
+  return summaries?.find((summary) => summary.role === "mask" && summary.id === asset.id);
+}
+
+function requestCopyMimeType(asset: InputAsset): { mimeType: string; extension: string } {
+  if (asset.mimeType === "image/jpeg") return { mimeType: "image/jpeg", extension: ".jpg" };
+  return { mimeType: "image/png", extension: ".png" };
+}
+
+async function nativeImageForAsset(asset: InputAsset): Promise<ReturnType<typeof nativeImage.createFromPath>> {
+  const image = nativeImage.createFromPath(asset.path);
+  if (!image.isEmpty()) return image;
+  const content = await fs.readFile(asset.path);
+  const fromBuffer = nativeImage.createFromBuffer(content);
+  if (fromBuffer.isEmpty()) {
+    throw new Error(`无法读取参考图尺寸：${asset.name}`);
+  }
+  return fromBuffer;
+}
+
+async function downsampleReferenceAssetForRequest(
+  asset: InputAsset,
+  summary: ReferencePreflightSummary
+): Promise<{ asset: InputAsset; summary: ReferencePreflightSummary; cleanupPath: string }> {
+  const width = summary.request.width ?? asset.width;
+  const height = summary.request.height ?? asset.height;
+  if (!width || !height) {
+    throw new Error(`参考图 ${asset.name} 无法安全降采样：缺少尺寸信息。`);
+  }
+
+  const source = await nativeImageForAsset(asset);
+  const resized = source.resize({ width, height, quality: "best" });
+  if (resized.isEmpty()) {
+    throw new Error(`参考图 ${asset.name} 降采样失败。`);
+  }
+
+  const encoded = requestCopyMimeType(asset);
+  const bytes = encoded.mimeType === "image/jpeg" ? resized.toJPEG(92) : resized.toPNG();
+  if (bytes.byteLength === 0) {
+    throw new Error(`参考图 ${asset.name} 降采样输出为空。`);
+  }
+
+  await ensureDir(referencePreflightTempDir());
+  const fileName = `${asset.id}-${randomUUID()}${encoded.extension}`;
+  const filePath = path.join(referencePreflightTempDir(), fileName);
+  await fs.writeFile(filePath, bytes);
+  const stat = await fs.stat(filePath);
+  if (stat.size > DEFAULT_REFERENCE_PREFLIGHT_LIMITS.hardBytes) {
+    await fs.unlink(filePath).catch(() => undefined);
+    throw new Error(`参考图 ${asset.name} 降采样后仍超过安全请求大小，请手动缩小图片后重试。`);
+  }
+  const size = resized.getSize();
+  const requestAsset: InputAsset = {
+    ...asset,
+    name: fileName,
+    path: filePath,
+    mimeType: encoded.mimeType,
+    sizeBytes: stat.size,
+    width: size.width,
+    height: size.height,
+    dataUrl: undefined,
+    previewUrl: undefined
+  };
+
+  return {
+    asset: requestAsset,
+    cleanupPath: filePath,
+    summary: {
+      ...summary,
+      request: {
+        mime: encoded.mimeType,
+        width: size.width,
+        height: size.height,
+        bytes: stat.size,
+        downsampled: true
+      },
+      warning: `Reference image "${asset.name}" uses a temporary downsampled request copy; the original file is unchanged.`,
+      blocked: false
+    }
+  };
+}
+
+async function prepareReferenceRequestJob(job: GenerationJob): Promise<{
+  providerJob: GenerationJob;
+  referencePreflight?: ReferencePreflightSummary[];
+  cleanupPaths: string[];
+}> {
+  const initialSummary = job.referencePreflight ?? buildReferencePreflightSummaries(job.inputAssets, job.maskAsset);
+  const blockingMessage = referencePreflightBlockingMessage(initialSummary);
+  if (blockingMessage) throw new Error(blockingMessage);
+  const cleanupPaths: string[] = [];
+  const nextSummaries = [...(initialSummary ?? [])];
+
+  const providerInputs = await Promise.all(job.inputAssets.map(async (asset) => {
+    const summary = summaryForReferenceAsset(nextSummaries, asset);
+    if (!summary?.request.downsampled) return asset;
+    const prepared = await downsampleReferenceAssetForRequest(asset, summary);
+    cleanupPaths.push(prepared.cleanupPath);
+    const index = nextSummaries.findIndex((item) => item.role === "reference" && item.id === asset.id);
+    if (index >= 0) nextSummaries[index] = prepared.summary;
+    return prepared.asset;
+  }));
+
+  if (job.maskAsset) {
+    const maskSummary = summaryForMaskAsset(nextSummaries, job.maskAsset);
+    if (maskSummary?.request.downsampled) {
+      throw new Error("蒙版模式不会降采样 mask；请缩小源图和 mask 后重试。");
+    }
+  }
+
+  return {
+    providerJob: {
+      ...job,
+      inputAssets: providerInputs,
+      maskAsset: job.maskAsset,
+      referencePreflight: nextSummaries.length > 0 ? nextSummaries : undefined
+    },
+    referencePreflight: nextSummaries.length > 0 ? nextSummaries : undefined,
+    cleanupPaths
+  };
+}
+
 async function persistMaskDataUrl(dataUrl: string, imagesDir: string): Promise<InputAsset> {
   const mimeMatch = /^data:([^;]+);base64,/.exec(dataUrl);
   const mimeType = mimeMatch?.[1] ?? "image/png";
@@ -1148,19 +1341,21 @@ async function persistMaskDataUrl(dataUrl: string, imagesDir: string): Promise<I
   const fileName = `mask-${Date.now()}-${randomUUID()}.${ext}`;
   const filePath = path.join(imagesDir, fileName);
   await fs.writeFile(filePath, Buffer.from(dataUrlToBase64(dataUrl), "base64"));
-  const stat = await fs.stat(filePath);
-
+  const asset = await toInputAsset(filePath, false);
   return {
-    id: createAssetId(filePath),
-    name: fileName,
-    path: filePath,
-    mimeType,
-    sizeBytes: stat.size,
+    ...asset,
     dataUrl
   };
 }
 
-function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAssets: InputAsset[], maskAsset?: InputAsset, source: QueueSource = "desktop"): GenerationJob {
+function createJob(
+  request: RunJobRequest,
+  config: StoredProviderConfig,
+  inputAssets: InputAsset[],
+  maskAsset?: InputAsset,
+  source: QueueSource = "desktop",
+  referencePreflight?: ReferencePreflightSummary[]
+): GenerationJob {
   const now = new Date().toISOString();
   const launchId = request.params.launchId;
   const modelId = request.params.model;
@@ -1182,7 +1377,8 @@ function createJob(request: RunJobRequest, config: StoredProviderConfig, inputAs
     status: "queued",
     createdAt: now,
     updatedAt: now,
-    outputs: []
+    outputs: [],
+    referencePreflight
   };
 }
 
@@ -2431,12 +2627,14 @@ async function getOrCreateHistoryJobForQueueItem(
     return {
       ...existing,
       prompt: request.prompt,
-      params: request.params
+      params: request.params,
+      referencePreflight: item.referencePreflight ?? existing.referencePreflight
     };
   }
 
   const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
-  const job = createJob(request, provider, inputs, mask, item.source);
+  const referencePreflight = item.referencePreflight ?? buildReferencePreflightOrThrow(inputs, mask);
+  const job = createJob(request, provider, inputs, mask, item.source, referencePreflight);
   await upsertJob(job);
   return job;
 }
@@ -2612,6 +2810,7 @@ function taskDiagnosticForQueueFailure(input: {
   route?: string;
   attemptIndex: number;
   abortSignal: AbortSignal;
+  referencePreflight?: ReferencePreflightSummary[];
 }): TaskDiagnostic {
   return buildTaskDiagnostic({
     error: input.error,
@@ -2621,7 +2820,8 @@ function taskDiagnosticForQueueFailure(input: {
     modelId: input.job?.modelId,
     route: input.route ?? (input.provider ? defaultRouteForRequest(input.request, input.provider.kind) : undefined),
     attemptIndex: input.attemptIndex,
-    userCancelled: input.abortSignal.aborted
+    userCancelled: input.abortSignal.aborted,
+    referencePreflight: input.referencePreflight ?? input.job?.referencePreflight
   });
 }
 
@@ -2639,7 +2839,8 @@ function jobWithRuntimeRouteMetadata(job: GenerationJob, diagnosticContext: Omit
         hasMask: diagnosticContext.hasMask,
         timeoutMs: diagnosticContext.timeoutMs,
         attemptIndex: diagnosticContext.attemptIndex
-      }
+      },
+      referencePreflight: job.referencePreflight
     }
   };
 }
@@ -2699,14 +2900,26 @@ async function retryGenerationQueueItemWithState(jobId: string) {
   };
 }
 
+async function recordGenerationQueueReferencePreflight(queueId: string, referencePreflight: ReferencePreflightSummary[] | undefined): Promise<void> {
+  if (!referencePreflight || referencePreflight.length === 0) return;
+  const nowIso = new Date().toISOString();
+  await getGenerationQueueStore().mutate((queue) => ({
+    ...queue,
+    updatedAt: nowIso,
+    items: queue.items.map((current) => current.queueId === queueId ? { ...current, referencePreflight, updatedAt: nowIso } : current)
+  }));
+}
+
 async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal: AbortSignal) {
   const startedAt = Date.now();
   const partialAssets: ImageAsset[] = [];
+  const referenceCleanupPaths: string[] = [];
   let provider: StoredProviderConfig | undefined;
   let request: RunJobRequest = item.request;
   let job: GenerationJob | undefined;
   let lastRoute: string | undefined;
   let lastAttemptIndex = Math.max(1, item.attempt);
+  let currentReferencePreflight = item.referencePreflight;
 
   const sendQueuedJobEvent = (event: JobProgressEvent) => {
     if (event.type === "attempt") {
@@ -2732,6 +2945,14 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
     const imagesDir = getImagesDir(state);
     job = await getOrCreateHistoryJobForQueueItem(state, item, provider, request);
     lastRoute = defaultRouteForRequest(request, provider.kind);
+    const preparedRequest = await prepareReferenceRequestJob(job);
+    referenceCleanupPaths.push(...preparedRequest.cleanupPaths);
+    currentReferencePreflight = preparedRequest.referencePreflight;
+    job = {
+      ...job,
+      referencePreflight: currentReferencePreflight
+    };
+    await recordGenerationQueueReferencePreflight(item.queueId, currentReferencePreflight);
 
     job = {
       ...job,
@@ -2741,13 +2962,24 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
     await upsertJob(job);
     sendQueuedJobEvent({ jobId: job.id, queueId: item.queueId, type: "started" });
 
-    job = await adapter.runJob(job, apiKey, provider, {
+    const providerJob = {
+      ...preparedRequest.providerJob,
+      status: "running" as const,
+      updatedAt: job.updatedAt
+    };
+    const providerResult = await adapter.runJob(providerJob, apiKey, provider, {
       fetch,
       imagesDir,
       ensureDir,
       sendJobEvent: sendQueuedJobEvent,
       abortSignal
     });
+    job = {
+      ...providerResult,
+      inputAssets: job.inputAssets,
+      maskAsset: job.maskAsset,
+      referencePreflight: currentReferencePreflight
+    };
     const routeDiagnostic = taskDiagnosticForQueueFailure({
       error: "",
       request,
@@ -2755,7 +2987,8 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       job,
       route: lastRoute,
       attemptIndex: lastAttemptIndex,
-      abortSignal
+      abortSignal,
+      referencePreflight: currentReferencePreflight
     });
     job = jobWithRuntimeRouteMetadata(job, routeDiagnostic);
     job = {
@@ -2772,7 +3005,8 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
           job,
           route: lastRoute,
           attemptIndex: lastAttemptIndex,
-          abortSignal
+          abortSignal,
+          referencePreflight: currentReferencePreflight
         })
       : undefined;
     if (failureDiagnostic) {
@@ -2807,7 +3041,8 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       job,
       route: lastRoute,
       attemptIndex: lastAttemptIndex,
-      abortSignal
+      abortSignal,
+      referencePreflight: currentReferencePreflight ?? job?.referencePreflight
     });
     const queueErrorCategory = queueErrorCategoryForTaskDiagnostic(diagnostic.category);
     const existingOutputs = job?.outputs ?? [];
@@ -2838,6 +3073,8 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
       retryable: diagnostic.retryable,
       diagnostic
     };
+  } finally {
+    await cleanupReferencePreflightTempPaths(referenceCleanupPaths);
   }
 }
 
@@ -3059,6 +3296,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   getApiKeyForConfigOrThrow(activeProvider);
   const imagesDir = getImagesDir(state);
   const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir);
+  const referencePreflight = buildReferencePreflightOrThrow(inputs, mask);
   const queuedAt = Date.now();
   let job!: GenerationJob;
   let queueItem!: GenerationQueueItem;
@@ -3067,7 +3305,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     if (!canRunRequestWithConfig(normalizedRequest, currentProvider)) {
       throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
     }
-    job = createJob(normalizedRequest, currentProvider, inputs, mask, "desktop");
+    job = createJob(normalizedRequest, currentProvider, inputs, mask, "desktop", referencePreflight);
     queueItem = createGenerationQueueItem({
       source: "desktop",
       providerId: currentProvider.id,
@@ -3075,7 +3313,8 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
       costConfirmed: true,
       historyJobId: job.id,
       sourceAssetIds: [...inputs.map((asset) => asset.id), ...(mask ? [mask.id] : [])],
-      outputMediaKinds: ["image"]
+      outputMediaKinds: ["image"],
+      referencePreflight
     });
     return {
       state: upsertJobInState(currentState, job),
@@ -4451,7 +4690,8 @@ async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
   const targetGalleryFolderId = normalizeTargetGalleryFolderId(state, input.targetGalleryFolderId);
   const request = validateAgentRunJobRequest(buildAgentRunJobRequest(provider, input), provider);
   const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
-  const job = createJob(request, provider, inputs, mask, input.source);
+  const referencePreflight = buildReferencePreflightOrThrow(inputs, mask);
+  const job = createJob(request, provider, inputs, mask, input.source, referencePreflight);
   const queueItem = createGenerationQueueItem({
     source: input.source,
     providerId: provider.id,
@@ -4464,7 +4704,8 @@ async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
     outputMediaKinds: ["image"],
     idempotencyKey,
     requestId: input.requestId,
-    correlationId: input.correlationId
+    correlationId: input.correlationId,
+    referencePreflight
   });
   const transaction = await mutateStateAndQueue<AgentGenerationEnqueueTransactionResult>((currentState, queue) => {
     if (idempotencyKey) {
@@ -5504,6 +5745,9 @@ app.whenReady().then(async () => {
     nativeTheme.themeSource = themeSource;
   }
   preserveLegacyUserDataPath();
+  await cleanupStaleReferencePreflightTempDirs().catch((error) => {
+    console.warn("[CrossGen] Failed to clean stale reference preflight temp files.", sanitizeError(error));
+  });
   const cliCommandArgs = getCliCommandArgs();
   if (cliCommandArgs) {
     const exitCode = await runCliCommandMode(cliCommandArgs);

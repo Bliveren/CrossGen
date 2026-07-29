@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { withExclusiveFileLock } from "./fileLock.js";
+import { normalizeReferencePreflightValue } from "./referencePreflight.js";
 import type {
   GenerationQueueFile,
   GenerationQueueItem,
@@ -130,7 +131,8 @@ function normalizeQueueItem(raw: Partial<GenerationQueueItem>): GenerationQueueI
     outputMediaKinds: Array.isArray(raw.outputMediaKinds) ? raw.outputMediaKinds.filter(isMediaKind) : ["image"],
     idempotencyKey: typeof raw.idempotencyKey === "string" ? raw.idempotencyKey : undefined,
     requestId: typeof raw.requestId === "string" ? raw.requestId : undefined,
-    correlationId: typeof raw.correlationId === "string" ? raw.correlationId : undefined
+    correlationId: typeof raw.correlationId === "string" ? raw.correlationId : undefined,
+    referencePreflight: normalizeReferencePreflightValue(raw.referencePreflight)
   };
 }
 

@@ -61,7 +61,8 @@ function item(patch: Partial<GenerationQueueItem> = {}): GenerationQueueItem {
     sourceAssetIds: patch.sourceAssetIds ?? [],
     outputMediaKinds: patch.outputMediaKinds ?? ["image"],
     requestId: patch.requestId,
-    correlationId: patch.correlationId
+    correlationId: patch.correlationId,
+    referencePreflight: patch.referencePreflight
   };
 }
 
@@ -175,5 +176,26 @@ describe("queue snapshot", () => {
     expect(summary.attemptIndex).toBe(2);
     expect(summary.completedAttempts).toBe(1);
     expect(summary.remainingAttempts).toBe(2);
+  });
+
+  it("exposes reference preflight on queue summaries and fallback diagnostics", () => {
+    const referencePreflight = [{
+      id: "source",
+      role: "reference" as const,
+      name: "source.png",
+      original: { mime: "image/png", width: 8000, height: 6000, bytes: 40_000_000 },
+      request: { mime: "image/png", width: 4096, height: 3072, bytes: 10_000_000, downsampled: true },
+      reason: "provider_limit" as const,
+      blocked: false
+    }];
+    const summary = buildQueueTaskSummary(item({
+      status: "failed",
+      lastError: "provider timeout",
+      lastErrorCategory: "transient",
+      referencePreflight
+    }), { now: NOW });
+
+    expect(summary.referencePreflight).toEqual(referencePreflight);
+    expect(summary.diagnostic?.referencePreflight).toEqual(referencePreflight);
   });
 });
