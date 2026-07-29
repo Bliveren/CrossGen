@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-07-29T19:43:09.607Z",
+  "lastUpdated": "2026-07-29T19:59:20.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -97,10 +97,12 @@
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-29T19:59:20.000Z",
+        "commit": "ff5b2b250e1e91d3a7323a79a8ca9de71830d64d",
+        "environment": "macOS local signing-readiness preflight. One valid Developer ID Application code signing identity is available in the local keychain, but the release shell does not currently export CSC_NAME. No signing, packaging, or notarization was attempted.",
+        "commands": [
+          "pnpm verify:signing-ready"
+        ],
         "references": [
           {
             "label": "Release evidence rules",
@@ -108,7 +110,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "Pending exact v0.3.2 release-candidate macOS signing evidence."
+        "summary": "Pending exact v0.3.2 release-candidate macOS signing evidence. Signing readiness preflight on commit ff5b2b250e1e91d3a7323a79a8ca9de71830d64d found one valid Developer ID Application identity, but CSC_NAME was unset in the current release shell, so package:mac:signed cannot run yet."
       }
     },
     {
@@ -124,10 +126,12 @@
         "The evidence records the exact artifact identity, SHA256, and validation command results."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-29T19:59:20.000Z",
+        "commit": "ff5b2b250e1e91d3a7323a79a8ca9de71830d64d",
+        "environment": "macOS local signing-readiness preflight. Apple notarization credentials were not exported in the current release shell. No notarization submission was attempted.",
+        "commands": [
+          "pnpm verify:signing-ready"
+        ],
         "references": [
           {
             "label": "Release evidence rules",
@@ -135,7 +139,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "Pending exact v0.3.2 release-candidate notarization evidence."
+        "summary": "Pending exact v0.3.2 release-candidate notarization evidence. Signing readiness preflight on commit ff5b2b250e1e91d3a7323a79a8ca9de71830d64d found APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID unset in the current release shell."
       }
     },
     {
