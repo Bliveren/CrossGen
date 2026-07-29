@@ -48,7 +48,7 @@ export function useHistoryListModel({
     const query = search.trim().toLowerCase();
     const statusMatched = statusFilter === "all"
       ? history
-      : history.filter((job) => job.status === statusFilter);
+      : history.filter((job) => statusFilter === "failed" ? job.status === "failed" || job.status === "interrupted" : job.status === statusFilter);
     const matched = !query
       ? statusMatched
       : statusMatched.filter((job) => {

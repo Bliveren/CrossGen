@@ -1,5 +1,5 @@
 import type React from "react";
-import { ArrowDownUp, CheckCircle2, ChevronUp, Copy, Download, FolderInput, RotateCcw, Save, Search, X } from "lucide-react";
+import { AlertTriangle, ArrowDownUp, CheckCircle2, ChevronUp, Copy, Download, FolderInput, Info, RotateCcw, RefreshCw, Save, Search, X } from "lucide-react";
 import type { GenerationJob, ImageAsset } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
@@ -63,6 +63,8 @@ interface HistoryItemCardProps {
   result?: ImageAsset;
   resultSrc?: string;
   jobError: string | null;
+  statusLabel: string;
+  recoverable: boolean;
   active: boolean;
   hoverOpen: boolean;
   selected: boolean;
@@ -104,6 +106,8 @@ interface HistoryItemCardProps {
   onReuse: () => void;
   onCopyPrompt: () => void;
   onDownload: () => void;
+  onDetails: () => void;
+  onRetry: () => void;
   onToggleGalleryMenu: () => void;
   onDelete: () => void;
 }
@@ -280,6 +284,8 @@ export function HistoryItemCard({
   result,
   resultSrc,
   jobError,
+  statusLabel,
+  recoverable,
   active,
   hoverOpen,
   selected,
@@ -321,10 +327,12 @@ export function HistoryItemCard({
   onReuse,
   onCopyPrompt,
   onDownload,
+  onDetails,
+  onRetry,
   onToggleGalleryMenu,
   onDelete
 }: HistoryItemCardProps) {
-  const sourceLabel = job.source === "cli" ? copy.historySourceCli : job.source === "mcp" ? copy.historySourceMcp : null;
+  const sourceLabel = job.source === "cli" ? copy.historySourceCli : job.source === "mcp" ? copy.historySourceMcp : copy.historySourceDesktop;
   return (
     <article
       className={[
@@ -333,6 +341,7 @@ export function HistoryItemCard({
         hoverOpen ? "hover-open" : "",
         selected ? "selected" : ""
       ].filter(Boolean).join(" ")}
+      data-status={job.status}
       onMouseEnter={onHoverOpen}
       onFocus={onHoverOpen}
     >
@@ -452,11 +461,20 @@ export function HistoryItemCard({
             </span>
           </div>
           <p>{job.prompt}</p>
-          {jobError && <p className="history-error">{jobError}</p>}
+          {recoverable && (
+            <div className="history-recovery-strip" data-status={job.status}>
+              <AlertTriangle size={13} />
+              <span>{jobError ?? statusLabel}</span>
+              <button type="button" className="icon-button" onClick={onDetails} aria-label={copy.queue.details} data-tooltip={copy.queue.details}>
+                <Info size={13} />
+              </button>
+            </div>
+          )}
         </div>
         <span className="history-date-model">
           <span>{createdAtLabel}</span>
           {durationLabel && <span className="history-duration">{durationLabel}</span>}
+          <span className="history-status-chip" data-status={job.status}>{statusLabel}</span>
           <span title={modelTitle}>{modelDisplayName}</span>
         </span>
       </div>
@@ -465,6 +483,12 @@ export function HistoryItemCard({
           <RotateCcw size={15} />
           <span>{reuseButtonLabel}</span>
         </button>
+        {recoverable && (
+          <button type="button" className="history-action-button" onClick={onRetry} aria-label={copy.queue.retry} data-tooltip={copy.queue.retry}>
+            <RefreshCw size={15} />
+            <span>{copy.queue.retry}</span>
+          </button>
+        )}
         <button type="button" className={copyButtonClass} onClick={onCopyPrompt} aria-label={copy.copyPrompt} data-tooltip={copy.copyPrompt}>
           <Copy size={15} />
           <span>{copyButtonLabel}</span>
