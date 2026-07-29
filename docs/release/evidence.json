@@ -158,7 +158,7 @@
         "references": [
           {
             "label": "Latest main CI package preflight",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [],
@@ -185,7 +185,7 @@
         "references": [
           {
             "label": "Latest main CI package preflight",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [],
@@ -232,8 +232,8 @@
         "Known harmless warnings are documented and do not hide failed tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T16:31:41.000Z",
-        "commit": "437595a56b136e154af33a2c069802842d7e14f4",
+        "verifiedAt": "2026-07-29T16:59:56.000Z",
+        "commit": "200ea00fc43956482b25c90af29a15ed75081c77",
         "environment": "GitHub Actions main CI plus macOS local pre-RC verification for CrossGen 0.3.2 release evidence ledger.",
         "commands": [
           "pnpm build",
@@ -246,8 +246,8 @@
         ],
         "references": [
           {
-            "label": "main CI run 30470826531",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "label": "main CI run 30473022642",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [
@@ -275,7 +275,7 @@
       ],
       "evidence": {
         "verifiedAt": null,
-        "commit": "437595a56b136e154af33a2c069802842d7e14f4",
+        "commit": "200ea00fc43956482b25c90af29a15ed75081c77",
         "environment": "macOS local pre-RC package smoke using the packaged app executable. The exact RC package gate remains pending.",
         "commands": [
           "pnpm package:mac",
@@ -287,7 +287,7 @@
         "references": [
           {
             "label": "Latest main CI package preflight",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           },
           {
             "label": "v0.3.2 pre-RC evidence",
@@ -299,13 +299,13 @@
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
             "public": false,
-            "description": "Local pre-RC macOS arm64 DMG, 103895152 bytes, SHA256 8fff6e58651a00a775ef2d5184afd8186e5dcc6dfcf4c7af4ac624c2ee3b99ea."
+            "description": "Local pre-RC macOS arm64 DMG, 103895078 bytes, SHA256 20e173a9db42349891ec3ad146d3ce73162d0807cf0d73e75841ac32fd3dc28e."
           },
           {
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-mac-arm64.zip",
             "public": false,
-            "description": "Local pre-RC macOS arm64 ZIP, 99636480 bytes, SHA256 41f38b0f85df5724d8dbdee3ab87ef8df0145a59d976facacda2fd227290e032."
+            "description": "Local pre-RC macOS arm64 ZIP, 99636480 bytes, SHA256 98298341c6ceac25d868fce24e35d7e873be17b7af0ec7433215eb3fc43565e0."
           }
         ],
         "summary": "Pending exact v0.3.2 release-candidate package smoke. A local non-notarized macOS pre-RC package passed packaged CLI/MCP and agent integration smoke through the app executable."
@@ -324,16 +324,16 @@
         "No CLI/MCP productization UI is required for v0.3.2."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T16:31:41.000Z",
-        "commit": "437595a56b136e154af33a2c069802842d7e14f4",
+        "verifiedAt": "2026-07-29T16:59:56.000Z",
+        "commit": "200ea00fc43956482b25c90af29a15ed75081c77",
         "environment": "GitHub Actions Linux package job and macOS local source-tree smoke.",
         "commands": [
           "pnpm verify:agent-integration-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30470826531",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "label": "main CI run 30473022642",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [
@@ -360,16 +360,16 @@
         "The smoke passes on the v0.3.2 release evidence ledger commit."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T16:31:41.000Z",
-        "commit": "437595a56b136e154af33a2c069802842d7e14f4",
+        "verifiedAt": "2026-07-29T16:59:56.000Z",
+        "commit": "200ea00fc43956482b25c90af29a15ed75081c77",
         "environment": "GitHub Actions main CI and macOS local smoke.",
         "commands": [
           "pnpm verify:queue-concurrency-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30470826531",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "label": "main CI run 30473022642",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [
@@ -396,16 +396,16 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T16:31:41.000Z",
-        "commit": "437595a56b136e154af33a2c069802842d7e14f4",
+        "verifiedAt": "2026-07-29T16:59:56.000Z",
+        "commit": "200ea00fc43956482b25c90af29a15ed75081c77",
         "environment": "GitHub Actions main CI and macOS local smoke.",
         "commands": [
           "pnpm verify:gallery-mutation-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30470826531",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "label": "main CI run 30473022642",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [
@@ -432,16 +432,16 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T16:31:41.000Z",
-        "commit": "437595a56b136e154af33a2c069802842d7e14f4",
+        "verifiedAt": "2026-07-29T16:59:56.000Z",
+        "commit": "200ea00fc43956482b25c90af29a15ed75081c77",
         "environment": "GitHub Actions main CI and macOS local smoke.",
         "commands": [
           "pnpm verify:image-core-regression-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30470826531",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "label": "main CI run 30473022642",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [
@@ -486,7 +486,7 @@
             "description": "No-cost saved-config dry-run summaries exist. Paid real provider summaries remain pending."
           }
         ],
-        "summary": "Pending explicit cost acceptance and Gemini-compatible configuration. Latest dry run on commit 437595a56b136e154af33a2c069802842d7e14f4 found OpenAI-compatible G1-G3 ready for paid gate and G4/G5 missing Gemini-compatible config."
+        "summary": "Pending explicit cost acceptance and Gemini-compatible configuration. Latest dry run on commit 200ea00fc43956482b25c90af29a15ed75081c77 found OpenAI-compatible G1-G3 ready for paid gate and G4/G5 missing Gemini-compatible config."
       }
     },
     {
@@ -502,8 +502,8 @@
         "Renderer smoke tests cover the new queue UI states without layout blocker regressions."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T16:31:41.000Z",
-        "commit": "437595a56b136e154af33a2c069802842d7e14f4",
+        "verifiedAt": "2026-07-29T16:59:56.000Z",
+        "commit": "200ea00fc43956482b25c90af29a15ed75081c77",
         "environment": "GitHub Actions main CI plus macOS local build.",
         "commands": [
           "pnpm build",
@@ -511,8 +511,8 @@
         ],
         "references": [
           {
-            "label": "main CI run 30470826531",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "label": "main CI run 30473022642",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [
@@ -539,8 +539,8 @@
         "Diagnostics record operation, route, model, input image count, mask usage, attempt count, retryability, charged retry risk, and next actions."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T16:31:41.000Z",
-        "commit": "437595a56b136e154af33a2c069802842d7e14f4",
+        "verifiedAt": "2026-07-29T16:59:56.000Z",
+        "commit": "200ea00fc43956482b25c90af29a15ed75081c77",
         "environment": "macOS local focused tests and GitHub Actions main CI.",
         "commands": [
           "pnpm exec vitest run src/core/providerDiagnostics.test.ts src/main/services/openaiImageRouting.test.ts src/main/services/openaiImage.test.ts src/core/queueSnapshot.test.ts",
@@ -548,8 +548,8 @@
         ],
         "references": [
           {
-            "label": "main CI run 30470826531",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "label": "main CI run 30473022642",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [
@@ -576,8 +576,8 @@
         "Temporary request copies are cleaned up on completion, failure, cancellation, and next startup."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T16:31:41.000Z",
-        "commit": "437595a56b136e154af33a2c069802842d7e14f4",
+        "verifiedAt": "2026-07-29T16:59:56.000Z",
+        "commit": "200ea00fc43956482b25c90af29a15ed75081c77",
         "environment": "macOS local focused tests and GitHub Actions main CI.",
         "commands": [
           "pnpm exec vitest run src/core/referencePreflight.test.ts",
@@ -585,8 +585,8 @@
         ],
         "references": [
           {
-            "label": "main CI run 30470826531",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "label": "main CI run 30473022642",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [
@@ -613,8 +613,8 @@
         "History/Gallery recovery paths are covered by smoke or focused tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T16:31:41.000Z",
-        "commit": "437595a56b136e154af33a2c069802842d7e14f4",
+        "verifiedAt": "2026-07-29T16:59:56.000Z",
+        "commit": "200ea00fc43956482b25c90af29a15ed75081c77",
         "environment": "GitHub Actions main CI and macOS local smoke.",
         "commands": [
           "pnpm verify:image-core-regression-smoke",
@@ -623,8 +623,8 @@
         ],
         "references": [
           {
-            "label": "main CI run 30470826531",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30470826531"
+            "label": "main CI run 30473022642",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
           }
         ],
         "artifacts": [
