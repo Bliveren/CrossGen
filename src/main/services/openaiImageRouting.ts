@@ -94,6 +94,8 @@ export async function probeOpenAIImageRouting(
   return {
     preferredGenerateRoute: preferredOpenAIImageRoute(probes, "generate"),
     preferredEditRoute: preferredOpenAIImageRoute(probes, "edit"),
+    preferredGenerateRouteVerified: preferredOpenAIImageRouteVerified(probes, "generate"),
+    preferredEditRouteVerified: preferredOpenAIImageRouteVerified(probes, "edit"),
     probes,
     updatedAt: nowIso()
   };
@@ -129,6 +131,7 @@ export async function probeOpenAIImageRoute(
       mode,
       endpoint: request.endpoint,
       ok: reachable,
+      verified: isRouteProbeSuccessStatus(response.status),
       latencyMs,
       status: response.status,
       error: reachable ? undefined : `HTTP ${response.status}`
@@ -139,6 +142,7 @@ export async function probeOpenAIImageRoute(
       mode,
       endpoint: request.endpoint,
       ok: false,
+      verified: false,
       latencyMs: Date.now() - startedAt,
       error: normalizeProbeError(error)
     };
@@ -152,6 +156,11 @@ export function preferredOpenAIImageRoute(probes: OpenAIImageRouteProbe[], mode:
   if (successfulCandidates[0]) return successfulCandidates[0].route;
 
   return "chat-completions";
+}
+
+export function preferredOpenAIImageRouteVerified(probes: OpenAIImageRouteProbe[], mode: ProbeMode): boolean {
+  const route = preferredOpenAIImageRoute(probes, mode);
+  return probes.some((probe) => probe.mode === mode && probe.route === route && isRouteProbeSuccessStatus(probe.status ?? 0));
 }
 
 function routePreferenceScore(probe: OpenAIImageRouteProbe): number {

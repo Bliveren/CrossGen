@@ -69,6 +69,7 @@ describe("OpenAI image route probing", () => {
       route: "chat-completions",
       endpoint: "/chat/completions",
       ok: true,
+      verified: false,
       status: 400,
       error: undefined
     });
@@ -103,8 +104,11 @@ describe("OpenAI image route probing", () => {
 
     expect(routing?.probes).toHaveLength(6);
     expect(routing?.probes.every((probe) => probe.ok)).toBe(true);
+    expect(routing?.probes.every((probe) => probe.verified === false)).toBe(true);
     expect(routing?.preferredGenerateRoute).toBe("chat-completions");
     expect(routing?.preferredEditRoute).toBe("chat-completions");
+    expect(routing?.preferredGenerateRouteVerified).toBe(false);
+    expect(routing?.preferredEditRouteVerified).toBe(false);
     expect(routing?.updatedAt).toBe("2026-07-19T12:00:00.000Z");
     expect(requests.map((request) => request.url)).toEqual([
       "https://api.test/v1/images/generations",
@@ -114,5 +118,38 @@ describe("OpenAI image route probing", () => {
       "https://api.test/v1/chat/completions",
       "https://api.test/v1/chat/completions"
     ]);
+  });
+
+  it("keeps text-to-image route verification separate from image-to-image verification", async () => {
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+      const body = init?.body instanceof FormData ? { action: "edit" } : JSON.parse(String(init?.body));
+      if (target.endsWith("/images/generations")) {
+        return Response.json({ data: [] });
+      }
+      if (target.endsWith("/responses") && body.tools?.[0]?.action === "generate") {
+        return Response.json({ output: [] });
+      }
+      return new Response(JSON.stringify({ error: { message: "route failed" } }), {
+        status: 500,
+        headers: { "content-type": "application/json" }
+      });
+    }) as typeof fetch;
+
+    const routing = await probeOpenAIImageRouting(
+      {
+        ...defaultStoredConfig,
+        baseURL: "https://api.test/v1",
+        timeoutMs: 60000
+      },
+      "sk-test",
+      fetchImpl,
+      () => "2026-07-19T12:00:00.000Z"
+    );
+
+    expect(["image-api", "responses"]).toContain(routing?.preferredGenerateRoute);
+    expect(routing?.preferredGenerateRouteVerified).toBe(true);
+    expect(routing?.preferredEditRoute).toBe("chat-completions");
+    expect(routing?.preferredEditRouteVerified).toBe(false);
   });
 });

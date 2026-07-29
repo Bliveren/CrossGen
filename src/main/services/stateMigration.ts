@@ -203,6 +203,7 @@ function normalizeOpenAIImageRouting(value: unknown): OpenAIImageRouting | undef
           mode,
           endpoint,
           ok: typeof probe.ok === "boolean" ? probe.ok : false,
+          verified: typeof probe.verified === "boolean" ? probe.verified : undefined,
           latencyMs: boundedInteger(probe.latencyMs, 0, 600000, 0),
           status: typeof probe.status === "number" ? probe.status : undefined,
           error: optionalString(probe.error)
@@ -212,6 +213,8 @@ function normalizeOpenAIImageRouting(value: unknown): OpenAIImageRouting | undef
   return {
     preferredGenerateRoute: optionalOneOf(value.preferredGenerateRoute, ["image-api", "responses", "chat-completions"] as const),
     preferredEditRoute: optionalOneOf(value.preferredEditRoute, ["image-api", "responses", "chat-completions"] as const),
+    preferredGenerateRouteVerified: typeof value.preferredGenerateRouteVerified === "boolean" ? value.preferredGenerateRouteVerified : undefined,
+    preferredEditRouteVerified: typeof value.preferredEditRouteVerified === "boolean" ? value.preferredEditRouteVerified : undefined,
     probes,
     updatedAt: nonEmptyString(value.updatedAt, new Date(0).toISOString())
   };

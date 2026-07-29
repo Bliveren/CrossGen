@@ -3,7 +3,9 @@ import type { RunJobRequest } from "../shared/types";
 import { DEFAULT_GENERAL_IMAGE_PARAMS, DEFAULT_IMAGE_PARAMS } from "../shared/validation";
 import {
   buildTaskDiagnostic,
+  MASK_GUIDED_EDIT_COMPATIBILITY_MESSAGE,
   queueErrorCategoryForTaskDiagnostic,
+  ROUTE_UNVERIFIED_DEFAULT_MESSAGE,
   taskDiagnosticCategoryForQueueError,
   taskOperationForRequest
 } from "./providerDiagnostics";
@@ -112,7 +114,25 @@ describe("provider diagnostics", () => {
       operation: "guided-region",
       hasMask: true
     });
-    expect(maskDiagnostic.nextActions.join("\n")).toContain("蒙版模式可能需要兼容端点支持");
+    expect(maskDiagnostic.nextActions.join("\n")).toContain(MASK_GUIDED_EDIT_COMPATIBILITY_MESSAGE);
+  });
+
+  it("adds an unverified default-route note when route probes do not verify the fallback", () => {
+    const diagnostic = buildTaskDiagnostic({
+      request: request({
+        mode: "edit",
+        inputPaths: ["/tmp/source.png"]
+      }),
+      providerKind: "openai",
+      baseURL: "https://gateway.test/v1",
+      route: "chat-completions",
+      routeVerified: false,
+      error: "OpenAI API 请求失败：HTTP 500."
+    });
+
+    expect(diagnostic.routeVerified).toBe(false);
+    expect(diagnostic.routeNote).toBe(ROUTE_UNVERIFIED_DEFAULT_MESSAGE);
+    expect(diagnostic.nextActions).toContain(ROUTE_UNVERIFIED_DEFAULT_MESSAGE);
   });
 
   it("keeps legacy queue category mapping explicit", () => {

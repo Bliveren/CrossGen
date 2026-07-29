@@ -21,10 +21,15 @@ export interface BuildTaskDiagnosticInput {
   baseURL?: string;
   modelId?: string;
   route?: string;
+  routeVerified?: boolean;
+  routeNote?: string;
   attemptIndex?: number;
   userCancelled?: boolean;
   referencePreflight?: ReferencePreflightSummary[];
 }
+
+export const ROUTE_UNVERIFIED_DEFAULT_MESSAGE = "接口路径未验证，按默认策略使用。";
+export const MASK_GUIDED_EDIT_COMPATIBILITY_MESSAGE = "部分兼容端点可能不支持蒙版编辑。";
 
 const TASK_DIAGNOSTIC_CATEGORIES = new Set<TaskDiagnosticCategory>([
   "auth",
@@ -166,7 +171,10 @@ function baseNextActions(input: BuildTaskDiagnosticInput, category: TaskDiagnost
     actions.push("文生图成功不代表图生图或蒙版编辑可用；请按 operation 分别验证。");
   }
   if (operation === "guided-region") {
-    actions.push("蒙版模式可能需要兼容端点支持 image edit / guided edit；部分兼容平台即使文生图成功，也可能不支持蒙版编辑。");
+    actions.push(`蒙版模式可能需要兼容端点支持 image edit / guided edit；${MASK_GUIDED_EDIT_COMPATIBILITY_MESSAGE}`);
+  }
+  if (input.routeVerified === false) {
+    actions.push(input.routeNote ?? ROUTE_UNVERIFIED_DEFAULT_MESSAGE);
   }
   if (input.request.inputPaths.length > 1) {
     actions.push("减少参考图数量，先用 1 张参考图验证该 route 是否支持图生图。");
@@ -182,6 +190,7 @@ export function buildTaskDiagnostic(input: BuildTaskDiagnosticInput): TaskDiagno
   const providerMessage = normalizeWhitespace(input.providerMessage ?? input.message ?? textFromError(input.error));
   const category = classifyTaskDiagnosticMessage(providerMessage, input);
   const message = diagnosticMessageForCategory(category, providerMessage);
+  const routeNote = input.routeNote ?? (input.routeVerified === false ? ROUTE_UNVERIFIED_DEFAULT_MESSAGE : undefined);
   return {
     category,
     message,
@@ -192,6 +201,8 @@ export function buildTaskDiagnostic(input: BuildTaskDiagnosticInput): TaskDiagno
     providerKind: diagnosticProviderKind(input.providerKind, input.baseURL),
     modelId: input.modelId?.trim() || modelIdFromParams(input.request.params),
     route: input.route ?? defaultRouteForRequest(input.request, input.providerKind),
+    routeVerified: input.routeVerified,
+    routeNote,
     inputImageCount: input.request.inputPaths.length,
     hasMask: Boolean(input.request.maskPath || input.request.maskDataUrl),
     timeoutMs: timeoutMsFromParams(input.request.params),
@@ -244,6 +255,8 @@ export function normalizeTaskDiagnosticValue(value: unknown): TaskDiagnostic | u
     attemptIndex: typeof value.attemptIndex === "number" && Number.isFinite(value.attemptIndex) ? Math.max(1, value.attemptIndex) : 1,
     retryable: typeof value.retryable === "boolean" ? value.retryable : retryableForCategory(category),
     chargedRetryRisk: typeof value.chargedRetryRisk === "boolean" ? value.chargedRetryRisk : chargedRetryRiskForCategory(category),
+    routeVerified: typeof value.routeVerified === "boolean" ? value.routeVerified : undefined,
+    routeNote: typeof value.routeNote === "string" ? value.routeNote : undefined,
     nextActions: normalizeStringArray(value.nextActions),
     referencePreflight: normalizeReferencePreflightValue(value.referencePreflight)
   };

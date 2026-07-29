@@ -261,11 +261,14 @@ describe("state migration", () => {
     expect(migrated.providers[0].openAIImageRouting).toEqual({
       preferredEditRoute: "chat-completions",
       preferredGenerateRoute: undefined,
+      preferredEditRouteVerified: undefined,
+      preferredGenerateRouteVerified: undefined,
       probes: [{
         route: "chat-completions",
         mode: "edit",
         endpoint: "/chat/completions",
         ok: true,
+        verified: undefined,
         latencyMs: 96,
         status: 200,
         error: undefined
