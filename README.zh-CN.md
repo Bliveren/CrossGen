@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <b>面向用户与本地 AI Agent 的本地优先生图工作台。</b><br />
-  通过桌面应用、JSON CLI 或支持 MCP 的 Agent 完成生图、编辑、素材管理与结果复用。
+  <b>一套本地 AI 图像工作流，同时服务 Desktop、CLI 与 MCP。</b><br />
+  通过可视化应用、脚本或支持 MCP 的 Agent 完成生图、编辑、素材管理与结果导出。
 </p>
 
 <p align="center">
@@ -22,12 +22,18 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载 v0.3.1</b></a> ·
+  <a href="#agent-快速开始"><b>Agent 快速开始</b></a> ·
+  <a href="./docs/cli-mcp.md"><b>CLI/MCP 文档</b></a> ·
+  <a href="https://discord.gg/XphwmYtY">Discord</a>
+</p>
+
+<p align="center">
   <a href="#为什么是-crossgen-031">0.3.1 介绍</a> ·
   <a href="#功能演示">功能演示</a> ·
   <a href="#核心工作流">核心工作流</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
-  <a href="#下载安装">下载安装</a> ·
-  <a href="https://discord.gg/XphwmYtY">Discord</a> ·
+  <a href="#下载安装">安装</a> ·
   <a href="#技术说明">技术说明</a>
 </p>
 
@@ -35,9 +41,35 @@
 
 CrossGen 0.3.1 将桌面生图工作台升级为面向 Agent 的本地运行时。你仍然可以使用完整的可视化应用，同时也可以让 Codex、Claude Code、Cursor 和其他本地 AI Agent 通过 CLI 或 MCP 发现模型、生图或编辑图片、追踪持久化任务，并把结果导出到当前项目。
 
+| 在桌面端完成可视化工作 | 让 Agent 调用同一本地运行时 |
+| --- | --- |
+| 配置 Provider、生图和编辑、查看历史，并将可复用图片整理进图库。 | 发现模型、提交队列生图或编辑任务、查询任务、检查图库资产，并将选中结果导出到当前项目。 |
+
 <img width="1440" height="940" alt="screenshot-20260724-003442" src="https://github.com/user-attachments/assets/aaaaf3d8-cf9b-4320-bdfb-a04ca9f92168" />
 
 桌面应用、CLI 和 MCP Server 共用 API 配置、持久化生图队列、历史记录与图库。CrossGen 只需安装一次；安装包中的 CLI/MCP 不要求用户额外安装 Node.js、npm、pnpm、全局包或本地 HTTP 服务。
+
+### Agent 快速开始
+
+安装并打开[最新桌面版本](https://github.com/Bliveren/CrossGen/releases/latest)，然后在 **API access** 中添加 API 配置。安装包内的 `crossgen` launcher 可直接供脚本调用，应用可执行文件也可以作为本地 MCP stdio server 运行。
+
+```bash
+crossgen doctor --agent --json
+crossgen models list --json
+crossgen generate --prompt "一个结构精确的等距视角应用图标" --yes --wait --json
+```
+
+为对应客户端生成最小权限 MCP 配置：
+
+```bash
+crossgen mcp config --client codex --mode readonly --json
+crossgen mcp config --client claude-code --mode generate --json
+crossgen mcp config --client cursor --mode generate --json
+```
+
+建议先使用 `readonly`，只有 Agent 确实需要时才开启 `write` 或 `generate`。付费生图、资产导出、破坏性操作、队列控制修改和本地路径披露都要求明确权限或确认。完整命令、工具覆盖、权限模式和安装路径见 [CLI 与 MCP 指南](./docs/cli-mcp.md)。
+
+> 已经在桌面、CLI 或 Agent 工作流中使用 CrossGen？可以 [Star 仓库](https://github.com/Bliveren/CrossGen)，帮助更多需要本地优先图像工具的用户发现它，也欢迎在 [Discord](https://discord.gg/XphwmYtY) 分享你的真实工作流。
 
 它解决的是很实际的工作问题：
 
