@@ -1,6 +1,6 @@
 # CrossGen Known Limitations
 
-Last updated: 2026-07-29 for v0.3.2 release-candidate validation.
+Last updated: 2026-07-30 for v0.3.2 release-candidate validation.
 
 This document tracks the current user-facing limits for the released app,
 release-candidate validation, and agent runtime surfaces.
@@ -64,7 +64,15 @@ release-candidate validation, and agent runtime surfaces.
      shows a clear diagnostic and a usable next action.
    - A text-to-image success alone is not enough evidence for release approval.
 
-8. **Linux package is verified but newer than the primary desktop target**
+8. **Reference-image preflight is non-destructive**
+   - v0.3.2 can create smaller temporary request copies for oversized
+     reference images. These copies are used only for provider requests and do
+     not replace the user's original Gallery, History, or local files.
+   - Queue and History diagnostics may show original/request dimensions, bytes,
+     downsampling status, and alpha-channel metadata to explain request
+     behavior.
+
+9. **Linux package is verified but newer than the primary desktop target**
    - The Linux AppImage is published and release-verified in CI.
    - The primary interactive desktop target remains macOS and Windows.
 
