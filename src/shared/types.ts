@@ -22,6 +22,43 @@ export type QueueExecutionKind = "sync-provider" | "remote-poll" | "local-cpu";
 
 export type QueueErrorCategory = "transient" | "auth" | "quota" | "safety" | "cancelled" | "unsupported" | "unknown";
 
+export type TaskDiagnosticCategory =
+  | "auth"
+  | "billing"
+  | "rate_limit"
+  | "timeout"
+  | "safety"
+  | "unsupported_capability"
+  | "route_unsupported"
+  | "provider_empty_output"
+  | "provider_schema"
+  | "network"
+  | "cancelled"
+  | "unknown";
+
+export type TaskDiagnosticOperation = "text-to-image" | "image-to-image" | "guided-region";
+
+export type TaskDiagnosticProviderKind = ProviderKind | "openai-compatible";
+
+export interface TaskDiagnostic {
+  category: TaskDiagnosticCategory;
+  message: string;
+  providerMessage?: string;
+  error?: string;
+  errorCategory?: QueueErrorCategory;
+  operation: TaskDiagnosticOperation;
+  providerKind: TaskDiagnosticProviderKind;
+  modelId: string;
+  route?: string;
+  inputImageCount: number;
+  hasMask: boolean;
+  timeoutMs: number;
+  attemptIndex: number;
+  retryable: boolean;
+  chargedRetryRisk: boolean;
+  nextActions: string[];
+}
+
 export interface QueueRuntimeConfig {
   maxGlobalRunning: number;
   providerConcurrency: Record<string, number>;
@@ -35,14 +72,6 @@ export type QueueStage =
   | "downloading"
   | "postprocessing"
   | "finalizing";
-
-export interface TaskDiagnostic {
-  error?: string;
-  errorCategory?: QueueErrorCategory;
-  retryable?: boolean;
-  chargedRetryRisk?: boolean;
-  nextActions?: string[];
-}
 
 export interface QueueTaskSummary {
   queueId: string;
@@ -451,6 +480,7 @@ export interface GenerationJob {
   outputs: ImageAsset[];
   usage?: UsageDetails;
   providerMetadata?: Record<string, unknown>;
+  diagnostic?: TaskDiagnostic;
 }
 
 export interface RunJobRequest {
@@ -479,6 +509,7 @@ export interface GenerationQueueItem {
   lastError?: string;
   lastErrorCategory?: QueueErrorCategory;
   lastErrorRetryable?: boolean;
+  lastDiagnostic?: TaskDiagnostic;
   historyJobId?: string;
   outputAssetIds: string[];
   partialAssetIds: string[];

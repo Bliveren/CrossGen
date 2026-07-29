@@ -404,6 +404,62 @@ describe("generationQueue", () => {
     await removeTempDir(tempDir);
   });
 
+  it("persists structured diagnostics on failed queue items", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({ queuePath, lockPath: `${queuePath}.lock` });
+    const item = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      maxAttempts: 1
+    });
+    await store.appendItem(item);
+
+    const result = await runNextGenerationQueueItem({
+      queueStore: store,
+      queueId: item.queueId,
+      host: { hostId: "host-1", kind: "desktop", processId: process.pid },
+      executeItem: async () => ({
+        status: "failed",
+        error: "OpenAI API 没有返回可保存的图片。",
+        errorCategory: "unsupported",
+        retryable: false,
+        diagnostic: {
+          category: "provider_empty_output",
+          message: "Provider 响应中没有可保存的图片。",
+          operation: "image-to-image",
+          providerKind: "openai-compatible",
+          modelId: "gpt-image-2",
+          route: "image-api",
+          inputImageCount: 1,
+          hasMask: false,
+          timeoutMs: 60000,
+          attemptIndex: 1,
+          retryable: false,
+          chargedRetryRisk: true,
+          nextActions: ["切换接口路径后重试。"]
+        }
+      })
+    });
+
+    expect(result.item?.status).toBe("failed");
+    const queue = await store.read();
+    expect(queue.items[0]).toMatchObject({
+      status: "failed",
+      lastErrorCategory: "unsupported",
+      lastDiagnostic: {
+        category: "provider_empty_output",
+        operation: "image-to-image",
+        route: "image-api",
+        inputImageCount: 1
+      }
+    });
+
+    await removeTempDir(tempDir);
+  });
+
   it("records partial outputs without duplicating asset ids", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-generation-queue-"));
     const queuePath = path.join(tempDir, "queue.json");

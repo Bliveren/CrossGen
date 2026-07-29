@@ -1,4 +1,4 @@
-import type { GenerationQueueFile, GenerationQueueItem, GenerationQueueWorkerHost, JobStatus, QueueErrorCategory } from "../shared/types.js";
+import type { GenerationQueueFile, GenerationQueueItem, GenerationQueueWorkerHost, JobStatus, QueueErrorCategory, TaskDiagnostic } from "../shared/types.js";
 import type { QueueHostIdentity, QueueStore } from "./queueStore.js";
 
 export interface GenerationQueueFailureClassification {
@@ -16,6 +16,7 @@ export interface GenerationQueueExecutionResult<TValue = unknown> {
   error?: string;
   errorCategory?: QueueErrorCategory;
   retryable?: boolean;
+  diagnostic?: TaskDiagnostic;
 }
 
 export interface ClassifyGenerationQueueFailureInput {
@@ -220,6 +221,7 @@ export function completeGenerationQueueItemInQueue(
         lastError: result.error,
         lastErrorCategory: result.errorCategory,
         lastErrorRetryable: result.retryable,
+        lastDiagnostic: result.diagnostic,
         historyJobId: result.historyJobId ?? current.historyJobId,
         outputAssetIds: result.outputAssetIds ?? current.outputAssetIds,
         partialAssetIds: result.partialAssetIds ?? current.partialAssetIds,
@@ -271,6 +273,7 @@ async function scheduleRetry(
   item: GenerationQueueItem,
   message: string,
   classification: GenerationQueueFailureClassification,
+  diagnostic: TaskDiagnostic | undefined,
   retryBackoffMs: number,
   nowMs: number
 ): Promise<GenerationQueueItem | undefined> {
@@ -290,6 +293,7 @@ async function scheduleRetry(
         lastError: message,
         lastErrorCategory: classification.category,
         lastErrorRetryable: classification.retryable,
+        lastDiagnostic: diagnostic ?? current.lastDiagnostic,
         completedAt: undefined,
         workerHostId: undefined,
         workerProcessId: undefined,
@@ -360,6 +364,7 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
         item,
         execution.error ?? "Generation failed.",
         classification,
+        execution.diagnostic,
         (options.retryBackoffMs ?? defaultRetryBackoffMs)(item, classification),
         now()
       );
@@ -392,6 +397,7 @@ export async function runNextGenerationQueueItem<TValue = unknown>(
       item,
       message,
       classification,
+      undefined,
       (options.retryBackoffMs ?? defaultRetryBackoffMs)(item, classification),
       now()
     );
@@ -557,6 +563,7 @@ export function retryGenerationQueueItemInQueue(
         lastError: undefined,
         lastErrorCategory: undefined,
         lastErrorRetryable: undefined,
+        lastDiagnostic: undefined,
         outputAssetIds: [],
         partialAssetIds: [],
         galleryAssetIds: [],

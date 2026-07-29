@@ -10,6 +10,7 @@ import type {
   QueueExecutionKind,
   QueueStage
 } from "../shared/types.js";
+import { normalizeTaskDiagnosticValue } from "./providerDiagnostics.js";
 
 export interface QueueStoreOptions {
   queuePath: string;
@@ -106,6 +107,7 @@ function normalizeQueueItem(raw: Partial<GenerationQueueItem>): GenerationQueueI
     lastError: typeof raw.lastError === "string" ? raw.lastError : undefined,
     lastErrorCategory: normalizeQueueErrorCategory(raw.lastErrorCategory),
     lastErrorRetryable: typeof raw.lastErrorRetryable === "boolean" ? raw.lastErrorRetryable : undefined,
+    lastDiagnostic: normalizeTaskDiagnosticValue(raw.lastDiagnostic),
     historyJobId: typeof raw.historyJobId === "string" ? raw.historyJobId : undefined,
     outputAssetIds: Array.isArray(raw.outputAssetIds) ? raw.outputAssetIds.filter((value): value is string => typeof value === "string") : [],
     partialAssetIds: Array.isArray(raw.partialAssetIds) ? raw.partialAssetIds.filter((value): value is string => typeof value === "string") : [],
