@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-07-29T19:59:20.000Z",
+  "lastUpdated": "2026-07-30T07:08:03.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -43,18 +43,27 @@
         "Each operation respects the user-configured timeout and records route, model, input image count, mask usage, attempts, elapsed seconds, output count, diagnostic, and next actions."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-30T07:06:02.341Z",
+        "commit": "c9d8f2fe4b44c08bb14ec7f5e4d8a8ba87d7d712",
+        "environment": "macOS local paid direct compatible-provider gate using the product-owner selected compatible endpoint. API keys and the full private Base URL were loaded from local environment and are not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate"
+        ],
         "references": [
           {
             "label": "v0.3.2 provider gate matrix",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.2-provider-gate-matrix.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending explicit cost acceptance before running real OpenAI-compatible provider gates. Latest saved-config dry run on commit b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317 wrote real-api-artifacts/crossgen-gate/2026-07-29T19-43-08-796Z/summary.json and found OpenAI-compatible G1-G3 ready for paid gate."
+        "artifacts": [
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/provider-gate/2026-07-30T07-03-11-668Z/summary.json",
+            "public": false,
+            "description": "Paid direct compatible-provider gate summary on main@c9d8f2f. G1 text-to-image and G2 image-to-image passed; G3 guided-region returned provider_empty_output with no saved image."
+          }
+        ],
+        "summary": "OpenAI-compatible text-to-image and image-to-image passed on the product-owner selected compatible endpoint (G1 51.45s, G2 95.26s). Guided-region/mask editing returned provider_empty_output with no saved image, so this gate remains pending product acceptance of the diagnostic or a provider/route fix."
       }
     },
     {
@@ -70,18 +79,40 @@
         "Missing Gemini-compatible provider configuration is not misreported as a generation failure."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-07-30T07:08:02.995Z",
+        "commit": "c9d8f2fe4b44c08bb14ec7f5e4d8a8ba87d7d712",
+        "environment": "macOS local paid direct compatible-provider single-gate retries using the product-owner selected compatible endpoint. API keys and the full private Base URL were loaded from local environment and are not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 CROSSGEN_REAL_PROVIDER_GATE_FILTER=G4 pnpm verify:real-provider-gate",
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 CROSSGEN_REAL_PROVIDER_GATE_FILTER=G5 pnpm verify:real-provider-gate"
+        ],
         "references": [
           {
             "label": "v0.3.2 provider gate matrix",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.2-provider-gate-matrix.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending Gemini-compatible saved provider configuration or direct endpoint environment. Latest saved-config dry run on commit b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317 wrote real-api-artifacts/crossgen-gate/2026-07-29T19-43-08-796Z/summary.json and reports G4/G5 as config_missing."
+        "artifacts": [
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/provider-gate/2026-07-30T07-06-26-000Z/summary.json",
+            "public": false,
+            "description": "Paid direct compatible-provider single-gate summary on main@c9d8f2f. G4 Gemini-compatible text-to-image passed in 40.56s."
+          },
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/provider-gate/2026-07-30T07-07-19-173Z/summary.json",
+            "public": false,
+            "description": "Paid direct compatible-provider single-gate summary on main@c9d8f2f. G5 Gemini-compatible image-to-image passed in 43.75s."
+          },
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/provider-gate/2026-07-30T07-03-11-668Z/summary.json",
+            "public": false,
+            "description": "Full consecutive paid gate summary on main@c9d8f2f. G4/G5 returned provider upstream 500 after G3, so provider stability under consecutive full-matrix execution remains pending."
+          }
+        ],
+        "summary": "Gemini-compatible text-to-image and image-to-image passed as isolated gates on the product-owner selected compatible endpoint. In the full consecutive matrix run, G4/G5 returned upstream 500 immediately after G3; therefore this gate remains pending a repeat clean full run or explicit product acceptance of the provider stability diagnostic."
       }
     },
     {
@@ -472,11 +503,13 @@
         "Every gate records route, model, timeout, elapsed seconds, input image count, output count, diagnostic category, and next actions without exposing secrets."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:43:09.607Z",
-        "commit": "b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317",
-        "environment": "macOS local no-cost saved-config dry run. The runner did not submit generation jobs because CROSSGEN_REAL_PROVIDER_ACCEPT_COST was not set. OpenAI-compatible G1-G3 were ready for paid gate; Gemini-compatible G4/G5 remained config_missing.",
+        "verifiedAt": "2026-07-30T07:08:02.995Z",
+        "commit": "c9d8f2fe4b44c08bb14ec7f5e4d8a8ba87d7d712",
+        "environment": "macOS local paid direct compatible-provider matrix using the product-owner selected compatible endpoint. API keys and the full private Base URL were loaded from local environment and are not recorded.",
         "commands": [
-          "CROSSGEN_REAL_PROVIDER_DRY_RUN=1 pnpm verify:real-crossgen-gate"
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate",
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 CROSSGEN_REAL_PROVIDER_GATE_FILTER=G4 pnpm verify:real-provider-gate",
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 CROSSGEN_REAL_PROVIDER_GATE_FILTER=G5 pnpm verify:real-provider-gate"
         ],
         "references": [
           {
@@ -486,19 +519,25 @@
         ],
         "artifacts": [
           {
-            "kind": "local-directory",
-            "path": "real-api-artifacts/crossgen-gate/",
+            "kind": "local-file",
+            "path": "real-api-artifacts/provider-gate/2026-07-30T07-03-11-668Z/summary.json",
             "public": false,
-            "description": "No-cost saved-config dry-run summaries exist. Paid real provider summaries remain pending."
+            "description": "Full paid direct compatible-provider matrix on main@c9d8f2f. G1/G2 passed, G3 returned provider_empty_output, and G4/G5 returned upstream 500 in the consecutive full run."
           },
           {
             "kind": "local-file",
-            "path": "real-api-artifacts/crossgen-gate/2026-07-29T19-43-08-796Z/summary.json",
+            "path": "real-api-artifacts/provider-gate/2026-07-30T07-06-26-000Z/summary.json",
             "public": false,
-            "description": "Latest no-cost saved-config dry-run summary for main@b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317. G1-G3 are dry-run ready; G4/G5 report config_missing. The summary is redacted and does not include API keys, full private Base URLs, full dataDir paths, or saved provider ids/names."
+            "description": "Filtered G4 retry passed on main@c9d8f2f."
+          },
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/provider-gate/2026-07-30T07-07-19-173Z/summary.json",
+            "public": false,
+            "description": "Filtered G5 retry passed on main@c9d8f2f."
           }
         ],
-        "summary": "Pending explicit cost acceptance and Gemini-compatible configuration. Latest no-cost dry run on commit b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317 wrote real-api-artifacts/crossgen-gate/2026-07-29T19-43-08-796Z/summary.json, found OpenAI-compatible G1-G3 ready for paid gate, and found G4/G5 missing Gemini-compatible config. The dry-run summary is redacted and does not include API keys, full private Base URLs, full dataDir paths, or saved provider ids/names."
+        "summary": "Paid operation-level evidence now exists for the selected compatible endpoint: G1 and G2 passed in the full matrix; G3 guided-region/mask returned provider_empty_output; G4 and G5 passed when retried individually but failed with upstream 500 in the full consecutive run. The matrix remains pending until guided-region diagnostics and provider stability are accepted or fixed."
       }
     },
     {
