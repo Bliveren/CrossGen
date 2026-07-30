@@ -1,0 +1,50 @@
+name: Feature request
+description: Propose a focused improvement to the desktop, CLI, or MCP workflow
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Desktop app
+        - JSON CLI
+        - MCP server
+        - Shared core workflow
+        - Packaging or installation
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the workflow problem before proposing a solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: agent-contract
+    attributes:
+      label: CLI or MCP contract
+      description: If relevant, include the desired JSON command, MCP tool, permission mode, and confirmation behavior.
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and pull requests.
+          required: true
+        - label: I have not included credentials, private images, or other sensitive data.
+          required: true
