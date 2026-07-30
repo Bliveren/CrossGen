@@ -67,6 +67,7 @@ const timeoutMs = Math.max(
 );
 
 const outputRoot = path.resolve(process.env.CROSSGEN_REAL_PROVIDER_OUTPUT_DIR ?? "real-api-artifacts", "provider-gate");
+const gateFilter = parseGateFilter(process.env.CROSSGEN_REAL_PROVIDER_GATE_FILTER ?? process.env.IMAGE2TOOLS_REAL_PROVIDER_GATE_FILTER ?? "");
 
 function requireAcceptance() {
   if (!baseURL) {
@@ -87,6 +88,24 @@ function requireAcceptance() {
   if (!acceptCost) {
     throw new Error("Refusing to make paid real provider calls. Set CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 to run the v0.3.2 provider gate.");
   }
+}
+
+function parseGateFilter(value) {
+  return value
+    .split(/[,\s]+/g)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function gateMatchesFilter(gate) {
+  if (gateFilter.length === 0) return true;
+  const haystack = [
+    gate.id,
+    gate.providerKind,
+    gate.model,
+    gate.operation
+  ].join(" ").toLowerCase();
+  return gateFilter.some((filter) => haystack.includes(filter));
 }
 
 function redacted(value) {
@@ -261,8 +280,8 @@ function extractImageRefs(text) {
   for (const match of text.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)) {
     refs.push(match[1] ?? "");
   }
-  for (const match of text.matchAll(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi)) {
-    refs.push(match[0] ?? "");
+  for (const match of text.matchAll(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s_-]+/gi)) {
+    refs.push((match[0] ?? "").replace(/\s+/g, ""));
   }
   for (const match of text.matchAll(/\bhttps?:\/\/[^\s"'<>)]*\.(?:png|jpe?g|webp|gif)(?:\?[^\s"'<>)]*)?/gi)) {
     refs.push(match[0] ?? "");
@@ -381,7 +400,7 @@ async function requestChatImage(gate, outputDir) {
       headers: {
         Authorization: `Bearer ${gate.apiKey}`,
         "content-type": "application/json",
-        accept: "text/event-stream, application/json"
+        accept: "text/event-stream"
       },
       body: JSON.stringify({
         model: gate.model,
@@ -411,8 +430,7 @@ async function requestChatImage(gate, outputDir) {
     if (!response.body) throw new Error(`${gate.id} returned an empty response body.`);
 
     const contentType = response.headers.get("content-type") ?? "";
-    const bodyText = await response.text();
-    const image = await imageFromResponseBody(gate.id, bodyText, contentType, gate.apiKey);
+    const image = await imageFromStreamingBody(gate.id, response.body, contentType, gate.apiKey);
     const saved = await saveImage(gate.id, image, outputDir);
     console.log(`${gate.id}: saved image after ${Date.now() - startedAt}ms.`);
     return {
@@ -458,6 +476,102 @@ async function requestChatImage(gate, outputDir) {
   } finally {
     timeout.clear();
   }
+}
+
+async function imageFromStreamingBody(label, body, contentType, apiKey) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let rawText = "";
+  let textBuffer = "";
+  let eventCount = 0;
+  let lastEventKeys = [];
+  const seenRefs = new Set();
+
+  async function imageFromText(value) {
+    textBuffer = trimTextBuffer(`${textBuffer}${value}`);
+    for (const ref of extractImageRefs(textBuffer)) {
+      if (seenRefs.has(ref)) continue;
+      seenRefs.add(ref);
+      const image = await fetchImageRef(label, ref, apiKey);
+      if (image.buffer.length > 0) {
+        await reader.cancel().catch(() => undefined);
+        return image;
+      }
+    }
+    return null;
+  }
+
+  async function processBlock(block) {
+    const data = block
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n");
+    if (!data || data === "[DONE]") return null;
+    let event;
+    try {
+      event = JSON.parse(data);
+    } catch {
+      return null;
+    }
+    eventCount += 1;
+    lastEventKeys = Object.keys(event).slice(0, 12);
+    return imageFromText(responseTextFromEvent(event));
+  }
+
+  async function processBufferedBlocks(flush = false) {
+    const parts = buffer.split(/\r?\n\r?\n/);
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      const image = await processBlock(part);
+      if (image) return image;
+    }
+    if (flush && buffer.trim()) {
+      const image = await processBlock(buffer);
+      if (image) return image;
+      const fallbackImage = await imageFromText(buffer);
+      if (fallbackImage) return fallbackImage;
+      buffer = "";
+    }
+    return null;
+  }
+
+  try {
+    while (true) {
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch (error) {
+        const image = await processBufferedBlocks(true);
+        if (image) return image;
+        throw error;
+      }
+      const { done, value } = chunk;
+      if (done) break;
+      const decoded = decoder.decode(value, { stream: true });
+      rawText = trimTextBuffer(`${rawText}${decoded}`);
+      buffer += decoded;
+      const image = await processBufferedBlocks(false);
+      if (image) return image;
+      const rawImage = await imageFromText(decoded);
+      if (rawImage) return rawImage;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const trailing = decoder.decode();
+  rawText = trimTextBuffer(`${rawText}${trailing}`);
+  buffer += trailing;
+  const image = await processBufferedBlocks(true);
+  if (image) return image;
+  const rawImage = await imageFromText(rawText);
+  if (rawImage) return rawImage;
+  if (rawText.trim()) {
+    return imageFromResponseBody(label, rawText, contentType, apiKey);
+  }
+  throw new Error(`${label} did not return a savable image. SSE events: ${eventCount}; last event keys: ${lastEventKeys.join(",") || "none"}.`);
 }
 
 async function imageFromResponseBody(label, bodyText, contentType, apiKey) {
@@ -605,7 +719,13 @@ async function main() {
   await writeFile(path.join(outputDir, "guided-region-mask.png"), mask.buffer);
 
   const modelDiscovery = await verifyModels(outputDir);
-  const gates = buildGates(source, mask);
+  const gates = buildGates(source, mask).filter(gateMatchesFilter);
+  if (gates.length === 0) {
+    throw new Error(`No provider gates matched CROSSGEN_REAL_PROVIDER_GATE_FILTER=${gateFilter.join(",")}.`);
+  }
+  if (gateFilter.length > 0) {
+    console.log(`Provider gate filter: ${gateFilter.join(", ")}; running ${gates.length} gate(s).`);
+  }
   const results = [];
   for (const gate of gates) {
     results.push(await requestChatImage(gate, outputDir));
@@ -620,6 +740,7 @@ async function main() {
     baseURL: baseURLIdentity(),
     timeoutMs,
     route: "chat-completions",
+    gateFilter,
     allowDiagnosticFailures,
     modelDiscovery,
     gates: results
