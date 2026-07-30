@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Workflow questions and ideas
+    url: https://github.com/Bliveren/CrossGen/discussions
+    about: Ask questions, share workflows, or discuss an idea before scoping an issue.
+  - name: Security vulnerability
+    url: https://github.com/Bliveren/CrossGen/security/advisories/new
+    about: Report security issues privately. Do not open a public issue.

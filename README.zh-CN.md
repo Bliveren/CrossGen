@@ -275,6 +275,15 @@ CrossGen 由 [诺惟 Nowo](https://www.nowo.com/) 与 [核炬科技 Corgnitor](h
 
 欢迎加入 [CrossGen Discord 社区](https://discord.gg/XphwmYtY)，反馈问题、讨论版本和交流生图工作流。
 
+## 社区与贡献
+
+- 使用问题、工作流分享和早期想法请前往 [GitHub Discussions](https://github.com/Bliveren/CrossGen/discussions)。
+- 可复现问题或边界明确的需求请使用 [Issue 模板](https://github.com/Bliveren/CrossGen/issues/new/choose)。
+- 提交代码或文档前，请先阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+- 安全漏洞请按 [SECURITY.md](./SECURITY.md) 私下报告，不要创建公开 Issue。
+
+新贡献者可从 [`good first issue`](https://github.com/Bliveren/CrossGen/labels/good%20first%20issue) 或 [`help wanted`](https://github.com/Bliveren/CrossGen/labels/help%20wanted) 任务开始。
+
 ## 技术说明
 
 CrossGen 使用 Electron、React 和 Tailwind 构建。本节面向开发、测试和发布维护人员；普通用户下载安装包即可使用。

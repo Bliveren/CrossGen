@@ -267,6 +267,15 @@ CrossGen is maintained by [Nowo](https://www.nowo.com/) and [Corgnitor](https://
 
 Join the CrossGen community on [Discord](https://discord.gg/XphwmYtY) for feedback, release discussion, and workflow ideas.
 
+## Community and Contributions
+
+- Ask usage questions, share workflows, and discuss early ideas in [GitHub Discussions](https://github.com/Bliveren/CrossGen/discussions).
+- Report reproducible problems or scoped requests with the [issue templates](https://github.com/Bliveren/CrossGen/issues/new/choose).
+- Read [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting code or documentation.
+- Report vulnerabilities privately according to [SECURITY.md](./SECURITY.md).
+
+New contributors can start with [`good first issue`](https://github.com/Bliveren/CrossGen/labels/good%20first%20issue) or [`help wanted`](https://github.com/Bliveren/CrossGen/labels/help%20wanted) tasks.
+
 ## Technical Notes
 
 CrossGen is an Electron + React + Tailwind desktop app. The app focuses on local-first workflows and supports OpenAI, Gemini, and compatible image providers.
