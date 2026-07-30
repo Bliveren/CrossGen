@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <b>Local-first AI image workspace for people and AI agents.</b><br />
-  Generate, edit, organize, and reuse images from the desktop app, JSON CLI, or MCP-compatible agents.
+  <b>One local AI image workflow. Desktop, CLI, and MCP.</b><br />
+  Generate, edit, organize, and export images from the visual app, scripts, or MCP-compatible agents.
 </p>
 
 <p align="center">
@@ -22,12 +22,18 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>Download v0.3.1</b></a> ·
+  <a href="#agent-quickstart"><b>Agent Quickstart</b></a> ·
+  <a href="./docs/cli-mcp.md"><b>CLI/MCP Docs</b></a> ·
+  <a href="https://discord.gg/XphwmYtY">Discord</a>
+</p>
+
+<p align="center">
   <a href="#why-crossgen-031">Why 0.3.1</a> ·
   <a href="#visual-tour">Visual Tour</a> ·
   <a href="#core-workflows">Core Workflows</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
-  <a href="#download-and-use">Download</a> ·
-  <a href="https://discord.gg/XphwmYtY">Discord</a> ·
+  <a href="#download-and-use">Install</a> ·
   <a href="#technical-notes">Technical Notes</a>
 </p>
 
@@ -37,7 +43,33 @@ CrossGen 0.3.1 turns the desktop image workspace into an agent-ready local runti
 
 The desktop app, CLI, and MCP server share the same API profiles, durable generation queue, History, and Gallery. Install CrossGen once; installed CLI and MCP use require no separate Node.js, npm, pnpm, global package, or local HTTP service.
 
+| Use CrossGen visually | Call the same runtime from an agent |
+| --- | --- |
+| Configure providers, generate and edit images, review History, and organize reusable Gallery assets. | Discover models, submit queue-backed generation or edits, monitor jobs, inspect Gallery assets, and export a selected result into the current project. |
+
 <img width="1440" height="940" alt="screenshot-20260724-003442" src="https://github.com/user-attachments/assets/53a63a11-7430-4b80-a749-2b67d29e5962" />
+
+### Agent Quickstart
+
+Install and open the [latest desktop release](https://github.com/Bliveren/CrossGen/releases/latest), then add an API profile in **API access**. The packaged `crossgen` launcher is ready for scripts, and the app executable can run as a local MCP stdio server.
+
+```bash
+crossgen doctor --agent --json
+crossgen models list --json
+crossgen generate --prompt "A precise isometric app icon" --yes --wait --json
+```
+
+Generate least-privilege MCP configuration for your client:
+
+```bash
+crossgen mcp config --client codex --mode readonly --json
+crossgen mcp config --client claude-code --mode generate --json
+crossgen mcp config --client cursor --mode generate --json
+```
+
+Start with `readonly`, then enable `write` or `generate` only when the agent needs it. Paid generation, asset export, destructive actions, queue-control changes, and local path disclosure require explicit permission or confirmation. See the [CLI and MCP guide](./docs/cli-mcp.md) for commands, tool coverage, modes, and installed executable paths.
+
+> Using CrossGen in a real desktop, CLI, or agent workflow? [Star the repository](https://github.com/Bliveren/CrossGen) so other local-first image-tool users can find it, and share the workflow in [Discord](https://discord.gg/XphwmYtY).
 
 It is built for real image-generation work, not just one-off prompting. Designers, comic and storyboarding teams, UI makers, operators, product teams, and AI image hobbyists often need the same loop:
 
