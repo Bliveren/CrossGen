@@ -14,6 +14,7 @@ interface TaskTabBarProps {
   onClose(taskId: string): void;
   onAdd(): void;
   onToggleEnabled(taskId: string, enabled: boolean): void;
+  onContextMenu?(event: React.MouseEvent, taskId: string): void;
 }
 
 interface TaskRunControlsProps {
@@ -44,7 +45,8 @@ export function TaskTabBar({
   onSwitch,
   onClose,
   onAdd,
-  onToggleEnabled
+  onToggleEnabled,
+  onContextMenu
 }: TaskTabBarProps) {
   useTaskStoreVersion(store);
   const stripRef = useRef<HTMLDivElement | null>(null);
@@ -87,6 +89,10 @@ export function TaskTabBar({
             ].filter(Boolean).join(" ")}
             tabIndex={0}
             onClick={() => onSwitch(taskId)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              onContextMenu?.(event, taskId);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();

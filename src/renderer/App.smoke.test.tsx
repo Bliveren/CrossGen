@@ -2268,6 +2268,52 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("copies and pastes a task via the tab context menu (references stay base64)", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
+    await flushAsync();
+
+    // 任务 1：设置提示词 + 粘贴一张参考图（base64）
+    await changeTextArea(textAreaByLabel("Prompt"), "Shared prompt");
+    await click(buttonByText("Image to image", ".mode-tab"));
+    const grid = document.querySelector<HTMLDivElement>(".refpanel-grid")!;
+    const dataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, "clipboardData", { value: { files: [], getData: () => dataUrl } });
+    act(() => { grid.dispatchEvent(pasteEvent); });
+    await flushAsync();
+    expect(document.querySelectorAll(".reference-thumb-tile")).toHaveLength(1);
+
+    // 右键任务页签 -> 复制任务
+    await contextMenu(document.querySelector<HTMLElement>(".task-tab")!);
+    expect(document.querySelector(".context-menu")).toBeTruthy();
+    await click(buttonByText("Copy task", ".context-menu-item"));
+    await flushAsync();
+    expect(document.body.textContent).toContain("Task copied to clipboard");
+
+    // 添加任务 2，右键 -> 粘贴任务
+    await click(document.querySelector<HTMLButtonElement>(".task-tab-add")!);
+    await flushAsync();
+    await contextMenu(document.querySelector<HTMLElement>(".task-tab.active")!);
+    await click(buttonByText("Paste task", ".context-menu-item"));
+    await flushAsync();
+
+    expect(textAreaByLabel("Prompt").value).toBe("Shared prompt");
+    expect(document.querySelectorAll(".reference-thumb-tile")).toHaveLength(1);
+    const pastedSrc = document.querySelector<HTMLImageElement>(".reference-thumb-tile img")?.src ?? "";
+    expect(pastedSrc).toContain("data:image/png;base64,");
+  });
+
   it("does not apply split-mode checks to models without mappings (e.g. gpt-image-2)", async () => {
     const relayConfig = providerConfig({
       id: "relay-access",

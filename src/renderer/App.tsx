@@ -7,6 +7,7 @@ import {
   ChevronUp,
   CheckCircle2,
   CheckSquare,
+  ClipboardPaste,
   Copy,
   Download,
   FileDown,
@@ -198,6 +199,15 @@ interface GallerySaveChoiceDialogState {
 }
 type BatchTagTarget = "history" | "gallery";
 type ImageContextMenuState = { x: number; y: number; asset: ImageAsset; jobPrompt: string };
+type TaskTabContextMenuState = { x: number; y: number; taskId: string };
+interface TaskClipboardPayload {
+  tabMode: TabMode;
+  prompt: string;
+  params: ImageParams;
+  inputAssets: InputAsset[];
+  maskDataUrl?: string | null;
+  maskAsset?: InputAsset | null;
+}
 type CrossgenProfilerEvent = {
   id: string;
   phase: "mount" | "update" | "nested-update";
@@ -1314,6 +1324,8 @@ export function App() {
   const [isPrimaryRunIconOnly, setIsPrimaryRunIconOnly] = useState(false);
   const [isParameterDialogOpen, setIsParameterDialogOpen] = useState(false);
   const [openLaunchMenuId, setOpenLaunchMenuId] = useTaskField<FocusedLaunchId | null>(taskStore, activeTaskId, "openLaunchMenuId", null);
+  const [taskTabContextMenu, setTaskTabContextMenu] = useState<TaskTabContextMenuState | null>(null);
+  const taskClipboardRef = useRef<TaskClipboardPayload | null>(null);
   const [historySearch, setHistorySearch] = useState("");
   const [historyStatusFilter, setHistoryStatusFilter] = useState<"all" | "succeeded" | "failed">("all");
   const [historySort, setHistorySort] = useState<"newest" | "oldest">("newest");
@@ -1525,6 +1537,99 @@ export function App() {
 
   function setTaskEnabled(taskId: string, enabled: boolean) {
     taskStore.set(taskId, "enabled", enabled);
+  }
+
+  // ---- 任务页签右键：复制任务 / 复制提示词 / 粘贴任务 ----
+  function openTaskTabContextMenu(event: React.MouseEvent, taskId: string) {
+    event.preventDefault();
+    setTaskTabContextMenu(null);
+    const position = clampContextMenuPosition(event.clientX, event.clientY, 200, 140);
+    setTaskTabContextMenu({ ...position, taskId });
+  }
+
+  function taskField(taskId: string, key: string): unknown {
+    return taskStore.get(taskId, key);
+  }
+
+  async function copyableReferenceAsset(asset: InputAsset): Promise<InputAsset | null> {
+    if (asset.dataUrl?.startsWith("data:image/")) return asset;
+    if (asset.path && bridge?.importImages) {
+      try {
+        const [converted] = await bridge.importImages([asset.path]);
+        if (converted?.dataUrl?.startsWith("data:image/")) return converted;
+      } catch {
+        // 忽略：无法读取的文件不进入剪贴板
+      }
+    }
+    return null;
+  }
+
+  async function copyTask(taskId: string) {
+    const tPrompt = (taskField(taskId, "prompt") as string | undefined) ?? "";
+    const tTabMode = (taskField(taskId, "tabMode") as TabMode | undefined) ?? "text2img";
+    const tParams = (taskField(taskId, "params") as ImageParams | undefined) ?? DEFAULT_IMAGE_PARAMS;
+    const tInputAssets = (taskField(taskId, "inputAssets") as InputAsset[] | undefined) ?? [];
+    const tMaskDataUrl = (taskField(taskId, "maskDataUrl") as string | null | undefined) ?? null;
+    const tMaskAsset = (taskField(taskId, "maskAsset") as InputAsset | null | undefined) ?? null;
+
+    const assets = await Promise.all(tInputAssets.map((asset) => copyableReferenceAsset(asset)));
+    const mask = tMaskAsset ? await copyableReferenceAsset(tMaskAsset) : null;
+    taskClipboardRef.current = {
+      tabMode: tTabMode,
+      prompt: tPrompt,
+      params: tParams,
+      inputAssets: assets.filter((asset): asset is InputAsset => asset !== null),
+      maskDataUrl: tMaskDataUrl,
+      maskAsset: mask
+    };
+    setNotice({ kind: "success", text: copy.taskCopied });
+  }
+
+  async function copyTaskPrompt(taskId: string) {
+    const text = (taskField(taskId, "prompt") as string | undefined) ?? "";
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.append(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+      setNotice({ kind: "success", text: copy.notices.promptCopied });
+    } catch {
+      setNotice({ kind: "error", text: copy.notices.promptCopyFailed });
+    }
+  }
+
+  function pasteTask(taskId: string) {
+    const payload = taskClipboardRef.current;
+    if (!payload) {
+      setNotice({ kind: "error", text: copy.taskClipboardEmpty });
+      return;
+    }
+    taskStore.set(taskId, "tabMode", payload.tabMode);
+    taskStore.set(taskId, "prompt", payload.prompt);
+    taskStore.set(taskId, "params", payload.params);
+    taskStore.set(taskId, "inputAssets", payload.inputAssets.map((asset, index) =>
+      asset.dataUrl?.startsWith("data:image/")
+        ? referenceDataUrlToAsset(asset.dataUrl, index)
+        : asset
+    ));
+    taskStore.set(taskId, "maskDataUrl", payload.maskDataUrl ?? null);
+    taskStore.set(taskId, "maskAsset", payload.maskAsset ?? null);
+    taskStore.set(taskId, "maskCheck", null);
+    if (payload.tabMode === "text2img") {
+      setTabMode("text2img");
+    } else {
+      setTabMode("img2img");
+    }
+    markDraftChanged();
+    setNotice({ kind: "success", text: copy.taskPasted });
   }
 
 
@@ -5782,6 +5887,20 @@ export function App() {
   }, [galleryAssetContextMenu, galleryFolderContextMenu, isGalleryFolderMenuOpen]);
 
   useEffect(() => {
+    if (!taskTabContextMenu) return;
+    const handleClick = () => setTaskTabContextMenu(null);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTaskTabContextMenu(null);
+    };
+    document.addEventListener("click", handleClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [taskTabContextMenu]);
+
+  useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
       const resizeState = textResizeRef.current;
       const canvas = annotationCanvasRef.current;
@@ -6823,6 +6942,7 @@ export function App() {
           onClose={closeTask}
           onAdd={addTask}
           onToggleEnabled={setTaskEnabled}
+          onContextMenu={openTaskTabContextMenu}
         />
         <TaskRunControls
           copy={copy}
@@ -7913,6 +8033,50 @@ export function App() {
             </div>
           )}
         </DialogShell>
+      )}
+      {taskTabContextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: taskTabContextMenu.x, top: taskTabContextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              void copyTask(taskTabContextMenu.taskId);
+              setTaskTabContextMenu(null);
+            }}
+          >
+            <Copy size={14} />
+            {copy.taskCopy}
+          </button>
+          <button
+            type="button"
+            className="context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              void copyTaskPrompt(taskTabContextMenu.taskId);
+              setTaskTabContextMenu(null);
+            }}
+          >
+            <Copy size={14} />
+            {copy.taskCopyPrompt}
+          </button>
+          <button
+            type="button"
+            className="context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              pasteTask(taskTabContextMenu.taskId);
+              setTaskTabContextMenu(null);
+            }}
+          >
+            <ClipboardPaste size={14} />
+            {copy.taskPaste}
+          </button>
+        </div>
       )}
       {contextMenu && (
         <div

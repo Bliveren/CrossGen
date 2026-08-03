@@ -35,6 +35,7 @@ interface NoticeCopy {
   jobDeleted: string;
   historyCleared: string;
   promptCopied: string;
+  promptCopyFailed: string;
   clipboardUnavailable: string;
   jobLoaded: string;
   modelsDiscovered: (count: number) => string;
@@ -129,6 +130,12 @@ export interface UiCopy {
   taskLabel: string;
   taskAdd: string;
   taskClose: string;
+  taskCopy: string;
+  taskCopyPrompt: string;
+  taskPaste: string;
+  taskCopied: string;
+  taskClipboardEmpty: string;
+  taskPasted: string;
   taskRunAll: string;
   taskRunAllNone: string;
   taskRunAllStarted: (count: number) => string;
@@ -561,6 +568,12 @@ export const translations: Record<Language, UiCopy> = {
     taskLabel: "Task",
     taskAdd: "Add task",
     taskClose: "Close task",
+    taskCopy: "Copy task",
+    taskCopyPrompt: "Copy prompt",
+    taskPaste: "Paste task",
+    taskCopied: "Task copied to clipboard",
+    taskClipboardEmpty: "No copied task yet. Copy a task first.",
+    taskPasted: "Task pasted",
     taskRunAll: "Run all",
     taskRunAllNone: "No runnable tasks.",
     taskRunAllStarted: (count) => `Started ${count} task${count === 1 ? "" : "s"}.`,
@@ -1090,6 +1103,7 @@ export const translations: Record<Language, UiCopy> = {
       jobDeleted: "Job deleted.",
       historyCleared: "History cleared.",
       promptCopied: "Prompt copied.",
+      promptCopyFailed: "Failed to copy the prompt.",
       clipboardUnavailable: "Clipboard is unavailable.",
       jobLoaded: "Job loaded into workspace.",
       modelsDiscovered: (count: number) => `${count} model${count === 1 ? "" : "s"} discovered.`,
@@ -1136,6 +1150,12 @@ export const translations: Record<Language, UiCopy> = {
     taskLabel: "任务",
     taskAdd: "添加任务",
     taskClose: "关闭任务",
+    taskCopy: "复制任务",
+    taskCopyPrompt: "复制提示词",
+    taskPaste: "粘贴任务",
+    taskCopied: "任务已复制",
+    taskClipboardEmpty: "暂无已复制的任务，请先复制一个任务。",
+    taskPasted: "任务已粘贴",
     taskRunAll: "全部运行",
     taskRunAllNone: "没有可运行的任务。",
     taskRunAllStarted: (count) => `已启动 ${count} 个任务。`,
@@ -1665,6 +1685,7 @@ export const translations: Record<Language, UiCopy> = {
       jobDeleted: "任务已删除。",
       historyCleared: "历史已清空。",
       promptCopied: "提示词已复制。",
+      promptCopyFailed: "复制提示词失败。",
       clipboardUnavailable: "剪贴板不可用。",
       jobLoaded: "任务已载入工作区。",
       modelsDiscovered: (count: number) => `已探测到 ${count} 个模型。`,
