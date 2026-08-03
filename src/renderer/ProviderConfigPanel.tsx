@@ -717,6 +717,14 @@ export function ModelAliasMappingSection({
             <p className="api-model-summary">{copy.modelAliasEmpty}</p>
           ) : (
             <div className="model-alias-list">
+              <div
+                className="model-alias-row model-alias-header"
+                style={{ display: "grid", gridTemplateColumns: splitMode ? "minmax(0, 1fr) auto minmax(0, 1fr) auto" : "minmax(0, 1fr) minmax(0, 1fr) auto", gap: "6px", alignItems: "end" }}
+              >
+                <span className="model-alias-target-label">{copy.modelAliasAliasLabel}</span>
+                {splitMode && <span className="model-alias-target-label">{copy.modelAliasTierLabel}</span>}
+                <span className="model-alias-target-label">{copy.modelAliasTargetLabel}</span>
+              </div>
               {draft.map((row, index) => (
                 <div
                   className="model-alias-row"
@@ -731,38 +739,34 @@ export function ModelAliasMappingSection({
                     disabled={disabled}
                   />
                   {splitMode && (
-                    <label>
-                      <span className="model-alias-target-label">{copy.modelAliasTierLabel}</span>
-                      <select
-                        value={row.tier}
-                        onChange={(event) => updateRow(index, { tier: event.target.value as "1K" | "2K" | "4K" })}
-                        disabled={disabled}
-                      >
-                        {(["1K", "2K", "4K"] as const).map((tier) => (
-                          <option key={tier} value={tier}>{tier}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <label>
-                    <span className="model-alias-target-label">{copy.modelAliasTargetLabel}</span>
                     <select
-                      value={row.targetModelId}
-                      onChange={(event) => updateRow(index, { targetModelId: event.target.value })}
+                      value={row.tier}
+                      onChange={(event) => updateRow(index, { tier: event.target.value as "1K" | "2K" | "4K" })}
+                      aria-label={copy.modelAliasTierLabel}
                       disabled={disabled}
                     >
-                      {row.targetModelId === "" && (
-                        <option value="" disabled>
-                          {copy.modelAliasTargetLabel}
-                        </option>
-                      )}
-                      {CATALOG_TARGET_MODEL_OPTIONS.map((modelId) => (
-                        <option key={modelId} value={modelId}>
-                          {modelId}
-                        </option>
+                      {(["1K", "2K", "4K"] as const).map((tier) => (
+                        <option key={tier} value={tier}>{tier}</option>
                       ))}
                     </select>
-                  </label>
+                  )}
+                  <select
+                    value={row.targetModelId}
+                    onChange={(event) => updateRow(index, { targetModelId: event.target.value })}
+                    aria-label={copy.modelAliasTargetLabel}
+                    disabled={disabled}
+                  >
+                    {row.targetModelId === "" && (
+                      <option value="" disabled>
+                        {copy.modelAliasTargetLabel}
+                      </option>
+                    )}
+                    {CATALOG_TARGET_MODEL_OPTIONS.map((modelId) => (
+                      <option key={modelId} value={modelId}>
+                        {modelId}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     className="icon-button ghost danger"

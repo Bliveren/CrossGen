@@ -182,6 +182,7 @@ export interface UiCopy {
   modelAliasTitle: string;
   modelAliasDescription: string;
   modelAliasAliasPlaceholder: string;
+  modelAliasAliasLabel: string;
   modelAliasTargetLabel: string;
   modelAliasAdd: string;
   modelAliasRemove: string;
@@ -688,6 +689,7 @@ export const translations: Record<Language, UiCopy> = {
     modelAliasTitle: "Model name mapping",
     modelAliasDescription: "Map aggregator model names to built-in catalog models.",
     modelAliasAliasPlaceholder: "Alias model name (as returned by the API)",
+    modelAliasAliasLabel: "API custom name",
     modelAliasTargetLabel: "Target model (built-in)",
     modelAliasAdd: "Add mapping",
     modelAliasRemove: "Remove mapping",
@@ -1259,6 +1261,7 @@ export const translations: Record<Language, UiCopy> = {
     modelAliasTitle: "模型名映射",
     modelAliasDescription: "将中转站返回的模型名映射到内置目录模型。",
     modelAliasAliasPlaceholder: "别名模型名（中转站返回）",
+    modelAliasAliasLabel: "API 自定义名称",
     modelAliasTargetLabel: "目标模型（内置）",
     modelAliasAdd: "添加映射",
     modelAliasRemove: "删除映射",
