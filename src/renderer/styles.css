@@ -5028,7 +5028,6 @@
   .prompt-composer {
     display: grid;
     gap: 8px;
-    min-height: 0;
   }
 
   .prompt-composer-field {
@@ -5447,6 +5446,14 @@
     height: 30px;
   }
 
+  .sidebar .queue-task-side {
+    display: none;
+  }
+
+  .sidebar .queue-task-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .queue-diagnostic-dialog {
     width: min(520px, calc(100vw - 36px));
     max-height: min(760px, calc(100vh - 44px));
@@ -5655,7 +5662,9 @@
 
   .reference-thumb-tile {
     width: 100%;
+    min-width: 0;
     min-height: 0;
+    overflow: hidden;
     gap: 5px;
     padding: 6px;
     cursor: pointer;
@@ -7340,17 +7349,17 @@
   cursor: not-allowed;
 }
 
-/* 参数快速选择条（chip）内：居中、限宽，悬停/聚焦时随 chip 展开 */
+.custom-select-menu-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+/* 参数快速选择条（chip）内：居中、固定宽度，不随聚焦/悬停改变宽度 */
 .parameter-quick-field .custom-select {
   justify-self: center;
   width: min(100%, 104px);
   min-width: 0;
   max-width: 100%;
-}
-
-.parameter-config-bar:hover .parameter-quick-field .custom-select,
-.parameter-quick-field:focus-within .custom-select {
-  width: 100%;
 }
 
 .parameter-quick-field .custom-select-trigger {
@@ -7444,6 +7453,9 @@
   height: 24px;
   min-height: 24px;
   padding: 0;
+}
+.task-tab-add {
+  flex: 0 0 auto;
 }
 .task-tab {
   height: 28px;

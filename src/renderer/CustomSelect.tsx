@@ -19,7 +19,21 @@ interface SelectProps {
 /** 通用自定义下拉（主题自适应），替代原生 <select>。 */
 export function Select({ value, onChange, options, ariaLabel, disabled = false, className }: SelectProps) {
   const [open, setOpen] = useState(false);
+  const [menuUp, setMenuUp] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  function toggleOpen() {
+    const next = !open;
+    if (next && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const estimatedMenuHeight = Math.min(options.length * 34 + 12, 240) + 8;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setMenuUp(spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow);
+    }
+    setOpen(next);
+  }
 
   useEffect(() => {
     if (!open) return undefined;
@@ -44,6 +58,7 @@ export function Select({ value, onChange, options, ariaLabel, disabled = false, 
   return (
     <div className={["custom-select", className].filter(Boolean).join(" ")} ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         className="custom-select-trigger"
         aria-haspopup="listbox"
@@ -51,13 +66,13 @@ export function Select({ value, onChange, options, ariaLabel, disabled = false, 
         aria-label={ariaLabel}
         data-value={value}
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggleOpen}
       >
         <span className="custom-select-label">{current?.label ?? value}</span>
         {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
       </button>
       {open && (
-        <div className="custom-select-menu" role="listbox" aria-label={ariaLabel}>
+        <div className={["custom-select-menu", menuUp ? "custom-select-menu-up" : ""].filter(Boolean).join(" ")} role="listbox" aria-label={ariaLabel}>
           {options.map((option) => (
             <button
               key={option.value}

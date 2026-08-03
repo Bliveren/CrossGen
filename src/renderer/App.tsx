@@ -599,6 +599,7 @@ function QueueStatusPanel({
   onToggle,
   onCancel,
   onRetry,
+  onRemove,
   onDetails
 }: {
   copy: UiCopy;
@@ -608,6 +609,7 @@ function QueueStatusPanel({
   onToggle: () => void;
   onCancel: (task: QueueTaskSummary) => void;
   onRetry: (task: QueueTaskSummary) => void;
+  onRemove: (task: QueueTaskSummary) => void;
   onDetails: (task: QueueTaskSummary) => void;
 }) {
   const tasks = visibleQueueTasks(snapshot);
@@ -667,6 +669,11 @@ function QueueStatusPanel({
                     {task.retryable && (
                       <button type="button" className="icon-button" onClick={() => onRetry(task)} aria-label={copy.queue.retry} data-tooltip={copy.queue.retry}>
                         <RefreshCw size={14} />
+                      </button>
+                    )}
+                    {(task.status === "failed" || task.status === "interrupted" || task.status === "cancelled") && (
+                      <button type="button" className="icon-button" onClick={() => onRemove(task)} aria-label={copy.queue.remove} data-tooltip={copy.queue.remove}>
+                        <Trash2 size={14} />
                       </button>
                     )}
                   </div>
@@ -4372,6 +4379,16 @@ export function App() {
     await cancelRunningJob();
   }
 
+  async function removeQueueTask(task: QueueTaskSummary) {
+    if (!bridge?.removeQueueItem) return;
+    try {
+      const next = await bridge.removeQueueItem(task.queueId);
+      setQueueSnapshot(next);
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
   function requestQueueRetry(task: QueueTaskSummary) {
     if (!bridge?.retryQueueItem) return;
     requestDangerConfirm({
@@ -6704,6 +6721,18 @@ export function App() {
           onSelectModel={(launchId, model) => void selectLaunchModel(launchId, model)}
         />
 
+        <QueueStatusPanel
+          copy={copy}
+          snapshot={queueSnapshot}
+          expanded={isQueuePanelOpen}
+          formatDurationLabel={formatDuration}
+          onToggle={() => setIsQueuePanelOpen((current) => !current)}
+          onCancel={(task) => void cancelQueueTask(task)}
+          onRetry={requestQueueRetry}
+          onRemove={(task) => void removeQueueTask(task)}
+          onDetails={setQueueDiagnosticTask}
+        />
+
         <section className="notice-area" data-kind={notice.kind} aria-live={notice.kind === "error" ? "assertive" : "polite"} aria-atomic="true">
           {notice.kind === "error" ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
           <span>{notice.text}</span>
@@ -7002,16 +7031,6 @@ export function App() {
                 </div>
               </div>
               {validationError && <p className="inline-check error">{validationError}</p>}
-              <QueueStatusPanel
-                copy={copy}
-                snapshot={queueSnapshot}
-                expanded={isQueuePanelOpen}
-                formatDurationLabel={formatDuration}
-                onToggle={() => setIsQueuePanelOpen((current) => !current)}
-                onCancel={(task) => void cancelQueueTask(task)}
-                onRetry={requestQueueRetry}
-                onDetails={setQueueDiagnosticTask}
-              />
             </div>
 
             {!showReferenceTools && (

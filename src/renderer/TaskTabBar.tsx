@@ -3,6 +3,7 @@ import type { UiCopy } from "./i18n";
 import type { ProviderConfig } from "../shared/types";
 import { useEffect, useRef, useState } from "react";
 import { useTaskStoreVersion, type TaskFieldStore } from "./taskStore";
+import type React from "react";
 
 interface TaskTabBarProps {
   store: TaskFieldStore;
@@ -46,9 +47,27 @@ export function TaskTabBar({
   onToggleEnabled
 }: TaskTabBarProps) {
   useTaskStoreVersion(store);
+  const stripRef = useRef<HTMLDivElement | null>(null);
+
+  function handleStripWheel(event: React.WheelEvent<HTMLDivElement>) {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const canScrollX = strip.scrollWidth > strip.clientWidth;
+    if (!canScrollX) return;
+    const { deltaX, deltaY } = event;
+    if (Math.abs(deltaX) >= Math.abs(deltaY)) return;
+    event.preventDefault();
+    strip.scrollLeft += deltaY;
+  }
 
   return (
-    <div className="task-tab-strip" role="tablist" aria-label={copy.taskLabel}>
+    <div
+      ref={stripRef}
+      className="task-tab-strip"
+      role="tablist"
+      aria-label={copy.taskLabel}
+      onWheel={handleStripWheel}
+    >
       {taskIds.map((taskId, index) => {
         const isActive = taskId === activeTaskId;
         const running = store.get(taskId, "isRunning") === true;

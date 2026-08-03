@@ -56,6 +56,7 @@ interface QueueCopy {
   retry: string;
   cancel: string;
   cancelRequested: string;
+  remove: string;
   retryConfirmTitle: string;
   retryConfirmBody: string;
   retryConfirm: string;
@@ -582,6 +583,7 @@ export const translations: Record<Language, UiCopy> = {
       retry: "Retry",
       cancel: "Cancel task",
       cancelRequested: "Cancel requested",
+      remove: "Remove task",
       retryConfirmTitle: "Retry this task?",
       retryConfirmBody: "Retrying may submit another paid provider request. Continue only if you intend to spend another request.",
       retryConfirm: "Retry task",
@@ -1154,6 +1156,7 @@ export const translations: Record<Language, UiCopy> = {
       retry: "重试",
       cancel: "取消任务",
       cancelRequested: "已请求取消",
+      remove: "删除任务",
       retryConfirmTitle: "确认重试该任务？",
       retryConfirmBody: "重试可能会再次向服务商提交付费请求。请确认你愿意重新消耗一次请求后再继续。",
       retryConfirm: "确认重试",

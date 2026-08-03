@@ -318,6 +318,22 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.retryQueueItem).toHaveBeenCalledWith("queue-retry");
   });
 
+  it("removes terminal queue tasks from the queue list", async () => {
+    const failedTask = queueTask({ queueId: "queue-remove-me", status: "failed", promptPreview: "Remove prompt", retryable: true, canCancel: false });
+    const runningTask = queueTask({ queueId: "queue-still-running", status: "running", promptPreview: "Running prompt", canCancel: true });
+    const bridge = await renderApp(snapshot(), queueSnapshot({ running: [runningTask], failed: [failedTask] }));
+    await flushAsync();
+    await click(document.querySelector<HTMLButtonElement>(".queue-widget-summary")!);
+
+    const failedCard = [...document.querySelectorAll<HTMLElement>(".queue-task-card")].find((item) => item.textContent?.includes("Remove prompt"))!;
+    await click(failedCard.querySelector<HTMLButtonElement>('button[aria-label="Remove task"]')!);
+    expect(bridge.removeQueueItem).toHaveBeenCalledWith("queue-remove-me");
+
+    await flushAsync();
+    expect(document.body.textContent).not.toContain("Remove prompt");
+    expect(document.body.textContent).toContain("Running prompt");
+  });
+
   it("surfaces History source, duration, failed details, interrupted guidance, and retry confirmation", async () => {
     const failedJob = geminiJob(10, {
       id: "history-failed",
@@ -3335,6 +3351,21 @@ function createBridge(initialSnapshot: AppSnapshot, initialQueueSnapshot: QueueS
     }),
     retryQueueItem: vi.fn(async (jobId) => {
       const next = mapQueueSnapshotTasks(currentQueueSnapshot, (task) => task.queueId === jobId || task.historyJobId === jobId ? { ...task, status: "queued", retryable: false, cancelRequested: false } : task);
+      emitQueueSnapshot(next);
+      return next;
+    }),
+    removeQueueItem: vi.fn(async (queueId) => {
+      const drop = (tasks: QueueTaskSummary[]) => tasks.filter((task) => task.queueId !== queueId);
+      const next = queueSnapshot({
+        ...currentQueueSnapshot,
+        queued: drop(currentQueueSnapshot.queued),
+        running: drop(currentQueueSnapshot.running),
+        failed: drop(currentQueueSnapshot.failed),
+        cancelled: drop(currentQueueSnapshot.cancelled),
+        interrupted: drop(currentQueueSnapshot.interrupted),
+        succeededRecent: drop(currentQueueSnapshot.succeededRecent),
+        recentJobs: drop(currentQueueSnapshot.recentJobs)
+      });
       emitQueueSnapshot(next);
       return next;
     }),

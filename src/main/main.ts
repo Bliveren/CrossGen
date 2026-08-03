@@ -112,6 +112,7 @@ import {
   completeGenerationQueueItemInQueue,
   recordGenerationQueueItemStage,
   recordGenerationQueuePartialOutput,
+  removeGenerationQueueItem,
   requestGenerationQueueItemCancelInQueue,
   retryGenerationQueueItemInQueue,
   runGenerationQueueItemToCompletion,
@@ -3566,6 +3567,24 @@ async function handleRetryQueueItem(_event: IpcMainInvokeEvent, jobId: string): 
   return snapshot;
 }
 
+async function handleRemoveQueueItem(_event: IpcMainInvokeEvent, queueId: string): Promise<QueueSnapshot> {
+  if (typeof queueId !== "string" || !queueId.trim()) {
+    throw new Error("队列任务 ID 无效。");
+  }
+
+  const result = await removeGenerationQueueItem(getGenerationQueueStore(), queueId);
+  if (result.action === "not_found") {
+    throw new Error("队列任务不存在。");
+  }
+  if (result.action === "not_removable") {
+    throw new Error("该任务正在执行中，无法删除。");
+  }
+
+  const snapshot = await buildDesktopQueueSnapshot(result.queue);
+  sendQueueSnapshot(snapshot);
+  return snapshot;
+}
+
 function canRunRequestWithConfig(request: RunJobRequest, config: StoredProviderConfig): boolean {
   if (request.params.providerKind === config.kind) return true;
   if (request.params.launchId !== config.activeLaunchId) return false;
@@ -5989,6 +6008,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("queue:configSet", handleQueueConfigSet);
   ipcMain.handle("queue:cancel", handleCancelQueueItem);
   ipcMain.handle("queue:retry", handleRetryQueueItem);
+  ipcMain.handle("queue:remove", handleRemoveQueueItem);
   ipcMain.handle("asset:download", handleDownloadAsset);
   ipcMain.handle("asset:downloadEdited", handleDownloadEditedImage);
   ipcMain.handle("asset:openFolder", handleOpenAssetFolder);

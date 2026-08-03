@@ -802,6 +802,7 @@ export interface AppBridge {
   setQueueRuntimeConfig: (patch: QueueRuntimeConfigPatch) => Promise<{ config: QueueRuntimeConfig }>;
   cancelQueueItem: (queueId: string) => Promise<QueueSnapshot>;
   retryQueueItem: (jobId: string) => Promise<QueueSnapshot>;
+  removeQueueItem: (queueId: string) => Promise<QueueSnapshot>;
   downloadAsset: (request: DownloadRequest) => Promise<string | null>;
   downloadEditedImage: (request: EditedImageDownloadRequest) => Promise<string | null>;
   openAssetFolder: (assetPath: string) => Promise<void>;
