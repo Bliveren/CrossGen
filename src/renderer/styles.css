@@ -7093,18 +7093,6 @@
   }
 }
 
-/* ===== 多任务页签栏 ===== */
-.task-tab-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border-strong, rgba(127, 127, 127, 0.25));
-  background: var(--panel, rgba(255, 255, 255, 0.6));
-  flex: 0 0 auto;
-  overflow-x: auto;
-  min-height: 38px;
-}
 .task-tab {
   display: inline-flex;
   align-items: center;
@@ -7240,12 +7228,34 @@
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border-strong, rgba(127, 127, 127, 0.25));
-  background: var(--panel, rgba(255, 255, 255, 0.6));
-  flex: 0 0 auto;
+  padding: 4px 10px;
+  margin-bottom: 10px;
+  height: 38px;
   min-height: 38px;
+  max-height: 38px;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: var(--surface-app);
+  flex: 0 0 auto;
 }
+
+/* 页签栏按钮统一紧凑尺寸，避免多标签时把栏高撑高 */
+.task-tab-add,
+.task-tab-close {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+}
+.task-tab {
+  height: 28px;
+  box-sizing: border-box;
+}
+.task-run-all {
+  height: 28px;
+  min-height: 28px;
+}
+
 .task-tab-strip {
   display: flex;
   align-items: center;
