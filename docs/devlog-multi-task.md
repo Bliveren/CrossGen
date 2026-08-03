@@ -9,7 +9,10 @@ per-provider model-name mapping for API relays (including a 1K/2K/4K
 "split" mode). The durable queue executes multiple tasks concurrently
 (configurable) and is surfaced as a global panel next to the task API
 selector. Parameter dropdowns were replaced with a theme-aware custom
-select that auto-flips above/below.
+select that auto-flips above/below. A per-provider "Gemini 使用像素尺寸"
+toggle sends explicit WxH pixel sizes (mapped from aspect ratio + tier),
+matching how relay dashboards like LTG build requests, so relays that
+ignore the aspectRatio field still produce the chosen ratio.
 
 ## What changed
 
@@ -25,6 +28,11 @@ Backend / shared:
 - Model alias mapping is persisted per provider; split mode rewrites the
   request model to the relay's per-resolution name and rejects unmapped
   tiers before the request is sent.
+- Gemini pixel-size relay adaptation: `geminiPixelSize` on the provider
+  config makes the Gemini adapter send an explicit pixel size (e.g.
+  `1152x2048` for 9:16 2K) instead of `aspectRatio` + `1K/2K/4K`; a
+  pixel table mirrors the relay dashboards' known-good sizes, with a
+  long-side/pixel-limit fallback for 21:9 and 0.5K.
 
 Renderer:
 - Task tabs: each task owns its provider selection, prompt, params,
@@ -35,6 +43,8 @@ Renderer:
   (1-9), resizable panel height, and content clipped to the tile frame.
 - API config dialog: model-alias mapping UI (with split mode) and a
   scrollable body; mapping rows use a single header row of column labels.
+  A "Gemini 使用像素尺寸" checkbox (relay adaptation) lives above the
+  alias section.
 - Parameter config: custom themed dropdowns (same style as the task API
   selector) with constant width and auto up/down menu placement.
 - The global generation queue moved into the sidebar near the task API
@@ -60,13 +70,13 @@ Operational:
 
 ## Testing
 - `tsc` (renderer + main configs) clean.
-- Vitest: 468 passed, 4 skipped. One pre-existing Windows
+- Vitest: 471 passed, 4 skipped. One pre-existing Windows
   symlink-permission test fails only on Windows without symlink privileges
   (unrelated to this change).
 - `vite build` succeeds.
 
 ## Scope
-30 files: backend + shared + renderer + tests + docs. Local launcher and
+31 files: backend + shared + renderer + tests + docs. Local launcher and
 pnpm-specific convenience files (`start-windows.bat`, `.gitattributes`,
 `pnpm-workspace.yaml`) are intentionally not part of this PR.
 
