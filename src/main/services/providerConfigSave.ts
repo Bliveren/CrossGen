@@ -54,6 +54,7 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
     openAIImageRouting: discoveryInvalidated ? undefined : current.openAIImageRouting,
     modelAliases: normalizeModelAliasEntries(input.modelAliases) ?? current.modelAliases,
     modelAliasSplitMode: typeof input.modelAliasSplitMode === "boolean" ? input.modelAliasSplitMode : current.modelAliasSplitMode,
+    geminiPixelSize: typeof input.geminiPixelSize === "boolean" ? input.geminiPixelSize : current.geminiPixelSize,
     updatedAt: now
   };
 

@@ -275,6 +275,7 @@ export interface ProviderConfig {
   openAIImageRouting?: OpenAIImageRouting;
   modelAliases?: ModelAliasEntry[];
   modelAliasSplitMode?: boolean;
+  geminiPixelSize?: boolean;
   updatedAt: string;
 }
 
@@ -319,6 +320,7 @@ export interface ProviderConfigInput {
   activeModelId?: string;
   modelAliases?: ModelAliasEntry[];
   modelAliasSplitMode?: boolean;
+  geminiPixelSize?: boolean;
 }
 
 export interface OpenAIImageParams {

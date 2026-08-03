@@ -7430,6 +7430,39 @@
 }
 
 
+/* API 配置内联勾选行（如 Gemini 像素尺寸适配开关） */
+.api-config-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.api-config-checkbox-row input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.api-config-checkbox-label {
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.api-config-checkbox-hint {
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.api-config-checkbox-row:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 /* 任务标签条拆分：标签可横向滚动，运行控制区固定右侧 */
 .task-tab-bar {
   display: flex;

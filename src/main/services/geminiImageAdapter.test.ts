@@ -434,4 +434,37 @@ describe("Gemini image adapter", () => {
       runGeminiImageJob(job({ params: params({ timeoutMs: 1 }) }), "mock-gemini-key", "https://api.test/v1beta", runtime)
     ).rejects.toThrow("请求超时");
   });
+
+  it("keeps tier imageSize by default and maps ratio+resolution to pixels when usePixelSize is enabled", () => {
+    const defaults = buildGeminiGenerateContentBody(params({ aspectRatio: "9:16", resolution: "2K" }), "prompt");
+    expect(defaults.generationConfig.responseFormat.image).toEqual({
+      aspectRatio: "9:16",
+      imageSize: "2K"
+    });
+    expect(defaults.contents[0].parts[0].text).toContain("Target image size: 2K.");
+
+    const pixels = buildGeminiGenerateContentBody(params({ aspectRatio: "9:16", resolution: "2K" }), "prompt", [], { usePixelSize: true });
+    expect(pixels.generationConfig.responseFormat.image).toEqual({
+      aspectRatio: "9:16",
+      imageSize: "1152x2048"
+    });
+    expect(pixels.contents[0].parts[0].text).toContain("Target image size: 1152x2048.");
+  });
+
+  it("maps common Gemini ratios to the relay pixel table at 1K/2K/4K", () => {
+    const cases: Array<[GeminiImageParams["aspectRatio"], GeminiImageParams["resolution"], string]> = [
+      ["1:1", "1K", "1024x1024"],
+      ["1:1", "2K", "2048x2048"],
+      ["16:9", "1K", "1280x720"],
+      ["16:9", "2K", "2048x1152"],
+      ["16:9", "4K", "3840x2160"],
+      ["9:16", "2K", "1152x2048"],
+      ["3:4", "2K", "1536x2048"],
+      ["4:3", "2K", "2048x1536"]
+    ];
+    for (const [aspectRatio, resolution, expected] of cases) {
+      const body = buildGeminiGenerateContentBody(params({ aspectRatio, resolution }), "prompt", [], { usePixelSize: true });
+      expect(body.generationConfig.responseFormat.image.imageSize).toBe(expected);
+    }
+  });
 });

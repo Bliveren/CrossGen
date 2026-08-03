@@ -3114,6 +3114,36 @@ describe("renderer multi-model smoke", () => {
       })
     );
   });
+
+  it("persists the Gemini pixel-size relay adaptation toggle from the API config detail", async () => {
+    const relayConfig = providerConfig({
+      id: "relay-pixel",
+      kind: "gemini",
+      name: "Relay Pixel",
+      baseURL: "https://gateway.example.com/v1beta",
+      apiKeySaved: true,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [relayConfig], activeProviderId: relayConfig.id }));
+
+    await openSavedApiAccess();
+    await click(apiConfigCardMainByText("Relay Pixel"));
+
+    const checkbox = document.querySelector<HTMLInputElement>(".api-config-checkbox-row input");
+    expect(checkbox).toBeTruthy();
+    expect(checkbox?.checked).toBe(false);
+
+    await changeCheckbox(checkbox!, true);
+    await click(buttonByText("Save", ".api-config-detail button"));
+
+    expect(bridge.saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: relayConfig.id,
+        geminiPixelSize: true
+      })
+    );
+  });
 });
 
 async function renderApp(initialSnapshot: AppSnapshot, initialQueueSnapshot = queueSnapshot()): Promise<AppBridge> {

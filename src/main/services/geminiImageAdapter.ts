@@ -4,6 +4,7 @@ import path from "node:path";
 import type {
   ConnectionTestResult,
   DiscoveredModel,
+  GeminiAspectRatio,
   GeminiImageParams,
   GeminiResolution,
   GenerationJob,
@@ -51,7 +52,7 @@ export interface GeminiGenerateContentBody {
     responseFormat: {
       image: {
         aspectRatio: GeminiImageParams["aspectRatio"];
-        imageSize: "512" | "1K" | "2K" | "4K";
+        imageSize: GeminiImageSize;
         imageCount?: number;
       };
     };
@@ -94,7 +95,7 @@ export const geminiImageAdapter: ImageProviderAdapter = {
     return validateGeminiRunJobRequest(request);
   },
   runJob(job: GenerationJob, apiKey: string, config: StoredProviderConfig, runtime: ImageJobRuntime) {
-    return runGeminiImageJob(asGeminiImageJob(job), apiKey, config.baseURL, runtime);
+    return runGeminiImageJob(asGeminiImageJob(job), apiKey, config.baseURL, runtime, { usePixelSize: config.geminiPixelSize === true });
   }
 };
 
@@ -107,16 +108,68 @@ export function buildGeminiGenerateContentEndpoint(baseURL: string, model: strin
   return `${buildGeminiEndpoint(baseURL, "/models")}/${encodeURIComponent(modelId)}:generateContent`;
 }
 
+export type GeminiImageSize = "512" | "1K" | "2K" | "4K" | `${number}x${number}`;
+
 export function geminiImageSizeForResolution(resolution: GeminiResolution): "512" | "1K" | "2K" | "4K" {
   return resolution === "0.5K" ? "512" : resolution;
+}
+
+// 中转适配：比例 + 档位 -> 具体像素（与官方画布 LTG 使用的像素表一致）。
+const GEMINI_PIXEL_SIZES: Record<GeminiAspectRatio, Record<"1K" | "2K" | "4K", string>> = {
+  "1:1": { "1K": "1024x1024", "2K": "2048x2048", "4K": "2880x2880" },
+  "3:4": { "1K": "1008x1344", "2K": "1536x2048", "4K": "2448x3264" },
+  "4:3": { "1K": "1344x1008", "2K": "2048x1536", "4K": "3264x2448" },
+  "9:16": { "1K": "720x1280", "2K": "1152x2048", "4K": "2160x3840" },
+  "16:9": { "1K": "1280x720", "2K": "2048x1152", "4K": "3840x2160" },
+  "21:9": { "1K": "1536x656", "2K": "2048x864", "4K": "3840x1632" }
+};
+
+const GEMINI_PIXEL_LONG_SIDE: Record<GeminiResolution, number> = { "0.5K": 512, "1K": 1536, "2K": 2048, "4K": 3840 };
+const GEMINI_PIXEL_LIMIT: Record<GeminiResolution, number> = {
+  "0.5K": 262144,
+  "1K": 1572864,
+  "2K": 4194304,
+  "4K": 8294400
+};
+
+function roundTo16(value: number): number {
+  return Math.max(64, Math.floor(value / 16) * 16);
+}
+
+export function geminiPixelSizeForRatioResolution(aspectRatio: GeminiAspectRatio, resolution: GeminiResolution): GeminiImageSize {
+  if (resolution !== "0.5K") {
+    const fixed = GEMINI_PIXEL_SIZES[aspectRatio][resolution];
+    if (fixed) return fixed as GeminiImageSize;
+  }
+  const longSide = GEMINI_PIXEL_LONG_SIDE[resolution];
+  const pixelLimit = GEMINI_PIXEL_LIMIT[resolution];
+  const [rw, rh] = aspectRatio.split(":").map(Number);
+  const ratio = rw / rh;
+  let width: number;
+  let height: number;
+  if (ratio === 1) {
+    const side = Math.min(longSide, Math.floor(Math.sqrt(pixelLimit)));
+    width = side;
+    height = side;
+  } else if (ratio > 1) {
+    width = longSide;
+    height = Math.min(longSide / ratio, Math.sqrt(pixelLimit / ratio));
+  } else {
+    width = Math.min(longSide * ratio, Math.sqrt(pixelLimit * ratio));
+    height = longSide;
+  }
+  return `${roundTo16(width)}x${roundTo16(height)}`;
 }
 
 export function buildGeminiGenerateContentBody(
   params: GeminiImageParams,
   prompt: string,
-  inlineDataParts: GeminiInlineData[] = []
+  inlineDataParts: GeminiInlineData[] = [],
+  options: { usePixelSize?: boolean } = {}
 ): GeminiGenerateContentBody {
-  const imageSize = geminiImageSizeForResolution(params.resolution);
+  const imageSize = options.usePixelSize
+    ? geminiPixelSizeForRatioResolution(params.aspectRatio, params.resolution)
+    : geminiImageSizeForResolution(params.resolution);
   const generationConfig: GeminiGenerateContentBody["generationConfig"] = {
     responseModalities: ["TEXT", "IMAGE"],
     responseFormat: {
@@ -155,7 +208,7 @@ export function buildGeminiGenerateContentBody(
 function geminiPromptWithOutputConstraints(
   prompt: string,
   aspectRatio: GeminiImageParams["aspectRatio"],
-  imageSize: "512" | "1K" | "2K" | "4K"
+  imageSize: GeminiImageSize
 ): string {
   return [
     prompt.trim(),
@@ -239,7 +292,8 @@ export async function runGeminiImageJob(
   job: GeminiImageJob,
   apiKey: string,
   baseURL: string,
-  runtime: GeminiImageRuntime
+  runtime: GeminiImageRuntime,
+  options: { usePixelSize?: boolean } = {}
 ): Promise<GenerationJob> {
   if (job.mode === "generate" && job.inputAssets.length > 0) {
     throw new Error("文生图不应携带输入图片。");
@@ -260,7 +314,7 @@ export async function runGeminiImageJob(
       method: "POST",
       signal: runtime.abortSignal,
       headers: geminiJsonHeaders(apiKey),
-      body: JSON.stringify(buildGeminiGenerateContentBody(job.params, job.prompt, inlineDataParts))
+      body: JSON.stringify(buildGeminiGenerateContentBody(job.params, job.prompt, inlineDataParts, options))
     },
     remainingTimeoutMs(deadlineMs)
   );

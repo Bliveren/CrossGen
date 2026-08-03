@@ -63,6 +63,7 @@ export interface StoredProviderConfig {
   openAIImageRouting?: OpenAIImageRouting;
   modelAliases?: ModelAliasEntry[];
   modelAliasSplitMode?: boolean;
+  geminiPixelSize?: boolean;
   updatedAt: string;
   encryptedApiKey?: string;
   encryption: "safeStorage" | "localFallback" | "none";
@@ -188,6 +189,7 @@ function normalizeStoredConfig(value: unknown): StoredProviderConfig {
     openAIImageRouting: normalizeOpenAIImageRouting(input.openAIImageRouting),
     modelAliases: normalizeModelAliases(input.modelAliases),
     modelAliasSplitMode: typeof input.modelAliasSplitMode === "boolean" ? input.modelAliasSplitMode : undefined,
+    geminiPixelSize: typeof input.geminiPixelSize === "boolean" ? input.geminiPixelSize : undefined,
     updatedAt: nonEmptyString(input.updatedAt, new Date(0).toISOString()),
     encryptedApiKey: optionalString(input.encryptedApiKey),
     encryption: normalizeEncryption(input.encryption)

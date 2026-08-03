@@ -1261,6 +1261,7 @@ export function App() {
   const [selectedApiConfigId, setSelectedApiConfigId] = useState<string | null>(null);
   const [modelAliasesDraft, setModelAliasesDraft] = useState<ModelAliasEntry[]>([]);
   const [modelAliasSplitModeDraft, setModelAliasSplitModeDraft] = useState(false);
+  const [geminiPixelSizeDraft, setGeminiPixelSizeDraft] = useState(false);
   const [promotedApiConfigId, setPromotedApiConfigId] = useState<string | null>(null);
   const [savedApiConfigId, setSavedApiConfigId] = useState<string | null>(null);
   const [isAddingApiAccess, setIsAddingApiAccess] = useState(false);
@@ -2894,6 +2895,7 @@ export function App() {
   useEffect(() => {
     setModelAliasesDraft(selectedApiConfig.modelAliases ?? []);
     setModelAliasSplitModeDraft(selectedApiConfig.modelAliasSplitMode === true);
+    setGeminiPixelSizeDraft(selectedApiConfig.geminiPixelSize === true);
   }, [selectedApiConfig.id]);
 
   useEffect(() => {
@@ -3738,7 +3740,7 @@ export function App() {
     });
   }
 
-  async function saveConfig(options: { modelAliases?: ModelAliasEntry[]; modelAliasSplitMode?: boolean } = {}) {
+  async function saveConfig(options: { modelAliases?: ModelAliasEntry[]; modelAliasSplitMode?: boolean; geminiPixelSize?: boolean } = {}) {
     if (!bridge) {
       setNotice({ kind: "error", text: copy.notices.bridgeSaveConfig });
       return;
@@ -3772,6 +3774,7 @@ export function App() {
         activeModelId: providerKindChanged ? nextDefaultModel : targetConfig.activeModelId,
         modelAliases: options.modelAliases ?? (modelAliasesDraft.length > 0 ? modelAliasesDraft : undefined),
         modelAliasSplitMode: options.modelAliasSplitMode ?? (modelAliasSplitModeDraft || undefined),
+        geminiPixelSize: options.geminiPixelSize ?? (geminiPixelSizeDraft || undefined),
       });
       applyConfig(config);
       if (config.id === activeConfig.id) {
@@ -7435,6 +7438,8 @@ export function App() {
           onModelAliasesChange={setModelAliasesDraft}
           modelAliasSplitMode={modelAliasSplitModeDraft}
           onModelAliasSplitModeChange={setModelAliasSplitModeDraft}
+          geminiPixelSize={geminiPixelSizeDraft}
+          onGeminiPixelSizeChange={setGeminiPixelSizeDraft}
         />
       )}
       {isParameterDialogOpen && (

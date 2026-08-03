@@ -193,6 +193,8 @@ export interface UiCopy {
   modelAliasTierLabel: string;
   modelAliasSplitMode: string;
   modelAliasSplitModeHintOn: string;
+  geminiPixelSizeLabel: string;
+  geminiPixelSizeHint: string;
   modelAliasSplitModeHintOff: string;
   modelAliasSplitMissingTier: (tier: string) => string;
   modelAliasSplitUnsupported: (resolution: string) => string;
@@ -701,6 +703,8 @@ export const translations: Record<Language, UiCopy> = {
     modelAliasSplitMode: "Split mode",
     modelAliasTierLabel: "Tier",
     modelAliasSplitModeHintOn: "Split names (1K/2K/4K) remap by resolution; a missing tier blocks generation with an error.",
+    geminiPixelSizeLabel: "Send explicit pixel size for Gemini",
+    geminiPixelSizeHint: "Relay adaptation: use WxH pixels (e.g. 1152x2048) instead of aspect ratio + 1K/2K/4K so relays that ignore the ratio still honor it.",
     modelAliasSplitModeHintOff: "Off: use aggregated model name matching instead of split tiers.",
     modelAliasSplitMissingTier: (tier) => `No model mapping is configured for ${tier} resolution (split mode).`,
     modelAliasSplitUnsupported: (resolution) => `Split mode does not support ${resolution}; only 1K/2K/4K are available.`,
@@ -1274,6 +1278,8 @@ export const translations: Record<Language, UiCopy> = {
     modelAliasSplitMode: "拆分模式",
     modelAliasTierLabel: "档位",
     modelAliasSplitModeHintOn: "按 1K/2K/4K 拆分名重映射；缺失档位生成时报错丢弃请求。",
+    geminiPixelSizeLabel: "Gemini 使用像素尺寸",
+    geminiPixelSizeHint: "中转适配：改用 WxH 像素（如 1152x2048）代替 比例+1K/2K/4K，让忽略比例的中转站也能按比例出图。",
     modelAliasSplitModeHintOff: "关闭：使用聚合模型名匹配，而非拆分档位。",
     modelAliasSplitMissingTier: (tier) => `未配置 ${tier} 分辨率的模型映射（拆分模式）。`,
     modelAliasSplitUnsupported: (resolution) => `拆分模式不支持 ${resolution} 分辨率，仅支持 1K/2K/4K。`,

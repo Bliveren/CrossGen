@@ -236,6 +236,8 @@ interface ApiConfigDetailProps {
   onModelAliasesChange?: (aliases: ModelAliasEntry[]) => void;
   modelAliasSplitMode?: boolean;
   onModelAliasSplitModeChange?: (value: boolean) => void;
+  geminiPixelSize?: boolean;
+  onGeminiPixelSizeChange?: (value: boolean) => void;
 }
 
 interface AddApiConfigDetailProps {
@@ -312,6 +314,8 @@ interface ApiConfigDialogProps {
   onModelAliasesChange?: (aliases: ModelAliasEntry[]) => void;
   modelAliasSplitMode?: boolean;
   onModelAliasSplitModeChange?: (value: boolean) => void;
+  geminiPixelSize?: boolean;
+  onGeminiPixelSizeChange?: (value: boolean) => void;
 }
 
 export function ApiConfigDialog({
@@ -372,6 +376,8 @@ export function ApiConfigDialog({
   onModelAliasesChange,
   modelAliasSplitMode,
   onModelAliasSplitModeChange,
+  geminiPixelSize,
+  onGeminiPixelSizeChange,
 }: ApiConfigDialogProps) {
   const renderCard = (config: ProviderConfig, active: boolean) => (
     <ApiConfigCard
@@ -494,6 +500,8 @@ export function ApiConfigDialog({
               onModelAliasesChange={onModelAliasesChange}
             modelAliasSplitMode={modelAliasSplitMode}
             onModelAliasSplitModeChange={onModelAliasSplitModeChange}
+              geminiPixelSize={geminiPixelSize}
+              onGeminiPixelSizeChange={onGeminiPixelSizeChange}
             />
           )}
         </div>
@@ -842,6 +850,8 @@ export function ApiConfigDetail({
   onModelAliasesChange,
   modelAliasSplitMode,
   onModelAliasSplitModeChange,
+  geminiPixelSize,
+  onGeminiPixelSizeChange,
 }: ApiConfigDetailProps) {
   return (
     <form
@@ -937,6 +947,18 @@ export function ApiConfigDetail({
           </div>
         ) : null}
       </section>
+      {onGeminiPixelSizeChange && (
+        <label className="api-config-checkbox-row" title={copy.geminiPixelSizeHint}>
+          <input
+            type="checkbox"
+            checked={geminiPixelSize === true}
+            onChange={(event) => onGeminiPixelSizeChange(event.target.checked)}
+            disabled={saving}
+          />
+          <span className="api-config-checkbox-label">{copy.geminiPixelSizeLabel}</span>
+          <small className="api-config-checkbox-hint">{copy.geminiPixelSizeHint}</small>
+        </label>
+      )}
       <ModelAliasMappingSection
         copy={copy}
         aliases={modelAliases}
