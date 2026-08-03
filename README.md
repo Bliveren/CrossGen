@@ -170,6 +170,10 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 - **Prompt templates**: save reusable prompt structures and apply them quickly.
 - **Prompt chips**: insert Gallery assets, color values, and templates into prompts.
 - **Image-to-image reference handling**: drag local files, Gallery assets, or History outputs into reference slots.
+- **Multi-task workspace**: run several independent generations in parallel; each task keeps its own API provider, prompt, parameters, and references.
+- **Paste reference images**: paste a copied image or image data (data URL) anywhere in the app to add it as a reference — no local file path required.
+- **Model alias mapping**: map relay model names to the built-in Gemini/GPT models; optional split mode matches 1K/2K/4K tiers and blocks unmapped tiers before the request is sent.
+- **Configurable queue concurrency**: run 1-8 queued tasks in parallel.
 - **Dark mode**: built for longer visual review sessions.
 - **Local-first storage**: history, outputs, templates, and Gallery assets are stored locally.
 - **Open source**: released under the MIT License.
