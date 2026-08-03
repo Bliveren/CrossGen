@@ -39,6 +39,8 @@ interface LaunchSectionProps {
   copy: UiCopy;
   activeConfig: ProviderConfig;
   activeProviderKind: ProviderKind;
+  activeLaunchId: FocusedLaunchId;
+  activeModelId: string;
   launchButtons: LaunchButtonState[];
   openLaunchMenuId: FocusedLaunchId | null;
   saving: boolean;
@@ -84,6 +86,8 @@ export function LaunchSection({
   copy,
   activeConfig,
   activeProviderKind,
+  activeLaunchId,
+  activeModelId,
   launchButtons,
   openLaunchMenuId,
   saving,
@@ -105,9 +109,9 @@ export function LaunchSection({
           const modelOptions = modelOptionsForLaunch(activeConfig, button.launchId);
           const hasModelMenu = button.available && modelOptions.length > 1;
           const activeModelOption =
-            modelOptions.find((model) => model.id === activeConfig.activeModelId && model.providerKind === button.providerKind) ??
+            modelOptions.find((model) => model.id === activeModelId && model.providerKind === button.providerKind) ??
             modelOptions.find((model) => model.id === button.modelId && model.providerKind === button.providerKind);
-          const isActive = activeConfig.activeLaunchId === button.launchId;
+          const isActive = activeLaunchId === button.launchId;
           return (
             <div key={button.launchId} className="launch-item">
               <button
@@ -131,7 +135,7 @@ export function LaunchSection({
               {hasModelMenu && openLaunchMenuId === button.launchId && (
                 <div className="launch-model-menu" role="listbox" aria-label={`${button.displayName} ${copy.model}`}>
                   {modelOptions.map((model) => {
-                    const isSelected = activeConfig.activeLaunchId === button.launchId && activeConfig.activeModelId === model.id && activeProviderKind === model.providerKind;
+                    const isSelected = activeLaunchId === button.launchId && activeModelId === model.id && activeProviderKind === model.providerKind;
                     return (
                       <button
                         key={`${model.providerKind}:${model.id}`}

@@ -721,6 +721,48 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("remembers each task's launch model when tasks share the same provider", async () => {
+    const relay = providerConfig({
+      id: "relay-shared",
+      kind: "openai",
+      name: "Relay",
+      baseURL: "https://gateway.example.com/v1",
+      apiKeySaved: true,
+      discoveredModels: [
+        { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
+        { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini" }
+      ],
+      lastModelDiscoveryAt: now,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID
+    });
+    await renderApp(snapshot({ providers: [relay], activeProviderId: relay.id }));
+    await flushAsync();
+
+    // 任务 1：选 gemini-3-pro-image
+    await click(launchButton("Nano Banana 3"));
+    await click(launchModelOption(GEMINI_3_PRO_IMAGE_MODEL_ID));
+    await flushAsync();
+
+    // 添加任务 2（同一 provider），选回 gemini-3.1-flash-image
+    await click(document.querySelector<HTMLButtonElement>(".task-tab-add")!);
+    await flushAsync();
+    await click(launchButton("Nano Banana 3"));
+    await click(launchModelOption(NANO_BANANA_3_MODEL_ID));
+    await flushAsync();
+
+    // 切回任务 1：应保持 gemini-3-pro-image，而不是被任务 2 覆盖
+    const tabs = Array.from(document.querySelectorAll<HTMLElement>(".task-tab"));
+    await click(tabs[0]);
+    await flushAsync();
+    expect(launchButton("Nano Banana 3").querySelector(".launch-model-detail")?.textContent).toContain(GEMINI_3_PRO_IMAGE_MODEL_ID);
+
+    // 任务 2 保持 gemini-3.1-flash-image
+    await click(tabs[1]);
+    await flushAsync();
+    expect(launchButton("Nano Banana 3").querySelector(".launch-model-detail")?.textContent).toContain(NANO_BANANA_3_MODEL_ID);
+  });
+
   it("keeps the single API config path working", async () => {
     const bridge = await renderApp(snapshot());
 

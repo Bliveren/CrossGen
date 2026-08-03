@@ -984,11 +984,11 @@ function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: 
   }
 }
 
-function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButtonState[] {
+function getLaunchButtonStates(config: ProviderConfig, params: ImageParams, copy: UiCopy): LaunchButtonState[] {
   const hasDiscovery = config.discoveredModels.length > 0;
   return FOCUSED_MODEL_CATALOG.map((definition) => {
     const modelOptions = getLaunchModelOptions(config, definition.launchId);
-    const preferredModel = getPreferredLaunchModel(config, definition.launchId, modelOptions);
+    const preferredModel = getPreferredLaunchModel(config, params, definition.launchId, modelOptions);
     const modelId = preferredModel?.id ?? definition.defaultModelId;
     const providerKind = preferredModel?.providerKind ?? definition.providerKind;
     let available = false;
@@ -1052,7 +1052,17 @@ function getLaunchModelOptions(config: ProviderConfig, launchId: FocusedLaunchId
   return [...discovered, ...aliasOptions];
 }
 
-function getPreferredLaunchModel(config: ProviderConfig, launchId: FocusedLaunchId, options: LaunchModelOption[]): LaunchModelOption | undefined {
+function getPreferredLaunchModel(
+  config: ProviderConfig,
+  params: ImageParams,
+  launchId: FocusedLaunchId,
+  options: LaunchModelOption[]
+): LaunchModelOption | undefined {
+  // 多 task 共享同一 provider 时，优先按任务自己的参数记忆，避免互相覆盖
+  if (params.launchId === launchId) {
+    const activeModel = options.find((model) => normalizeModelId(model.id) === normalizeModelId(params.model));
+    if (activeModel) return activeModel;
+  }
   if (config.activeLaunchId === launchId) {
     const activeModel = options.find((model) => normalizeModelId(model.id) === normalizeModelId(config.activeModelId));
     if (activeModel) return activeModel;
@@ -1804,7 +1814,7 @@ export function App() {
   const streamDisabledReason = openAIParams ? streamPartialPreviewDisabledReason(openAIParams, activeConfig, requestMode, copy) : undefined;
   const streamPartialsAllowed = openAIParams ? !streamDisabledReason : false;
   const apiKeyPlaceholder = selectedApiConfig.apiKeyPreview ?? (selectedApiConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
-  const launchButtons = useMemo(() => getLaunchButtonStates(activeConfig, copy), [copy, activeConfig]);
+  const launchButtons = useMemo(() => getLaunchButtonStates(activeConfig, params, copy), [copy, activeConfig, params]);
   const connectionLabel = connectionStatusLabel(connectionCheck, copy);
   const connectionTitle = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : connectionLabel;
   const connectionErrorText = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : null;
@@ -6715,6 +6725,8 @@ export function App() {
           copy={copy}
           activeConfig={activeConfig}
           activeProviderKind={params.providerKind}
+          activeLaunchId={params.launchId}
+          activeModelId={params.model}
           launchButtons={launchButtons}
           openLaunchMenuId={openLaunchMenuId}
           saving={isSavingConfig}
