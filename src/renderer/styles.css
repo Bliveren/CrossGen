@@ -7234,37 +7234,6 @@
   opacity: 0.65;
 }
 
-/* 参考图粘贴输入框（data URL / 剪贴板） */
-.refpanel-paste-input-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-}
-.refpanel-paste-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 12px;
-  padding: 5px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
-  background: var(--panel, #fff);
-  color: var(--text, #111);
-}
-.refpanel-paste-add {
-  flex: 0 0 auto;
-  font-size: 12px;
-  padding: 5px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
-  background: var(--accent, #2f6feb);
-  color: #fff;
-  cursor: pointer;
-}
-.refpanel-paste-add:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 /* 任务标签条拆分：标签可横向滚动，运行控制区固定右侧 */
 .task-tab-bar {

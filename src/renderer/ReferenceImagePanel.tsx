@@ -101,8 +101,6 @@ export function ReferenceImagePanel({
   const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const [isExternalDragOver, setIsExternalDragOver] = useState(false);
-  const [pasteText, setPasteText] = useState("");
-  const pasteInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (selectedId && !assets.some((asset) => asset.id === selectedId)) {
@@ -316,41 +314,6 @@ export function ReferenceImagePanel({
     return toAdd.length;
   }
 
-  function handleAddPasteText() {
-    const added = addDataUrlTexts(pasteText);
-    if (added < 0) {
-      onNotice("error", copy.pasteDataUrlInvalid);
-      return;
-    }
-    if (added === 0) return;
-    setPasteText("");
-    onNotice("success", copy.pastedImageName(added));
-  }
-
-  function handlePasteInputPaste(event: React.ClipboardEvent<HTMLInputElement>) {
-    const items = Array.from(event.clipboardData?.items ?? []);
-    const imageFiles = items
-      .filter((item) => item.kind === "file" && IMAGE_FILE_TYPE_PATTERN.test(item.type))
-      .map((item) => item.getAsFile())
-      .filter((file): file is File => file !== null);
-    if (imageFiles.length > 0) {
-      event.preventDefault();
-      void addFiles(imageFiles).then((added) => {
-        if (added > 0) {
-          onNotice("success", copy.pastedImageName(added));
-          setPasteText("");
-        }
-      });
-      return;
-    }
-    const text = event.clipboardData?.getData("text") ?? "";
-    const added = addDataUrlTexts(text);
-    if (added > 0) {
-      event.preventDefault();
-      setPasteText("");
-      onNotice("success", copy.pastedImageName(added));
-    }
-  }
 
   function handleGridDrop(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -534,32 +497,6 @@ export function ReferenceImagePanel({
           data-tooltip={copy.addLocalReferences}
         >
           <Plus size={18} />
-        </button>
-      </div>
-      <div className="refpanel-paste-input-row">
-        <input
-          ref={pasteInputRef}
-          className="refpanel-paste-input"
-          value={pasteText}
-          onChange={(event) => setPasteText(event.target.value)}
-          onPaste={handlePasteInputPaste}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              handleAddPasteText();
-            }
-          }}
-          placeholder={copy.pasteDataUrlPlaceholder}
-          aria-label={copy.pasteDataUrlPlaceholder}
-          disabled={dragDropDisabled}
-        />
-        <button
-          type="button"
-          className="refpanel-paste-add"
-          onClick={handleAddPasteText}
-          disabled={dragDropDisabled || !pasteText.trim()}
-        >
-          {copy.pasteDataUrlAdd}
         </button>
       </div>
 

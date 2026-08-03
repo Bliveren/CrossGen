@@ -2157,14 +2157,16 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
 
     await click(buttonByText("Image to image", ".mode-tab"));
-    const pasteInput = document.querySelector<HTMLInputElement>(".refpanel-paste-input")!;
-    expect(pasteInput).not.toBeNull();
+    const grid = document.querySelector<HTMLDivElement>(".refpanel-grid")!;
+    expect(grid).not.toBeNull();
     const dataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-    await changeInput(pasteInput, dataUrl);
-    await click(buttonByText("Add", ".refpanel-paste-input-row button"));
-
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      value: { files: [], getData: () => dataUrl }
+    });
+    act(() => { grid.dispatchEvent(pasteEvent); });
+    await flushAsync();
     expect(document.querySelectorAll(".reference-thumb-tile")).toHaveLength(1);
-
     await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
     expect(bridge.runJob).toHaveBeenCalledWith(
       expect.objectContaining({
