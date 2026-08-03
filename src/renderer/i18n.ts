@@ -132,6 +132,9 @@ export interface UiCopy {
   taskRunAllNone: string;
   taskRunAllStarted: (count: number) => string;
   taskAdded: string;
+  taskToggleEnabled: string;
+  taskEnabledCount: (enabled: number, total: number) => string;
+  taskQueued: string;
   taskConcurrency: string;
   taskProviderLabel: string;
   provider: string;
@@ -539,9 +542,6 @@ export interface UiCopy {
   maskOptional: string;
   notices: NoticeCopy;
   validation: ValidationCopy;
-  pasteDataUrlPlaceholder: string;
-  pasteDataUrlAdd: string;
-  pasteDataUrlInvalid: string;
   pasteImages: string;
   pasteImagesHint: string;
   dragToReorderHint: string;
@@ -561,6 +561,9 @@ export const translations: Record<Language, UiCopy> = {
     taskRunAllStarted: (count) => `Started ${count} task${count === 1 ? "" : "s"}.`,
     taskAdded: "Task added.",
     taskConcurrency: "Concurrency",
+    taskToggleEnabled: "Enable this task",
+    taskEnabledCount: (enabled, total) => `Enabled ${enabled}/${total}`,
+    taskQueued: "Queued",
     taskProviderLabel: "Task API",
     queue: {
       title: "Image queue",
@@ -1112,9 +1115,6 @@ export const translations: Record<Language, UiCopy> = {
       regionGuideReady: "Region guide selected."
     },
     pasteImages: "Paste images",
-    pasteDataUrlPlaceholder: "Paste image data (data:image/...;base64,...) or press Ctrl+V",
-    pasteDataUrlAdd: "Add",
-    pasteDataUrlInvalid: "No valid image data found.",
     pasteImagesHint: "Click here to paste images, or drag image files in.",
     dragToReorderHint: "Drag thumbnails to reorder them.",
     numberKeyReorderHint: "Select a tile, then press 1-9 to move it to that position.",
@@ -1131,6 +1131,9 @@ export const translations: Record<Language, UiCopy> = {
     taskRunAllStarted: (count) => `已启动 ${count} 个任务。`,
     taskAdded: "已添加任务。",
     taskConcurrency: "并发",
+    taskToggleEnabled: "启用此任务",
+    taskEnabledCount: (enabled, total) => `已启用 ${enabled}/${total}`,
+    taskQueued: "排队中",
     taskProviderLabel: "任务 API",
     queue: {
       title: "生图队列",
@@ -1682,9 +1685,6 @@ export const translations: Record<Language, UiCopy> = {
       regionGuideReady: "已选择区域引导。"
     },
     pasteImages: "粘贴图片",
-    pasteDataUrlPlaceholder: "粘贴图片数据（data:image/...;base64,...）或按 Ctrl+V",
-    pasteDataUrlAdd: "添加",
-    pasteDataUrlInvalid: "未识别到有效的图片数据。",
     pasteImagesHint: "点击此处粘贴图片或拖入图片。",
     dragToReorderHint: "拖拽缩略图可调整顺序。",
     numberKeyReorderHint: "选中缩略图后按数字键 1-9 可将其移动到对应位置。",

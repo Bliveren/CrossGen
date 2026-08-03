@@ -136,7 +136,7 @@ import {
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 import { useImageEditor } from "./useImageEditor";
 import { createTaskFieldStore, createTaskId, useTaskField, useTaskStoreVersion, type TaskFieldStore } from "./taskStore";
-import { TaskTabBar } from "./TaskTabBar";
+import { TaskRunControls, TaskTabBar, isTaskEnabled } from "./TaskTabBar";
 import { ReferenceImagePanel, type ReferenceImagePanelProps } from "./ReferenceImagePanel";
 import { extractDataUrlsFromText, referenceDataUrlToAsset } from "./referenceImageData";
 import { useHistoryListModel } from "./useHistoryListModel";
@@ -1232,6 +1232,8 @@ export function App() {
   const [initialTaskId] = useState(() => createTaskId());
   const [taskIds, setTaskIds] = useState<string[]>(() => [initialTaskId]);
   const [activeTaskId, setActiveTaskId] = useState<string>(initialTaskId);
+  const enabledTaskCount = taskIds.filter((taskId) => isTaskEnabled(taskStore, taskId)).length;
+  useTaskStoreVersion(taskStore);
   const [providerId, setProviderId] = useTaskField<string>(taskStore, activeTaskId, "providerId", "");
   const [language, setLanguage] = useState<Language>(() => getInitialLanguage());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getInitialThemeMode());
@@ -1451,7 +1453,12 @@ export function App() {
   function addTask() {
     const nextId = createTaskId();
     setTaskIds((current) => [...current, nextId]);
-    taskStore.set(nextId, "providerId", snapshot.activeProviderId || activeConfig.id || "");
+    const defaultProvider = snapshot.providers.find((p) => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
+    taskStore.set(nextId, "providerId", defaultProvider?.id ?? "");
+    if (defaultProvider) {
+      // 新任务继承当前 provider 的启动/模型，保证生成按钮立即可用
+      taskStore.set(nextId, "params", createParamsForConfig(defaultProvider, DEFAULT_IMAGE_PARAMS));
+    }
     setActiveTaskId(nextId);
     resetSharedEditorView();
     // (task switch keeps the config dialog selection)
@@ -1479,14 +1486,16 @@ export function App() {
     setOpenLaunchMenuId(null);
   }
 
-  async function updateTaskConcurrency(next: number) {
-    const clamped = Math.min(8, Math.max(1, Math.floor(next)));
-    if (!Number.isFinite(clamped)) return;
-    setQueueConcurrency(clamped);
-    if (bridge?.setQueueRuntimeConfig) {
+  async function ensureConcurrencyForEnabledTasks() {
+    // 并发显示为“已勾选(启用)的任务数”；运行时把后端 maxGlobalRunning 自动抬到启用数，
+    // 让勾选的任务能并行执行（而不是用单个 int 选择器决定哪些任务并发）。
+    const enabledCount = taskIds.filter((taskId) => isTaskEnabled(taskStore, taskId)).length;
+    const needed = Math.min(8, Math.max(1, enabledCount));
+    if (bridge?.setQueueRuntimeConfig && queueConcurrency < needed) {
       try {
-        const result = await bridge.setQueueRuntimeConfig({ maxGlobalRunning: clamped });
+        const result = await bridge.setQueueRuntimeConfig({ maxGlobalRunning: needed });
         if (result?.config) {
+          setQueueConcurrency(result.config.maxGlobalRunning);
           setQueueSnapshot((current) => ({ ...current, concurrency: { ...current.concurrency, maxGlobal: result.config.maxGlobalRunning } }));
         }
       } catch (error) {
@@ -1494,6 +1503,11 @@ export function App() {
       }
     }
   }
+
+  function setTaskEnabled(taskId: string, enabled: boolean) {
+    taskStore.set(taskId, "enabled", enabled);
+  }
+
 
   // ---- 收集某个 task 的运行请求（与渲染期派生逻辑保持一致） ----
   function collectTaskRunRequest(taskId: string): {
@@ -1592,6 +1606,7 @@ export function App() {
       return;
     }
     const isActive = taskId === activeTaskId;
+    await ensureConcurrencyForEnabledTasks();
 
     taskStore.set(taskId, "isRunning", true);
     taskStore.set(taskId, "runningJobId", null);
@@ -1651,22 +1666,12 @@ export function App() {
   }
 
   async function runAllTasks() {
-    const candidates = taskIds.filter((taskId) => taskStore.get(taskId, "isRunning") !== true);
+    const candidates = taskIds.filter((taskId) => isTaskEnabled(taskStore, taskId) && taskStore.get(taskId, "isRunning") !== true);
     if (candidates.length === 0) {
       setNotice({ kind: "info", text: copy.taskRunAllNone });
       return;
     }
-    // 并行运行前确保全局并发足够（1..8），不足时自动提升
-    const runningCount = taskIds.filter((taskId) => taskStore.get(taskId, "isRunning") === true).length;
-    const needed = Math.min(8, Math.max(1, runningCount + candidates.length));
-    if (queueConcurrency < needed && bridge?.setQueueRuntimeConfig) {
-      try {
-        await bridge.setQueueRuntimeConfig({ maxGlobalRunning: needed });
-        setQueueConcurrency(needed);
-      } catch {
-        // 忽略设置失败，仍按当前并发尝试
-      }
-    }
+    await ensureConcurrencyForEnabledTasks();
     let launched = 0;
     for (const taskId of candidates) {
       const request = collectTaskRunRequest(taskId);
@@ -2224,8 +2229,9 @@ export function App() {
   const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, effectivePrompt), copy) ?? modeError;
   const canRun = !validationError && !isRunning;
+  const isTaskQueued = isRunning && !runningJobId;
   const canCancelRun = isRunning && Boolean(runningJobId);
-  const primaryRunActionLabel = isRunning ? copy.cancelGeneration : modeLabels[requestMode].action;
+  const primaryRunActionLabel = isTaskQueued ? copy.taskQueued : isRunning ? copy.cancelGeneration : modeLabels[requestMode].action;
   const promptCopyActionLabel = buttonFeedback["copy:prompt"] ? copy.clicked : copy.copyPrompt;
   const savedApiConfigs = snapshot.providers;
   const canDeleteActiveApiAccess = snapshot.providers.length > 1;
@@ -6751,18 +6757,24 @@ export function App() {
 
       <PerfProfiler id="Workspace">
       <section className="workspace">
-      <TaskTabBar
-        store={taskStore}
-        taskIds={taskIds}
-        activeTaskId={activeTaskId}
-        concurrency={queueConcurrency}
-        copy={copy}
-        onSwitch={switchTask}
-        onClose={closeTask}
-        onAdd={addTask}
-        onConcurrencyChange={(next) => void updateTaskConcurrency(next)}
-        onRunAll={() => void runAllTasks()}
-      />
+      <div className="task-tab-bar">
+        <TaskTabBar
+          store={taskStore}
+          taskIds={taskIds}
+          activeTaskId={activeTaskId}
+          copy={copy}
+          onSwitch={switchTask}
+          onClose={closeTask}
+          onAdd={addTask}
+          onToggleEnabled={setTaskEnabled}
+        />
+        <TaskRunControls
+          copy={copy}
+          enabledCount={enabledTaskCount}
+          totalCount={taskIds.length}
+          onRunAll={() => void runAllTasks()}
+        />
+      </div>
         <div className={isEditorFocusMode ? "preview-layout editor-focus-mode" : "preview-layout"} ref={previewLayoutRef}>
           <ImageEditor
             copy={copy}
@@ -6944,8 +6956,8 @@ export function App() {
                     ref={primaryRunButtonRef}
                     type="button"
                     className="primary-run"
-                    onClick={isRunning ? () => void cancelRunningJob() : runJob}
-                    disabled={isRunning ? !canCancelRun : !canRun}
+                    onClick={isTaskQueued ? undefined : isRunning ? () => void cancelRunningJob() : runJob}
+                    disabled={isTaskQueued ? true : isRunning ? !canCancelRun : !canRun}
                     aria-label={primaryRunActionLabel}
                     data-tooltip={primaryRunActionLabel}
                   >
