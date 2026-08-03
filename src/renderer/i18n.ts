@@ -1,4 +1,4 @@
-﻿import type { WorkMode } from "../shared/types";
+import type { WorkMode } from "../shared/types";
 
 export type Language = "en" | "zh";
 

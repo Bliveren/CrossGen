@@ -1,4 +1,4 @@
-﻿# Development Log: Multi-task workspace + image tooling + model alias mapping
+# Development Log: Multi-task workspace + image tooling + model alias mapping
 
 ## Summary
 Adds a multi-task workspace (run several independent generations in
@@ -6,8 +6,10 @@ parallel, each with its own API provider / prompt / params / references /
 result), richer reference-image tooling (paste image data anywhere, drag &
 keyboard reorder, resizable panel, non-file/base64 references), and a
 per-provider model-name mapping for API relays (including a 1K/2K/4K
-"split" mode). The durable queue now executes multiple tasks concurrently
-(configurable).
+"split" mode). The durable queue executes multiple tasks concurrently
+(configurable) and is surfaced as a global panel next to the task API
+selector. Parameter dropdowns were replaced with a theme-aware custom
+select that auto-flips above/below.
 
 ## What changed
 
@@ -16,7 +18,8 @@ Backend / shared:
   target the provider the task actually uses, and pasted/base64 references
   no longer require a local file path.
 - Queue concurrency is configurable (1-8) via a new `queue:configSet` IPC;
-  several submitted tasks run in parallel.
+  `queue:remove` lets terminal tasks (failed/interrupted/cancelled) be
+  cleared from the queue.
 - Gemini batch output `outputCount` 1-4 (adapter sends `imageCount`);
   OpenAI `n` (1-10) was already supported.
 - Model alias mapping is persisted per provider; split mode rewrites the
@@ -25,20 +28,23 @@ Backend / shared:
 
 Renderer:
 - Task tabs: each task owns its provider selection, prompt, params,
-  references and result; the history/gallery rail stays shared.
+  references and result; the history/gallery rail stays shared. The tab
+  strip scrolls horizontally with the mouse wheel.
 - Reference panel: paste image data (clipboard image or `data:image/...`
   text) anywhere in the workspace, drag reorder, number-key reorder
-  (1-9), resizable panel height.
+  (1-9), resizable panel height, and content clipped to the tile frame.
 - API config dialog: model-alias mapping UI (with split mode) and a
-  scrollable body.
+  scrollable body; mapping rows use a single header row of column labels.
+- Parameter config: custom themed dropdowns (same style as the task API
+  selector) with constant width and auto up/down menu placement.
+- The global generation queue moved into the sidebar near the task API
+  section, with per-task remove/retry/cancel actions.
 
 Operational:
 - `dev:electron` / `start` compile the main process with `tsc` directly so
   a broken PATH `pnpm` shim can no longer break the dev launch.
 - DevTools no longer auto-open in dev mode; opt in with
   `CROSSGEN_OPEN_DEVTOOLS=1`.
-- `.gitattributes` pins LF for text files (`.bat/.cmd/.ps1` stay CRLF).
-- `start-windows.bat`: minimal Windows launcher (optional).
 
 ## Design notes
 - Per-task state lives in a renderer task store keyed by task id; only the
@@ -54,15 +60,15 @@ Operational:
 
 ## Testing
 - `tsc` (renderer + main configs) clean.
-- Vitest: 464 passed, 4 skipped. One pre-existing Windows
+- Vitest: 468 passed, 4 skipped. One pre-existing Windows
   symlink-permission test fails only on Windows without symlink privileges
   (unrelated to this change).
 - `vite build` succeeds.
 
 ## Scope
-27 files: backend + shared + renderer + tests + small operational files.
-`start-windows.bat` and `.gitattributes` are optional conveniences and can
-be dropped if the maintainers prefer a narrower diff.
+30 files: backend + shared + renderer + tests + docs. Local launcher and
+pnpm-specific convenience files (`start-windows.bat`, `.gitattributes`,
+`pnpm-workspace.yaml`) are intentionally not part of this PR.
 
 ## Known limitations
 - Draft autosave follows the active task only.

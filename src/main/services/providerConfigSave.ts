@@ -1,4 +1,4 @@
-﻿import type { FocusedLaunchId, ModelAliasEntry, ProviderConfig, ProviderConfigInput } from "../../shared/types.js";
+import type { FocusedLaunchId, ModelAliasEntry, ProviderConfig, ProviderConfigInput } from "../../shared/types.js";
 import {
   DEFAULT_BASE_URL,
   DEFAULT_GEMINI_BASE_URL,

@@ -1,4 +1,4 @@
-﻿import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 /**
  * 按 taskId 隔离的前端字段存储（多 task 工作区）。

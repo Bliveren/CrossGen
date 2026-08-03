@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { AlertTriangle, ClipboardPaste, GripHorizontal, Plus, X } from "lucide-react";
 import type { InputAsset } from "../shared/types";
