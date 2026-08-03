@@ -136,7 +136,7 @@ import {
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 import { useImageEditor } from "./useImageEditor";
 import { createTaskFieldStore, createTaskId, useTaskField, useTaskStoreVersion, type TaskFieldStore } from "./taskStore";
-import { TaskRunControls, TaskTabBar, isTaskEnabled } from "./TaskTabBar";
+import { TaskProviderSelect, TaskRunControls, TaskTabBar, isTaskEnabled } from "./TaskTabBar";
 import { ReferenceImagePanel, type ReferenceImagePanelProps } from "./ReferenceImagePanel";
 import { extractDataUrlsFromText, referenceDataUrlToAsset } from "./referenceImageData";
 import { useHistoryListModel } from "./useHistoryListModel";
@@ -2843,6 +2843,19 @@ export function App() {
       setProviderId(snapshot.activeProviderId || snapshot.providers[0].id);
     }
   }, [providerId, snapshot.activeProviderId, snapshot.providers]);
+
+  useEffect(() => {
+    if (!openLaunchMenuId) return undefined;
+    const closeLaunchMenuOnOutside = (event: MouseEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target) return;
+      if (target instanceof Element && target.closest(".launch-section, .task-provider-menu")) return;
+      setOpenLaunchMenuId(null);
+    };
+    document.addEventListener("mousedown", closeLaunchMenuOnOutside, true);
+    return () => document.removeEventListener("mousedown", closeLaunchMenuOnOutside, true);
+  }, [openLaunchMenuId]);
+
 
   useEffect(() => {
     if (!bridge) return undefined;
@@ -6647,26 +6660,25 @@ export function App() {
         </div>
         <div className="sidebar-full-stack">
 
-        <label className="task-provider-select" title={copy.taskProviderLabel}>
+        <label className="task-provider-select-row" title={copy.taskProviderLabel}>
           <span>{copy.taskProviderLabel}</span>
-          <select
-            aria-label={copy.taskProviderLabel}
+          <TaskProviderSelect
+            copy={copy}
+            providers={snapshot.providers}
             value={providerId || snapshot.activeProviderId || ""}
-            onChange={(event) => {
-              const nextId = event.target.value;
+            displayName={(provider) => apiAccessDisplayName(provider, copy.apiAccessUntitled)}
+            onOpen={() => setOpenLaunchMenuId(null)}
+            onSelect={(nextId) => {
               if (!nextId) return;
               setProviderId(nextId);
+              setOpenLaunchMenuId(null);
               const nextProvider = snapshot.providers.find((p) => p.id === nextId);
               if (nextProvider) {
                 syncParamsToConfig(nextProvider);
                 setNotice({ kind: "info", text: copy.apiAccessSwitched(apiAccessDisplayName(nextProvider, copy.apiAccessUntitled)) });
               }
             }}
-          >
-            {snapshot.providers.map((config) => (
-              <option key={config.id} value={config.id}>{apiAccessDisplayName(config, copy.apiAccessUntitled)}</option>
-            ))}
-          </select>
+          />
         </label>
         <ProviderSummarySection
           copy={copy}

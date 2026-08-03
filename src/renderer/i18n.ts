@@ -166,6 +166,7 @@ export interface UiCopy {
   apiAccessAdded: string;
   apiAccessDeleted: string;
   apiAccessSwitched: (name: string) => string;
+  apiAccessNoProviders: string;
   apiAccessUntitled: string;
   apiAccessKind: string;
   apiAccessBaseURLSummary: string;
@@ -672,6 +673,7 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessDeleted: "API config deleted.",
     apiAccessSwitched: (name: string) => `Switched to ${name}.`,
     apiAccessUntitled: "Untitled API config",
+    apiAccessNoProviders: "No API configs yet.",
     apiAccessKind: "API type",
     apiAccessBaseURLSummary: "Base URL",
     providerAutoDetected: "Auto-detected from API",
@@ -1242,6 +1244,7 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessDeleted: "API 配置已删除。",
     apiAccessSwitched: (name: string) => `已切换到 ${name}。`,
     apiAccessUntitled: "未命名 API 配置",
+    apiAccessNoProviders: "还没有 API 配置。",
     apiAccessKind: "API 类型",
     apiAccessBaseURLSummary: "Base URL",
     providerAutoDetected: "已根据 API 自动识别",

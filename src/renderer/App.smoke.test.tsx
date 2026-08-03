@@ -2042,16 +2042,15 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelectorAll(".task-tab.active")).toHaveLength(1);
 
     // 切换任务时任务级 API 选择跟随（第二个任务默认全局 openai）
-    const providerSelect = document.querySelector<HTMLSelectElement>(".task-provider-select select");
-    expect(providerSelect?.value).toBe("openai-access");
-    await changeSelect(providerSelect!, "gemini-access");
-    expect(providerSelect?.value).toBe("gemini-access");
+    expect(document.querySelector(".task-provider-trigger-label")?.textContent).toContain("OpenAI access");
+    await selectTaskProvider("gemini-access");
+    expect(document.querySelector(".task-provider-trigger-label")?.textContent).toContain("Gemini access");
 
     // 切回第一个任务，两个任务各自保持状态
     const tabs = Array.from(document.querySelectorAll<HTMLElement>(".task-tab"));
     await click(tabs[0].querySelector(".task-tab-label") ?? tabs[0]);
     expect(document.querySelectorAll(".task-tab.active")).toHaveLength(1);
-    expect(document.querySelector<HTMLSelectElement>(".task-provider-select select")?.value).toBe("openai-access");
+    expect(document.querySelector(".task-provider-trigger-label")?.textContent).toContain("OpenAI access");
 
     // 关闭第二个任务
     await click(document.querySelectorAll<HTMLButtonElement>(".task-tab-close")[0]);
@@ -2135,9 +2134,8 @@ describe("renderer multi-model smoke", () => {
     await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
     expect(launchButton("Nano Banana 3").disabled).toBe(true);
 
-    const providerSelect = document.querySelector<HTMLSelectElement>(".task-provider-select select")!;
-    await changeSelect(providerSelect, "gemini-access");
-    expect(providerSelect.value).toBe("gemini-access");
+    await selectTaskProvider("gemini-access");
+    expect(document.querySelector(".task-provider-trigger-label")?.textContent).toContain("Gemini access");
     expect(launchButton("Nano Banana 3").disabled).toBe(false);
     expect(launchButton("GPT Image 2").disabled).toBe(true);
   });
@@ -3037,9 +3035,8 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
 
     // 全局 provider 是 A(openai)，把任务 provider 切到 B(gemini)
-    const providerSelect = document.querySelector<HTMLSelectElement>(".task-provider-select select")!;
-    await changeSelect(providerSelect, geminiConfig.id);
-    expect(providerSelect.value).toBe(geminiConfig.id);
+    await selectTaskProvider(geminiConfig.id);
+    expect(document.querySelector(".task-provider-trigger-label")?.textContent).toContain("Gemini");
 
     await click(launchButton("Nano Banana 3"));
 
@@ -3850,6 +3847,16 @@ async function changeTextArea(textarea: HTMLTextAreaElement, value: string) {
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
     textarea.dispatchEvent(new Event("change", { bubbles: true }));
   });
+}
+
+
+async function selectTaskProvider(providerId: string) {
+  const trigger = document.querySelector<HTMLButtonElement>(".task-provider-trigger");
+  if (!trigger) throw new Error("Task provider trigger was not found.");
+  await click(trigger);
+  const option = document.querySelector<HTMLButtonElement>(`.task-provider-option[data-provider-id="${providerId}"]`);
+  if (!option) throw new Error(`Task provider option ${providerId} was not found.`);
+  await click(option);
 }
 
 async function changeSelect(select: HTMLSelectElement, value: string) {

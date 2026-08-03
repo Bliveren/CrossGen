@@ -1,5 +1,7 @@
-﻿import { Loader2, Plus, X, Play } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Plus, X, Play } from "lucide-react";
 import type { UiCopy } from "./i18n";
+import type { ProviderConfig } from "../shared/types";
+import { useEffect, useRef, useState } from "react";
 import { useTaskStoreVersion, type TaskFieldStore } from "./taskStore";
 
 interface TaskTabBarProps {
@@ -134,6 +136,80 @@ export function TaskRunControls({ copy, enabledCount, totalCount, onRunAll }: Ta
         <Play size={13} />
         <span>{copy.taskRunAll}</span>
       </button>
+    </div>
+  );
+}
+
+
+interface TaskProviderSelectProps {
+  copy: UiCopy;
+  providers: ProviderConfig[];
+  value: string;
+  displayName(provider: ProviderConfig): string;
+  onSelect(providerId: string): void;
+  onOpen?(): void;
+}
+
+/** 左侧“任务 API”选择器：自定义下拉（与启动模型菜单同款样式），主题自适应。 */
+export function TaskProviderSelect({ copy, providers, value, displayName, onSelect, onOpen }: TaskProviderSelectProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutside = (event: MouseEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target) return;
+      if (rootRef.current && !rootRef.current.contains(target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutside, true);
+    return () => document.removeEventListener("mousedown", closeOnOutside, true);
+  }, [open]);
+
+  const current = providers.find((provider) => provider.id === value);
+  return (
+    <div className="task-provider-select" ref={rootRef}>
+      <button
+        type="button"
+        className="task-provider-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => {
+          const next = !open;
+          setOpen(next);
+          if (next) onOpen?.();
+        }}
+      >
+        <span className="task-provider-trigger-label">{current ? displayName(current) : copy.apiAccessUntitled}</span>
+        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      </button>
+      {open && (
+        <div className="task-provider-menu" role="listbox" aria-label={copy.taskProviderLabel}>
+          {providers.length === 0 ? (
+            <div className="task-provider-empty">{copy.apiAccessNoProviders}</div>
+          ) : (
+            providers.map((provider) => {
+              const selected = provider.id === value;
+              return (
+                <button
+                  key={provider.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  data-provider-id={provider.id}
+                  className={["task-provider-option", selected ? "active" : ""].filter(Boolean).join(" ")}
+                  onClick={() => {
+                    setOpen(false);
+                    if (provider.id !== value) onSelect(provider.id);
+                  }}
+                >
+                  <span>{displayName(provider)}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 }
