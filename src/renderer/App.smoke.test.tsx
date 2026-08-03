@@ -2231,7 +2231,7 @@ describe("renderer multi-model smoke", () => {
     await click(launchButton("GPT Image 2"));
     await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
     expect(bridge.runJob).toHaveBeenCalled();
-    expect(bridge.runJob.mock.calls[0][0].params.launchId).toBe(GPT_IMAGE_2_LAUNCH_ID);
+    expect(bridge.runJob).toHaveBeenCalledWith(expect.objectContaining({ params: expect.objectContaining({ launchId: GPT_IMAGE_2_LAUNCH_ID }) }));
   });
 
 
