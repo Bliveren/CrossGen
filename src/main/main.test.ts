@@ -286,13 +286,17 @@ describe("handleRunJob provider selection", () => {
 describe("reference input data URLs (persistInputDataUrl / resolveRequestInputs)", () => {
   const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
   let imagesDir: string;
+  let userDataDir: string;
 
   beforeAll(async () => {
     imagesDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-images-"));
+    userDataDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-userdata-"));
+    electronMock.appPaths.set("userData", userDataDir);
   });
 
   afterAll(async () => {
     await rm(imagesDir, { recursive: true, force: true });
+    await rm(userDataDir, { recursive: true, force: true });
   });
 
   it("persists a PNG data URL as a ref- prefixed asset that keeps the dataUrl", async () => {
