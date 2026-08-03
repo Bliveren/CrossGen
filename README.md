@@ -174,6 +174,8 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 - **Paste reference images**: paste a copied image or image data (data URL) anywhere in the app to add it as a reference — no local file path required.
 - **Model alias mapping**: map relay model names to the built-in Gemini/GPT models; optional split mode matches 1K/2K/4K tiers and blocks unmapped tiers before the request is sent.
 - **Configurable queue concurrency**: run 1-8 queued tasks in parallel.
+- **Gemini pixel-size relay adaptation**: a per-provider toggle sends explicit WxH pixels (e.g. 1152x2048 for 9:16 2K) instead of aspect ratio + 1K/2K/4K, so relays that ignore the aspectRatio field still honor the chosen ratio.
+- **Task copy/paste**: right-click a task tab to copy a whole task (prompt, parameters, and references as base64) or just its prompt, then paste it into another tab.
 - **Dark mode**: built for longer visual review sessions.
 - **Local-first storage**: history, outputs, templates, and Gallery assets are stored locally.
 - **Open source**: released under the MIT License.

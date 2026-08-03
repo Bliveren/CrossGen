@@ -35,7 +35,17 @@ Backend / shared:
   config makes the Gemini adapter send an explicit pixel size (e.g.
   `1152x2048` for 9:16 2K) instead of `aspectRatio` + `1K/2K/4K`; a
   pixel table mirrors the relay dashboards' known-good sizes, with a
-  long-side/pixel-limit fallback for 21:9 and 0.5K.
+  long-side/pixel-limit fallback for 21:9 and 0.5K. The toggle persists
+  and round-trips through the public config.
+- Base64 reference/mask working copies are persisted to an app cache dir
+  (`userData/input-data-cache`) instead of the user's results folder, so
+  generation no longer litters the output directory with `ref-*` files.
+- Queue and state files are written via a unique temp file + rename with
+  bounded retry on transient Windows `EPERM`/`EBUSY`/`EEXIST`. A momentary
+  file lock no longer fails the completion transaction (which previously
+  left jobs stuck "running", or marked them failed after the provider had
+  already charged).
+- Gemini `outputCount` is clamped to 1-4 at submission time.
 
 Renderer:
 - Task tabs: each task owns its provider selection, prompt, params,
@@ -51,7 +61,8 @@ Renderer:
 - API config dialog: model-alias mapping UI (with split mode) and a
   scrollable body; mapping rows use a single header row of column labels.
   A "Gemini 使用像素尺寸" checkbox (relay adaptation) lives above the
-  alias section.
+  alias section. Switching provider cards resets the mapping draft, so
+  each provider keeps its own mappings.
 - Parameter config: custom themed dropdowns (same style as the task API
   selector) with constant width and auto up/down menu placement.
 - The global generation queue moved into the sidebar near the task API
@@ -77,13 +88,13 @@ Operational:
 
 ## Testing
 - `tsc` (renderer + main configs) clean.
-- Vitest: 473 passed, 4 skipped. One pre-existing Windows
+- Vitest: 477 passed, 4 skipped. One pre-existing Windows
   symlink-permission test fails only on Windows without symlink privileges
   (unrelated to this change).
 - `vite build` succeeds.
 
 ## Scope
-31 files: backend + shared + renderer + tests + docs. Local launcher and
+35 files: backend + shared + renderer + tests + docs. Local launcher and
 pnpm-specific convenience files (`start-windows.bat`, `.gitattributes`,
 `pnpm-workspace.yaml`) are intentionally not part of this PR.
 
