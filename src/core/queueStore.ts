@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { withExclusiveFileLock } from "./fileLock.js";
@@ -77,11 +78,53 @@ export async function readQueueFile(queuePath: string): Promise<GenerationQueueF
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Windows 上对已存在的目标文件 rename 偶尔会 EPERM（如杀软/并发读暂时锁定），
+// 这里对小概率的瞬时错误做有限次重试，避免队列状态写入失败导致任务卡在 running。
+const TRANSIENT_WRITE_ERRORS = new Set(["EPERM", "EBUSY", "EEXIST", "EACCES"]);
+
+async function writeFileWithRetry(filePath: string, data: string, attempts = 5): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await fs.writeFile(filePath, data, "utf8");
+      return;
+    } catch (error) {
+      if (!isNodeError(error) || !TRANSIENT_WRITE_ERRORS.has(error.code ?? "")) throw error;
+      lastError = error;
+      await sleep(40 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
+async function renameWithRetry(fromPath: string, toPath: string, attempts = 5): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await fs.rename(fromPath, toPath);
+      return;
+    } catch (error) {
+      if (!isNodeError(error) || !TRANSIENT_WRITE_ERRORS.has(error.code ?? "")) throw error;
+      lastError = error;
+      await sleep(40 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
 export async function writeQueueFile(queuePath: string, queue: GenerationQueueFile): Promise<void> {
   await fs.mkdir(path.dirname(queuePath), { recursive: true });
-  const tmpPath = `${queuePath}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(tmpPath, `${JSON.stringify(queue, null, 2)}\n`, "utf8");
-  await fs.rename(tmpPath, queuePath);
+  const tmpPath = `${queuePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
+  try {
+    await writeFileWithRetry(tmpPath, `${JSON.stringify(queue, null, 2)}\n`);
+    await renameWithRetry(tmpPath, queuePath);
+  } finally {
+    await fs.unlink(tmpPath).catch(() => undefined);
+  }
 }
 
 async function quarantineCorruptQueueFile(queuePath: string): Promise<void> {

@@ -849,7 +849,12 @@ function selectedOpenAIImageRoute(params: OpenAIImageParams, config: ProviderCon
 }
 
 function normalizeParamsForOutputCount(params: ImageParams): ImageParams {
-  return isOpenAIImageParams(params) ? normalizeOpenAIParamsForOutputCount(params) : params;
+  if (isOpenAIImageParams(params)) return normalizeOpenAIParamsForOutputCount(params);
+  if (isGeminiImageParams(params)) {
+    const outputCount = clamp(Math.round(Number(params.outputCount) || 1), 1, 4);
+    return outputCount === params.outputCount ? params : { ...params, outputCount };
+  }
+  return params;
 }
 
 function createGeminiParams(modelId: string, current: ImageParams, config?: ProviderConfig): GeminiImageParams {
