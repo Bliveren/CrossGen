@@ -12,7 +12,10 @@ selector. Parameter dropdowns were replaced with a theme-aware custom
 select that auto-flips above/below. A per-provider "Gemini 使用像素尺寸"
 toggle sends explicit WxH pixel sizes (mapped from aspect ratio + tier),
 matching how relay dashboards like LTG build requests, so relays that
-ignore the aspectRatio field still produce the chosen ratio.
+ignore the aspectRatio field still produce the chosen ratio. Each task
+remembers its own launch model even when tasks share the same relay
+provider, and a task-tab context menu copies/pastes whole tasks (prompt,
+params, references as base64) between tabs.
 
 ## What changed
 
@@ -37,7 +40,11 @@ Backend / shared:
 Renderer:
 - Task tabs: each task owns its provider selection, prompt, params,
   references and result; the history/gallery rail stays shared. The tab
-  strip scrolls horizontally with the mouse wheel.
+  strip scrolls horizontally with the mouse wheel. The launch/model
+  picker reads the task's own params, so tasks sharing one provider keep
+  their own model selection. Right-clicking a tab opens 复制任务 /
+  复制提示词 / 粘贴任务: the task copy stores images as base64 (paths are
+  converted via the bridge), so pasting never depends on local files.
 - Reference panel: paste image data (clipboard image or `data:image/...`
   text) anywhere in the workspace, drag reorder, number-key reorder
   (1-9), resizable panel height, and content clipped to the tile frame.
@@ -70,7 +77,7 @@ Operational:
 
 ## Testing
 - `tsc` (renderer + main configs) clean.
-- Vitest: 471 passed, 4 skipped. One pre-existing Windows
+- Vitest: 473 passed, 4 skipped. One pre-existing Windows
   symlink-permission test fails only on Windows without symlink privileges
   (unrelated to this change).
 - `vite build` succeeds.
