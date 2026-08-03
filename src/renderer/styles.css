@@ -7265,3 +7265,81 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* 任务标签条拆分：标签可横向滚动，运行控制区固定右侧 */
+.task-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-strong, rgba(127, 127, 127, 0.25));
+  background: var(--panel, rgba(255, 255, 255, 0.6));
+  flex: 0 0 auto;
+  min-height: 38px;
+}
+.task-tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.task-run-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding-left: 10px;
+  margin-left: 4px;
+  border-left: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.18));
+}
+.task-concurrency {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary, #555);
+  padding: 0 4px;
+  white-space: nowrap;
+}
+/* 每任务启停勾选 */
+.task-tab-enabled {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.task-tab-enabled input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent, #2f6feb);
+  cursor: pointer;
+}
+.task-tab.disabled {
+  opacity: 0.5;
+}
+.task-tab.disabled .task-tab-label {
+  text-decoration: line-through;
+}
+.task-tab.queued {
+  border-style: dashed;
+  border-color: var(--border-strong, rgba(127, 127, 127, 0.35));
+}
+.task-tab.queued .task-tab-label::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent, #2f6feb);
+  animation: task-queued-pulse 1.2s ease-in-out infinite;
+}
+@keyframes task-queued-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}

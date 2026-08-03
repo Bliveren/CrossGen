@@ -132,6 +132,9 @@ export interface UiCopy {
   taskRunAllNone: string;
   taskRunAllStarted: (count: number) => string;
   taskAdded: string;
+  taskToggleEnabled: string;
+  taskEnabledCount: (enabled: number, total: number) => string;
+  taskQueued: string;
   taskConcurrency: string;
   taskProviderLabel: string;
   provider: string;
@@ -561,6 +564,9 @@ export const translations: Record<Language, UiCopy> = {
     taskRunAllStarted: (count) => `Started ${count} task${count === 1 ? "" : "s"}.`,
     taskAdded: "Task added.",
     taskConcurrency: "Concurrency",
+    taskToggleEnabled: "Enable this task",
+    taskEnabledCount: (enabled, total) => `Enabled ${enabled}/${total}`,
+    taskQueued: "Queued",
     taskProviderLabel: "Task API",
     queue: {
       title: "Image queue",
@@ -1131,6 +1137,9 @@ export const translations: Record<Language, UiCopy> = {
     taskRunAllStarted: (count) => `已启动 ${count} 个任务。`,
     taskAdded: "已添加任务。",
     taskConcurrency: "并发",
+    taskToggleEnabled: "启用此任务",
+    taskEnabledCount: (enabled, total) => `已启用 ${enabled}/${total}`,
+    taskQueued: "排队中",
     taskProviderLabel: "任务 API",
     queue: {
       title: "生图队列",

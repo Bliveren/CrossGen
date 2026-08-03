@@ -2234,6 +2234,67 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.runJob).toHaveBeenCalledWith(expect.objectContaining({ params: expect.objectContaining({ launchId: GPT_IMAGE_2_LAUNCH_ID }) }));
   });
 
+  it("runs only enabled tasks and shows the enabled count", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
+    await click(document.querySelector<HTMLButtonElement>(".task-tab-add")!);
+    expect(document.querySelectorAll(".task-tab")).toHaveLength(2);
+    expect(document.querySelector(".task-concurrency")?.textContent).toContain("Enabled 2/2");
+
+    const checkboxes = document.querySelectorAll<HTMLInputElement>(".task-tab-enabled input");
+    await changeCheckbox(checkboxes[1], false);
+    expect(document.querySelector(".task-concurrency")?.textContent).toContain("Enabled 1/2");
+
+    vi.mocked(bridge.runJob).mockClear();
+    await click(document.querySelector<HTMLButtonElement>(".task-run-all")!);
+    await flushAsync();
+    expect(bridge.runJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps other tasks' generate buttons clickable while one task runs (queue-based)", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
+    await click(document.querySelector<HTMLButtonElement>(".task-tab-add")!);
+    await click(document.querySelectorAll<HTMLElement>(".task-tab")[0]);
+
+    // 任务1生成挂起（模拟后端排队/执行中）
+    vi.mocked(bridge.runJob).mockImplementationOnce((request) =>
+      new Promise((resolve) => {
+        window.setTimeout(() => resolve(jobFromRequest(request, defaultConfig)), 60);
+      })
+    );
+    await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
+
+    // 切到任务2，生成按钮应可点击并入队
+    await click(document.querySelectorAll<HTMLElement>(".task-tab")[1]);
+    const runButton = document.querySelector<HTMLButtonElement>(".primary-run")!;
+    expect(runButton.disabled).toBe(false);
+    await click(runButton);
+    await flushAsync();
+    expect(bridge.runJob).toHaveBeenCalledTimes(2);
+  });
+
+
 
 
 
