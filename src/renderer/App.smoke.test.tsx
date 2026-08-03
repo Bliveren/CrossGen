@@ -3203,6 +3203,40 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("keeps model alias mappings per provider (no global sharing)", async () => {
+    const providerA = providerConfig({ id: "relay-a", kind: "openai", name: "Relay A", baseURL: "https://a.example.com/v1", apiKeySaved: true, discoveredModels: [], lastModelDiscoveryAt: now });
+    const providerB = providerConfig({ id: "relay-b", kind: "openai", name: "Relay B", baseURL: "https://b.example.com/v1", apiKeySaved: true, discoveredModels: [], lastModelDiscoveryAt: now });
+    await renderApp(snapshot({ providers: [providerA, providerB], activeProviderId: providerA.id }));
+
+    await openSavedApiAccess();
+    await click(apiConfigCardMainByText("Relay A"));
+    await click(document.querySelector<HTMLButtonElement>(".api-model-section .section-toggle")!);
+    await click(buttonByText("Add mapping", ".model-alias-body button"));
+    await changeInput(document.querySelector<HTMLInputElement>('input[aria-label="Alias model name (as returned by the API)"]')!, "alias-a-model");
+    await click(buttonByText("Save", ".model-alias-body button"));
+    await flushAsync();
+
+    // 切到 B：映射区应为空（不共享 A 的映射）
+    await click(apiConfigCardMainByText("Relay B"));
+    await flushAsync();
+    expect(document.querySelectorAll(".model-alias-row:not(.model-alias-header)")).toHaveLength(0);
+
+    // 给 B 配置自己的映射并保存
+    const toggleB = document.querySelector<HTMLButtonElement>(".api-model-section .section-toggle")!;
+    if (toggleB.getAttribute("aria-expanded") !== "true") await click(toggleB);
+    await click(buttonByText("Add mapping", ".model-alias-body button"));
+    await changeInput(document.querySelector<HTMLInputElement>('input[aria-label="Alias model name (as returned by the API)"]')!, "alias-b-model");
+    await click(buttonByText("Save", ".model-alias-body button"));
+    await flushAsync();
+
+    // 切回 A：仍保留 A 自己的映射
+    await click(apiConfigCardMainByText("Relay A"));
+    await flushAsync();
+    const rowsA = document.querySelectorAll<HTMLElement>(".model-alias-row:not(.model-alias-header)");
+    expect(rowsA.length).toBeGreaterThan(0);
+    expect((rowsA[0]?.querySelector("input") as HTMLInputElement | null)?.value).toBe("alias-a-model");
+  });
+
   it("persists the Gemini pixel-size relay adaptation toggle from the API config detail", async () => {
     const relayConfig = providerConfig({
       id: "relay-pixel",
@@ -3303,6 +3337,9 @@ function createBridge(initialSnapshot: AppSnapshot, initialQueueSnapshot: QueueS
         streamingPartialsEnabled: input.streamingPartialsEnabled ?? config.streamingPartialsEnabled,
         activeLaunchId: input.activeLaunchId ?? config.activeLaunchId,
         activeModelId: input.activeModelId ?? config.activeModelId,
+        modelAliases: input.modelAliases ?? config.modelAliases,
+        modelAliasSplitMode: input.modelAliasSplitMode ?? config.modelAliasSplitMode,
+        geminiPixelSize: input.geminiPixelSize ?? config.geminiPixelSize,
         apiKeySaved: config.apiKeySaved || Boolean(input.apiKey?.trim()),
         updatedAt: now
       };

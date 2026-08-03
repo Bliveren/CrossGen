@@ -676,7 +676,7 @@ export function ModelAliasMappingSection({
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    (aliases ?? []).map((entry) => ({ aliasModelId: entry.aliasModelId, targetModelId: entry.targetModelId, tier: aliasEntryTier(entry) }))
+    setDraft((aliases ?? []).map((entry) => ({ aliasModelId: entry.aliasModelId, targetModelId: entry.targetModelId, tier: aliasEntryTier(entry) })));
     setSaved(false);
   }, [aliases]);
 
