@@ -1,5 +1,6 @@
 import type {
   DiscoveredModel,
+  ModelAliasEntry,
   FocusedLaunchId,
   GalleryAsset,
   GalleryFolder,
@@ -60,6 +61,9 @@ export interface StoredProviderConfig {
   activeLaunchId: FocusedLaunchId;
   activeModelId: string;
   openAIImageRouting?: OpenAIImageRouting;
+  modelAliases?: ModelAliasEntry[];
+  modelAliasSplitMode?: boolean;
+  geminiPixelSize?: boolean;
   updatedAt: string;
   encryptedApiKey?: string;
   encryption: "safeStorage" | "localFallback" | "none";
@@ -183,10 +187,26 @@ function normalizeStoredConfig(value: unknown): StoredProviderConfig {
     activeLaunchId,
     activeModelId: nonEmptyString(input.activeModelId, activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ? defaultModel : getDefaultModelForLaunch(activeLaunchId)),
     openAIImageRouting: normalizeOpenAIImageRouting(input.openAIImageRouting),
+    modelAliases: normalizeModelAliases(input.modelAliases),
+    modelAliasSplitMode: typeof input.modelAliasSplitMode === "boolean" ? input.modelAliasSplitMode : undefined,
+    geminiPixelSize: typeof input.geminiPixelSize === "boolean" ? input.geminiPixelSize : undefined,
     updatedAt: nonEmptyString(input.updatedAt, new Date(0).toISOString()),
     encryptedApiKey: optionalString(input.encryptedApiKey),
     encryption: normalizeEncryption(input.encryption)
   };
+}
+
+
+function normalizeModelAliases(value: unknown): ModelAliasEntry[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const entries = value.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const aliasModelId = typeof entry.aliasModelId === "string" ? entry.aliasModelId.trim() : "";
+    const targetModelId = typeof entry.targetModelId === "string" ? entry.targetModelId.trim() : "";
+    if (!aliasModelId || !targetModelId) return [];
+    return [{ aliasModelId, targetModelId }];
+  });
+  return entries.length > 0 ? entries : undefined;
 }
 
 function normalizeOpenAIImageRouting(value: unknown): OpenAIImageRouting | undefined {
@@ -455,7 +475,7 @@ export function normalizeImageParams(value: unknown): ImageParams {
       providerKind,
       launchId: GENERAL_LAUNCH_ID,
       model: nonEmptyString(input.model, defaults.model),
-      outputCount: boundedInteger(input.outputCount, 1, 1, defaults.outputCount),
+      outputCount: boundedInteger(input.outputCount, 1, 4, defaults.outputCount),
       timeoutMs: boundedInteger(input.timeoutMs, 30000, 600000, defaults.timeoutMs)
     };
   }
@@ -469,7 +489,7 @@ export function normalizeImageParams(value: unknown): ImageParams {
       model: nonEmptyString(input.model, defaults.model),
       aspectRatio: oneOf(input.aspectRatio, ["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"] as const, defaults.aspectRatio),
       resolution: oneOf(input.resolution, ["0.5K", "1K", "2K", "4K"] as const, defaults.resolution),
-      outputCount: boundedInteger(input.outputCount, 1, 1, defaults.outputCount),
+      outputCount: boundedInteger(input.outputCount, 1, 4, defaults.outputCount),
       thinking: typeof input.thinking === "boolean" ? input.thinking : defaults.thinking,
       searchGrounding: typeof input.searchGrounding === "boolean" ? input.searchGrounding : defaults.searchGrounding,
       timeoutMs: boundedInteger(input.timeoutMs, 30000, 600000, defaults.timeoutMs)

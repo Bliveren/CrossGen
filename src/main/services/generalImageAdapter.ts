@@ -75,7 +75,7 @@ export async function runGeneralImageJob(
       ...job,
       params: toGeminiFallbackParams(job)
     };
-    const result = await runGeminiImageJob(providerJob, apiKey, config.baseURL, runtime);
+    const result = await runGeminiImageJob(providerJob, apiKey, config.baseURL, runtime, { usePixelSize: config.geminiPixelSize === true });
     return restoreGeneralJobIdentity(job, result);
   }
 

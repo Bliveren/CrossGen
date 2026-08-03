@@ -6,6 +6,7 @@ import { createGenerationQueueItem } from "./generation";
 import {
   completeGenerationQueueItemInQueue,
   recordGenerationQueuePartialOutput,
+  removeGenerationQueueItemInQueue,
   requestGenerationQueueItemCancel,
   requestGenerationQueueItemCancelInQueue,
   retryGenerationQueueItem,
@@ -615,3 +616,37 @@ describe("generationQueue", () => {
     await removeTempDir(tempDir);
   });
 });
+
+  it("removes only terminal queue items", () => {
+    const now = Date.parse("2026-01-01T00:02:00.000Z");
+    const base = createGenerationQueueItem({
+      source: "desktop",
+      providerId: "provider-1",
+      request: request(),
+      costConfirmed: true,
+      historyJobId: "job-1"
+    });
+    const queue = {
+      schemaVersion: 1 as const,
+      updatedAt: new Date(0).toISOString(),
+      workerHosts: [],
+      items: [
+        { ...base, queueId: "q-failed", status: "failed" as const, historyJobId: "job-failed" },
+        { ...base, queueId: "q-cancelled", status: "cancelled" as const, historyJobId: "job-cancelled" },
+        { ...base, queueId: "q-running", status: "running" as const, historyJobId: "job-running" },
+        { ...base, queueId: "q-queued", status: "queued" as const, historyJobId: "job-queued" }
+      ]
+    };
+
+    const removed = removeGenerationQueueItemInQueue(queue, "q-failed", now);
+    expect(removed.result.action).toBe("removed");
+    expect(removed.result.item?.queueId).toBe("q-failed");
+    expect(removed.queue.items.map((item) => item.queueId)).toEqual(["q-cancelled", "q-running", "q-queued"]);
+
+    const running = removeGenerationQueueItemInQueue(removed.queue, "q-running", now);
+    expect(running.result.action).toBe("not_removable");
+    expect(running.queue.items.length).toBe(3);
+
+    const missing = removeGenerationQueueItemInQueue(running.queue, "nope", now);
+    expect(missing.result.action).toBe("not_found");
+  });

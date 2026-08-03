@@ -35,6 +35,7 @@ interface NoticeCopy {
   jobDeleted: string;
   historyCleared: string;
   promptCopied: string;
+  promptCopyFailed: string;
   clipboardUnavailable: string;
   jobLoaded: string;
   modelsDiscovered: (count: number) => string;
@@ -56,6 +57,7 @@ interface QueueCopy {
   retry: string;
   cancel: string;
   cancelRequested: string;
+  remove: string;
   retryConfirmTitle: string;
   retryConfirmBody: string;
   retryConfirm: string;
@@ -125,6 +127,24 @@ export interface UiCopy {
   english: string;
   chinese: string;
   tagline: string;
+  taskLabel: string;
+  taskAdd: string;
+  taskClose: string;
+  taskCopy: string;
+  taskCopyPrompt: string;
+  taskPaste: string;
+  taskCopied: string;
+  taskClipboardEmpty: string;
+  taskPasted: string;
+  taskRunAll: string;
+  taskRunAllNone: string;
+  taskRunAllStarted: (count: number) => string;
+  taskAdded: string;
+  taskToggleEnabled: string;
+  taskEnabledCount: (enabled: number, total: number) => string;
+  taskQueued: string;
+  taskConcurrency: string;
+  taskProviderLabel: string;
   provider: string;
   providerLabel: string;
   apiAccess: string;
@@ -154,6 +174,7 @@ export interface UiCopy {
   apiAccessAdded: string;
   apiAccessDeleted: string;
   apiAccessSwitched: (name: string) => string;
+  apiAccessNoProviders: string;
   apiAccessUntitled: string;
   apiAccessKind: string;
   apiAccessBaseURLSummary: string;
@@ -166,6 +187,25 @@ export interface UiCopy {
   discoverModels: string;
   discoveringModels: string;
   discoveredModelsCount: (count: number) => string;
+  modelAliasTitle: string;
+  modelAliasDescription: string;
+  modelAliasAliasPlaceholder: string;
+  modelAliasAliasLabel: string;
+  modelAliasTargetLabel: string;
+  modelAliasAdd: string;
+  modelAliasRemove: string;
+  modelAliasEmpty: string;
+  modelAliasResolutionHint: string;
+  modelAliasResolutionUnavailable: (resolution: string) => string;
+  modelAliasTierLabel: string;
+  modelAliasSplitMode: string;
+  modelAliasSplitModeHintOn: string;
+  geminiPixelSizeLabel: string;
+  geminiPixelSizeHint: string;
+  modelAliasSplitModeHintOff: string;
+  modelAliasSplitMissingTier: (tier: string) => string;
+  modelAliasSplitUnsupported: (resolution: string) => string;
+  modelAliasSaved: string;
   connectionIdle: string;
   connectionChecking: string;
   connectionOk: string;
@@ -514,10 +554,35 @@ export interface UiCopy {
   maskOptional: string;
   notices: NoticeCopy;
   validation: ValidationCopy;
+  pasteImages: string;
+  pasteImagesHint: string;
+  dragToReorderHint: string;
+  numberKeyReorderHint: string;
+  pastedImageName: (count: number) => string;
+  referenceResizeHint: string;
+  externalDropUnsupported: string;
 }
 
 export const translations: Record<Language, UiCopy> = {
   en: {
+    taskLabel: "Task",
+    taskAdd: "Add task",
+    taskClose: "Close task",
+    taskCopy: "Copy task",
+    taskCopyPrompt: "Copy prompt",
+    taskPaste: "Paste task",
+    taskCopied: "Task copied to clipboard",
+    taskClipboardEmpty: "No copied task yet. Copy a task first.",
+    taskPasted: "Task pasted",
+    taskRunAll: "Run all",
+    taskRunAllNone: "No runnable tasks.",
+    taskRunAllStarted: (count) => `Started ${count} task${count === 1 ? "" : "s"}.`,
+    taskAdded: "Task added.",
+    taskConcurrency: "Concurrency",
+    taskToggleEnabled: "Enable this task",
+    taskEnabledCount: (enabled, total) => `Enabled ${enabled}/${total}`,
+    taskQueued: "Queued",
+    taskProviderLabel: "Task API",
     queue: {
       title: "Image queue",
       subtitle: "Visible task execution",
@@ -533,6 +598,7 @@ export const translations: Record<Language, UiCopy> = {
       retry: "Retry",
       cancel: "Cancel task",
       cancelRequested: "Cancel requested",
+      remove: "Remove task",
       retryConfirmTitle: "Retry this task?",
       retryConfirmBody: "Retrying may submit another paid provider request. Continue only if you intend to spend another request.",
       retryConfirm: "Retry task",
@@ -625,6 +691,7 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessDeleted: "API config deleted.",
     apiAccessSwitched: (name: string) => `Switched to ${name}.`,
     apiAccessUntitled: "Untitled API config",
+    apiAccessNoProviders: "No API configs yet.",
     apiAccessKind: "API type",
     apiAccessBaseURLSummary: "Base URL",
     providerAutoDetected: "Auto-detected from API",
@@ -636,6 +703,25 @@ export const translations: Record<Language, UiCopy> = {
     discoverModels: "Discover models",
     discoveringModels: "Discovering",
     discoveredModelsCount: (count: number) => `${count} model${count === 1 ? "" : "s"} discovered`,
+    modelAliasTitle: "Model name mapping",
+    modelAliasDescription: "Map aggregator model names to built-in catalog models.",
+    modelAliasAliasPlaceholder: "Alias model name (as returned by the API)",
+    modelAliasAliasLabel: "API custom name",
+    modelAliasTargetLabel: "Target model (built-in)",
+    modelAliasAdd: "Add mapping",
+    modelAliasRemove: "Remove mapping",
+    modelAliasEmpty: "No mappings yet.",
+    modelAliasResolutionHint: "Unmapped resolution options will be disabled for generation.",
+    modelAliasSaved: "Mappings saved",
+    modelAliasSplitMode: "Split mode",
+    modelAliasTierLabel: "Tier",
+    modelAliasSplitModeHintOn: "Split names (1K/2K/4K) remap by resolution; a missing tier blocks generation with an error.",
+    geminiPixelSizeLabel: "Send explicit pixel size for Gemini",
+    geminiPixelSizeHint: "Relay adaptation: use WxH pixels (e.g. 1152x2048) instead of aspect ratio + 1K/2K/4K so relays that ignore the ratio still honor it.",
+    modelAliasSplitModeHintOff: "Off: use aggregated model name matching instead of split tiers.",
+    modelAliasSplitMissingTier: (tier) => `No model mapping is configured for ${tier} resolution (split mode).`,
+    modelAliasSplitUnsupported: (resolution) => `Split mode does not support ${resolution}; only 1K/2K/4K are available.`,
+    modelAliasResolutionUnavailable: (resolution) => `No model mapping is configured for ${resolution} resolution.`,
     connectionIdle: "Not tested",
     connectionChecking: "Checking",
     connectionOk: "Connected",
@@ -1017,6 +1103,7 @@ export const translations: Record<Language, UiCopy> = {
       jobDeleted: "Job deleted.",
       historyCleared: "History cleared.",
       promptCopied: "Prompt copied.",
+      promptCopyFailed: "Failed to copy the prompt.",
       clipboardUnavailable: "Clipboard is unavailable.",
       jobLoaded: "Job loaded into workspace.",
       modelsDiscovered: (count: number) => `${count} model${count === 1 ? "" : "s"} discovered.`,
@@ -1050,9 +1137,34 @@ export const translations: Record<Language, UiCopy> = {
       maskNeedsAlpha: "Mask needs an alpha channel with transparent areas.",
       maskLooksValid: "Mask format, size, and alpha look valid.",
       regionGuideReady: "Region guide selected."
-    }
+    },
+    pasteImages: "Paste images",
+    pasteImagesHint: "Click here to paste images, or drag image files in.",
+    dragToReorderHint: "Drag thumbnails to reorder them.",
+    numberKeyReorderHint: "Select a tile, then press 1-9 to move it to that position.",
+    pastedImageName: (count: number) => `Pasted ${count} image${count === 1 ? "" : "s"}.`,
+    referenceResizeHint: "Drag to resize the reference panel.",
+    externalDropUnsupported: "Unsupported drop. Drop image files instead."
   },
   zh: {
+    taskLabel: "任务",
+    taskAdd: "添加任务",
+    taskClose: "关闭任务",
+    taskCopy: "复制任务",
+    taskCopyPrompt: "复制提示词",
+    taskPaste: "粘贴任务",
+    taskCopied: "任务已复制",
+    taskClipboardEmpty: "暂无已复制的任务，请先复制一个任务。",
+    taskPasted: "任务已粘贴",
+    taskRunAll: "全部运行",
+    taskRunAllNone: "没有可运行的任务。",
+    taskRunAllStarted: (count) => `已启动 ${count} 个任务。`,
+    taskAdded: "已添加任务。",
+    taskConcurrency: "并发",
+    taskToggleEnabled: "启用此任务",
+    taskEnabledCount: (enabled, total) => `已启用 ${enabled}/${total}`,
+    taskQueued: "排队中",
+    taskProviderLabel: "任务 API",
     queue: {
       title: "生图队列",
       subtitle: "任务执行状态",
@@ -1068,6 +1180,7 @@ export const translations: Record<Language, UiCopy> = {
       retry: "重试",
       cancel: "取消任务",
       cancelRequested: "已请求取消",
+      remove: "删除任务",
       retryConfirmTitle: "确认重试该任务？",
       retryConfirmBody: "重试可能会再次向服务商提交付费请求。请确认你愿意重新消耗一次请求后再继续。",
       retryConfirm: "确认重试",
@@ -1160,6 +1273,7 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessDeleted: "API 配置已删除。",
     apiAccessSwitched: (name: string) => `已切换到 ${name}。`,
     apiAccessUntitled: "未命名 API 配置",
+    apiAccessNoProviders: "还没有 API 配置。",
     apiAccessKind: "API 类型",
     apiAccessBaseURLSummary: "Base URL",
     providerAutoDetected: "已根据 API 自动识别",
@@ -1171,6 +1285,25 @@ export const translations: Record<Language, UiCopy> = {
     discoverModels: "探测模型",
     discoveringModels: "探测中",
     discoveredModelsCount: (count: number) => `探测到【${count}】个模型`,
+    modelAliasTitle: "模型名映射",
+    modelAliasDescription: "将中转站返回的模型名映射到内置目录模型。",
+    modelAliasAliasPlaceholder: "别名模型名（中转站返回）",
+    modelAliasAliasLabel: "API 自定义名称",
+    modelAliasTargetLabel: "目标模型（内置）",
+    modelAliasAdd: "添加映射",
+    modelAliasRemove: "删除映射",
+    modelAliasEmpty: "暂无映射。",
+    modelAliasResolutionHint: "未映射的分辨率选项将禁用生成。",
+    modelAliasSaved: "映射已保存",
+    modelAliasSplitMode: "拆分模式",
+    modelAliasTierLabel: "档位",
+    modelAliasSplitModeHintOn: "按 1K/2K/4K 拆分名重映射；缺失档位生成时报错丢弃请求。",
+    geminiPixelSizeLabel: "Gemini 使用像素尺寸",
+    geminiPixelSizeHint: "中转适配：改用 WxH 像素（如 1152x2048）代替 比例+1K/2K/4K，让忽略比例的中转站也能按比例出图。",
+    modelAliasSplitModeHintOff: "关闭：使用聚合模型名匹配，而非拆分档位。",
+    modelAliasSplitMissingTier: (tier) => `未配置 ${tier} 分辨率的模型映射（拆分模式）。`,
+    modelAliasSplitUnsupported: (resolution) => `拆分模式不支持 ${resolution} 分辨率，仅支持 1K/2K/4K。`,
+    modelAliasResolutionUnavailable: (resolution) => `未配置 ${resolution} 分辨率的模型映射。`,
     connectionIdle: "未测试",
     connectionChecking: "检测中",
     connectionOk: "连接成功",
@@ -1552,6 +1685,7 @@ export const translations: Record<Language, UiCopy> = {
       jobDeleted: "任务已删除。",
       historyCleared: "历史已清空。",
       promptCopied: "提示词已复制。",
+      promptCopyFailed: "复制提示词失败。",
       clipboardUnavailable: "剪贴板不可用。",
       jobLoaded: "任务已载入工作区。",
       modelsDiscovered: (count: number) => `已探测到 ${count} 个模型。`,
@@ -1585,7 +1719,14 @@ export const translations: Record<Language, UiCopy> = {
       maskNeedsAlpha: "蒙版需要带透明区域的 alpha 通道。",
       maskLooksValid: "蒙版格式、尺寸和透明通道有效。",
       regionGuideReady: "已选择区域引导。"
-    }
+    },
+    pasteImages: "粘贴图片",
+    pasteImagesHint: "点击此处粘贴图片或拖入图片。",
+    dragToReorderHint: "拖拽缩略图可调整顺序。",
+    numberKeyReorderHint: "选中缩略图后按数字键 1-9 可将其移动到对应位置。",
+    pastedImageName: (count: number) => `已粘贴 ${count} 张图片。`,
+    referenceResizeHint: "拖拽可调整参考图面板高度。",
+    externalDropUnsupported: "不支持的内容，请拖入图片文件。"
   }
 };
 

@@ -1,4 +1,6 @@
-import type { QueueRuntimeConfig } from "../shared/types.js";
+import type { QueueRuntimeConfig, QueueRuntimeConfigPatch } from "../shared/types.js";
+
+export type { QueueRuntimeConfigPatch };
 
 export const MIN_QUEUE_CONCURRENCY = 1;
 export const MAX_QUEUE_CONCURRENCY = 8;
@@ -7,12 +9,6 @@ export const DEFAULT_QUEUE_RUNTIME_CONFIG: QueueRuntimeConfig = {
   maxGlobalRunning: 1,
   providerConcurrency: {}
 };
-
-export interface QueueRuntimeConfigPatch {
-  maxGlobalRunning?: number;
-  providerConcurrency?: Record<string, number>;
-  clearProviderIds?: string[];
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));

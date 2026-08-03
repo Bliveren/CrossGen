@@ -5,6 +5,7 @@ import {
   DEFAULT_GENERAL_IMAGE_PARAMS,
   GENERAL_PROMPT_ONLY_MESSAGE,
   MAX_GPT_IMAGE_INPUTS,
+  MAX_INPUT_DATA_URL_TOTAL_BYTES,
   dataUrlToBase64,
   extensionForFormat,
   getValidationError,
@@ -18,11 +19,13 @@ import {
   validateApiKey,
   shouldSendCompression,
   validateGptImage2Size,
+  validateGeminiImageParams,
   validateImageParams,
   validateMaskMimeType,
   validateMaskSourceFormat,
   validateGeneralRunJobRequest,
   validateProviderConfigInput,
+  validateQueueRuntimeConfigPatch,
   validateRunJobRequest,
   validateWorkspaceDraftInput
 } from "./validation";
@@ -70,7 +73,8 @@ describe("gpt-image-2 validation", () => {
     expect(validateImageParams(DEFAULT_GENERAL_IMAGE_PARAMS).ok).toBe(true);
     expect(validateImageParams({ ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "gemini", model: "gemini-3-pro-image" }).ok).toBe(true);
     expect(validateImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, aspectRatio: "2:1" }).ok).toBe(false);
-    expect(validateImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, outputCount: 2 }).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, outputCount: 2 }).ok).toBe(true);
+    expect(validateImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, outputCount: 5 }).ok).toBe(false);
     expect(validateImageParams({ ...DEFAULT_GENERAL_IMAGE_PARAMS, outputCount: 2 }).ok).toBe(false);
   });
 
@@ -364,5 +368,113 @@ describe("gpt-image-2 validation", () => {
     expect(redactSecret("")).toBe("");
     expect(redactSecret("12345678")).toBe("****");
     expect(redactSecret("sk-abcdefghijklmnopqrstuvwxyz")).toBe("sk-a...wxyz");
+  });
+});
+
+describe("run job provider and reference data inputs", () => {
+  const baseJob = {
+    mode: "generate" as const,
+    prompt: "Prompt",
+    inputPaths: [] as string[],
+    params: DEFAULT_IMAGE_PARAMS
+  };
+  const pngDataUrl = "data:image/png;base64,abc";
+  const jpegDataUrl = "data:image/jpeg;base64,def";
+  const webpDataUrl = "data:image/webp;base64,ghi";
+
+  it("accepts an optional non-empty providerId", () => {
+    expect(validateRunJobRequest({ ...baseJob, providerId: "gemini-a" }).ok).toBe(true);
+    expect(validateRunJobRequest({ ...baseJob, providerId: "" }).ok).toBe(false);
+    expect(validateRunJobRequest({ ...baseJob, providerId: "  " }).ok).toBe(false);
+    expect(validateRunJobRequest({ ...baseJob, providerId: 123 } as never).ok).toBe(false);
+  });
+
+  it("validates inputDataUrls as PNG/JPEG/WebP base64 data URLs", () => {
+    expect(
+      validateRunJobRequest({
+        ...baseJob,
+        mode: "edit",
+        inputPaths: [],
+        inputDataUrls: [pngDataUrl, jpegDataUrl, webpDataUrl]
+      }).ok
+    ).toBe(true);
+    expect(validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: [], inputDataUrls: [1] } as never).ok).toBe(false);
+    expect(validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: [], inputDataUrls: ["not-a-data-url"] }).ok).toBe(false);
+    expect(validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: [], inputDataUrls: ["data:image/gif;base64,abc"] }).ok).toBe(false);
+    expect(validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: [], inputDataUrls: ["data:image/png;base64,abc", 2] } as never).ok).toBe(false);
+  });
+
+  it("treats an empty inputDataUrls array as not provided", () => {
+    expect(validateRunJobRequest({ ...baseJob, inputDataUrls: [] }).ok).toBe(true);
+  });
+
+  it("rejects generate-mode requests carrying inputDataUrls", () => {
+    expect(validateRunJobRequest({ ...baseJob, inputDataUrls: [pngDataUrl] }).ok).toBe(false);
+  });
+
+  it("accepts edit mode with only inputDataUrls and rejects edit mode with neither paths nor data urls", () => {
+    expect(validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: [], inputDataUrls: [pngDataUrl] }).ok).toBe(true);
+    expect(validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: [], inputDataUrls: [] }).ok).toBe(false);
+  });
+
+  it("caps combined inputPaths + inputDataUrls at 16", () => {
+    const dataUrls = Array.from({ length: MAX_GPT_IMAGE_INPUTS }, () => pngDataUrl);
+    expect(validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: [], inputDataUrls: dataUrls }).ok).toBe(true);
+    const over = Array.from({ length: MAX_GPT_IMAGE_INPUTS + 1 }, () => pngDataUrl);
+    expect(validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: [], inputDataUrls: over }).ok).toBe(false);
+    expect(validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: ["/tmp/a.png"], inputDataUrls: dataUrls }).ok).toBe(false);
+  });
+
+  it("caps total inputDataUrls payload size at ~20MB base64 length", () => {
+    const overPayload = "A".repeat(MAX_INPUT_DATA_URL_TOTAL_BYTES + 1);
+    expect(
+      validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: [], inputDataUrls: [`data:image/png;base64,${overPayload}`] }).ok
+    ).toBe(false);
+    const okPayload = "A".repeat(1024 * 1024);
+    expect(
+      validateRunJobRequest({ ...baseJob, mode: "edit", inputPaths: [], inputDataUrls: [`data:image/png;base64,${okPayload}`] }).ok
+    ).toBe(true);
+  });
+});
+
+describe("queue runtime config patch validation", () => {
+  it("accepts valid patches", () => {
+    expect(validateQueueRuntimeConfigPatch({ maxGlobalRunning: 1 }).ok).toBe(true);
+    expect(validateQueueRuntimeConfigPatch({ maxGlobalRunning: 8 }).ok).toBe(true);
+    expect(validateQueueRuntimeConfigPatch({ providerConcurrency: { gemini: 2 } }).ok).toBe(true);
+    expect(validateQueueRuntimeConfigPatch({ clearProviderIds: ["gemini"] }).ok).toBe(true);
+    expect(
+      validateQueueRuntimeConfigPatch({ maxGlobalRunning: 4, providerConcurrency: { a: 1, b: 8 }, clearProviderIds: ["c"] }).ok
+    ).toBe(true);
+    expect(validateQueueRuntimeConfigPatch({}).ok).toBe(true);
+    expect(validateQueueRuntimeConfigPatch(null as never).ok).toBe(false);
+  });
+
+  it("rejects out-of-range or non-integer concurrency values", () => {
+    expect(validateQueueRuntimeConfigPatch({ maxGlobalRunning: 0 }).ok).toBe(false);
+    expect(validateQueueRuntimeConfigPatch({ maxGlobalRunning: 9 }).ok).toBe(false);
+    expect(validateQueueRuntimeConfigPatch({ maxGlobalRunning: 2.5 }).ok).toBe(false);
+    expect(validateQueueRuntimeConfigPatch({ providerConcurrency: { gemini: 0 } }).ok).toBe(false);
+    expect(validateQueueRuntimeConfigPatch({ providerConcurrency: { gemini: 9 } }).ok).toBe(false);
+    expect(validateQueueRuntimeConfigPatch({ providerConcurrency: { gemini: 1.5 } }).ok).toBe(false);
+    expect(validateQueueRuntimeConfigPatch({ providerConcurrency: "x" } as never).ok).toBe(false);
+    expect(validateQueueRuntimeConfigPatch({ clearProviderIds: "x" } as never).ok).toBe(false);
+    expect(validateQueueRuntimeConfigPatch({ clearProviderIds: [1] } as never).ok).toBe(false);
+  });
+});
+
+describe("gemini image params outputCount", () => {
+  it("accepts outputCount 1..4 and rejects values outside the range", () => {
+    expect(validateGeminiImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, outputCount: 1 }).ok).toBe(true);
+    expect(validateGeminiImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, outputCount: 4 }).ok).toBe(true);
+    expect(validateGeminiImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, outputCount: 0 }).ok).toBe(false);
+    expect(validateGeminiImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, outputCount: 5 }).ok).toBe(false);
+    expect(validateGeminiImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, outputCount: 2.5 }).ok).toBe(false);
+  });
+
+  it("uses the updated error message for invalid outputCount", () => {
+    const result = validateGeminiImageParams({ ...DEFAULT_GEMINI_IMAGE_PARAMS, outputCount: 5 });
+    expect(result.ok).toBe(false);
+    expect(result.message).toBe("生成数量需在 1 到 4 之间。");
   });
 });

@@ -53,6 +53,11 @@ export interface GenerationQueueRetryResult {
   item?: GenerationQueueItem;
 }
 
+export interface GenerationQueueRemoveResult {
+  action: "removed" | "not_found" | "not_removable";
+  item?: GenerationQueueItem;
+}
+
 export interface RunGenerationQueueItemToCompletionOptions<TValue = unknown> extends RunNextGenerationQueueItemOptions<TValue> {
   pollIntervalMs?: number;
   waitTimeoutMs?: number;
@@ -587,4 +592,49 @@ export function retryGenerationQueueItemInQueue(
   if (retried) return { queue: nextQueue, result: { action: "retried", item: retried } };
   if (found) return { queue: nextQueue, result: { action: "not_retryable", item: found } };
   return { queue: nextQueue, result: { action: "not_found" } };
+}
+
+export async function removeGenerationQueueItem(
+  queueStore: QueueStore,
+  queueId: string,
+  now = Date.now
+): Promise<GenerationQueueRemoveResult & { queue: GenerationQueueFile }> {
+  const normalizedQueueId = queueId.trim();
+  if (!normalizedQueueId) {
+    return { action: "not_found", queue: await queueStore.read() };
+  }
+  let result: GenerationQueueRemoveResult = { action: "not_found" };
+  const queue = await queueStore.mutate((current) => {
+    const next = removeGenerationQueueItemInQueue(current, normalizedQueueId, now());
+    result = next.result;
+    return next.queue;
+  });
+  return { ...result, queue };
+}
+
+export function removeGenerationQueueItemInQueue(
+  queue: GenerationQueueFile,
+  queueId: string,
+  nowMs: number
+): { queue: GenerationQueueFile; result: GenerationQueueRemoveResult } {
+  const normalizedQueueId = queueId.trim();
+  if (!normalizedQueueId) {
+    return { queue, result: { action: "not_found" } };
+  }
+  let found: GenerationQueueItem | undefined;
+  const nowIso = iso(nowMs);
+  const nextQueue = {
+    ...queue,
+    updatedAt: nowIso,
+    items: queue.items.filter((item) => {
+      if (item.queueId !== normalizedQueueId) return true;
+      found = item;
+      return !TERMINAL_STATUSES.has(item.status);
+    })
+  };
+  if (!found) return { queue, result: { action: "not_found" } };
+  if (!TERMINAL_STATUSES.has(found.status)) {
+    return { queue, result: { action: "not_removable", item: found } };
+  }
+  return { queue: nextQueue, result: { action: "removed", item: found } };
 }

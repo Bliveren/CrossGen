@@ -7,6 +7,7 @@ import {
   ChevronUp,
   CheckCircle2,
   CheckSquare,
+  ClipboardPaste,
   Copy,
   Download,
   FileDown,
@@ -69,6 +70,7 @@ import {
 import type {
   AppSnapshot,
   FocusedLaunchId,
+  FocusedModelDefinition,
   GalleryAsset,
   GalleryFolder,
   GeneralImageParams,
@@ -114,6 +116,7 @@ import {
   isPotentialGeneralImageModel,
   normalizeModelId
 } from "../shared/modelCatalog";
+import { aliasCoveredResolutionTiers, aliasCoveredSplitResolutionTiers, gptSizeToResolutionTier, isSplitResolutionTier, type ModelAliasEntry } from "../shared/modelAliasMapping";
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { DialogShell } from "./DialogShell";
@@ -133,6 +136,11 @@ import {
 } from "./GalleryPanel";
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 import { useImageEditor } from "./useImageEditor";
+import { createTaskFieldStore, createTaskId, useTaskField, useTaskStoreVersion, type TaskFieldStore } from "./taskStore";
+import { TaskProviderSelect, TaskRunControls, TaskTabBar, isTaskEnabled } from "./TaskTabBar";
+import { Select } from "./CustomSelect";
+import { ReferenceImagePanel, type ReferenceImagePanelProps } from "./ReferenceImagePanel";
+import { extractDataUrlsFromText, referenceDataUrlToAsset } from "./referenceImageData";
 import { useHistoryListModel } from "./useHistoryListModel";
 import {
   GALLERY_ALL_FILTER,
@@ -191,6 +199,15 @@ interface GallerySaveChoiceDialogState {
 }
 type BatchTagTarget = "history" | "gallery";
 type ImageContextMenuState = { x: number; y: number; asset: ImageAsset; jobPrompt: string };
+type TaskTabContextMenuState = { x: number; y: number; taskId: string };
+interface TaskClipboardPayload {
+  tabMode: TabMode;
+  prompt: string;
+  params: ImageParams;
+  inputAssets: InputAsset[];
+  maskDataUrl?: string | null;
+  maskAsset?: InputAsset | null;
+}
 type CrossgenProfilerEvent = {
   id: string;
   phase: "mount" | "update" | "nested-update";
@@ -592,6 +609,7 @@ function QueueStatusPanel({
   onToggle,
   onCancel,
   onRetry,
+  onRemove,
   onDetails
 }: {
   copy: UiCopy;
@@ -601,6 +619,7 @@ function QueueStatusPanel({
   onToggle: () => void;
   onCancel: (task: QueueTaskSummary) => void;
   onRetry: (task: QueueTaskSummary) => void;
+  onRemove: (task: QueueTaskSummary) => void;
   onDetails: (task: QueueTaskSummary) => void;
 }) {
   const tasks = visibleQueueTasks(snapshot);
@@ -660,6 +679,11 @@ function QueueStatusPanel({
                     {task.retryable && (
                       <button type="button" className="icon-button" onClick={() => onRetry(task)} aria-label={copy.queue.retry} data-tooltip={copy.queue.retry}>
                         <RefreshCw size={14} />
+                      </button>
+                    )}
+                    {(task.status === "failed" || task.status === "interrupted" || task.status === "cancelled") && (
+                      <button type="button" className="icon-button" onClick={() => onRemove(task)} aria-label={copy.queue.remove} data-tooltip={copy.queue.remove}>
+                        <Trash2 size={14} />
                       </button>
                     )}
                   </div>
@@ -825,7 +849,12 @@ function selectedOpenAIImageRoute(params: OpenAIImageParams, config: ProviderCon
 }
 
 function normalizeParamsForOutputCount(params: ImageParams): ImageParams {
-  return isOpenAIImageParams(params) ? normalizeOpenAIParamsForOutputCount(params) : params;
+  if (isOpenAIImageParams(params)) return normalizeOpenAIParamsForOutputCount(params);
+  if (isGeminiImageParams(params)) {
+    const outputCount = clamp(Math.round(Number(params.outputCount) || 1), 1, 4);
+    return outputCount === params.outputCount ? params : { ...params, outputCount };
+  }
+  return params;
 }
 
 function createGeminiParams(modelId: string, current: ImageParams, config?: ProviderConfig): GeminiImageParams {
@@ -888,6 +917,34 @@ function hasDiscoveredProviderModel(config: ProviderConfig, providerKind: Provid
   return config.discoveredModels.some((model) => model.providerKind === providerKind && normalizeModelId(model.id) === normalizedModelId);
 }
 
+function hasProviderModelViaAlias(config: ProviderConfig, providerKind: ProviderKind, modelId: string): boolean {
+  const aliases = config.modelAliases ?? [];
+  if (aliases.length === 0) return false;
+  const normalized = normalizeModelId(modelId);
+  return aliases.some((entry) => normalizeModelId(entry.targetModelId) === normalized);
+}
+
+function hasFocusedModelAlias(config: ProviderConfig, definition: FocusedModelDefinition): boolean {
+  return (config.modelAliases ?? []).some((entry) =>
+    definition.modelIds.some((id) => normalizeModelId(id) === normalizeModelId(entry.targetModelId))
+  );
+}
+
+function geminiResolutionAliasAvailability(config: ProviderConfig, modelId: string): Set<string> | null {
+  const aliases = config.modelAliases ?? [];
+  if (config.modelAliasSplitMode === true) {
+    const hasModelAliases = aliases.some((entry) => normalizeModelId(entry.targetModelId) === normalizeModelId(modelId));
+    if (!hasModelAliases) return null;
+    // 拆分模式：只认 1K/2K/4K；未覆盖档位（含 0.5K）视为不可用
+    return new Set(aliasCoveredSplitResolutionTiers(modelId, aliases));
+  }
+  if (aliases.length === 0) return null;
+  const covered = aliasCoveredResolutionTiers(modelId, aliases);
+  if (covered.size === 0) return null;
+  return new Set(covered);
+}
+
+
 function defaultSizeForConfigSave(params: ImageParams, config: ProviderConfig): string {
   return isOpenAIImageParams(params) ? params.size : config.defaultSize || DEFAULT_IMAGE_PARAMS.size;
 }
@@ -902,7 +959,11 @@ function runtimeSelectionError(params: ImageParams, config: ProviderConfig, copy
   }
   if (isGeminiImageParams(params)) {
     if (config.activeLaunchId !== NANO_BANANA_3_LAUNCH_ID) return copy.selectLaunchToRun("Nano Banana 3");
-    if (config.kind === "gemini" || hasDiscoveredProviderModel(config, "gemini", params.model)) return null;
+    if (config.kind === "gemini" || hasDiscoveredProviderModel(config, "gemini", params.model) || hasProviderModelViaAlias(config, "gemini", params.model)) return null;
+    const geminiAliasResolutions = geminiResolutionAliasAvailability(config, params.model);
+    if (geminiAliasResolutions !== null && !geminiAliasResolutions.has(params.resolution)) {
+      return copy.modelAliasResolutionUnavailable(params.resolution);
+    }
     return copy.launchUnavailableModel(params.model);
   }
   if (!isGeneralImageParams(params)) return copy.generalRuntimeUnsupported;
@@ -938,11 +999,11 @@ function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: 
   }
 }
 
-function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButtonState[] {
+function getLaunchButtonStates(config: ProviderConfig, params: ImageParams, copy: UiCopy): LaunchButtonState[] {
   const hasDiscovery = config.discoveredModels.length > 0;
   return FOCUSED_MODEL_CATALOG.map((definition) => {
     const modelOptions = getLaunchModelOptions(config, definition.launchId);
-    const preferredModel = getPreferredLaunchModel(config, definition.launchId, modelOptions);
+    const preferredModel = getPreferredLaunchModel(config, params, definition.launchId, modelOptions);
     const modelId = preferredModel?.id ?? definition.defaultModelId;
     const providerKind = preferredModel?.providerKind ?? definition.providerKind;
     let available = false;
@@ -950,6 +1011,9 @@ function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButt
 
     if (!config.apiKeySaved) {
       reason = copy.launchUnavailableNoKey;
+    } else if (definition.launchId !== GENERAL_LAUNCH_ID && hasFocusedModelAlias(config, definition)) {
+      available = true;
+      reason = copy.launchAvailable;
     } else if (config.lastModelDiscoveryError) {
       reason = config.lastModelDiscoveryError;
     } else if (!hasDiscovery) {
@@ -988,12 +1052,32 @@ function getLaunchModelOptions(config: ProviderConfig, launchId: FocusedLaunchId
   const definition = FOCUSED_MODEL_CATALOG.find((item) => item.launchId === launchId);
   if (!definition) return [];
   const normalizedModelIds = new Set(definition.modelIds.map(normalizeModelId));
-  return config.discoveredModels
+  const discovered = config.discoveredModels
     .filter((model) => normalizedModelIds.has(normalizeModelId(model.id)))
     .map(toLaunchModelOption);
+  const seen = new Set(discovered.map((option) => normalizeModelId(option.id)));
+  const aliasOptions: LaunchModelOption[] = (config.modelAliases ?? [])
+    .filter((entry) => normalizedModelIds.has(normalizeModelId(entry.targetModelId)))
+    .filter((entry) => !seen.has(normalizeModelId(entry.targetModelId)))
+    .map((entry) => ({
+      id: entry.targetModelId,
+      providerKind: definition.providerKind,
+      displayName: entry.targetModelId
+    }));
+  return [...discovered, ...aliasOptions];
 }
 
-function getPreferredLaunchModel(config: ProviderConfig, launchId: FocusedLaunchId, options: LaunchModelOption[]): LaunchModelOption | undefined {
+function getPreferredLaunchModel(
+  config: ProviderConfig,
+  params: ImageParams,
+  launchId: FocusedLaunchId,
+  options: LaunchModelOption[]
+): LaunchModelOption | undefined {
+  // 多 task 共享同一 provider 时，优先按任务自己的参数记忆，避免互相覆盖
+  if (params.launchId === launchId) {
+    const activeModel = options.find((model) => normalizeModelId(model.id) === normalizeModelId(params.model));
+    if (activeModel) return activeModel;
+  }
   if (config.activeLaunchId === launchId) {
     const activeModel = options.find((model) => normalizeModelId(model.id) === normalizeModelId(config.activeModelId));
     if (activeModel) return activeModel;
@@ -1175,15 +1259,24 @@ async function inspectMask(
 
 export function App() {
   const bridge = getBridge();
+
+  // ---- 多 task 工作区状态（任务页签） ----
+  const [taskStore] = useState(() => createTaskFieldStore());
+  const [initialTaskId] = useState(() => createTaskId());
+  const [taskIds, setTaskIds] = useState<string[]>(() => [initialTaskId]);
+  const [activeTaskId, setActiveTaskId] = useState<string>(initialTaskId);
+  const enabledTaskCount = taskIds.filter((taskId) => isTaskEnabled(taskStore, taskId)).length;
+  useTaskStoreVersion(taskStore);
+  const [providerId, setProviderId] = useTaskField<string>(taskStore, activeTaskId, "providerId", "");
   const [language, setLanguage] = useState<Language>(() => getInitialLanguage());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getInitialThemeMode());
   const copy = translations[language];
   const [snapshot, setSnapshot] = useState<AppSnapshot>(fallbackSnapshot);
-  const [tabMode, setTabMode] = useState<TabMode>("text2img");
-  const [prompt, setPrompt] = useState("A clean product photo of a matte black travel mug on a brushed steel counter");
-  const [promptTokens, setPromptTokens] = useState<PromptToken[]>([]);
-  const [promptTokenAssets, setPromptTokenAssets] = useState<Record<string, InputAsset>>({});
-  const [params, setParams] = useState<ImageParams>(DEFAULT_IMAGE_PARAMS);
+  const [tabMode, setTabMode] = useTaskField<TabMode>(taskStore, activeTaskId, "tabMode", "text2img");
+  const [prompt, setPrompt] = useTaskField<string>(taskStore, activeTaskId, "prompt", "A clean product photo of a matte black travel mug on a brushed steel counter");
+  const [promptTokens, setPromptTokens] = useTaskField<PromptToken[]>(taskStore, activeTaskId, "promptTokens", []);
+  const [promptTokenAssets, setPromptTokenAssets] = useTaskField<Record<string, InputAsset>>(taskStore, activeTaskId, "promptTokenAssets", {});
+  const [params, setParams] = useTaskField<ImageParams>(taskStore, activeTaskId, "params", DEFAULT_IMAGE_PARAMS);
   const modeLabels = useMemo(() => modeLabelsForParams(copy, params), [copy, params]);
   const [apiKey, setApiKey] = useState("");
   const [apiAccessKind, setApiAccessKind] = useState<ProviderKind>("openai");
@@ -1191,6 +1284,10 @@ export function App() {
   const [baseURL, setBaseURL] = useState(DEFAULT_BASE_URL);
   const [isActiveApiConfigOpen, setIsActiveApiConfigOpen] = useState(false);
   const [selectedApiConfigId, setSelectedApiConfigId] = useState<string | null>(null);
+  const [modelAliasesDraft, setModelAliasesDraft] = useState<ModelAliasEntry[]>([]);
+  const [modelAliasSplitModeDraft, setModelAliasSplitModeDraft] = useState(false);
+  const [geminiPixelSizeDraft, setGeminiPixelSizeDraft] = useState(false);
+  const geminiPixelSizeTouchedRef = useRef(false);
   const [promotedApiConfigId, setPromotedApiConfigId] = useState<string | null>(null);
   const [savedApiConfigId, setSavedApiConfigId] = useState<string | null>(null);
   const [isAddingApiAccess, setIsAddingApiAccess] = useState(false);
@@ -1200,14 +1297,14 @@ export function App() {
   const [newApiAccessName, setNewApiAccessName] = useState("");
   const [newApiAccessBaseURL, setNewApiAccessBaseURL] = useState(DEFAULT_BASE_URL);
   const [newApiAccessKey, setNewApiAccessKey] = useState("");
-  const [customSize, setCustomSize] = useState("2048x1152");
-  const [inputAssets, setInputAssets] = useState<InputAsset[]>([]);
-  const [maskAsset, setMaskAsset] = useState<InputAsset | null>(null);
-  const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null);
-  const [maskCheck, setMaskCheck] = useState<MaskCheck | null>(null);
-  const [activeJob, setActiveJob] = useState<GenerationJob | null>(null);
-  const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
-  const [partialImages, setPartialImages] = useState<ImageAsset[]>([]);
+  const [customSize, setCustomSize] = useTaskField<string>(taskStore, activeTaskId, "customSize", "2048x1152");
+  const [inputAssets, setInputAssets] = useTaskField<InputAsset[]>(taskStore, activeTaskId, "inputAssets", []);
+  const [maskAsset, setMaskAsset] = useTaskField<InputAsset | null>(taskStore, activeTaskId, "maskAsset", null);
+  const [maskDataUrl, setMaskDataUrl] = useTaskField<string | null>(taskStore, activeTaskId, "maskDataUrl", null);
+  const [maskCheck, setMaskCheck] = useTaskField<MaskCheck | null>(taskStore, activeTaskId, "maskCheck", null);
+  const [activeJob, setActiveJob] = useTaskField<GenerationJob | null>(taskStore, activeTaskId, "activeJob", null);
+  const [selectedResultId, setSelectedResultId] = useTaskField<string | null>(taskStore, activeTaskId, "selectedResultId", null);
+  const [partialImages, setPartialImages] = useTaskField<ImageAsset[]>(taskStore, activeTaskId, "partialImages", []);
   const [notice, setNotice] = useState<Notice>({
     kind: bridge ? "info" : "error",
     text: bridge ? copy.notices.ready : copy.notices.browserPreview
@@ -1218,20 +1315,23 @@ export function App() {
   const [isClearingApiKey, setIsClearingApiKey] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck>({ status: "idle" });
-  const [isRunning, setIsRunning] = useState(false);
-  const [runningJobId, setRunningJobId] = useState<string | null>(null);
-  const [runningQueueId, setRunningQueueId] = useState<string | null>(null);
+  const [isRunning, setIsRunning] = useTaskField<boolean>(taskStore, activeTaskId, "isRunning", false);
+  const [runningJobId, setRunningJobId] = useTaskField<string | null>(taskStore, activeTaskId, "runningJobId", null);
+  const [runningQueueId, setRunningQueueId] = useTaskField<string | null>(taskStore, activeTaskId, "runningQueueId", null);
   const [queueSnapshot, setQueueSnapshot] = useState<QueueSnapshot>(fallbackQueueSnapshot);
+  const [queueConcurrency, setQueueConcurrency] = useState(1);
   const [isQueuePanelOpen, setIsQueuePanelOpen] = useState(false);
   const [queueDiagnosticTask, setQueueDiagnosticTask] = useState<QueueTaskSummary | null>(null);
   const [historyDiagnosticJob, setHistoryDiagnosticJob] = useState<GenerationJob | null>(null);
-  const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
-  const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
-  const [generationAttemptIndex, setGenerationAttemptIndex] = useState<number | null>(null);
+  const [generationStartedAt, setGenerationStartedAt] = useTaskField<number | null>(taskStore, activeTaskId, "generationStartedAt", null);
+  const [generationElapsedSeconds, setGenerationElapsedSeconds] = useTaskField<number>(taskStore, activeTaskId, "generationElapsedSeconds", 0);
+  const [generationAttemptIndex, setGenerationAttemptIndex] = useTaskField<number | null>(taskStore, activeTaskId, "generationAttemptIndex", null);
   const [arePromptSecondaryActionsIconOnly, setArePromptSecondaryActionsIconOnly] = useState(false);
   const [isPrimaryRunIconOnly, setIsPrimaryRunIconOnly] = useState(false);
   const [isParameterDialogOpen, setIsParameterDialogOpen] = useState(false);
-  const [openLaunchMenuId, setOpenLaunchMenuId] = useState<FocusedLaunchId | null>(null);
+  const [openLaunchMenuId, setOpenLaunchMenuId] = useTaskField<FocusedLaunchId | null>(taskStore, activeTaskId, "openLaunchMenuId", null);
+  const [taskTabContextMenu, setTaskTabContextMenu] = useState<TaskTabContextMenuState | null>(null);
+  const taskClipboardRef = useRef<TaskClipboardPayload | null>(null);
   const [historySearch, setHistorySearch] = useState("");
   const [historyStatusFilter, setHistoryStatusFilter] = useState<"all" | "succeeded" | "failed">("all");
   const [historySort, setHistorySort] = useState<"newest" | "oldest">("newest");
@@ -1294,11 +1394,11 @@ export function App() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [storageDialogKind, setStorageDialogKind] = useState<StorageKind | null>(null);
   const [syncStorageFolders, setSyncStorageFolders] = useState(false);
-  const [brushSize, setBrushSize] = useState(72);
-  const [isPainting, setIsPainting] = useState(false);
-  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
-  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
-  const [hasUserChangedDraft, setHasUserChangedDraft] = useState(false);
+  const [brushSize, setBrushSize] = useTaskField<number>(taskStore, activeTaskId, "brushSize", 72);
+  const [isPainting, setIsPainting] = useTaskField<boolean>(taskStore, activeTaskId, "isPainting", false);
+  const [draftUpdatedAt, setDraftUpdatedAt] = useTaskField<string | null>(taskStore, activeTaskId, "draftUpdatedAt", null);
+  const [hasRestoredDraft, setHasRestoredDraft] = useTaskField<boolean>(taskStore, activeTaskId, "hasRestoredDraft", false);
+  const [hasUserChangedDraft, setHasUserChangedDraft] = useTaskField<boolean>(taskStore, activeTaskId, "hasUserChangedDraft", false);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
@@ -1367,12 +1467,357 @@ export function App() {
     hasExportableEditorOverlay,
     hasEditedPreviewChanges
   } = useImageEditor();
+  // ---- 多 task：切换任务时重置共享的编辑器视图状态（缩放/标注/裁剪等瞬时状态） ----
+  function resetSharedEditorView() {
+    setPreviewZoom(1);
+    setPreviewPan({ x: 0, y: 0 });
+    setPreviewMode("idle");
+    setAnnotationTool("draw");
+    setAnnotationDrawingLayers([]);
+    setAnnotationTextBoxes([]);
+    setActiveAnnotationTextBoxId(null);
+    setDraftTextRect(null);
+    setIsDrawingAnnotation(false);
+    setHasAnnotationMarks(false);
+    setEditedImageDataUrl(null);
+    setEditorUndoStack([]);
+    setIsAnnotationColorPickerOpen(false);
+    setIsAnnotationColorSampling(false);
+    setSampledAnnotationColor(null);
+    setCropSelection(null);
+  }
+
+  function addTask() {
+    const nextId = createTaskId();
+    setTaskIds((current) => [...current, nextId]);
+    const defaultProvider = snapshot.providers.find((p) => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
+    taskStore.set(nextId, "providerId", defaultProvider?.id ?? "");
+    if (defaultProvider) {
+      // 新任务继承当前 provider 的启动/模型，保证生成按钮立即可用
+      taskStore.set(nextId, "params", createParamsForConfig(defaultProvider, DEFAULT_IMAGE_PARAMS));
+    }
+    setActiveTaskId(nextId);
+    resetSharedEditorView();
+    // (task switch keeps the config dialog selection)
+    setNotice({ kind: "info", text: copy.taskAdded });
+  }
+
+  function closeTask(taskId: string) {
+    if (taskIds.length <= 1) return;
+    const remaining = taskIds.filter((id) => id !== taskId);
+    setTaskIds(remaining);
+    taskStore.clearTask(taskId);
+    if (activeTaskId === taskId) {
+      const nextActive = remaining[remaining.length - 1];
+      setActiveTaskId(nextActive);
+      resetSharedEditorView();
+      // (task switch keeps the config dialog selection)
+    }
+  }
+
+  function switchTask(taskId: string) {
+    if (taskId === activeTaskId) return;
+    setActiveTaskId(taskId);
+    resetSharedEditorView();
+    // (task switch keeps the config dialog selection)
+    setOpenLaunchMenuId(null);
+  }
+
+  async function ensureConcurrencyForEnabledTasks() {
+    // 并发显示为“已勾选(启用)的任务数”；运行时把后端 maxGlobalRunning 自动抬到启用数，
+    // 让勾选的任务能并行执行（而不是用单个 int 选择器决定哪些任务并发）。
+    const enabledCount = taskIds.filter((taskId) => isTaskEnabled(taskStore, taskId)).length;
+    const needed = Math.min(8, Math.max(1, enabledCount));
+    if (bridge?.setQueueRuntimeConfig && queueConcurrency < needed) {
+      try {
+        const result = await bridge.setQueueRuntimeConfig({ maxGlobalRunning: needed });
+        if (result?.config) {
+          setQueueConcurrency(result.config.maxGlobalRunning);
+          setQueueSnapshot((current) => ({ ...current, concurrency: { ...current.concurrency, maxGlobal: result.config.maxGlobalRunning } }));
+        }
+      } catch (error) {
+        setNotice({ kind: "error", text: normalizeNotice(error) });
+      }
+    }
+  }
+
+  function setTaskEnabled(taskId: string, enabled: boolean) {
+    taskStore.set(taskId, "enabled", enabled);
+  }
+
+  // ---- 任务页签右键：复制任务 / 复制提示词 / 粘贴任务 ----
+  function openTaskTabContextMenu(event: React.MouseEvent, taskId: string) {
+    event.preventDefault();
+    setTaskTabContextMenu(null);
+    const position = clampContextMenuPosition(event.clientX, event.clientY, 200, 140);
+    setTaskTabContextMenu({ ...position, taskId });
+  }
+
+  function taskField(taskId: string, key: string): unknown {
+    return taskStore.get(taskId, key);
+  }
+
+  async function copyableReferenceAsset(asset: InputAsset): Promise<InputAsset | null> {
+    if (asset.dataUrl?.startsWith("data:image/")) return asset;
+    if (asset.path && bridge?.importImages) {
+      try {
+        const [converted] = await bridge.importImages([asset.path]);
+        if (converted?.dataUrl?.startsWith("data:image/")) return converted;
+      } catch {
+        // 忽略：无法读取的文件不进入剪贴板
+      }
+    }
+    return null;
+  }
+
+  async function copyTask(taskId: string) {
+    const tPrompt = (taskField(taskId, "prompt") as string | undefined) ?? "";
+    const tTabMode = (taskField(taskId, "tabMode") as TabMode | undefined) ?? "text2img";
+    const tParams = (taskField(taskId, "params") as ImageParams | undefined) ?? DEFAULT_IMAGE_PARAMS;
+    const tInputAssets = (taskField(taskId, "inputAssets") as InputAsset[] | undefined) ?? [];
+    const tMaskDataUrl = (taskField(taskId, "maskDataUrl") as string | null | undefined) ?? null;
+    const tMaskAsset = (taskField(taskId, "maskAsset") as InputAsset | null | undefined) ?? null;
+
+    const assets = await Promise.all(tInputAssets.map((asset) => copyableReferenceAsset(asset)));
+    const mask = tMaskAsset ? await copyableReferenceAsset(tMaskAsset) : null;
+    taskClipboardRef.current = {
+      tabMode: tTabMode,
+      prompt: tPrompt,
+      params: tParams,
+      inputAssets: assets.filter((asset): asset is InputAsset => asset !== null),
+      maskDataUrl: tMaskDataUrl,
+      maskAsset: mask
+    };
+    setNotice({ kind: "success", text: copy.taskCopied });
+  }
+
+  async function copyTaskPrompt(taskId: string) {
+    const text = (taskField(taskId, "prompt") as string | undefined) ?? "";
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.append(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+      setNotice({ kind: "success", text: copy.notices.promptCopied });
+    } catch {
+      setNotice({ kind: "error", text: copy.notices.promptCopyFailed });
+    }
+  }
+
+  function pasteTask(taskId: string) {
+    const payload = taskClipboardRef.current;
+    if (!payload) {
+      setNotice({ kind: "error", text: copy.taskClipboardEmpty });
+      return;
+    }
+    taskStore.set(taskId, "tabMode", payload.tabMode);
+    taskStore.set(taskId, "prompt", payload.prompt);
+    taskStore.set(taskId, "params", payload.params);
+    taskStore.set(taskId, "inputAssets", payload.inputAssets.map((asset, index) =>
+      asset.dataUrl?.startsWith("data:image/")
+        ? referenceDataUrlToAsset(asset.dataUrl, index)
+        : asset
+    ));
+    taskStore.set(taskId, "maskDataUrl", payload.maskDataUrl ?? null);
+    taskStore.set(taskId, "maskAsset", payload.maskAsset ?? null);
+    taskStore.set(taskId, "maskCheck", null);
+    if (payload.tabMode === "text2img") {
+      setTabMode("text2img");
+    } else {
+      setTabMode("img2img");
+    }
+    markDraftChanged();
+    setNotice({ kind: "success", text: copy.taskPasted });
+  }
+
+
+  // ---- 收集某个 task 的运行请求（与渲染期派生逻辑保持一致） ----
+  function collectTaskRunRequest(taskId: string): {
+    mode: WorkMode;
+    prompt: string;
+    inputPaths: string[];
+    inputDataUrls?: string[];
+    maskPath?: string;
+    maskDataUrl?: string;
+    params: ImageParams;
+    providerId?: string;
+    validation: string | null;
+  } {
+    const tPrompt = (taskStore.get(taskId, "prompt") as string | undefined) ?? "";
+    const tTokens = (taskStore.get(taskId, "promptTokens") as PromptToken[] | undefined) ?? [];
+    const tTokenAssets = (taskStore.get(taskId, "promptTokenAssets") as Record<string, InputAsset> | undefined) ?? {};
+    const tParams = (taskStore.get(taskId, "params") as ImageParams | undefined) ?? DEFAULT_IMAGE_PARAMS;
+    const tTabMode = (taskStore.get(taskId, "tabMode") as TabMode | undefined) ?? "text2img";
+    const tInputAssets = (taskStore.get(taskId, "inputAssets") as InputAsset[] | undefined) ?? [];
+    const tMaskAsset = (taskStore.get(taskId, "maskAsset") as InputAsset | null | undefined) ?? null;
+    const tMaskDataUrl = (taskStore.get(taskId, "maskDataUrl") as string | null | undefined) ?? null;
+    const tProviderId = (taskStore.get(taskId, "providerId") as string | undefined) || snapshot.activeProviderId || "";
+
+    const serialized = serializePromptTokens([{ type: "text", text: tPrompt }, ...tTokens], {
+      resolveAsset: (galleryAssetId) => tTokenAssets[galleryAssetId]
+    });
+    const effectiveInputs = dedupeAssets([...tInputAssets, ...serialized.inputAssets]);
+    const hasMask = Boolean(tMaskAsset || tMaskDataUrl);
+    const isGeneral = isGeneralImageParams(tParams);
+    const generalAllows = isGeneral ? generalFallbackSupportsReferenceImages((tParams as GeneralImageParams).providerKind) : false;
+    const requestMode: WorkMode = isGeneral
+      ? generalAllows && effectiveInputs.length > 0
+        ? "edit"
+        : "generate"
+      : tTabMode === "text2img"
+        ? "generate"
+        : hasMask
+          ? "inpaint"
+          : "edit";
+
+    const validation = localizeValidationMessage(getValidationError(tParams, serialized.prompt), copy) ?? null;
+    const provider = snapshot.providers.find((p) => p.id === tProviderId);
+    if (!provider) {
+      return { mode: requestMode, prompt: serialized.prompt, inputPaths: [], params: tParams, validation: copy.apiAccessUntitled };
+    }
+
+
+    if (provider.modelAliasSplitMode === true) {
+      const tModelHasAliases = (provider.modelAliases ?? []).some((entry) => normalizeModelId(entry.targetModelId) === normalizeModelId(tParams.model));
+      if (!tModelHasAliases) {
+        // 该模型未配置映射：拆分模式不干预，保持原有行为
+      } else {
+      if (isGeminiImageParams(tParams)) {
+        const splitResolution = tParams.resolution;
+        if (!isSplitResolutionTier(splitResolution)) {
+          return { mode: requestMode, prompt: serialized.prompt, inputPaths: [], params: tParams, providerId: tProviderId, validation: copy.modelAliasSplitUnsupported(splitResolution) };
+        }
+        const splitCovered = aliasCoveredSplitResolutionTiers(tParams.model, provider.modelAliases ?? []);
+        if (!splitCovered.has(splitResolution)) {
+          return { mode: requestMode, prompt: serialized.prompt, inputPaths: [], params: tParams, providerId: tProviderId, validation: copy.modelAliasSplitMissingTier(splitResolution) };
+        }
+      } else if (isOpenAIImageParams(tParams)) {
+        const splitTier = gptSizeToResolutionTier(tParams.size);
+        if (!splitTier) {
+          return { mode: requestMode, prompt: serialized.prompt, inputPaths: [], params: tParams, providerId: tProviderId, validation: copy.modelAliasSplitUnsupported(tParams.size) };
+        }
+        const splitCovered = aliasCoveredSplitResolutionTiers(tParams.model, provider.modelAliases ?? []);
+        if (!splitCovered.has(splitTier)) {
+          return { mode: requestMode, prompt: serialized.prompt, inputPaths: [], params: tParams, providerId: tProviderId, validation: copy.modelAliasSplitMissingTier(splitTier) };
+        }
+      }
+      }
+    }
+
+    return {
+      mode: requestMode,
+      prompt: serialized.prompt,
+      inputPaths: requestMode === "generate" ? [] : effectiveInputs.map((asset) => asset.path).filter(Boolean),
+      inputDataUrls: requestMode === "generate" ? undefined : effectiveInputs.map((asset) => asset.dataUrl).filter((value): value is string => Boolean(value)),
+      maskPath: requestMode === "inpaint" && !tMaskDataUrl ? tMaskAsset?.path : undefined,
+      maskDataUrl: requestMode === "inpaint" && tMaskDataUrl ? tMaskDataUrl : undefined,
+      params: tParams,
+      providerId: tProviderId,
+      validation
+    };
+  }
+
+  async function runJobForTaskId(taskId: string) {
+    if (!bridge) {
+      if (taskId === activeTaskId) setNotice({ kind: "error", text: copy.notices.bridgeRunJob });
+      return;
+    }
+    const request = collectTaskRunRequest(taskId);
+    if (request.validation) {
+      if (taskId === activeTaskId) setNotice({ kind: "error", text: request.validation });
+      return;
+    }
+    const isActive = taskId === activeTaskId;
+    await ensureConcurrencyForEnabledTasks();
+
+    taskStore.set(taskId, "isRunning", true);
+    taskStore.set(taskId, "runningJobId", null);
+    taskStore.set(taskId, "runningQueueId", null);
+    taskStore.set(taskId, "partialImages", []);
+    taskStore.set(taskId, "generationStartedAt", Date.now());
+    taskStore.set(taskId, "generationElapsedSeconds", 0);
+    taskStore.set(taskId, "generationAttemptIndex", null);
+    taskStore.set(taskId, "activeJob", null);
+    if (isActive) {
+      setActiveGalleryAssetId(null);
+      setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[request.mode].action) });
+    }
+
+    try {
+      const requestParams = normalizeParamsForOutputCount(request.params);
+      const job = await bridge.runJob({
+        mode: request.mode,
+        providerId: request.providerId,
+        prompt: request.prompt,
+        inputPaths: request.inputPaths,
+        inputDataUrls: request.inputDataUrls,
+        maskPath: request.maskPath,
+        maskDataUrl: request.maskDataUrl,
+        params: requestParams
+      });
+      const historyJob = stripTransientPreviewsFromJob(job);
+      taskStore.set(taskId, "activeJob", job);
+      setSnapshot((current) => ({
+        ...current,
+        history: [historyJob, ...current.history.filter((item) => item.id !== historyJob.id)]
+      }));
+      if (isActive) {
+        setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? copy.notices.actionFinished(modeLabels[request.mode].action) });
+      }
+      if (job.status === "succeeded") {
+        await bridge.clearDraft();
+        taskStore.set(taskId, "promptTokens", []);
+        taskStore.set(taskId, "promptTokenAssets", {});
+        taskStore.set(taskId, "draftUpdatedAt", null);
+        taskStore.set(taskId, "hasUserChangedDraft", false);
+        setSnapshot((current) => ({ ...current, draft: undefined }));
+      }
+    } catch (error) {
+      if (isActive) setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      taskStore.set(taskId, "isRunning", false);
+      taskStore.set(taskId, "runningJobId", null);
+      taskStore.set(taskId, "runningQueueId", null);
+      taskStore.set(taskId, "generationStartedAt", null);
+      taskStore.set(taskId, "generationAttemptIndex", null);
+    }
+  }
+
+  async function runJob() {
+    await runJobForTaskId(activeTaskId);
+  }
+
+  async function runAllTasks() {
+    const candidates = taskIds.filter((taskId) => isTaskEnabled(taskStore, taskId) && taskStore.get(taskId, "isRunning") !== true);
+    if (candidates.length === 0) {
+      setNotice({ kind: "info", text: copy.taskRunAllNone });
+      return;
+    }
+    await ensureConcurrencyForEnabledTasks();
+    let launched = 0;
+    for (const taskId of candidates) {
+      const request = collectTaskRunRequest(taskId);
+      if (request.validation) continue;
+      void runJobForTaskId(taskId);
+      launched += 1;
+    }
+    setNotice({ kind: "info", text: copy.taskRunAllStarted(launched) });
+  }
+
   const [isEditorFocusMode, setIsEditorFocusMode] = useState(false);
-  const [referencePreviewAssetId, setReferencePreviewAssetId] = useState<string | null>(null);
-  const [isReferenceMaskToolsOpen, setIsReferenceMaskToolsOpen] = useState(false);
-  const [referenceMaskConfirmAssetId, setReferenceMaskConfirmAssetId] = useState<string | null>(null);
-  const [isReferenceDragOver, setIsReferenceDragOver] = useState(false);
-  const [referenceLimitToast, setReferenceLimitToast] = useState<{ id: number; text: string } | null>(null);
+  const [referencePreviewAssetId, setReferencePreviewAssetId] = useTaskField<string | null>(taskStore, activeTaskId, "referencePreviewAssetId", null);
+  const [isReferenceMaskToolsOpen, setIsReferenceMaskToolsOpen] = useTaskField<boolean>(taskStore, activeTaskId, "isReferenceMaskToolsOpen", false);
+  const [referenceMaskConfirmAssetId, setReferenceMaskConfirmAssetId] = useTaskField<string | null>(taskStore, activeTaskId, "referenceMaskConfirmAssetId", null);
+  const [isReferenceDragOver, setIsReferenceDragOver] = useTaskField<boolean>(taskStore, activeTaskId, "isReferenceDragOver", false);
+  const [referenceLimitToast, setReferenceLimitToast] = useTaskField<{ id: number; text: string } | null>(taskStore, activeTaskId, "referenceLimitToast", null);
   const [buttonFeedback, setButtonFeedback] = useState<Record<string, number>>({});
   const [globalTooltip, setGlobalTooltip] = useState<GlobalTooltip | null>(null);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -1411,7 +1856,10 @@ export function App() {
   const historyWidthRef = useRef(historyWidth);
   const expandedHistoryWidthRef = useRef(Math.max(historyWidth, MIN_HISTORY_WIDTH));
 
-  const activeConfig = snapshot.providers.find(p => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
+  const activeConfig =
+    snapshot.providers.find(p => p.id === providerId)
+    ?? snapshot.providers.find(p => p.id === snapshot.activeProviderId)
+    ?? snapshot.providers[0];
   const isSidebarCompact = isSidebarCollapsed || isAutoSidebarCollapsed;
   const selectedApiConfig = snapshot.providers.find(p => p.id === selectedApiConfigId) ?? activeConfig;
   const isDiscoveringModels = discoveringProviderId !== null;
@@ -1477,7 +1925,7 @@ export function App() {
   const streamDisabledReason = openAIParams ? streamPartialPreviewDisabledReason(openAIParams, activeConfig, requestMode, copy) : undefined;
   const streamPartialsAllowed = openAIParams ? !streamDisabledReason : false;
   const apiKeyPlaceholder = selectedApiConfig.apiKeyPreview ?? (selectedApiConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
-  const launchButtons = useMemo(() => getLaunchButtonStates(activeConfig, copy), [copy, activeConfig]);
+  const launchButtons = useMemo(() => getLaunchButtonStates(activeConfig, params, copy), [copy, activeConfig, params]);
   const connectionLabel = connectionStatusLabel(connectionCheck, copy);
   const connectionTitle = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : connectionLabel;
   const connectionErrorText = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : null;
@@ -1911,8 +2359,9 @@ export function App() {
   const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, effectivePrompt), copy) ?? modeError;
   const canRun = !validationError && !isRunning;
+  const isTaskQueued = isRunning && !runningJobId;
   const canCancelRun = isRunning && Boolean(runningJobId);
-  const primaryRunActionLabel = isRunning ? copy.cancelGeneration : modeLabels[requestMode].action;
+  const primaryRunActionLabel = isTaskQueued ? copy.taskQueued : isRunning ? copy.cancelGeneration : modeLabels[requestMode].action;
   const promptCopyActionLabel = buttonFeedback["copy:prompt"] ? copy.clicked : copy.copyPrompt;
   const savedApiConfigs = snapshot.providers;
   const canDeleteActiveApiAccess = snapshot.providers.length > 1;
@@ -2514,6 +2963,64 @@ export function App() {
   }, [bridge]);
 
   useEffect(() => {
+    if (queueSnapshot.concurrency?.maxGlobal) {
+      setQueueConcurrency(queueSnapshot.concurrency.maxGlobal);
+    }
+  }, [queueSnapshot.concurrency?.maxGlobal]);
+
+  useEffect(() => {
+    if (!providerId && snapshot.providers.length > 0) {
+      setProviderId(snapshot.activeProviderId || snapshot.providers[0].id);
+    }
+  }, [providerId, snapshot.activeProviderId, snapshot.providers]);
+
+  useEffect(() => {
+    if (!openLaunchMenuId) return undefined;
+    const closeLaunchMenuOnOutside = (event: MouseEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target) return;
+      if (target instanceof Element && target.closest(".launch-section, .task-provider-menu")) return;
+      setOpenLaunchMenuId(null);
+    };
+    document.addEventListener("mousedown", closeLaunchMenuOnOutside, true);
+    return () => document.removeEventListener("mousedown", closeLaunchMenuOnOutside, true);
+  }, [openLaunchMenuId]);
+
+
+  useEffect(() => {
+    if (!bridge) return undefined;
+    const handleGlobalPaste = (event: ClipboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      // 参考图面板内部自行处理粘贴，避免重复
+      if (target?.closest(".refpanel")) return;
+      if (generalParams && !generalAllowsReferences) return;
+      const clipboard = event.clipboardData;
+      if (!clipboard) return;
+      const imageFiles = Array.from(clipboard.files ?? []).filter((file) => /^image\/(png|jpe?g|webp)$/i.test(file.type));
+      if (imageFiles.length > 0) {
+        event.preventDefault();
+        addPastedReferenceFiles(imageFiles);
+        return;
+      }
+      const text = clipboard.getData("text") ?? "";
+      const dataUrls = extractDataUrlsFromText(text);
+      if (dataUrls.length === 0) return;
+      event.preventDefault();
+      addPastedReferenceDataUrls(dataUrls);
+    };
+    document.addEventListener("paste", handleGlobalPaste, true);
+    return () => document.removeEventListener("paste", handleGlobalPaste, true);
+  }, [bridge, generalParams, generalAllowsReferences, inputAssets, activeReferenceImageLimit]);
+
+
+  useEffect(() => {
+    setModelAliasesDraft(selectedApiConfig.modelAliases ?? []);
+    setModelAliasSplitModeDraft(selectedApiConfig.modelAliasSplitMode === true);
+    setGeminiPixelSizeDraft(selectedApiConfig.geminiPixelSize === true);
+    geminiPixelSizeTouchedRef.current = false;
+  }, [selectedApiConfig.id]);
+
+  useEffect(() => {
     if (!bridge) return;
     return bridge.onGalleryEvent((event) => {
       setSnapshot((current) => ({
@@ -2569,6 +3076,7 @@ export function App() {
     try {
       const next = await bridge.getSnapshot();
       const nextActiveConfig = applySnapshot(next);
+      setProviderId(nextActiveConfig.id);
       if (!hasRestoredDraft) {
         restoreDraft(next.draft, nextActiveConfig);
       }
@@ -3354,7 +3862,7 @@ export function App() {
     });
   }
 
-  async function saveConfig() {
+  async function saveConfig(options: { modelAliases?: ModelAliasEntry[]; modelAliasSplitMode?: boolean; geminiPixelSize?: boolean } = {}) {
     if (!bridge) {
       setNotice({ kind: "error", text: copy.notices.bridgeSaveConfig });
       return;
@@ -3366,7 +3874,11 @@ export function App() {
       const configKind = apiAccessKind;
       const isEditingActiveConfig = targetConfig.id === activeConfig.id;
       const providerKindChanged = configKind !== targetConfig.kind;
-      const nextActiveLaunchId = providerKindChanged ? defaultLaunchForProvider(configKind) : targetConfig.activeLaunchId;
+      const nextActiveLaunchId = providerKindChanged
+        ? defaultLaunchForProvider(configKind)
+        : isEditingActiveConfig && (isGeminiImageParams(params) || isGeneralImageParams(params))
+          ? isGeminiImageParams(params) ? NANO_BANANA_3_LAUNCH_ID : GENERAL_LAUNCH_ID
+          : targetConfig.activeLaunchId;
       const nextDefaultModel = providerKindChanged
         ? defaultModelForProvider(configKind)
         : isEditingActiveConfig ? defaultModelForConfigSave(configKind, params, activeConfig) : targetConfig.defaultModel;
@@ -3381,7 +3893,10 @@ export function App() {
         defaultQuality: isEditingActiveConfig ? defaultQualityForConfigSave(params, activeConfig) : targetConfig.defaultQuality,
         timeoutMs: isEditingActiveConfig ? params.timeoutMs : targetConfig.timeoutMs,
         activeLaunchId: nextActiveLaunchId,
-        activeModelId: providerKindChanged ? nextDefaultModel : targetConfig.activeModelId
+        activeModelId: providerKindChanged ? nextDefaultModel : targetConfig.activeModelId,
+        modelAliases: options.modelAliases ?? (modelAliasesDraft.length > 0 ? modelAliasesDraft : undefined),
+        modelAliasSplitMode: options.modelAliasSplitMode ?? (modelAliasSplitModeDraft || undefined),
+        geminiPixelSize: options.geminiPixelSize ?? (geminiPixelSizeTouchedRef.current ? geminiPixelSizeDraft : undefined),
       });
       applyConfig(config);
       if (config.id === activeConfig.id) {
@@ -3429,6 +3944,7 @@ export function App() {
       await persistCurrentDraft();
       const next = await bridge.switchProvider(providerId);
       const nextActiveConfig = applySnapshot(next);
+      setProviderId(nextActiveConfig.id);
       hydrateApiConfigForm(nextActiveConfig);
       setPromotedApiConfigId(nextActiveConfig.id);
       window.setTimeout(() => {
@@ -3466,6 +3982,7 @@ export function App() {
         activeModelId: defaultModel
       });
       const nextActiveConfig = applySnapshot(next);
+      setProviderId(nextActiveConfig.id);
       hydrateApiConfigForm(nextActiveConfig);
       setNewApiAccessKind("openai");
       setNewApiAccessName("");
@@ -3501,6 +4018,7 @@ export function App() {
       }
       const next = await bridge.deleteProvider(config.id);
       const nextActiveConfig = applySnapshot(next);
+      setProviderId(nextActiveConfig.id);
       hasAutoTestedConnectionRef.current = false;
       setConnectionCheck({ status: "idle" });
       setNotice({ kind: "success", text: copy.apiAccessDeleted });
@@ -3547,6 +4065,7 @@ export function App() {
     setIsSavingConfig(true);
     try {
       const config = await bridge.saveConfig({
+        providerId: activeConfig.id,
         baseURL: activeConfig.baseURL,
         defaultModel: defaultModelForConfigSave(activeConfig.kind, nextParams, activeConfig),
         defaultSize: defaultSizeForConfigSave(nextParams, activeConfig),
@@ -3580,6 +4099,7 @@ export function App() {
     setIsSavingConfig(true);
     try {
       const config = await bridge.saveConfig({
+        providerId: activeConfig.id,
         baseURL: activeConfig.baseURL,
         defaultModel: defaultModelForConfigSave(activeConfig.kind, nextParams, activeConfig),
         defaultSize: defaultSizeForConfigSave(nextParams, activeConfig),
@@ -3741,9 +4261,41 @@ export function App() {
 
   function showReferenceLimitHint(max: number) {
     const text = copy.referenceLimitReached(max);
+    setNotice({ kind: "info", text });
     if (referenceLimitToastTimerRef.current) window.clearTimeout(referenceLimitToastTimerRef.current);
     setReferenceLimitToast({ id: Date.now(), text });
     referenceLimitToastTimerRef.current = window.setTimeout(() => setReferenceLimitToast(null), 2400);
+  }
+
+
+  function filesToReferenceAssets(files: File[]): Promise<InputAsset[]> {
+    return Promise.all(
+      files.map((file, index) =>
+        new Promise<InputAsset>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result !== "string" || !reader.result) {
+              reject(new Error("Failed to read image as data URL."));
+              return;
+            }
+            resolve(referenceDataUrlToAsset(reader.result, index));
+          };
+          reader.onerror = () => reject(reader.error ?? new Error("Failed to read image."));
+          reader.readAsDataURL(file);
+        })
+      )
+    );
+  }
+
+  function addPastedReferenceFiles(files: File[]) {
+    void filesToReferenceAssets(files).then(addInputAssets).catch(() => {
+      setNotice({ kind: "error", text: copy.validation.cannotReadImage });
+    });
+  }
+
+  function addPastedReferenceDataUrls(dataUrls: string[]) {
+    const assets = dataUrls.map((dataUrl, index) => referenceDataUrlToAsset(dataUrl, index));
+    addInputAssets(assets);
   }
 
   function addInputAssets(assets: InputAsset[]) {
@@ -3756,12 +4308,42 @@ export function App() {
     const capped = Boolean(referenceLimit > 0 && next.length > referenceLimit);
     setInputAssets(cappedNext);
     if (tabMode === "text2img") setTabMode("img2img");
-    if (capped) showReferenceLimitHint(referenceLimit);
     if (addedCount > 0) {
       setNotice({
         kind: "success",
         text: copy.notices.imagesAdded(addedCount, cappedNext.length, false, referenceLimit)
       });
+    }
+    if (capped) showReferenceLimitHint(referenceLimit);
+  }
+
+
+  function reorderInputAssets(fromIndex: number, toIndex: number) {
+    markDraftChanged();
+    setInputAssets((current) => {
+      if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) return current;
+      if (fromIndex < 0 || fromIndex >= current.length || toIndex < 0) return current;
+      if (fromIndex === toIndex) return current;
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      const target = Math.min(next.length, toIndex);
+      next.splice(target, 0, moved);
+      return next;
+    });
+  }
+
+  async function addHistoryAssetToReferences(assetPath: string) {
+    if (!bridge) return;
+    if (generalParams && !generalAllowsReferences) {
+      setNotice({ kind: "error", text: copy.generalPromptOnlyRuntime });
+      return;
+    }
+    if (!/^\.(png|jpe?g|webp)$/i.test(assetPath) && !/^data:image\/(png|jpe?g|webp);base64,/i.test(assetPath)) return;
+    try {
+      const assets = await bridge.importImages([assetPath]);
+      addInputAssets(assets);
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
     }
   }
 
@@ -3893,62 +4475,6 @@ export function App() {
     setNotice({ kind: "success", text: copy.notices.maskAdded });
   }
 
-  async function runJob() {
-    if (!bridge) {
-      setNotice({ kind: "error", text: copy.notices.bridgeRunJob });
-      return;
-    }
-    if (validationError) {
-      setNotice({ kind: "error", text: validationError });
-      return;
-    }
-
-    setIsRunning(true);
-    setRunningJobId(null);
-    setRunningQueueId(null);
-    resetPartialImages();
-    setGenerationStartedAt(Date.now());
-    setGenerationElapsedSeconds(0);
-    setGenerationAttemptIndex(null);
-    setActiveJob(null);
-    setActiveGalleryAssetId(null);
-    setNotice({ kind: "info", text: copy.notices.requestSent(modeLabels[requestMode].action) });
-
-    try {
-      const requestParams = normalizeParamsForOutputCount(params);
-      const job = await bridge.runJob({
-        mode: requestMode,
-        prompt: effectivePrompt,
-        inputPaths: requestMode === "generate" ? [] : effectiveInputAssets.map((asset) => asset.path),
-        maskPath: requestMode === "inpaint" && !maskDataUrl ? maskAsset?.path : undefined,
-        maskDataUrl: requestMode === "inpaint" && maskDataUrl ? maskDataUrl : undefined,
-        params: requestParams
-      });
-      const historyJob = stripTransientPreviewsFromJob(job);
-      setActiveJob(job);
-      setSnapshot((current) => ({
-        ...current,
-        history: [historyJob, ...current.history.filter((item) => item.id !== historyJob.id)]
-      }));
-      setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? copy.notices.actionFinished(modeLabels[requestMode].action) });
-      if (job.status === "succeeded") {
-        await bridge.clearDraft();
-        clearPromptChips();
-        setDraftUpdatedAt(null);
-        setHasUserChangedDraft(false);
-        setSnapshot((current) => ({ ...current, draft: undefined }));
-      }
-    } catch (error) {
-      setNotice({ kind: "error", text: normalizeNotice(error) });
-    } finally {
-      setIsRunning(false);
-      setRunningJobId(null);
-      setRunningQueueId(null);
-      setGenerationStartedAt(null);
-      setGenerationAttemptIndex(null);
-    }
-  }
-
   async function cancelRunningJob() {
     if (!bridge || !runningJobId) return;
     setNotice({ kind: "info", text: copy.notices.cancelRequested });
@@ -3976,6 +4502,16 @@ export function App() {
       return;
     }
     await cancelRunningJob();
+  }
+
+  async function removeQueueTask(task: QueueTaskSummary) {
+    if (!bridge?.removeQueueItem) return;
+    try {
+      const next = await bridge.removeQueueItem(task.queueId);
+      setQueueSnapshot(next);
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
   }
 
   function requestQueueRetry(task: QueueTaskSummary) {
@@ -4020,6 +4556,7 @@ export function App() {
       const requestParams = normalizeParamsForOutputCount(job.params);
       const retriedJob = await bridge.runJob({
         mode: job.mode,
+        providerId: providerId,
         prompt: job.prompt,
         inputPaths: job.mode === "generate" ? [] : job.inputAssets.map((asset) => asset.path),
         maskPath: job.mode === "inpaint" ? job.maskAsset?.path : undefined,
@@ -5274,11 +5811,23 @@ export function App() {
       const text = target.dataset.tooltip?.trim();
       if (!text) return;
       const rect = target.getBoundingClientRect();
-      const placement = target.classList.contains("tooltip-below") ? "bottom" : "top";
+      // 顶部/底部空间不足时翻转方向，避免被窗口上/下沿截断
+      const forcedBelow = target.classList.contains("tooltip-below");
+      const estimatedHeight = Math.min(200, Math.max(30, text.length * 7));
+      const placement = forcedBelow
+        ? "bottom"
+        : rect.top < estimatedHeight + 14
+          ? "bottom"
+          : "top";
+      const x = clamp(rect.left + rect.width / 2, 92, window.innerWidth - 92);
+      const y =
+        placement === "bottom"
+          ? Math.min(rect.bottom, Math.max(0, window.innerHeight - estimatedHeight - 10))
+          : Math.max(rect.top, estimatedHeight + 10);
       setGlobalTooltip({
         text,
-        x: clamp(rect.left + rect.width / 2, 92, window.innerWidth - 92),
-        y: placement === "bottom" ? rect.bottom : rect.top,
+        x,
+        y,
         placement
       });
     };
@@ -5343,6 +5892,20 @@ export function App() {
       document.removeEventListener("keydown", handleEscape);
     };
   }, [galleryAssetContextMenu, galleryFolderContextMenu, isGalleryFolderMenuOpen]);
+
+  useEffect(() => {
+    if (!taskTabContextMenu) return;
+    const handleClick = () => setTaskTabContextMenu(null);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTaskTabContextMenu(null);
+    };
+    document.addEventListener("click", handleClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [taskTabContextMenu]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -5560,57 +6123,53 @@ export function App() {
           <Info size={12} />
         </span>
       </span>
-      <select
+      <Select
         value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
         disabled={requestMode === "inpaint"}
-        onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
-      >
-        <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
-        <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
-        <option value="responses">{copy.imageRouteResponses}</option>
-        <option value="image-api">{copy.imageRouteImageApi}</option>
-      </select>
+        ariaLabel={copy.imageRoute}
+        onChange={(value) => updateOpenAIParams({ imageRoute: value as OpenAIImageRouteSelection })}
+        options={[
+          { value: "auto", label: copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode))) },
+          { value: "chat-completions", label: copy.imageRouteChatCompletions },
+          { value: "responses", label: copy.imageRouteResponses },
+          { value: "image-api", label: copy.imageRouteImageApi }
+        ]}
+      />
     </label>
   ) : null;
   const parameterQuickControls = openAIParams ? (
     <>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.size}</small>
-        <select
-          aria-label={copy.size}
+        <Select
+          ariaLabel={copy.size}
           value={sizeSelectValue}
-          onChange={(event) => {
-            const value = event.target.value;
+          onChange={(value) => {
             updateOpenAIParams({ size: value === "custom" ? customSize : value });
           }}
-        >
-          {sizePresets.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-          <option value="custom">{copy.custom}</option>
-        </select>
+          options={[
+            ...sizePresets.map((size) => ({ value: size, label: size })),
+            { value: "custom", label: copy.custom }
+          ]}
+        />
       </label>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.quality}</small>
-        <select aria-label={copy.quality} value={openAIParams.quality} onChange={(event) => updateOpenAIParams({ quality: event.target.value as ImageQuality })}>
-          {qualityOptions.map((quality) => (
-            <option key={quality} value={quality}>
-              {quality}
-            </option>
-          ))}
-        </select>
+        <Select
+          ariaLabel={copy.quality}
+          value={openAIParams.quality}
+          onChange={(value) => updateOpenAIParams({ quality: value as ImageQuality })}
+          options={qualityOptions.map((quality) => ({ value: quality, label: quality }))}
+        />
       </label>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.format}</small>
-        <select aria-label={copy.format} value={openAIParams.outputFormat} onChange={(event) => updateOpenAIParams({ outputFormat: event.target.value as ImageFormat })}>
-          {formatOptions.map((format) => (
-            <option key={format} value={format}>
-              {format.toUpperCase()}
-            </option>
-          ))}
-        </select>
+        <Select
+          ariaLabel={copy.format}
+          value={openAIParams.outputFormat}
+          onChange={(value) => updateOpenAIParams({ outputFormat: value as ImageFormat })}
+          options={formatOptions.map((format) => ({ value: format, label: format.toUpperCase() }))}
+        />
       </label>
       <label className="parameter-summary-chip parameter-quick-field parameter-route-field" title={imageRouteTitle}>
         <span className="route-label">
@@ -5619,44 +6178,47 @@ export function App() {
             <Info size={12} />
           </span>
         </span>
-        <select
-          aria-label={copy.imageRoute}
+        <Select
+          ariaLabel={copy.imageRoute}
           value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
           disabled={requestMode === "inpaint"}
-          onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
-        >
-          <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
-          <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
-          <option value="responses">{copy.imageRouteResponses}</option>
-          <option value="image-api">{copy.imageRouteImageApi}</option>
-        </select>
+          onChange={(value) => updateOpenAIParams({ imageRoute: value as OpenAIImageRouteSelection })}
+          options={[
+            { value: "auto", label: copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode))) },
+            { value: "chat-completions", label: copy.imageRouteChatCompletions },
+            { value: "responses", label: copy.imageRouteResponses },
+            { value: "image-api", label: copy.imageRouteImageApi }
+          ]}
+        />
       </label>
     </>
   ) : geminiParams ? (
     <>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.aspectRatio}</small>
-        <select aria-label={copy.aspectRatio} value={geminiParams.aspectRatio} onChange={(event) => updateGeminiParams({ aspectRatio: event.target.value as GeminiAspectRatio })}>
-          {GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => (
-            <option key={aspectRatio} value={aspectRatio}>
-              {aspectRatio}
-            </option>
-          ))}
-        </select>
+        <Select
+          ariaLabel={copy.aspectRatio}
+          value={geminiParams.aspectRatio}
+          onChange={(value) => updateGeminiParams({ aspectRatio: value as GeminiAspectRatio })}
+          options={GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => ({ value: aspectRatio, label: aspectRatio }))}
+        />
       </label>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.resolution}</small>
-        <select aria-label={copy.resolution} value={geminiParams.resolution} onChange={(event) => updateGeminiParams({ resolution: event.target.value as GeminiResolution })}>
-          {GEMINI_RESOLUTION_OPTIONS.map((resolution) => (
-            <option key={resolution} value={resolution}>
-              {resolution}
-            </option>
-          ))}
-        </select>
+        <Select
+          ariaLabel={copy.resolution}
+          value={geminiParams.resolution}
+          onChange={(value) => updateGeminiParams({ resolution: value as GeminiResolution })}
+          options={GEMINI_RESOLUTION_OPTIONS.filter((resolution) => !activeConfig.modelAliasSplitMode || isSplitResolutionTier(resolution)).map((resolution) => {
+            const aliasAvailable = geminiResolutionAliasAvailability(activeConfig, geminiParams.model);
+            const resolutionDisabled = aliasAvailable !== null && !aliasAvailable.has(resolution);
+            return { value: resolution, label: resolution, disabled: resolutionDisabled };
+          })}
+        />
       </label>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.count}</small>
-        <input aria-label={copy.count} type="number" min="1" max="1" value={geminiParams.outputCount} onChange={() => updateGeminiParams({ outputCount: 1 })} />
+        <input aria-label={copy.count} type="number" min="1" max="4" value={geminiParams.outputCount} onChange={(event) => updateGeminiParams({ outputCount: clamp(Number(event.target.value), 1, 4) })} />
       </label>
     </>
   ) : (
@@ -5675,40 +6237,32 @@ export function App() {
     <>
       <label>
         <span>{copy.size}</span>
-        <select
+        <Select
           value={sizeSelectValue}
-          onChange={(event) => {
-            const value = event.target.value;
+          onChange={(value) => {
             updateOpenAIParams({ size: value === "custom" ? customSize : value });
           }}
-        >
-          {sizePresets.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-          <option value="custom">{copy.custom}</option>
-        </select>
+          options={[
+            ...sizePresets.map((size) => ({ value: size, label: size })),
+            { value: "custom", label: copy.custom }
+          ]}
+        />
       </label>
       <label>
         <span>{copy.quality}</span>
-        <select value={openAIParams.quality} onChange={(event) => updateOpenAIParams({ quality: event.target.value as ImageQuality })}>
-          {qualityOptions.map((quality) => (
-            <option key={quality} value={quality}>
-              {quality}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={openAIParams.quality}
+          onChange={(value) => updateOpenAIParams({ quality: value as ImageQuality })}
+          options={qualityOptions.map((quality) => ({ value: quality, label: quality }))}
+        />
       </label>
       <label>
         <span>{copy.format}</span>
-        <select value={openAIParams.outputFormat} onChange={(event) => updateOpenAIParams({ outputFormat: event.target.value as ImageFormat })}>
-          {formatOptions.map((format) => (
-            <option key={format} value={format}>
-              {format.toUpperCase()}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={openAIParams.outputFormat}
+          onChange={(value) => updateOpenAIParams({ outputFormat: value as ImageFormat })}
+          options={formatOptions.map((format) => ({ value: format, label: format.toUpperCase() }))}
+        />
       </label>
       {openAIImageRouteControl}
     </>
@@ -5716,27 +6270,27 @@ export function App() {
     <>
       <label>
         <span>{copy.aspectRatio}</span>
-        <select value={geminiParams.aspectRatio} onChange={(event) => updateGeminiParams({ aspectRatio: event.target.value as GeminiAspectRatio })}>
-          {GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => (
-            <option key={aspectRatio} value={aspectRatio}>
-              {aspectRatio}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={geminiParams.aspectRatio}
+          onChange={(value) => updateGeminiParams({ aspectRatio: value as GeminiAspectRatio })}
+          options={GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => ({ value: aspectRatio, label: aspectRatio }))}
+        />
       </label>
       <label>
         <span>{copy.resolution}</span>
-        <select value={geminiParams.resolution} onChange={(event) => updateGeminiParams({ resolution: event.target.value as GeminiResolution })}>
-          {GEMINI_RESOLUTION_OPTIONS.map((resolution) => (
-            <option key={resolution} value={resolution}>
-              {resolution}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={geminiParams.resolution}
+          onChange={(value) => updateGeminiParams({ resolution: value as GeminiResolution })}
+          options={GEMINI_RESOLUTION_OPTIONS.filter((resolution) => !activeConfig.modelAliasSplitMode || isSplitResolutionTier(resolution)).map((resolution) => {
+            const aliasAvailable = geminiResolutionAliasAvailability(activeConfig, geminiParams.model);
+            const resolutionDisabled = aliasAvailable !== null && !aliasAvailable.has(resolution);
+            return { value: resolution, label: resolution, disabled: resolutionDisabled };
+          })}
+        />
       </label>
       <label>
         <span>{copy.count}</span>
-        <input type="number" min="1" max="1" value={geminiParams.outputCount} onChange={() => updateGeminiParams({ outputCount: 1 })} />
+        <input type="number" min="1" max="4" value={geminiParams.outputCount} onChange={(event) => updateGeminiParams({ outputCount: clamp(Number(event.target.value), 1, 4) })} />
       </label>
     </>
   ) : (
@@ -5786,13 +6340,11 @@ export function App() {
       </label>
       <label>
         {copy.background}
-        <select value={openAIParams.background} onChange={(event) => updateOpenAIParams({ background: event.target.value as ImageBackground })}>
-          {backgroundOptions.map((background) => (
-            <option key={background} value={background}>
-              {background}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={openAIParams.background}
+          onChange={(value) => updateOpenAIParams({ background: value as ImageBackground })}
+          options={backgroundOptions.map((background) => ({ value: background, label: background }))}
+        />
       </label>
       <label>
         {copy.count}
@@ -5833,13 +6385,11 @@ export function App() {
       </label>
       <label>
         {copy.moderation}
-        <select value={openAIParams.moderation} onChange={(event) => updateOpenAIParams({ moderation: event.target.value as ModerationMode })}>
-          {moderationOptions.map((moderation) => (
-            <option key={moderation} value={moderation}>
-              {moderation}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={openAIParams.moderation}
+          onChange={(value) => updateOpenAIParams({ moderation: value as ModerationMode })}
+          options={moderationOptions.map((moderation) => ({ value: moderation, label: moderation }))}
+        />
       </label>
       <label>
         {copy.timeoutSeconds}
@@ -6266,6 +6816,26 @@ export function App() {
         </div>
         <div className="sidebar-full-stack">
 
+        <label className="task-provider-select-row" title={copy.taskProviderLabel}>
+          <span>{copy.taskProviderLabel}</span>
+          <TaskProviderSelect
+            copy={copy}
+            providers={snapshot.providers}
+            value={providerId || snapshot.activeProviderId || ""}
+            displayName={(provider) => apiAccessDisplayName(provider, copy.apiAccessUntitled)}
+            onOpen={() => setOpenLaunchMenuId(null)}
+            onSelect={(nextId) => {
+              if (!nextId) return;
+              setProviderId(nextId);
+              setOpenLaunchMenuId(null);
+              const nextProvider = snapshot.providers.find((p) => p.id === nextId);
+              if (nextProvider) {
+                syncParamsToConfig(nextProvider);
+                setNotice({ kind: "info", text: copy.apiAccessSwitched(apiAccessDisplayName(nextProvider, copy.apiAccessUntitled)) });
+              }
+            }}
+          />
+        </label>
         <ProviderSummarySection
           copy={copy}
           displayName={apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}
@@ -6281,6 +6851,8 @@ export function App() {
           copy={copy}
           activeConfig={activeConfig}
           activeProviderKind={params.providerKind}
+          activeLaunchId={params.launchId}
+          activeModelId={params.model}
           launchButtons={launchButtons}
           openLaunchMenuId={openLaunchMenuId}
           saving={isSavingConfig}
@@ -6288,6 +6860,18 @@ export function App() {
           onToggleLaunchMenu={(launchId, open) => setOpenLaunchMenuId(open ? launchId : null)}
           onLaunch={(button) => void launchModel(button)}
           onSelectModel={(launchId, model) => void selectLaunchModel(launchId, model)}
+        />
+
+        <QueueStatusPanel
+          copy={copy}
+          snapshot={queueSnapshot}
+          expanded={isQueuePanelOpen}
+          formatDurationLabel={formatDuration}
+          onToggle={() => setIsQueuePanelOpen((current) => !current)}
+          onCancel={(task) => void cancelQueueTask(task)}
+          onRetry={requestQueueRetry}
+          onRemove={(task) => void removeQueueTask(task)}
+          onDetails={setQueueDiagnosticTask}
         />
 
         <section className="notice-area" data-kind={notice.kind} aria-live={notice.kind === "error" ? "assertive" : "polite"} aria-atomic="true">
@@ -6355,6 +6939,25 @@ export function App() {
 
       <PerfProfiler id="Workspace">
       <section className="workspace">
+      <div className="task-tab-bar">
+        <TaskTabBar
+          store={taskStore}
+          taskIds={taskIds}
+          activeTaskId={activeTaskId}
+          copy={copy}
+          onSwitch={switchTask}
+          onClose={closeTask}
+          onAdd={addTask}
+          onToggleEnabled={setTaskEnabled}
+          onContextMenu={openTaskTabContextMenu}
+        />
+        <TaskRunControls
+          copy={copy}
+          enabledCount={enabledTaskCount}
+          totalCount={taskIds.length}
+          onRunAll={() => void runAllTasks()}
+        />
+      </div>
         <div className={isEditorFocusMode ? "preview-layout editor-focus-mode" : "preview-layout"} ref={previewLayoutRef}>
           <ImageEditor
             copy={copy}
@@ -6536,8 +7139,8 @@ export function App() {
                     ref={primaryRunButtonRef}
                     type="button"
                     className="primary-run"
-                    onClick={isRunning ? () => void cancelRunningJob() : runJob}
-                    disabled={isRunning ? !canCancelRun : !canRun}
+                    onClick={isTaskQueued ? undefined : isRunning ? () => void cancelRunningJob() : runJob}
+                    disabled={isTaskQueued ? true : isRunning ? !canCancelRun : !canRun}
                     aria-label={primaryRunActionLabel}
                     data-tooltip={primaryRunActionLabel}
                   >
@@ -6570,16 +7173,6 @@ export function App() {
                 </div>
               </div>
               {validationError && <p className="inline-check error">{validationError}</p>}
-              <QueueStatusPanel
-                copy={copy}
-                snapshot={queueSnapshot}
-                expanded={isQueuePanelOpen}
-                formatDurationLabel={formatDuration}
-                onToggle={() => setIsQueuePanelOpen((current) => !current)}
-                onCancel={(task) => void cancelQueueTask(task)}
-                onRetry={requestQueueRetry}
-                onDetails={setQueueDiagnosticTask}
-              />
             </div>
 
             {!showReferenceTools && (
@@ -6592,97 +7185,32 @@ export function App() {
 
             {showReferenceTools && (
               <>
-                <div
-                  className={isReferenceDragOver ? "reference-grid drag-over" : "reference-grid"}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "copy";
-                    if (!isReferenceDragOver) setIsReferenceDragOver(true);
+                <ReferenceImagePanel
+                  copy={copy}
+                  language={language}
+                  assets={inputAssets}
+                  limit={activeReferenceImageLimit}
+                  maskPreviewDataUrl={maskPreview}
+                  showRightsReminder={Boolean(geminiParams || (generalParams && generalFallbackSupportsReferenceImages(generalParams.providerKind)))}
+                  showMaskRouteNotice={showMaskRouteNotice}
+                  dragDropDisabled={Boolean(generalParams && !generalAllowsReferences)}
+                  onAddAssets={addInputAssets}
+                  onRemoveAsset={removeInputAsset}
+                  onPromoteToFirst={promoteReferenceAssetToFirst}
+                  onReorder={reorderInputAssets}
+                  onOpenPreview={openReferencePreview}
+                  onAddLocalFiles={selectImages}
+                  onNotice={(kind, text) => setNotice({ kind, text })}
+                  onDirty={markDraftChanged}
+                  onExternalDrop={(kind, value) => {
+                    if (kind === "gallery") {
+                      const asset = snapshot.galleryAssets.find((item) => item.id === value);
+                      if (asset) void pickGalleryAsset(asset);
+                    } else {
+                      void addHistoryAssetToReferences(value);
+                    }
                   }}
-                  onDragLeave={(event) => {
-                    if (event.currentTarget.contains(event.relatedTarget as Node)) return;
-                    setIsReferenceDragOver(false);
-                  }}
-                  onDrop={handleReferenceDrop}
-                >
-                  {inputAssets.length === 0 ? (
-                    <div className="empty-inline">{copy.dropReferencesHint}</div>
-                  ) : (
-                    inputAssets.map((asset, index) => (
-                      <div
-                        key={asset.id}
-                        className={[
-                          "asset-tile",
-                          "reference-thumb-tile",
-                          index === 0 ? "primary-reference" : "",
-                          index === 0 && maskPreview ? "has-mask" : ""
-                        ].filter(Boolean).join(" ")}
-                        role="button"
-                        tabIndex={0}
-                        title={copy.referenceTileHint}
-                        data-tooltip={copy.referenceTileHint}
-                        onClick={() => handleReferenceTileClick(asset.id)}
-                        onDoubleClick={() => openReferencePreview(asset.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            openReferencePreview(asset.id);
-                            return;
-                          }
-                          if (event.key === " ") {
-                            event.preventDefault();
-                            promoteReferenceAssetToFirst(asset.id);
-                          }
-                        }}
-                      >
-                        {assetSource(asset) && <img src={assetSource(asset)} alt={asset.name} />}
-                        <button
-                          type="button"
-                          className="tile-remove"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeInputAsset(asset.id);
-                          }}
-                          aria-label={copy.delete}
-                          data-tooltip={copy.delete}
-                        >
-                          <X size={14} />
-                        </button>
-                        <div className="reference-thumb-meta">
-                          <strong>{index === 0 ? copy.source : `${copy.reference} ${index + 1}`}</strong>
-                          <span>{asset.name}</span>
-                        </div>
-                        {index === 0 && maskPreview && <span className="reference-mask-badge">{copy.mask}</span>}
-                      </div>
-                    ))
-                  )}
-                  <button
-                    type="button"
-                    className="icon-button reference-add-button"
-                    onClick={selectImages}
-                    aria-label={copy.addLocalReferences}
-                    data-tooltip={copy.addLocalReferences}
-                  >
-                    <Plus size={18} />
-                  </button>
-                  {referenceLimitToast && (
-                    <div key={referenceLimitToast.id} className="reference-limit-toast" role="status">
-                      {referenceLimitToast.text}
-                    </div>
-                  )}
-                </div>
-                {(geminiParams || (generalParams && generalFallbackSupportsReferenceImages(generalParams.providerKind))) && (
-                  <p className="inline-check reference-rights-reminder">
-                    <AlertTriangle size={14} />
-                    <span>{copy.uploadRightsReminder}</span>
-                  </p>
-                )}
-                {showMaskRouteNotice && (
-                  <p className="inline-check warning mask-route-notice">
-                    <AlertTriangle size={14} />
-                    <span>{copy.exactMaskRouteNotice}</span>
-                  </p>
-                )}
+                />
                 <ParameterConfigLauncher
                   copy={copy}
                   quickControls={parameterQuickControls}
@@ -7044,6 +7572,16 @@ export function App() {
             setBaseURL(value);
           }}
           onSubmit={() => void saveConfig()}
+          onPersist={(aliases, splitMode) => void saveConfig({ modelAliases: aliases, modelAliasSplitMode: splitMode })}
+          modelAliases={modelAliasesDraft}
+          onModelAliasesChange={setModelAliasesDraft}
+          modelAliasSplitMode={modelAliasSplitModeDraft}
+          onModelAliasSplitModeChange={setModelAliasSplitModeDraft}
+          geminiPixelSize={geminiPixelSizeDraft}
+          onGeminiPixelSizeChange={(value) => {
+            geminiPixelSizeTouchedRef.current = true;
+            setGeminiPixelSizeDraft(value);
+          }}
         />
       )}
       {isParameterDialogOpen && (
@@ -7505,6 +8043,50 @@ export function App() {
             </div>
           )}
         </DialogShell>
+      )}
+      {taskTabContextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: taskTabContextMenu.x, top: taskTabContextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              void copyTask(taskTabContextMenu.taskId);
+              setTaskTabContextMenu(null);
+            }}
+          >
+            <Copy size={14} />
+            {copy.taskCopy}
+          </button>
+          <button
+            type="button"
+            className="context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              void copyTaskPrompt(taskTabContextMenu.taskId);
+              setTaskTabContextMenu(null);
+            }}
+          >
+            <Copy size={14} />
+            {copy.taskCopyPrompt}
+          </button>
+          <button
+            type="button"
+            className="context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              pasteTask(taskTabContextMenu.taskId);
+              setTaskTabContextMenu(null);
+            }}
+          >
+            <ClipboardPaste size={14} />
+            {copy.taskPaste}
+          </button>
+        </div>
       )}
       {contextMenu && (
         <div

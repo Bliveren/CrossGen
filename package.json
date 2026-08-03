@@ -15,7 +15,7 @@
   "main": "dist/main/main.js",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "dev:electron": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && pnpm build:main && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "dev:electron": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && node node_modules/typescript/bin/tsc -p tsconfig.main.json && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "build": "pnpm typecheck && pnpm test && pnpm build:renderer && pnpm build:main",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
@@ -27,7 +27,7 @@
     "package:mac:signed": "pnpm verify:signing-ready && pnpm build && node scripts/electron-builder-pnpm.mjs --mac -c.mac.identity=\"$CSC_NAME\" -c.mac.notarize=true",
     "package:win": "pnpm build && node scripts/electron-builder-pnpm.mjs --win",
     "preview": "vite preview --host 127.0.0.1",
-    "start": "pnpm build:main && electron .",
+    "start": "node node_modules/typescript/bin/tsc -p tsconfig.main.json && electron .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
     "verify:mock-gemini-api": "node scripts/verify-mock-gemini-api.mjs",

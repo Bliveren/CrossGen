@@ -1,7 +1,7 @@
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createQueueStore } from "./queueStore";
 import type { GenerationQueueItem, GenerationQueueWorkerHost, QueueStage } from "../shared/types";
 
@@ -375,5 +375,30 @@ describe("queueStore", () => {
     ]);
 
     await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("retries the queue file rename on a transient EPERM", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({ queuePath, lockPath: `${queuePath}.lock` });
+    const queue = await store.read();
+    await store.write(queue);
+
+    const fsMod = await import("node:fs");
+    const renameSpy = vi.spyOn(fsMod.promises, "rename");
+    renameSpy.mockImplementationOnce(async () => {
+      throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+    });
+
+    try {
+      await expect(store.write({ ...queue, updatedAt: new Date().toISOString() })).resolves.toBeUndefined();
+      expect(renameSpy).toHaveBeenCalledTimes(2);
+
+      const after = await store.read();
+      expect(after.updatedAt).not.toBe(queue.updatedAt);
+    } finally {
+      renameSpy.mockRestore();
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 });

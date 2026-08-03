@@ -67,6 +67,12 @@ export interface QueueRuntimeConfig {
   providerConcurrency: Record<string, number>;
 }
 
+export interface QueueRuntimeConfigPatch {
+  maxGlobalRunning?: number;
+  providerConcurrency?: Record<string, number>;
+  clearProviderIds?: string[];
+}
+
 export type QueueStage =
   | "queued"
   | "claiming"
@@ -243,6 +249,11 @@ export interface DiscoveredModel {
   raw?: unknown;
 }
 
+export interface ModelAliasEntry {
+  aliasModelId: string;
+  targetModelId: string;
+}
+
 export interface ProviderConfig {
   id: string;
   kind: ProviderKind;
@@ -262,6 +273,9 @@ export interface ProviderConfig {
   activeLaunchId: FocusedLaunchId;
   activeModelId: string;
   openAIImageRouting?: OpenAIImageRouting;
+  modelAliases?: ModelAliasEntry[];
+  modelAliasSplitMode?: boolean;
+  geminiPixelSize?: boolean;
   updatedAt: string;
 }
 
@@ -304,6 +318,9 @@ export interface ProviderConfigInput {
   streamingPartialsEnabled?: boolean;
   activeLaunchId?: FocusedLaunchId;
   activeModelId?: string;
+  modelAliases?: ModelAliasEntry[];
+  modelAliasSplitMode?: boolean;
+  geminiPixelSize?: boolean;
 }
 
 export interface OpenAIImageParams {
@@ -531,7 +548,9 @@ export interface GenerationJob {
 export interface RunJobRequest {
   mode: WorkMode;
   prompt: string;
+  providerId?: string;
   inputPaths: string[];
+  inputDataUrls?: string[];
   maskPath?: string;
   maskDataUrl?: string;
   params: ImageParams;
@@ -782,8 +801,10 @@ export interface AppBridge {
   runJob: (request: RunJobRequest) => Promise<GenerationJob>;
   cancelJob: (jobId: string) => Promise<boolean>;
   getQueueSnapshot: () => Promise<QueueSnapshot>;
+  setQueueRuntimeConfig: (patch: QueueRuntimeConfigPatch) => Promise<{ config: QueueRuntimeConfig }>;
   cancelQueueItem: (queueId: string) => Promise<QueueSnapshot>;
   retryQueueItem: (jobId: string) => Promise<QueueSnapshot>;
+  removeQueueItem: (queueId: string) => Promise<QueueSnapshot>;
   downloadAsset: (request: DownloadRequest) => Promise<string | null>;
   downloadEditedImage: (request: EditedImageDownloadRequest) => Promise<string | null>;
   openAssetFolder: (assetPath: string) => Promise<void>;

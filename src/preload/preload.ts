@@ -12,6 +12,7 @@ import type {
   JobProgressEvent,
   PromptTemplateInput,
   ProviderConfigInput,
+  QueueRuntimeConfigPatch,
   QueueSnapshot,
   RunJobRequest,
   WorkspaceDraftInput
@@ -54,8 +55,10 @@ const bridge: AppBridge = {
   runJob: (request: RunJobRequest) => ipcRenderer.invoke("job:run", request),
   cancelJob: (jobId: string) => ipcRenderer.invoke("job:cancel", jobId),
   getQueueSnapshot: () => ipcRenderer.invoke("queue:getSnapshot"),
+  setQueueRuntimeConfig: (patch: QueueRuntimeConfigPatch) => ipcRenderer.invoke("queue:configSet", patch),
   cancelQueueItem: (queueId: string) => ipcRenderer.invoke("queue:cancel", queueId),
   retryQueueItem: (jobId: string) => ipcRenderer.invoke("queue:retry", jobId),
+  removeQueueItem: (queueId: string) => ipcRenderer.invoke("queue:remove", queueId),
   downloadAsset: (request: DownloadRequest) => ipcRenderer.invoke("asset:download", request),
   downloadEditedImage: (request: EditedImageDownloadRequest) => ipcRenderer.invoke("asset:downloadEdited", request),
   openAssetFolder: (assetPath: string) => ipcRenderer.invoke("asset:openFolder", assetPath),

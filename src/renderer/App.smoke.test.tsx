@@ -318,6 +318,22 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.retryQueueItem).toHaveBeenCalledWith("queue-retry");
   });
 
+  it("removes terminal queue tasks from the queue list", async () => {
+    const failedTask = queueTask({ queueId: "queue-remove-me", status: "failed", promptPreview: "Remove prompt", retryable: true, canCancel: false });
+    const runningTask = queueTask({ queueId: "queue-still-running", status: "running", promptPreview: "Running prompt", canCancel: true });
+    const bridge = await renderApp(snapshot(), queueSnapshot({ running: [runningTask], failed: [failedTask] }));
+    await flushAsync();
+    await click(document.querySelector<HTMLButtonElement>(".queue-widget-summary")!);
+
+    const failedCard = [...document.querySelectorAll<HTMLElement>(".queue-task-card")].find((item) => item.textContent?.includes("Remove prompt"))!;
+    await click(failedCard.querySelector<HTMLButtonElement>('button[aria-label="Remove task"]')!);
+    expect(bridge.removeQueueItem).toHaveBeenCalledWith("queue-remove-me");
+
+    await flushAsync();
+    expect(document.body.textContent).not.toContain("Remove prompt");
+    expect(document.body.textContent).toContain("Running prompt");
+  });
+
   it("surfaces History source, duration, failed details, interrupted guidance, and retry confirmation", async () => {
     const failedJob = geminiJob(10, {
       id: "history-failed",
@@ -453,7 +469,7 @@ describe("renderer multi-model smoke", () => {
 
     await openParameterDialog();
 
-    expect(selectByLabel("API route").selectedOptions[0]?.textContent).toBe("Auto · Chat");
+    expect(selectByLabel("API route").querySelector(".custom-select-label")?.textContent).toBe("Auto · Chat");
     expect(document.body.textContent).toContain("API route: Chat");
     expect(document.body.textContent).toContain("Unverified, using the default strategy");
 
@@ -510,7 +526,7 @@ describe("renderer multi-model smoke", () => {
       }
     }));
 
-    expect(document.querySelector<HTMLSelectElement>(".parameter-route-field select")?.value).toBe("image-api");
+    expect(document.querySelector<HTMLButtonElement>(".parameter-route-field .custom-select-trigger")?.dataset.value).toBe("image-api");
     expect(document.body.textContent).not.toContain("Unverified, using the default strategy");
   });
 
@@ -705,6 +721,48 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("remembers each task's launch model when tasks share the same provider", async () => {
+    const relay = providerConfig({
+      id: "relay-shared",
+      kind: "openai",
+      name: "Relay",
+      baseURL: "https://gateway.example.com/v1",
+      apiKeySaved: true,
+      discoveredModels: [
+        { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
+        { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini" }
+      ],
+      lastModelDiscoveryAt: now,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID
+    });
+    await renderApp(snapshot({ providers: [relay], activeProviderId: relay.id }));
+    await flushAsync();
+
+    // 任务 1：选 gemini-3-pro-image
+    await click(launchButton("Nano Banana 3"));
+    await click(launchModelOption(GEMINI_3_PRO_IMAGE_MODEL_ID));
+    await flushAsync();
+
+    // 添加任务 2（同一 provider），选回 gemini-3.1-flash-image
+    await click(document.querySelector<HTMLButtonElement>(".task-tab-add")!);
+    await flushAsync();
+    await click(launchButton("Nano Banana 3"));
+    await click(launchModelOption(NANO_BANANA_3_MODEL_ID));
+    await flushAsync();
+
+    // 切回任务 1：应保持 gemini-3-pro-image，而不是被任务 2 覆盖
+    const tabs = Array.from(document.querySelectorAll<HTMLElement>(".task-tab"));
+    await click(tabs[0]);
+    await flushAsync();
+    expect(launchButton("Nano Banana 3").querySelector(".launch-model-detail")?.textContent).toContain(GEMINI_3_PRO_IMAGE_MODEL_ID);
+
+    // 任务 2 保持 gemini-3.1-flash-image
+    await click(tabs[1]);
+    await flushAsync();
+    expect(launchButton("Nano Banana 3").querySelector(".launch-model-detail")?.textContent).toContain(NANO_BANANA_3_MODEL_ID);
+  });
+
   it("keeps the single API config path working", async () => {
     const bridge = await renderApp(snapshot());
 
@@ -755,7 +813,7 @@ describe("renderer multi-model smoke", () => {
     expect(card.getAttribute("title")).toBe("Click to edit config");
 
     const detail = document.querySelector<HTMLElement>(".api-config-detail")!;
-    expect(selectByLabel("API type", detail).value).toBe("openai");
+    expect((selectByLabel("API type", detail) as HTMLSelectElement).value).toBe("openai");
     await changeSelect(selectByLabel("API type", detail), "gemini");
     await click(buttonByText("Save", ".api-config-detail button"));
 
@@ -1956,7 +2014,7 @@ describe("renderer multi-model smoke", () => {
     expect(reminder?.textContent).toContain("Only upload images you have permission to use");
     expect(referenceGrid && reminder ? Boolean(referenceGrid.compareDocumentPosition(reminder) & Node.DOCUMENT_POSITION_FOLLOWING) : false).toBe(true);
     expect(document.querySelector<HTMLButtonElement>('.input-panel button[aria-label="Add as mask"]')).toBeNull();
-    expect(document.body.textContent).toContain("Drag local images, History results, or Gallery images here.");
+    expect(document.body.textContent).toContain("Click here to paste images, or drag image files in.");
     expect(document.querySelector<HTMLButtonElement>('.input-panel button[aria-label="Clear"]')).toBeNull();
   });
 
@@ -1976,10 +2034,10 @@ describe("renderer multi-model smoke", () => {
     }));
 
     expect(document.body.textContent).toContain("some compatible endpoints may not support mask editing");
-    expect(document.querySelector<HTMLSelectElement>(".parameter-route-field select")?.value).toBe("image-api");
+    expect(document.querySelector<HTMLButtonElement>(".parameter-route-field .custom-select-trigger")?.dataset.value).toBe("image-api");
     await openParameterDialog();
-    expect(selectByLabel("API route").value).toBe("image-api");
-    expect(selectByLabel("API route").disabled).toBe(true);
+    expect(selectByLabel("API route").querySelector<HTMLButtonElement>(".custom-select-trigger")?.dataset.value).toBe("image-api");
+    expect(selectByLabel("API route").querySelector<HTMLButtonElement>(".custom-select-trigger")?.disabled).toBe(true);
   });
 
   it("caps local reference images to the active model capability", async () => {
@@ -2007,15 +2065,404 @@ describe("renderer multi-model smoke", () => {
 
     expect(document.querySelectorAll(".asset-tile")).toHaveLength(2);
     expect(document.body.textContent).toContain("The current model supports up to 2 reference images.");
-    expect(document.querySelector(".reference-limit-toast")?.textContent).toContain("The current model supports up to 2 reference images.");
+    expect(document.querySelector(".notice-area")?.textContent).toContain("The current model supports up to 2 reference images.");
 
     vi.mocked(bridge.selectImages).mockClear();
     await click(document.querySelector<HTMLButtonElement>(".reference-add-button")!);
 
     expect(bridge.selectImages).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain("The current model supports up to 2 reference images.");
-    expect(document.querySelector(".reference-limit-toast")?.textContent).toContain("The current model supports up to 2 reference images.");
+    expect(document.querySelector(".notice-area")?.textContent).toContain("The current model supports up to 2 reference images.");
   });
+
+  it("manages multiple parallel task tabs with independent providers", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
+
+    expect(document.querySelectorAll(".task-tab")).toHaveLength(1);
+    expect(document.querySelector(".task-run-all")).not.toBeNull();
+
+    // 添加第二个任务：默认使用全局 provider
+    await click(document.querySelector<HTMLButtonElement>(".task-tab-add")!);
+    expect(document.querySelectorAll(".task-tab")).toHaveLength(2);
+    expect(document.querySelectorAll(".task-tab.active")).toHaveLength(1);
+
+    // 切换任务时任务级 API 选择跟随（第二个任务默认全局 openai）
+    expect(document.querySelector(".task-provider-trigger-label")?.textContent).toContain("OpenAI access");
+    await selectTaskProvider("gemini-access");
+    expect(document.querySelector(".task-provider-trigger-label")?.textContent).toContain("Gemini access");
+
+    // 切回第一个任务，两个任务各自保持状态
+    const tabs = Array.from(document.querySelectorAll<HTMLElement>(".task-tab"));
+    await click(tabs[0].querySelector(".task-tab-label") ?? tabs[0]);
+    expect(document.querySelectorAll(".task-tab.active")).toHaveLength(1);
+    expect(document.querySelector(".task-provider-trigger-label")?.textContent).toContain("OpenAI access");
+
+    // 关闭第二个任务
+    await click(document.querySelectorAll<HTMLButtonElement>(".task-tab-close")[0]);
+    expect(document.querySelectorAll(".task-tab")).toHaveLength(1);
+  });
+
+  it("keeps the selected API config form when editing a non-active provider", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access", baseURL: "https://openai.example.com/v1" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://gemini.example.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
+
+    await openSavedApiAccess();
+    await click(apiConfigCardMainByText("Gemini access"));
+    const baseURLInput = inputByLabel("Base URL");
+    expect(baseURLInput.value).toBe("https://gemini.example.com/v1beta");
+
+    await changeInput(baseURLInput, "https://gemini.example.com/v1beta/changed");
+    await click(buttonByText("Save", ".api-config-detail button"));
+
+    expect(bridge.saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: "gemini-access",
+        kind: "gemini",
+        baseURL: "https://gemini.example.com/v1beta/changed"
+      })
+    );
+  });
+
+  it("keeps the API config dialog selection when switching task tabs", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access", baseURL: "https://openai.example.com/v1" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://gemini.example.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
+
+    await openSavedApiAccess();
+    await click(apiConfigCardMainByText("Gemini access"));
+    expect(inputByLabel("Base URL").value).toBe("https://gemini.example.com/v1beta");
+
+    // 添加并切换任务，再切回来：对话框选中与表单不应被重置
+    await click(document.querySelector<HTMLButtonElement>(".task-tab-add")!);
+    await click(document.querySelectorAll<HTMLElement>(".task-tab")[0]);
+    expect(inputByLabel("Base URL").value).toBe("https://gemini.example.com/v1beta");
+    expect(document.querySelector<HTMLElement>(".api-config-card.selected")?.textContent).toContain("Gemini access");
+  });
+
+  it("switching the task API from the sidebar syncs the task params", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
+    expect(launchButton("Nano Banana 3").disabled).toBe(true);
+
+    await selectTaskProvider("gemini-access");
+    expect(document.querySelector(".task-provider-trigger-label")?.textContent).toContain("Gemini access");
+    expect(launchButton("Nano Banana 3").disabled).toBe(false);
+    expect(launchButton("GPT Image 2").disabled).toBe(true);
+  });
+
+  it("adds pasted image data as a non-file reference and sends it as inputDataUrls", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    const grid = document.querySelector<HTMLDivElement>(".refpanel-grid")!;
+    expect(grid).not.toBeNull();
+    const dataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      value: { files: [], getData: () => dataUrl }
+    });
+    act(() => { grid.dispatchEvent(pasteEvent); });
+    await flushAsync();
+    expect(document.querySelectorAll(".reference-thumb-tile")).toHaveLength(1);
+    await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputPaths: [],
+        inputDataUrls: [expect.stringContaining("data:image/png;base64,")]
+      })
+    );
+  });
+
+  it("adds pasted image data anywhere (e.g. the prompt area) to the references", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    expect(document.querySelectorAll(".reference-thumb-tile")).toHaveLength(0);
+
+    // 模拟在提示词区域粘贴一张图片（document 级 paste，携带 data URL 文本）
+    const dataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      value: { files: [], getData: () => dataUrl }
+    });
+    act(() => { document.dispatchEvent(pasteEvent); });
+    await flushAsync();
+
+    expect(document.querySelectorAll(".reference-thumb-tile")).toHaveLength(1);
+
+    await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputDataUrls: [expect.stringContaining("data:image/png;base64,")]
+      })
+    );
+  });
+
+  it("copies and pastes a task via the tab context menu (references stay base64)", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
+    await flushAsync();
+
+    // 任务 1：设置提示词 + 粘贴一张参考图（base64）
+    await changeTextArea(textAreaByLabel("Prompt"), "Shared prompt");
+    await click(buttonByText("Image to image", ".mode-tab"));
+    const grid = document.querySelector<HTMLDivElement>(".refpanel-grid")!;
+    const dataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, "clipboardData", { value: { files: [], getData: () => dataUrl } });
+    act(() => { grid.dispatchEvent(pasteEvent); });
+    await flushAsync();
+    expect(document.querySelectorAll(".reference-thumb-tile")).toHaveLength(1);
+
+    // 右键任务页签 -> 复制任务
+    await contextMenu(document.querySelector<HTMLElement>(".task-tab")!);
+    expect(document.querySelector(".context-menu")).toBeTruthy();
+    await click(buttonByText("Copy task", ".context-menu-item"));
+    await flushAsync();
+    expect(document.body.textContent).toContain("Task copied to clipboard");
+
+    // 添加任务 2，右键 -> 粘贴任务
+    await click(document.querySelector<HTMLButtonElement>(".task-tab-add")!);
+    await flushAsync();
+    await contextMenu(document.querySelector<HTMLElement>(".task-tab.active")!);
+    await click(buttonByText("Paste task", ".context-menu-item"));
+    await flushAsync();
+
+    expect(textAreaByLabel("Prompt").value).toBe("Shared prompt");
+    expect(document.querySelectorAll(".reference-thumb-tile")).toHaveLength(1);
+    const pastedSrc = document.querySelector<HTMLImageElement>(".reference-thumb-tile img")?.src ?? "";
+    expect(pastedSrc).toContain("data:image/png;base64,");
+  });
+
+  it("does not apply split-mode checks to models without mappings (e.g. gpt-image-2)", async () => {
+    const relayConfig = providerConfig({
+      id: "relay-access",
+      kind: "openai",
+      name: "Relay",
+      baseURL: "https://gateway.example.com/v1",
+      apiKeySaved: true,
+      activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_MODEL_ID,
+      discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }],
+      lastModelDiscoveryAt: now,
+      modelAliasSplitMode: true,
+      modelAliases: [{ aliasModelId: "gemini-3-pro-image-preview-2k", targetModelId: GEMINI_3_PRO_IMAGE_MODEL_ID }]
+    });
+    const bridge = await renderApp(snapshot({ providers: [relayConfig], activeProviderId: relayConfig.id }));
+
+    // GPT Image 2 未配置映射：拆分模式不干预，应正常生成
+    expect(launchButton("GPT Image 2").disabled).toBe(false);
+    await click(launchButton("GPT Image 2"));
+    await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
+    expect(bridge.runJob).toHaveBeenCalled();
+    expect(bridge.runJob).toHaveBeenCalledWith(expect.objectContaining({ params: expect.objectContaining({ launchId: GPT_IMAGE_2_LAUNCH_ID }) }));
+  });
+
+  it("runs only enabled tasks and shows the enabled count", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
+    await click(document.querySelector<HTMLButtonElement>(".task-tab-add")!);
+    expect(document.querySelectorAll(".task-tab")).toHaveLength(2);
+    expect(document.querySelector(".task-concurrency")?.textContent).toContain("Enabled 2/2");
+
+    const checkboxes = document.querySelectorAll<HTMLInputElement>(".task-tab-enabled input");
+    await changeCheckbox(checkboxes[1], false);
+    expect(document.querySelector(".task-concurrency")?.textContent).toContain("Enabled 1/2");
+
+    vi.mocked(bridge.runJob).mockClear();
+    await click(document.querySelector<HTMLButtonElement>(".task-run-all")!);
+    await flushAsync();
+    expect(bridge.runJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps other tasks' generate buttons clickable while one task runs (queue-based)", async () => {
+    const defaultConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
+    await click(document.querySelector<HTMLButtonElement>(".task-tab-add")!);
+    await click(document.querySelectorAll<HTMLElement>(".task-tab")[0]);
+
+    // 任务1生成挂起（模拟后端排队/执行中）
+    vi.mocked(bridge.runJob).mockImplementationOnce((request) =>
+      new Promise((resolve) => {
+        window.setTimeout(() => resolve(jobFromRequest(request, defaultConfig)), 60);
+      })
+    );
+    await click(document.querySelector<HTMLButtonElement>(".primary-run")!);
+
+    // 切到任务2，生成按钮应可点击并入队
+    await click(document.querySelectorAll<HTMLElement>(".task-tab")[1]);
+    const runButton = document.querySelector<HTMLButtonElement>(".primary-run")!;
+    expect(runButton.disabled).toBe(false);
+    await click(runButton);
+    await flushAsync();
+    expect(bridge.runJob).toHaveBeenCalledTimes(2);
+  });
+
+
+
+
+
+  it("blocks generation in split mapping mode when the resolution tier is missing", async () => {
+    const relayConfig = providerConfig({
+      id: "relay-access",
+      kind: "openai",
+      name: "Relay",
+      baseURL: "https://gateway.example.com/v1",
+      apiKeySaved: true,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now,
+      modelAliasSplitMode: true,
+      modelAliases: [{ aliasModelId: "gemini-3.1-flash-image-preview-2k", targetModelId: NANO_BANANA_3_MODEL_ID }]
+    });
+    const bridge = await renderApp(snapshot({ providers: [relayConfig], activeProviderId: relayConfig.id }));
+
+    await click(launchButton("Nano Banana 3"));
+    // 默认分辨率 1K 未映射：生成被拦截并丢弃
+    await click(buttonByText("Generate", ".primary-run"));
+    expect(bridge.runJob).not.toHaveBeenCalled();
+    expect(document.querySelector(".notice-area")?.textContent).toContain("1K resolution (split mode)");
+
+    // 切到已映射的 2K：可以生成，模型仍为目录模型（后端改写为拆分名）
+    await openParameterDialog();
+    await changeSelect(selectByLabel("Resolution"), "2K");
+    await click(buttonByText("Generate", ".primary-run"));
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          providerKind: "gemini",
+          model: NANO_BANANA_3_MODEL_ID,
+          resolution: "2K"
+        })
+      })
+    );
+  });
+
+  it("shows an explicit tier selector for split-mode alias rows", async () => {
+    const relayConfig = providerConfig({
+      id: "relay-access",
+      kind: "openai",
+      name: "Relay",
+      baseURL: "https://gateway.example.com/v1",
+      apiKeySaved: true,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now,
+      modelAliasSplitMode: true,
+      modelAliases: [{ aliasModelId: "gemini-3.1-flash-image-preview-2k", targetModelId: NANO_BANANA_3_MODEL_ID }]
+    });
+    await renderApp(snapshot({ providers: [relayConfig], activeProviderId: relayConfig.id }));
+
+    await openSavedApiAccess();
+    await click(apiConfigCardMainByText("Relay"));
+    const rowSelects = document.querySelectorAll<HTMLSelectElement>(".model-alias-row select");
+    expect(rowSelects.length).toBe(2);
+    expect(rowSelects[0].value).toBe("2K");
+    expect(rowSelects[1].value).toBe(NANO_BANANA_3_MODEL_ID);
+  });
+
+
+
+
+
 
   it("enables Nano Banana 3 and Gemini General candidate without showing more than six collapsed history items", async () => {
     const defaultConfig = providerConfig({
@@ -2674,6 +3121,151 @@ describe("renderer multi-model smoke", () => {
 
     expect(document.querySelector<HTMLImageElement>(".zoom-surface img")?.src).toContain("result_2.png");
   });
+
+  it("persists launch selection to the current task provider", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access", baseURL: "https://openai.example.com/v1" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKeySaved: true,
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
+
+    // 全局 provider 是 A(openai)，把任务 provider 切到 B(gemini)
+    await selectTaskProvider(geminiConfig.id);
+    expect(document.querySelector(".task-provider-trigger-label")?.textContent).toContain("Gemini");
+
+    await click(launchButton("Nano Banana 3"));
+
+    // launch 应保存到当前任务 provider（B），而不是全局 provider（A）
+    expect(bridge.saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: geminiConfig.id,
+        activeLaunchId: NANO_BANANA_3_LAUNCH_ID
+      })
+    );
+  });
+
+  it("enables launch via model alias mapping without discovery", async () => {
+    const relayConfig = providerConfig({
+      id: "relay-access",
+      kind: "openai",
+      name: "Relay",
+      baseURL: "https://gateway.example.com/v1",
+      apiKeySaved: true,
+      discoveredModels: [],
+      lastModelDiscoveryAt: now,
+      modelAliasSplitMode: true,
+      modelAliases: [{ aliasModelId: "gemini-3.1-flash-image-preview-2k", targetModelId: NANO_BANANA_3_MODEL_ID }]
+    });
+    await renderApp(snapshot({ providers: [relayConfig], activeProviderId: relayConfig.id }));
+
+    // 任一分辨率映射命中目录模型即可用，无需 discovery
+    expect(launchButton("Nano Banana 3").disabled).toBe(false);
+  });
+
+  it("persists alias mappings immediately when saving from the mapping section", async () => {
+    const relayConfig = providerConfig({
+      id: "relay-access",
+      kind: "openai",
+      name: "Relay",
+      baseURL: "https://gateway.example.com/v1",
+      apiKeySaved: true,
+      discoveredModels: [],
+      lastModelDiscoveryAt: now,
+      modelAliasSplitMode: true,
+      modelAliases: [{ aliasModelId: "gemini-3.1-flash-image-preview-2k", targetModelId: NANO_BANANA_3_MODEL_ID }]
+    });
+    const bridge = await renderApp(snapshot({ providers: [relayConfig], activeProviderId: relayConfig.id }));
+
+    await openSavedApiAccess();
+    await click(apiConfigCardMainByText("Relay"));
+
+    // 有 aliases 时映射区块默认展开，点区块内“保存”应立即持久化
+    const sectionToggle = document.querySelector<HTMLButtonElement>(".api-model-section .section-toggle");
+    expect(sectionToggle?.getAttribute("aria-expanded")).toBe("true");
+    await click(buttonByText("Save", ".model-alias-body button"));
+
+    expect(bridge.saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: relayConfig.id,
+        modelAliases: expect.arrayContaining([
+          expect.objectContaining({ aliasModelId: "gemini-3.1-flash-image-preview-2k" })
+        ])
+      })
+    );
+  });
+
+  it("keeps model alias mappings per provider (no global sharing)", async () => {
+    const providerA = providerConfig({ id: "relay-a", kind: "openai", name: "Relay A", baseURL: "https://a.example.com/v1", apiKeySaved: true, discoveredModels: [], lastModelDiscoveryAt: now });
+    const providerB = providerConfig({ id: "relay-b", kind: "openai", name: "Relay B", baseURL: "https://b.example.com/v1", apiKeySaved: true, discoveredModels: [], lastModelDiscoveryAt: now });
+    await renderApp(snapshot({ providers: [providerA, providerB], activeProviderId: providerA.id }));
+
+    await openSavedApiAccess();
+    await click(apiConfigCardMainByText("Relay A"));
+    await click(document.querySelector<HTMLButtonElement>(".api-model-section .section-toggle")!);
+    await click(buttonByText("Add mapping", ".model-alias-body button"));
+    await changeInput(document.querySelector<HTMLInputElement>('input[aria-label="Alias model name (as returned by the API)"]')!, "alias-a-model");
+    await click(buttonByText("Save", ".model-alias-body button"));
+    await flushAsync();
+
+    // 切到 B：映射区应为空（不共享 A 的映射）
+    await click(apiConfigCardMainByText("Relay B"));
+    await flushAsync();
+    expect(document.querySelectorAll(".model-alias-row:not(.model-alias-header)")).toHaveLength(0);
+
+    // 给 B 配置自己的映射并保存
+    const toggleB = document.querySelector<HTMLButtonElement>(".api-model-section .section-toggle")!;
+    if (toggleB.getAttribute("aria-expanded") !== "true") await click(toggleB);
+    await click(buttonByText("Add mapping", ".model-alias-body button"));
+    await changeInput(document.querySelector<HTMLInputElement>('input[aria-label="Alias model name (as returned by the API)"]')!, "alias-b-model");
+    await click(buttonByText("Save", ".model-alias-body button"));
+    await flushAsync();
+
+    // 切回 A：仍保留 A 自己的映射
+    await click(apiConfigCardMainByText("Relay A"));
+    await flushAsync();
+    const rowsA = document.querySelectorAll<HTMLElement>(".model-alias-row:not(.model-alias-header)");
+    expect(rowsA.length).toBeGreaterThan(0);
+    expect((rowsA[0]?.querySelector("input") as HTMLInputElement | null)?.value).toBe("alias-a-model");
+  });
+
+  it("persists the Gemini pixel-size relay adaptation toggle from the API config detail", async () => {
+    const relayConfig = providerConfig({
+      id: "relay-pixel",
+      kind: "gemini",
+      name: "Relay Pixel",
+      baseURL: "https://gateway.example.com/v1beta",
+      apiKeySaved: true,
+      discoveredModels: [{ id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [relayConfig], activeProviderId: relayConfig.id }));
+
+    await openSavedApiAccess();
+    await click(apiConfigCardMainByText("Relay Pixel"));
+
+    const checkbox = document.querySelector<HTMLInputElement>(".api-config-checkbox-row input");
+    expect(checkbox).toBeTruthy();
+    expect(checkbox?.checked).toBe(false);
+
+    await changeCheckbox(checkbox!, true);
+    await click(buttonByText("Save", ".api-config-detail button"));
+
+    expect(bridge.saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: relayConfig.id,
+        geminiPixelSize: true
+      })
+    );
+  });
 });
 
 async function renderApp(initialSnapshot: AppSnapshot, initialQueueSnapshot = queueSnapshot()): Promise<AppBridge> {
@@ -2727,6 +3319,10 @@ function createBridge(initialSnapshot: AppSnapshot, initialQueueSnapshot: QueueS
   return {
     getSnapshot: vi.fn(async () => currentSnapshot),
     getQueueSnapshot: vi.fn(async () => currentQueueSnapshot),
+    setQueueRuntimeConfig: vi.fn(async (patch) => ({
+      config: { maxGlobalRunning: patch?.maxGlobalRunning ?? 1, providerConcurrency: {} },
+      ...patch
+    })),
     saveConfig: vi.fn(async (input) => {
       const config = configById(input.providerId);
       const nextConfig: ProviderConfig = {
@@ -2741,6 +3337,9 @@ function createBridge(initialSnapshot: AppSnapshot, initialQueueSnapshot: QueueS
         streamingPartialsEnabled: input.streamingPartialsEnabled ?? config.streamingPartialsEnabled,
         activeLaunchId: input.activeLaunchId ?? config.activeLaunchId,
         activeModelId: input.activeModelId ?? config.activeModelId,
+        modelAliases: input.modelAliases ?? config.modelAliases,
+        modelAliasSplitMode: input.modelAliasSplitMode ?? config.modelAliasSplitMode,
+        geminiPixelSize: input.geminiPixelSize ?? config.geminiPixelSize,
         apiKeySaved: config.apiKeySaved || Boolean(input.apiKey?.trim()),
         updatedAt: now
       };
@@ -2907,6 +3506,21 @@ function createBridge(initialSnapshot: AppSnapshot, initialQueueSnapshot: QueueS
     }),
     retryQueueItem: vi.fn(async (jobId) => {
       const next = mapQueueSnapshotTasks(currentQueueSnapshot, (task) => task.queueId === jobId || task.historyJobId === jobId ? { ...task, status: "queued", retryable: false, cancelRequested: false } : task);
+      emitQueueSnapshot(next);
+      return next;
+    }),
+    removeQueueItem: vi.fn(async (queueId) => {
+      const drop = (tasks: QueueTaskSummary[]) => tasks.filter((task) => task.queueId !== queueId);
+      const next = queueSnapshot({
+        ...currentQueueSnapshot,
+        queued: drop(currentQueueSnapshot.queued),
+        running: drop(currentQueueSnapshot.running),
+        failed: drop(currentQueueSnapshot.failed),
+        cancelled: drop(currentQueueSnapshot.cancelled),
+        interrupted: drop(currentQueueSnapshot.interrupted),
+        succeededRecent: drop(currentQueueSnapshot.succeededRecent),
+        recentJobs: drop(currentQueueSnapshot.recentJobs)
+      });
       emitQueueSnapshot(next);
       return next;
     }),
@@ -3421,13 +4035,32 @@ async function changeTextArea(textarea: HTMLTextAreaElement, value: string) {
   });
 }
 
-async function changeSelect(select: HTMLSelectElement, value: string) {
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
-    setter?.call(select, value);
-    select.dispatchEvent(new Event("input", { bubbles: true }));
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+
+async function selectTaskProvider(providerId: string) {
+  const trigger = document.querySelector<HTMLButtonElement>(".task-provider-trigger");
+  if (!trigger) throw new Error("Task provider trigger was not found.");
+  await click(trigger);
+  const option = document.querySelector<HTMLButtonElement>(`.task-provider-option[data-provider-id="${providerId}"]`);
+  if (!option) throw new Error(`Task provider option ${providerId} was not found.`);
+  await click(option);
+}
+
+async function changeSelect(select: HTMLElement, value: string) {
+  if (select instanceof HTMLSelectElement) {
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
+      setter?.call(select, value);
+      select.dispatchEvent(new Event("input", { bubbles: true }));
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    return;
+  }
+  const trigger = select.querySelector<HTMLButtonElement>(".custom-select-trigger");
+  if (!trigger) throw new Error("Custom select trigger was not found.");
+  await click(trigger);
+  const option = select.querySelector<HTMLButtonElement>(`.custom-select-option[data-select-value="${value}"]`);
+  if (!option) throw new Error(`Custom select option "${value}" was not found.`);
+  await click(option);
 }
 
 function inputByLabel(labelText: string, root: ParentNode = document): HTMLInputElement {
@@ -3450,9 +4083,9 @@ function textAreaByLabel(labelText: string, root: ParentNode = document): HTMLTe
   return textarea;
 }
 
-function selectByLabel(labelText: string, root: ParentNode = document): HTMLSelectElement {
+function selectByLabel(labelText: string, root: ParentNode = document): HTMLElement {
   const label = [...root.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(labelText));
-  const select = label?.querySelector<HTMLSelectElement>("select");
+  const select = label?.querySelector<HTMLElement>("select, .custom-select");
   if (!select) throw new Error(`Select labeled "${labelText}" was not found.`);
   return select;
 }

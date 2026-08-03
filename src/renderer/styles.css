@@ -958,6 +958,7 @@
   }
 
   .api-config-dialog {
+    grid-template-rows: auto minmax(0, 1fr);
     display: grid;
     gap: 14px;
     width: min(960px, 100%);
@@ -971,11 +972,12 @@
   }
 
   .api-config-dialog-body {
+    overflow-x: hidden;
+    overflow-y: auto;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     min-height: 0;
-    overflow: hidden;
   }
 
   .api-config-list-pane,
@@ -1063,7 +1065,9 @@
   }
 
   .api-config-card.selected {
-    box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.28);
+    background: var(--surface-raised);
   }
 
   .api-config-card.promoted {
@@ -5024,7 +5028,6 @@
   .prompt-composer {
     display: grid;
     gap: 8px;
-    min-height: 0;
   }
 
   .prompt-composer-field {
@@ -5443,6 +5446,14 @@
     height: 30px;
   }
 
+  .sidebar .queue-task-side {
+    display: none;
+  }
+
+  .sidebar .queue-task-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .queue-diagnostic-dialog {
     width: min(520px, calc(100vw - 36px));
     max-height: min(760px, calc(100vh - 44px));
@@ -5651,7 +5662,9 @@
 
   .reference-thumb-tile {
     width: 100%;
+    min-width: 0;
     min-height: 0;
+    overflow: hidden;
     gap: 5px;
     padding: 6px;
     cursor: pointer;
@@ -6988,4 +7001,573 @@
       max-height: min(160px, 24vh);
     }
   }
+}
+
+/* ===== ReferenceImagePanel (refpanel-*) ===== */
+.refpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 0;
+}
+
+.refpanel-resize-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  height: 10px;
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: var(--radius-sm);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.refpanel-resize-handle:hover,
+.refpanel-resize-handle:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.refpanel-grid.reference-grid {
+  height: var(--refpanel-height, 160px);
+  min-height: 96px;
+  max-height: 480px;
+}
+
+.refpanel-tile-dragging {
+  opacity: 0.45;
+}
+
+.refpanel-tile-drop-target {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+}
+
+.refpanel-tile-selected {
+  border-color: var(--accent-strong) !important;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.22);
+}
+
+.refpanel-paste-button {
+  position: absolute;
+  right: 52px;
+  bottom: 10px;
+  z-index: 3;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+.refpanel-paste-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.refpanel-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (max-height: 780px) {
+  .refpanel-grid.reference-grid {
+    max-height: 34vh;
+  }
+}
+
+@media (max-height: 760px) {
+  .refpanel-grid.reference-grid {
+    max-height: 24vh;
+  }
+}
+
+@media (max-height: 680px) {
+  .refpanel-grid.reference-grid {
+    max-height: 20vh;
+  }
+}
+
+@media (max-height: 620px) {
+  .refpanel-grid.reference-grid {
+    max-height: 18vh;
+  }
+}
+
+.task-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary, #555);
+  background: transparent;
+  max-width: 200px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.task-tab:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
+.task-tab.active {
+  background: rgba(127, 127, 127, 0.16);
+  border-color: var(--border-strong, rgba(127, 127, 127, 0.3));
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.task-tab.running .task-tab-label::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent, #2f6feb);
+  vertical-align: middle;
+}
+.task-tab-spinner {
+  flex: 0 0 auto;
+}
+.task-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-tab-close {
+  padding: 2px;
+  width: 18px;
+  height: 18px;
+}
+.task-tab-spacer {
+  flex: 1 1 auto;
+}
+.task-concurrency {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary, #555);
+  padding: 0 6px;
+}
+.task-concurrency select {
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
+  background: var(--panel, #fff);
+  color: var(--text-primary);
+}
+.task-run-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
+  background: var(--accent, #2f6feb);
+  color: #fff;
+  cursor: pointer;
+}
+.task-run-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* 任务 API 选择行（标签 + 自定义下拉） */
+.task-provider-select-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.task-provider-select {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.task-provider-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.task-provider-trigger:hover {
+  border-color: var(--accent-border);
+  background: var(--surface-raised);
+}
+.task-provider-trigger-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-provider-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1200;
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  padding: 5px;
+  box-shadow: var(--shadow-soft);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.task-provider-option {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 4px 8px;
+  text-align: left;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.task-provider-option:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.task-provider-option.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.task-provider-empty {
+  padding: 6px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* 通用自定义下拉（替代原生 <select>），视觉与任务 API 下拉一致 */
+.custom-select {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.custom-select-trigger:hover:not(:disabled),
+.custom-select-trigger[aria-expanded="true"] {
+  border-color: var(--accent-border);
+  background: var(--surface-raised);
+}
+
+.custom-select-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.custom-select-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1200;
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  padding: 5px;
+  box-shadow: var(--shadow-soft);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.custom-select-option {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 4px 8px;
+  text-align: left;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.custom-select-option:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.custom-select-option.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.custom-select-option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.custom-select-menu-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+/* 参数快速选择条（chip）内：居中、固定宽度，不随聚焦/悬停改变宽度 */
+.parameter-quick-field .custom-select {
+  justify-self: center;
+  width: min(100%, 104px);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.parameter-quick-field .custom-select-trigger {
+  min-height: 26px;
+  padding: 2px 6px;
+  font-weight: 700;
+}
+
+.parameter-route-field .custom-select {
+  width: min(100%, 96px);
+}
+
+.compact-grid .custom-select,
+.advanced-controls .custom-select {
+  width: 100%;
+}
+
+/* 模型名映射列表：顶部标题行 + 数据行 */
+.model-alias-list {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.model-alias-target-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 模型名映射拆分模式开关：紧凑单行（勾选框 + 标签 + 提示） */
+.model-alias-split-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.model-alias-split-toggle input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.model-alias-split-toggle-label {
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.model-alias-split-toggle-hint {
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.model-alias-split-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+
+/* API 配置内联勾选行（如 Gemini 像素尺寸适配开关） */
+.api-config-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.api-config-checkbox-row input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.api-config-checkbox-label {
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.api-config-checkbox-hint {
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.api-config-checkbox-row:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* 任务标签条拆分：标签可横向滚动，运行控制区固定右侧 */
+.task-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 4px 10px;
+  margin-bottom: 10px;
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: var(--surface-app);
+  flex: 0 0 auto;
+}
+
+/* 页签栏按钮统一紧凑尺寸，避免多标签时把栏高撑高 */
+.task-tab-add,
+.task-tab-close {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+}
+.task-tab-add {
+  flex: 0 0 auto;
+}
+.task-tab {
+  height: 28px;
+  box-sizing: border-box;
+}
+.task-run-all {
+  height: 28px;
+  min-height: 28px;
+}
+
+.task-tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.task-run-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding-left: 10px;
+  margin-left: 4px;
+  border-left: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.18));
+}
+.task-concurrency {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary, #555);
+  padding: 0 4px;
+  white-space: nowrap;
+}
+/* 每任务启停勾选 */
+.task-tab-enabled {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.task-tab-enabled input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent, #2f6feb);
+  cursor: pointer;
+}
+.task-tab.disabled {
+  opacity: 0.5;
+}
+.task-tab.disabled .task-tab-label {
+  text-decoration: line-through;
+}
+.task-tab.queued {
+  border-style: dashed;
+  border-color: var(--border-strong, rgba(127, 127, 127, 0.35));
+}
+.task-tab.queued .task-tab-label::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent, #2f6feb);
+  animation: task-queued-pulse 1.2s ease-in-out infinite;
+}
+@keyframes task-queued-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+/* 任务栏内按钮的 CSS 伪元素提示会被 overflow:hidden 裁剪，统一走根层 GlobalTooltip（自动翻转方向） */
+.task-tab-bar [data-tooltip]::after,
+.task-tab-bar [data-tooltip]::before {
+  display: none;
 }

@@ -1,4 +1,4 @@
-import type { FocusedLaunchId, ProviderConfig, ProviderConfigInput } from "../../shared/types.js";
+import type { FocusedLaunchId, ModelAliasEntry, ProviderConfig, ProviderConfigInput } from "../../shared/types.js";
 import {
   DEFAULT_BASE_URL,
   DEFAULT_GEMINI_BASE_URL,
@@ -52,10 +52,24 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
     lastModelDiscoveryAt: discoveryInvalidated ? undefined : current.lastModelDiscoveryAt,
     lastModelDiscoveryError: discoveryInvalidated ? undefined : current.lastModelDiscoveryError,
     openAIImageRouting: discoveryInvalidated ? undefined : current.openAIImageRouting,
+    modelAliases: normalizeModelAliasEntries(input.modelAliases) ?? current.modelAliases,
+    modelAliasSplitMode: typeof input.modelAliasSplitMode === "boolean" ? input.modelAliasSplitMode : current.modelAliasSplitMode,
+    geminiPixelSize: typeof input.geminiPixelSize === "boolean" ? input.geminiPixelSize : current.geminiPixelSize,
     updatedAt: now
   };
 
   return nextConfig;
+}
+
+function normalizeModelAliasEntries(value: ModelAliasEntry[] | undefined): ModelAliasEntry[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const entries = value
+    .map((entry) => ({
+      aliasModelId: entry.aliasModelId.trim(),
+      targetModelId: entry.targetModelId.trim()
+    }))
+    .filter((entry) => entry.aliasModelId.length > 0 && entry.targetModelId.length > 0);
+  return entries.length > 0 ? entries : undefined;
 }
 
 function defaultBaseURLForProvider(kind: StoredProviderConfig["kind"], previousBaseURL: string): string {
