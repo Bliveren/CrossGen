@@ -453,7 +453,7 @@ describe("renderer multi-model smoke", () => {
 
     await openParameterDialog();
 
-    expect(selectByLabel("API route").selectedOptions[0]?.textContent).toBe("Auto · Chat");
+    expect(selectByLabel("API route").querySelector(".custom-select-label")?.textContent).toBe("Auto · Chat");
     expect(document.body.textContent).toContain("API route: Chat");
     expect(document.body.textContent).toContain("Unverified, using the default strategy");
 
@@ -510,7 +510,7 @@ describe("renderer multi-model smoke", () => {
       }
     }));
 
-    expect(document.querySelector<HTMLSelectElement>(".parameter-route-field select")?.value).toBe("image-api");
+    expect(document.querySelector<HTMLButtonElement>(".parameter-route-field .custom-select-trigger")?.dataset.value).toBe("image-api");
     expect(document.body.textContent).not.toContain("Unverified, using the default strategy");
   });
 
@@ -755,7 +755,7 @@ describe("renderer multi-model smoke", () => {
     expect(card.getAttribute("title")).toBe("Click to edit config");
 
     const detail = document.querySelector<HTMLElement>(".api-config-detail")!;
-    expect(selectByLabel("API type", detail).value).toBe("openai");
+    expect((selectByLabel("API type", detail) as HTMLSelectElement).value).toBe("openai");
     await changeSelect(selectByLabel("API type", detail), "gemini");
     await click(buttonByText("Save", ".api-config-detail button"));
 
@@ -1976,10 +1976,10 @@ describe("renderer multi-model smoke", () => {
     }));
 
     expect(document.body.textContent).toContain("some compatible endpoints may not support mask editing");
-    expect(document.querySelector<HTMLSelectElement>(".parameter-route-field select")?.value).toBe("image-api");
+    expect(document.querySelector<HTMLButtonElement>(".parameter-route-field .custom-select-trigger")?.dataset.value).toBe("image-api");
     await openParameterDialog();
-    expect(selectByLabel("API route").value).toBe("image-api");
-    expect(selectByLabel("API route").disabled).toBe(true);
+    expect(selectByLabel("API route").querySelector<HTMLButtonElement>(".custom-select-trigger")?.dataset.value).toBe("image-api");
+    expect(selectByLabel("API route").querySelector<HTMLButtonElement>(".custom-select-trigger")?.disabled).toBe(true);
   });
 
   it("caps local reference images to the active model capability", async () => {
@@ -3859,13 +3859,22 @@ async function selectTaskProvider(providerId: string) {
   await click(option);
 }
 
-async function changeSelect(select: HTMLSelectElement, value: string) {
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
-    setter?.call(select, value);
-    select.dispatchEvent(new Event("input", { bubbles: true }));
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+async function changeSelect(select: HTMLElement, value: string) {
+  if (select instanceof HTMLSelectElement) {
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
+      setter?.call(select, value);
+      select.dispatchEvent(new Event("input", { bubbles: true }));
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    return;
+  }
+  const trigger = select.querySelector<HTMLButtonElement>(".custom-select-trigger");
+  if (!trigger) throw new Error("Custom select trigger was not found.");
+  await click(trigger);
+  const option = select.querySelector<HTMLButtonElement>(`.custom-select-option[data-select-value="${value}"]`);
+  if (!option) throw new Error(`Custom select option "${value}" was not found.`);
+  await click(option);
 }
 
 function inputByLabel(labelText: string, root: ParentNode = document): HTMLInputElement {
@@ -3888,9 +3897,9 @@ function textAreaByLabel(labelText: string, root: ParentNode = document): HTMLTe
   return textarea;
 }
 
-function selectByLabel(labelText: string, root: ParentNode = document): HTMLSelectElement {
+function selectByLabel(labelText: string, root: ParentNode = document): HTMLElement {
   const label = [...root.querySelectorAll<HTMLLabelElement>("label")].find((item) => item.textContent?.includes(labelText));
-  const select = label?.querySelector<HTMLSelectElement>("select");
+  const select = label?.querySelector<HTMLElement>("select, .custom-select");
   if (!select) throw new Error(`Select labeled "${labelText}" was not found.`);
   return select;
 }

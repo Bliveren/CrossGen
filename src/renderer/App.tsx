@@ -137,6 +137,7 @@ import { getInitialLanguage, localizeValidationMessage, translations, type Langu
 import { useImageEditor } from "./useImageEditor";
 import { createTaskFieldStore, createTaskId, useTaskField, useTaskStoreVersion, type TaskFieldStore } from "./taskStore";
 import { TaskProviderSelect, TaskRunControls, TaskTabBar, isTaskEnabled } from "./TaskTabBar";
+import { Select } from "./CustomSelect";
 import { ReferenceImagePanel, type ReferenceImagePanelProps } from "./ReferenceImagePanel";
 import { extractDataUrlsFromText, referenceDataUrlToAsset } from "./referenceImageData";
 import { useHistoryListModel } from "./useHistoryListModel";
@@ -5966,57 +5967,53 @@ export function App() {
           <Info size={12} />
         </span>
       </span>
-      <select
+      <Select
         value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
         disabled={requestMode === "inpaint"}
-        onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
-      >
-        <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
-        <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
-        <option value="responses">{copy.imageRouteResponses}</option>
-        <option value="image-api">{copy.imageRouteImageApi}</option>
-      </select>
+        ariaLabel={copy.imageRoute}
+        onChange={(value) => updateOpenAIParams({ imageRoute: value as OpenAIImageRouteSelection })}
+        options={[
+          { value: "auto", label: copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode))) },
+          { value: "chat-completions", label: copy.imageRouteChatCompletions },
+          { value: "responses", label: copy.imageRouteResponses },
+          { value: "image-api", label: copy.imageRouteImageApi }
+        ]}
+      />
     </label>
   ) : null;
   const parameterQuickControls = openAIParams ? (
     <>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.size}</small>
-        <select
-          aria-label={copy.size}
+        <Select
+          ariaLabel={copy.size}
           value={sizeSelectValue}
-          onChange={(event) => {
-            const value = event.target.value;
+          onChange={(value) => {
             updateOpenAIParams({ size: value === "custom" ? customSize : value });
           }}
-        >
-          {sizePresets.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-          <option value="custom">{copy.custom}</option>
-        </select>
+          options={[
+            ...sizePresets.map((size) => ({ value: size, label: size })),
+            { value: "custom", label: copy.custom }
+          ]}
+        />
       </label>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.quality}</small>
-        <select aria-label={copy.quality} value={openAIParams.quality} onChange={(event) => updateOpenAIParams({ quality: event.target.value as ImageQuality })}>
-          {qualityOptions.map((quality) => (
-            <option key={quality} value={quality}>
-              {quality}
-            </option>
-          ))}
-        </select>
+        <Select
+          ariaLabel={copy.quality}
+          value={openAIParams.quality}
+          onChange={(value) => updateOpenAIParams({ quality: value as ImageQuality })}
+          options={qualityOptions.map((quality) => ({ value: quality, label: quality }))}
+        />
       </label>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.format}</small>
-        <select aria-label={copy.format} value={openAIParams.outputFormat} onChange={(event) => updateOpenAIParams({ outputFormat: event.target.value as ImageFormat })}>
-          {formatOptions.map((format) => (
-            <option key={format} value={format}>
-              {format.toUpperCase()}
-            </option>
-          ))}
-        </select>
+        <Select
+          ariaLabel={copy.format}
+          value={openAIParams.outputFormat}
+          onChange={(value) => updateOpenAIParams({ outputFormat: value as ImageFormat })}
+          options={formatOptions.map((format) => ({ value: format, label: format.toUpperCase() }))}
+        />
       </label>
       <label className="parameter-summary-chip parameter-quick-field parameter-route-field" title={imageRouteTitle}>
         <span className="route-label">
@@ -6025,40 +6022,43 @@ export function App() {
             <Info size={12} />
           </span>
         </span>
-        <select
-          aria-label={copy.imageRoute}
+        <Select
+          ariaLabel={copy.imageRoute}
           value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
           disabled={requestMode === "inpaint"}
-          onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
-        >
-          <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
-          <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
-          <option value="responses">{copy.imageRouteResponses}</option>
-          <option value="image-api">{copy.imageRouteImageApi}</option>
-        </select>
+          onChange={(value) => updateOpenAIParams({ imageRoute: value as OpenAIImageRouteSelection })}
+          options={[
+            { value: "auto", label: copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode))) },
+            { value: "chat-completions", label: copy.imageRouteChatCompletions },
+            { value: "responses", label: copy.imageRouteResponses },
+            { value: "image-api", label: copy.imageRouteImageApi }
+          ]}
+        />
       </label>
     </>
   ) : geminiParams ? (
     <>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.aspectRatio}</small>
-        <select aria-label={copy.aspectRatio} value={geminiParams.aspectRatio} onChange={(event) => updateGeminiParams({ aspectRatio: event.target.value as GeminiAspectRatio })}>
-          {GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => (
-            <option key={aspectRatio} value={aspectRatio}>
-              {aspectRatio}
-            </option>
-          ))}
-        </select>
+        <Select
+          ariaLabel={copy.aspectRatio}
+          value={geminiParams.aspectRatio}
+          onChange={(value) => updateGeminiParams({ aspectRatio: value as GeminiAspectRatio })}
+          options={GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => ({ value: aspectRatio, label: aspectRatio }))}
+        />
       </label>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.resolution}</small>
-        <select aria-label={copy.resolution} value={geminiParams.resolution} onChange={(event) => updateGeminiParams({ resolution: event.target.value as GeminiResolution })}>
-          {GEMINI_RESOLUTION_OPTIONS.filter((resolution) => !activeConfig.modelAliasSplitMode || isSplitResolutionTier(resolution)).map((resolution) => {
+        <Select
+          ariaLabel={copy.resolution}
+          value={geminiParams.resolution}
+          onChange={(value) => updateGeminiParams({ resolution: value as GeminiResolution })}
+          options={GEMINI_RESOLUTION_OPTIONS.filter((resolution) => !activeConfig.modelAliasSplitMode || isSplitResolutionTier(resolution)).map((resolution) => {
             const aliasAvailable = geminiResolutionAliasAvailability(activeConfig, geminiParams.model);
             const resolutionDisabled = aliasAvailable !== null && !aliasAvailable.has(resolution);
-            return <option key={resolution} value={resolution} disabled={resolutionDisabled}>{resolution}</option>;
+            return { value: resolution, label: resolution, disabled: resolutionDisabled };
           })}
-        </select>
+        />
       </label>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.count}</small>
@@ -6081,40 +6081,32 @@ export function App() {
     <>
       <label>
         <span>{copy.size}</span>
-        <select
+        <Select
           value={sizeSelectValue}
-          onChange={(event) => {
-            const value = event.target.value;
+          onChange={(value) => {
             updateOpenAIParams({ size: value === "custom" ? customSize : value });
           }}
-        >
-          {sizePresets.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-          <option value="custom">{copy.custom}</option>
-        </select>
+          options={[
+            ...sizePresets.map((size) => ({ value: size, label: size })),
+            { value: "custom", label: copy.custom }
+          ]}
+        />
       </label>
       <label>
         <span>{copy.quality}</span>
-        <select value={openAIParams.quality} onChange={(event) => updateOpenAIParams({ quality: event.target.value as ImageQuality })}>
-          {qualityOptions.map((quality) => (
-            <option key={quality} value={quality}>
-              {quality}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={openAIParams.quality}
+          onChange={(value) => updateOpenAIParams({ quality: value as ImageQuality })}
+          options={qualityOptions.map((quality) => ({ value: quality, label: quality }))}
+        />
       </label>
       <label>
         <span>{copy.format}</span>
-        <select value={openAIParams.outputFormat} onChange={(event) => updateOpenAIParams({ outputFormat: event.target.value as ImageFormat })}>
-          {formatOptions.map((format) => (
-            <option key={format} value={format}>
-              {format.toUpperCase()}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={openAIParams.outputFormat}
+          onChange={(value) => updateOpenAIParams({ outputFormat: value as ImageFormat })}
+          options={formatOptions.map((format) => ({ value: format, label: format.toUpperCase() }))}
+        />
       </label>
       {openAIImageRouteControl}
     </>
@@ -6122,23 +6114,23 @@ export function App() {
     <>
       <label>
         <span>{copy.aspectRatio}</span>
-        <select value={geminiParams.aspectRatio} onChange={(event) => updateGeminiParams({ aspectRatio: event.target.value as GeminiAspectRatio })}>
-          {GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => (
-            <option key={aspectRatio} value={aspectRatio}>
-              {aspectRatio}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={geminiParams.aspectRatio}
+          onChange={(value) => updateGeminiParams({ aspectRatio: value as GeminiAspectRatio })}
+          options={GEMINI_ASPECT_RATIO_OPTIONS.map((aspectRatio) => ({ value: aspectRatio, label: aspectRatio }))}
+        />
       </label>
       <label>
         <span>{copy.resolution}</span>
-        <select value={geminiParams.resolution} onChange={(event) => updateGeminiParams({ resolution: event.target.value as GeminiResolution })}>
-          {GEMINI_RESOLUTION_OPTIONS.filter((resolution) => !activeConfig.modelAliasSplitMode || isSplitResolutionTier(resolution)).map((resolution) => {
+        <Select
+          value={geminiParams.resolution}
+          onChange={(value) => updateGeminiParams({ resolution: value as GeminiResolution })}
+          options={GEMINI_RESOLUTION_OPTIONS.filter((resolution) => !activeConfig.modelAliasSplitMode || isSplitResolutionTier(resolution)).map((resolution) => {
             const aliasAvailable = geminiResolutionAliasAvailability(activeConfig, geminiParams.model);
             const resolutionDisabled = aliasAvailable !== null && !aliasAvailable.has(resolution);
-            return <option key={resolution} value={resolution} disabled={resolutionDisabled}>{resolution}</option>;
+            return { value: resolution, label: resolution, disabled: resolutionDisabled };
           })}
-        </select>
+        />
       </label>
       <label>
         <span>{copy.count}</span>
@@ -6192,13 +6184,11 @@ export function App() {
       </label>
       <label>
         {copy.background}
-        <select value={openAIParams.background} onChange={(event) => updateOpenAIParams({ background: event.target.value as ImageBackground })}>
-          {backgroundOptions.map((background) => (
-            <option key={background} value={background}>
-              {background}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={openAIParams.background}
+          onChange={(value) => updateOpenAIParams({ background: value as ImageBackground })}
+          options={backgroundOptions.map((background) => ({ value: background, label: background }))}
+        />
       </label>
       <label>
         {copy.count}
@@ -6239,13 +6229,11 @@ export function App() {
       </label>
       <label>
         {copy.moderation}
-        <select value={openAIParams.moderation} onChange={(event) => updateOpenAIParams({ moderation: event.target.value as ModerationMode })}>
-          {moderationOptions.map((moderation) => (
-            <option key={moderation} value={moderation}>
-              {moderation}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={openAIParams.moderation}
+          onChange={(value) => updateOpenAIParams({ moderation: value as ModerationMode })}
+          options={moderationOptions.map((moderation) => ({ value: moderation, label: moderation }))}
+        />
       </label>
       <label>
         {copy.timeoutSeconds}

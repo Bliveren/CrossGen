@@ -7254,6 +7254,120 @@
   font-size: 12px;
 }
 
+/* 通用自定义下拉（替代原生 <select>），视觉与任务 API 下拉一致 */
+.custom-select {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.custom-select-trigger:hover:not(:disabled),
+.custom-select-trigger[aria-expanded="true"] {
+  border-color: var(--accent-border);
+  background: var(--surface-raised);
+}
+
+.custom-select-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.custom-select-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1200;
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  padding: 5px;
+  box-shadow: var(--shadow-soft);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.custom-select-option {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 4px 8px;
+  text-align: left;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.custom-select-option:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.custom-select-option.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.custom-select-option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 参数快速选择条（chip）内：居中、限宽，悬停/聚焦时随 chip 展开 */
+.parameter-quick-field .custom-select {
+  justify-self: center;
+  width: min(100%, 104px);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.parameter-config-bar:hover .parameter-quick-field .custom-select,
+.parameter-quick-field:focus-within .custom-select {
+  width: 100%;
+}
+
+.parameter-quick-field .custom-select-trigger {
+  min-height: 26px;
+  padding: 2px 6px;
+  font-weight: 700;
+}
+
+.parameter-route-field .custom-select {
+  width: min(100%, 96px);
+}
+
+.compact-grid .custom-select,
+.advanced-controls .custom-select {
+  width: 100%;
+}
+
 /* 模型名映射拆分模式开关：紧凑单行（勾选框 + 标签 + 提示） */
 .model-alias-split-toggle {
   display: flex;
