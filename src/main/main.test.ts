@@ -332,6 +332,8 @@ describe("reference input data URLs (persistInputDataUrl / resolveRequestInputs)
     expect(inputs[0]?.path).toBe(sourcePath);
     expect(inputs[1]?.name.startsWith("ref-")).toBe(true);
     expect(inputs[1]?.dataUrl).toBe(dataUrl);
+    // base64 参考图写进缓存目录，而不是用户的输出/历史目录
+    expect(path.dirname(inputs[1]?.path ?? "")).not.toBe(imagesDir);
   });
 
   it("throws a Chinese error when combined inputs exceed the 16-image limit", async () => {

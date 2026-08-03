@@ -1184,9 +1184,10 @@ async function selectedFilesToAssets(paths: string[]): Promise<InputAsset[]> {
 }
 
 export async function resolveRequestInputs(request: RunJobRequest, imagesDir: string): Promise<{ inputs: InputAsset[]; mask?: InputAsset }> {
+  const inputCacheDir = getInputDataCacheDir();
   const pathInputs = await Promise.all(request.inputPaths.filter(isImagePath).map((filePath) => toInputAsset(filePath, false)));
   const dataUrlInputs = await Promise.all(
-    (request.inputDataUrls ?? []).filter((dataUrl) => dataUrl.length > 0).map((dataUrl) => persistInputDataUrl(dataUrl, imagesDir))
+    (request.inputDataUrls ?? []).filter((dataUrl) => dataUrl.length > 0).map((dataUrl) => persistInputDataUrl(dataUrl, inputCacheDir))
   );
   const inputs = [...pathInputs, ...dataUrlInputs];
   if (inputs.length > MAX_GPT_IMAGE_INPUTS) {
@@ -1197,7 +1198,7 @@ export async function resolveRequestInputs(request: RunJobRequest, imagesDir: st
   if (request.maskPath) {
     mask = await toInputAsset(request.maskPath, false);
   } else if (request.maskDataUrl) {
-    mask = await persistMaskDataUrl(request.maskDataUrl, imagesDir);
+    mask = await persistMaskDataUrl(request.maskDataUrl, inputCacheDir);
   }
 
   return { inputs, mask };
@@ -1214,6 +1215,11 @@ function buildReferencePreflightOrThrow(inputs: InputAsset[], mask?: InputAsset)
 
 function referencePreflightTempRoot(): string {
   return path.join(app.getPath("userData"), "reference-preflight-tmp");
+}
+
+// 输入图片（base64 参考图/mask）的工作副本缓存目录：不写入用户的输出/历史目录，避免污染结果文件夹。
+function getInputDataCacheDir(): string {
+  return path.join(app.getPath("userData"), "input-data-cache");
 }
 
 function referencePreflightTempDir(): string {
