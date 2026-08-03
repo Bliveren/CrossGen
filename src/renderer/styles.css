@@ -7113,7 +7113,7 @@
 .task-tab.active {
   background: rgba(127, 127, 127, 0.16);
   border-color: var(--border-strong, rgba(127, 127, 127, 0.3));
-  color: var(--text, #111);
+  color: var(--text-primary);
   font-weight: 600;
 }
 .task-tab.running .task-tab-label::after {
@@ -7155,7 +7155,7 @@
   border-radius: 6px;
   border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
   background: var(--panel, #fff);
-  color: var(--text, #111);
+  color: var(--text-primary);
 }
 .task-run-all {
   display: inline-flex;
@@ -7189,7 +7189,7 @@
   border-radius: 6px;
   border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
   background: var(--panel, #fff);
-  color: var(--text, #111);
+  color: var(--text-primary);
 }
 
 /* 模型名映射拆分模式开关：紧凑单行（勾选框 + 标签 + 提示） */
