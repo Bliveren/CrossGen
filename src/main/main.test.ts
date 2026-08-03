@@ -147,6 +147,19 @@ function appState(providers: StoredProviderConfig[], activeProviderId: string): 
 }
 
 describe("main config save builder", () => {
+  it("persists the Gemini pixel-size toggle (on and off) and keeps it for old configs", () => {
+    const base = savedConfig();
+    const on = buildProviderConfigForSave(base, input({ geminiPixelSize: true }), "2026-06-09T02:00:00.000Z");
+    expect(on.geminiPixelSize).toBe(true);
+
+    const off = buildProviderConfigForSave({ ...on }, input({ geminiPixelSize: false }), "2026-06-09T02:00:00.000Z");
+    expect(off.geminiPixelSize).toBe(false);
+
+    // 老配置文件没有该字段：保持未定义，兼容旧状态
+    const legacy = buildProviderConfigForSave({ ...base, geminiPixelSize: undefined }, input(), "2026-06-09T02:00:00.000Z");
+    expect(legacy.geminiPixelSize).toBeUndefined();
+  });
+
   it("preserves an existing key on same-provider saves without a new key", () => {
     const next = buildProviderConfigForSave(savedConfig({ streamingPartialsEnabled: true }), input(), "2026-06-09T02:00:00.000Z");
 

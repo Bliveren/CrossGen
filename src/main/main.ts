@@ -562,6 +562,7 @@ function toPublicConfig(config: StoredProviderConfig): ProviderConfig {
     openAIImageRouting: config.openAIImageRouting,
     modelAliases: config.modelAliases,
     modelAliasSplitMode: config.modelAliasSplitMode,
+    geminiPixelSize: config.geminiPixelSize,
     updatedAt: config.updatedAt
   };
 }

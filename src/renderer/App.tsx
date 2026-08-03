@@ -1282,6 +1282,7 @@ export function App() {
   const [modelAliasesDraft, setModelAliasesDraft] = useState<ModelAliasEntry[]>([]);
   const [modelAliasSplitModeDraft, setModelAliasSplitModeDraft] = useState(false);
   const [geminiPixelSizeDraft, setGeminiPixelSizeDraft] = useState(false);
+  const geminiPixelSizeTouchedRef = useRef(false);
   const [promotedApiConfigId, setPromotedApiConfigId] = useState<string | null>(null);
   const [savedApiConfigId, setSavedApiConfigId] = useState<string | null>(null);
   const [isAddingApiAccess, setIsAddingApiAccess] = useState(false);
@@ -3011,6 +3012,7 @@ export function App() {
     setModelAliasesDraft(selectedApiConfig.modelAliases ?? []);
     setModelAliasSplitModeDraft(selectedApiConfig.modelAliasSplitMode === true);
     setGeminiPixelSizeDraft(selectedApiConfig.geminiPixelSize === true);
+    geminiPixelSizeTouchedRef.current = false;
   }, [selectedApiConfig.id]);
 
   useEffect(() => {
@@ -3889,7 +3891,7 @@ export function App() {
         activeModelId: providerKindChanged ? nextDefaultModel : targetConfig.activeModelId,
         modelAliases: options.modelAliases ?? (modelAliasesDraft.length > 0 ? modelAliasesDraft : undefined),
         modelAliasSplitMode: options.modelAliasSplitMode ?? (modelAliasSplitModeDraft || undefined),
-        geminiPixelSize: options.geminiPixelSize ?? (geminiPixelSizeDraft || undefined),
+        geminiPixelSize: options.geminiPixelSize ?? (geminiPixelSizeTouchedRef.current ? geminiPixelSizeDraft : undefined),
       });
       applyConfig(config);
       if (config.id === activeConfig.id) {
@@ -7571,7 +7573,10 @@ export function App() {
           modelAliasSplitMode={modelAliasSplitModeDraft}
           onModelAliasSplitModeChange={setModelAliasSplitModeDraft}
           geminiPixelSize={geminiPixelSizeDraft}
-          onGeminiPixelSizeChange={setGeminiPixelSizeDraft}
+          onGeminiPixelSizeChange={(value) => {
+            geminiPixelSizeTouchedRef.current = true;
+            setGeminiPixelSizeDraft(value);
+          }}
         />
       )}
       {isParameterDialogOpen && (
