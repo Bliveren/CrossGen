@@ -5668,11 +5668,23 @@ export function App() {
       const text = target.dataset.tooltip?.trim();
       if (!text) return;
       const rect = target.getBoundingClientRect();
-      const placement = target.classList.contains("tooltip-below") ? "bottom" : "top";
+      // 顶部/底部空间不足时翻转方向，避免被窗口上/下沿截断
+      const forcedBelow = target.classList.contains("tooltip-below");
+      const estimatedHeight = Math.min(200, Math.max(30, text.length * 7));
+      const placement = forcedBelow
+        ? "bottom"
+        : rect.top < estimatedHeight + 14
+          ? "bottom"
+          : "top";
+      const x = clamp(rect.left + rect.width / 2, 92, window.innerWidth - 92);
+      const y =
+        placement === "bottom"
+          ? Math.min(rect.bottom, Math.max(0, window.innerHeight - estimatedHeight - 10))
+          : Math.max(rect.top, estimatedHeight + 10);
       setGlobalTooltip({
         text,
-        x: clamp(rect.left + rect.width / 2, 92, window.innerWidth - 92),
-        y: placement === "bottom" ? rect.bottom : rect.top,
+        x,
+        y,
         placement
       });
     };

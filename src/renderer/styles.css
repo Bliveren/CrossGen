@@ -7384,3 +7384,9 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.25; }
 }
+
+/* 任务栏内按钮的 CSS 伪元素提示会被 overflow:hidden 裁剪，统一走根层 GlobalTooltip（自动翻转方向） */
+.task-tab-bar [data-tooltip]::after,
+.task-tab-bar [data-tooltip]::before {
+  display: none;
+}
