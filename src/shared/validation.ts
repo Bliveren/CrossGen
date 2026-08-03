@@ -30,6 +30,10 @@ export const GPT_IMAGE_2_MODEL = GPT_IMAGE_2_MODEL_ID;
 export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 export const MAX_GPT_IMAGE_INPUTS = 16;
+export const MAX_INPUT_DATA_URL_TOTAL_BYTES = 20 * 1024 * 1024; // ~20MB per request across all inputDataUrls (measured via base64 payload length)
+const INPUT_DATA_URL_PATTERN = /^data:image\/(png|jpe?g|webp);base64,/i;
+const QUEUE_CONCURRENCY_MIN = 1;
+const QUEUE_CONCURRENCY_MAX = 8;
 export const GENERAL_PROMPT_ONLY_MESSAGE = "General OpenAI 兼容兜底仅支持纯提示词生成。";
 
 export const DEFAULT_IMAGE_PARAMS: OpenAIImageParams = {
@@ -296,8 +300,8 @@ export function validateGeminiImageParams(params: unknown): ValidationResult {
   if (!isOneOf(params.resolution, GEMINI_RESOLUTION_OPTIONS)) {
     return { ok: false, message: "Gemini 图片分辨率参数无效。" };
   }
-  if (!isInteger(params.outputCount) || params.outputCount < 1 || params.outputCount > 1) {
-    return { ok: false, message: "Gemini 首期输出数量固定为 1。" };
+  if (!isInteger(params.outputCount) || params.outputCount < 1 || params.outputCount > 4) {
+    return { ok: false, message: "生成数量需在 1 到 4 之间。" };
   }
   if (typeof params.thinking !== "boolean") {
     return { ok: false, message: "Gemini Thinking 参数无效。" };
@@ -395,6 +399,19 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
     return { ok: false, message: "启动模型无效。" };
   }
   if (input.activeModelId !== undefined && typeof input.activeModelId !== "string") {
+  if (input.modelAliasSplitMode !== undefined && typeof input.modelAliasSplitMode !== "boolean") {
+    return { ok: false, message: "模型名拆分模式配置无效。" };
+  }
+  if (input.modelAliases !== undefined) {
+    if (!Array.isArray(input.modelAliases)) {
+      return { ok: false, message: "模型名映射格式无效。" };
+    }
+    for (const entry of input.modelAliases) {
+      if (!isRecord(entry) || typeof entry.aliasModelId !== "string" || !entry.aliasModelId.trim() || typeof entry.targetModelId !== "string" || !entry.targetModelId.trim()) {
+        return { ok: false, message: "模型名映射包含无效条目。" };
+      }
+    }
+  }
     return { ok: false, message: "活动模型 ID 无效。" };
   }
   return { ok: true };
@@ -463,11 +480,29 @@ function validateRunJobRequestBase(request: unknown): ValidationResult {
   if (typeof request.prompt !== "string") {
     return { ok: false, message: "Prompt 格式无效。" };
   }
+  if (request.providerId !== undefined && (typeof request.providerId !== "string" || !request.providerId.trim())) {
+    return { ok: false, message: "任务 provider ID 无效。" };
+  }
   if (!Array.isArray(request.inputPaths) || request.inputPaths.some((item) => typeof item !== "string")) {
     return { ok: false, message: "输入图片路径无效。" };
   }
   if (request.inputPaths.some((item) => !IMAGE_PATH_PATTERN.test(item))) {
     return { ok: false, message: "输入图片必须是 PNG、JPEG 或 WebP。" };
+  }
+  if (request.inputDataUrls !== undefined) {
+    if (!Array.isArray(request.inputDataUrls) || request.inputDataUrls.some((item) => typeof item !== "string")) {
+      return { ok: false, message: "输入图片数据无效。" };
+    }
+    const providedDataUrls = request.inputDataUrls.filter((item) => item.length > 0);
+    for (const dataUrl of providedDataUrls) {
+      if (!INPUT_DATA_URL_PATTERN.test(dataUrl)) {
+        return { ok: false, message: "输入图片数据必须是 PNG、JPEG 或 WebP base64 data URL。" };
+      }
+    }
+    const totalBytes = providedDataUrls.reduce((sum, dataUrl) => sum + dataUrlToBase64(dataUrl).length, 0);
+    if (totalBytes > MAX_INPUT_DATA_URL_TOTAL_BYTES) {
+      return { ok: false, message: "输入图片数据总量不能超过 20MB。" };
+    }
   }
   return { ok: true };
 }
@@ -479,13 +514,15 @@ export function validateOpenAIRunJobRequest(request: unknown): ValidationResult 
     return { ok: false, message: "任务请求格式无效。" };
   }
   const inputPaths = request.inputPaths as string[];
-  if (inputPaths.length > MAX_GPT_IMAGE_INPUTS) {
-    return { ok: false, message: `GPT Image 2 输入图片不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
+  const inputDataUrls = (request.inputDataUrls ?? []) as string[];
+  const inputCount = inputPaths.length + inputDataUrls.length;
+  if (inputCount > MAX_GPT_IMAGE_INPUTS) {
+    return { ok: false, message: `输入图片不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
   }
-  if (request.mode === "generate" && inputPaths.length > 0) {
+  if (request.mode === "generate" && inputCount > 0) {
     return { ok: false, message: "文生图不应携带输入图片。" };
   }
-  if ((request.mode === "edit" || request.mode === "inpaint") && inputPaths.length === 0) {
+  if ((request.mode === "edit" || request.mode === "inpaint") && inputCount === 0) {
     return { ok: false, message: request.mode === "inpaint" ? "局部重绘至少需要一张源图。" : "图像编辑至少需要一张源图。" };
   }
   if (request.maskPath !== undefined && typeof request.maskPath !== "string") {
@@ -522,10 +559,15 @@ export function validateGeminiRunJobRequest(request: unknown): ValidationResult 
     return { ok: false, message: "任务请求格式无效。" };
   }
   const inputPaths = request.inputPaths as string[];
-  if (request.mode === "generate" && inputPaths.length > 0) {
+  const inputDataUrls = (request.inputDataUrls ?? []) as string[];
+  const inputCount = inputPaths.length + inputDataUrls.length;
+  if (inputCount > MAX_GPT_IMAGE_INPUTS) {
+    return { ok: false, message: `输入图片不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
+  }
+  if (request.mode === "generate" && inputCount > 0) {
     return { ok: false, message: "文生图不应携带输入图片。" };
   }
-  if ((request.mode === "edit" || request.mode === "inpaint") && inputPaths.length === 0) {
+  if ((request.mode === "edit" || request.mode === "inpaint") && inputCount === 0) {
     return { ok: false, message: request.mode === "inpaint" ? "局部重绘至少需要一张源图。" : "图像编辑至少需要一张源图。" };
   }
   if (request.maskPath !== undefined && typeof request.maskPath !== "string") {
@@ -575,6 +617,8 @@ export function validateGeneralRunJobRequest(request: unknown): ValidationResult
   }
 
   const inputPaths = request.inputPaths as string[];
+  const inputDataUrls = (request.inputDataUrls ?? []) as string[];
+  const inputCount = inputPaths.length + inputDataUrls.length;
   if (request.mode === "inpaint") {
     return { ok: false, message: "General 首期不支持局部重绘。" };
   }
@@ -582,15 +626,15 @@ export function validateGeneralRunJobRequest(request: unknown): ValidationResult
     return { ok: false, message: "General 首期不支持 mask 参数。" };
   }
   if (generalFallbackSupportsReferenceImages(request.params.providerKind)) {
-    if (request.mode === "generate" && inputPaths.length > 0) {
+    if (request.mode === "generate" && inputCount > 0) {
       return { ok: false, message: "文生图不应携带输入图片。" };
     }
-    if (request.mode === "edit" && inputPaths.length === 0) {
+    if (request.mode === "edit" && inputCount === 0) {
       return { ok: false, message: "基础参考图编辑至少需要一张参考图。" };
     }
     return { ok: true };
   }
-  if (request.mode !== "generate" || inputPaths.length > 0) {
+  if (request.mode !== "generate" || inputCount > 0) {
     return { ok: false, message: GENERAL_PROMPT_ONLY_MESSAGE };
   }
   return { ok: true };
@@ -649,6 +693,35 @@ export function validateWorkspaceDraftInput(input: unknown): ValidationResult {
     return { ok: false, message: "画笔大小无效。" };
   }
   return validateImageParams(input.params);
+}
+
+export function validateQueueRuntimeConfigPatch(patch: unknown): ValidationResult {
+  if (!isRecord(patch)) {
+    return { ok: false, message: "队列并发配置格式无效。" };
+  }
+  if (
+    patch.maxGlobalRunning !== undefined &&
+    (!isInteger(patch.maxGlobalRunning) || patch.maxGlobalRunning < QUEUE_CONCURRENCY_MIN || patch.maxGlobalRunning > QUEUE_CONCURRENCY_MAX)
+  ) {
+    return { ok: false, message: "maxGlobalRunning 需为 1 到 8 之间的整数。" };
+  }
+  if (patch.providerConcurrency !== undefined) {
+    if (!isRecord(patch.providerConcurrency)) {
+      return { ok: false, message: "providerConcurrency 格式无效。" };
+    }
+    for (const concurrency of Object.values(patch.providerConcurrency)) {
+      if (!isInteger(concurrency) || concurrency < QUEUE_CONCURRENCY_MIN || concurrency > QUEUE_CONCURRENCY_MAX) {
+        return { ok: false, message: "providerConcurrency 数值需为 1 到 8 之间的整数。" };
+      }
+    }
+  }
+  if (
+    patch.clearProviderIds !== undefined &&
+    (!Array.isArray(patch.clearProviderIds) || patch.clearProviderIds.some((item) => typeof item !== "string"))
+  ) {
+    return { ok: false, message: "clearProviderIds 需为字符串数组。" };
+  }
+  return { ok: true };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

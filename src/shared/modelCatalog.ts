@@ -149,3 +149,9 @@ export function getGeneralImageModelCandidate(discoveredModels: DiscoveredModel[
 export function normalizeModelId(value: string): string {
   return value.trim().toLowerCase().replace(/^models\//, "");
 }
+
+export function getCatalogModelIds(): string[] {
+  return FOCUSED_MODEL_CATALOG.filter((definition) => definition.launchId !== GENERAL_LAUNCH_ID).flatMap(
+    (definition) => definition.modelIds
+  );
+}

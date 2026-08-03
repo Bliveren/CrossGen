@@ -1,4 +1,4 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 
 @theme {
   --font-sans:
@@ -958,6 +958,7 @@
   }
 
   .api-config-dialog {
+    grid-template-rows: auto minmax(0, 1fr);
     display: grid;
     gap: 14px;
     width: min(960px, 100%);
@@ -971,11 +972,12 @@
   }
 
   .api-config-dialog-body {
+    overflow-x: hidden;
+    overflow-y: auto;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     min-height: 0;
-    overflow: hidden;
   }
 
   .api-config-list-pane,
@@ -6988,4 +6990,278 @@
       max-height: min(160px, 24vh);
     }
   }
+}
+
+/* ===== ReferenceImagePanel (refpanel-*) ===== */
+.refpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 0;
+}
+
+.refpanel-resize-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  height: 10px;
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: var(--radius-sm);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.refpanel-resize-handle:hover,
+.refpanel-resize-handle:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.refpanel-grid.reference-grid {
+  height: var(--refpanel-height, 160px);
+  min-height: 96px;
+  max-height: 480px;
+}
+
+.refpanel-tile-dragging {
+  opacity: 0.45;
+}
+
+.refpanel-tile-drop-target {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+}
+
+.refpanel-tile-selected {
+  border-color: var(--accent-strong) !important;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.22);
+}
+
+.refpanel-paste-button {
+  position: absolute;
+  right: 52px;
+  bottom: 10px;
+  z-index: 3;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+.refpanel-paste-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.refpanel-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (max-height: 780px) {
+  .refpanel-grid.reference-grid {
+    max-height: 34vh;
+  }
+}
+
+@media (max-height: 760px) {
+  .refpanel-grid.reference-grid {
+    max-height: 24vh;
+  }
+}
+
+@media (max-height: 680px) {
+  .refpanel-grid.reference-grid {
+    max-height: 20vh;
+  }
+}
+
+@media (max-height: 620px) {
+  .refpanel-grid.reference-grid {
+    max-height: 18vh;
+  }
+}
+
+/* ===== 多任务页签栏 ===== */
+.task-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-strong, rgba(127, 127, 127, 0.25));
+  background: var(--panel, rgba(255, 255, 255, 0.6));
+  flex: 0 0 auto;
+  overflow-x: auto;
+  min-height: 38px;
+}
+.task-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary, #555);
+  background: transparent;
+  max-width: 200px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.task-tab:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
+.task-tab.active {
+  background: rgba(127, 127, 127, 0.16);
+  border-color: var(--border-strong, rgba(127, 127, 127, 0.3));
+  color: var(--text, #111);
+  font-weight: 600;
+}
+.task-tab.running .task-tab-label::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent, #2f6feb);
+  vertical-align: middle;
+}
+.task-tab-spinner {
+  flex: 0 0 auto;
+}
+.task-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-tab-close {
+  padding: 2px;
+  width: 18px;
+  height: 18px;
+}
+.task-tab-spacer {
+  flex: 1 1 auto;
+}
+.task-concurrency {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary, #555);
+  padding: 0 6px;
+}
+.task-concurrency select {
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
+  background: var(--panel, #fff);
+  color: var(--text, #111);
+}
+.task-run-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
+  background: var(--accent, #2f6feb);
+  color: #fff;
+  cursor: pointer;
+}
+.task-run-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.task-provider-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-secondary, #555);
+}
+.task-provider-select select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
+  background: var(--panel, #fff);
+  color: var(--text, #111);
+}
+
+/* 模型名映射拆分模式开关：紧凑单行（勾选框 + 标签 + 提示） */
+.model-alias-split-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.model-alias-split-toggle input[type="checkbox"] {
+  margin-top: 2px;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+.model-alias-split-toggle-label {
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.model-alias-split-toggle-hint {
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.model-alias-split-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* 参考图粘贴输入框（data URL / 剪贴板） */
+.refpanel-paste-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.refpanel-paste-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
+  background: var(--panel, #fff);
+  color: var(--text, #111);
+}
+.refpanel-paste-add {
+  flex: 0 0 auto;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.3));
+  background: var(--accent, #2f6feb);
+  color: #fff;
+  cursor: pointer;
+}
+.refpanel-paste-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

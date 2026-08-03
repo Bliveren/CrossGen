@@ -52,6 +52,7 @@ export interface GeminiGenerateContentBody {
       image: {
         aspectRatio: GeminiImageParams["aspectRatio"];
         imageSize: "512" | "1K" | "2K" | "4K";
+        imageCount?: number;
       };
     };
     thinkingConfig?: {
@@ -125,6 +126,10 @@ export function buildGeminiGenerateContentBody(
       }
     }
   };
+
+  if (params.outputCount > 1) {
+    generationConfig.responseFormat.image.imageCount = params.outputCount;
+  }
 
   if (!params.thinking) {
     generationConfig.thinkingConfig = { thinkingBudget: 0 };

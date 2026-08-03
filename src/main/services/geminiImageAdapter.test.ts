@@ -144,6 +144,18 @@ describe("Gemini image adapter", () => {
     expect(body.contents[0]?.parts[0]?.text).toContain("prompt");
   });
 
+  it("adds imageCount only when Gemini outputCount is above 1", () => {
+    const single = buildGeminiGenerateContentBody(params(), "prompt");
+    expect(single.generationConfig.responseFormat.image.imageCount).toBeUndefined();
+
+    const multi = buildGeminiGenerateContentBody(params({ outputCount: 4 }), "prompt");
+    expect(multi.generationConfig.responseFormat.image).toMatchObject({
+      aspectRatio: "1:1",
+      imageSize: "1K",
+      imageCount: 4
+    });
+  });
+
   it("calls Gemini generateContent and saves inline image results with text metadata", async () => {
     let requestUrl = "";
     let requestBody: Record<string, unknown> = {};

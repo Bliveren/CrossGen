@@ -1,4 +1,4 @@
-import {
+﻿import {
   app,
   BrowserWindow,
   dialog,
@@ -47,6 +47,7 @@ import type {
   PromptTemplateInput,
   ProviderConfig,
   ProviderConfigInput,
+  QueueRuntimeConfig,
   QueueSnapshot,
   QueueSource,
   ReferencePreflightSummary,
@@ -69,9 +70,12 @@ import {
   defaultStreamingPartialsEnabled,
   getValidationError,
   isOpenAIImageParams,
+  isGeminiImageParams,
   stripTransientPreviewsFromJob,
+  MAX_GPT_IMAGE_INPUTS,
   validateApiKey,
   validateProviderConfigInput,
+  validateQueueRuntimeConfigPatch,
   validateRunJobRequest,
   validateWorkspaceDraftInput
 } from "../shared/validation.js";
@@ -86,6 +90,7 @@ import {
   isPotentialGeneralImageModel,
   normalizeModelId
 } from "../shared/modelCatalog.js";
+import { entryResolutionTier, gptSizeToResolutionTier, isSplitResolutionTier } from "../shared/modelAliasMapping.js";
 import { compareVersions, isAllowedUpdateUrl, parseUpdateManifest, safeUpdateFileName, selectUpdateAsset } from "../shared/updateManifest.js";
 import { resolveDataDirs, resolveUserDataDir } from "../core/dataDirs.js";
 import { createGenerationQueueItem } from "../core/generation.js";
@@ -214,6 +219,7 @@ const LEGACY_USER_DATA_DIR_ENV = "IMAGE2TOOLS_USER_DATA_DIR";
 const PERF_RESULT_PATH_ENV = "CROSSGEN_PERF_RESULT_PATH";
 const RENDERER_PERF_RESULT_PATH_ENV = "CROSSGEN_RENDERER_PERF_RESULT_PATH";
 const THEME_SOURCE_ENV = "CROSSGEN_THEME_SOURCE";
+const OPEN_DEVTOOLS_ENV = "CROSSGEN_OPEN_DEVTOOLS";
 const RENDERER_SCREENSHOT_DIR_ENV = "CROSSGEN_RENDERER_SCREENSHOT_DIR";
 const CLI_SCHEMA_VERSION = 1;
 const DESKTOP_QUEUE_WORKER_INTERVAL_MS = 5000;
@@ -355,7 +361,7 @@ function createWindow(): BrowserWindow {
     const url = process.env[RENDERER_PERF_RESULT_PATH_ENV] ? new URL(devServerURL) : null;
     if (url) url.searchParams.set("crossgenPerf", "1");
     void window.loadURL(url ? url.toString() : devServerURL);
-    if (!process.env[RENDERER_PERF_RESULT_PATH_ENV]) {
+    if (process.env[OPEN_DEVTOOLS_ENV] === "1" && !process.env[RENDERER_PERF_RESULT_PATH_ENV]) {
       window.webContents.openDevTools({ mode: "detach" });
     }
   } else {
@@ -553,6 +559,8 @@ function toPublicConfig(config: StoredProviderConfig): ProviderConfig {
     activeLaunchId: config.activeLaunchId,
     activeModelId: config.activeModelId,
     openAIImageRouting: config.openAIImageRouting,
+    modelAliases: config.modelAliases,
+    modelAliasSplitMode: config.modelAliasSplitMode,
     updatedAt: config.updatedAt
   };
 }
@@ -1174,8 +1182,15 @@ async function selectedFilesToAssets(paths: string[]): Promise<InputAsset[]> {
   return Promise.all(imagePaths.map((filePath) => toInputAsset(filePath, true)));
 }
 
-async function resolveRequestInputs(request: RunJobRequest, imagesDir: string): Promise<{ inputs: InputAsset[]; mask?: InputAsset }> {
-  const inputs = await Promise.all(request.inputPaths.filter(isImagePath).map((filePath) => toInputAsset(filePath, false)));
+export async function resolveRequestInputs(request: RunJobRequest, imagesDir: string): Promise<{ inputs: InputAsset[]; mask?: InputAsset }> {
+  const pathInputs = await Promise.all(request.inputPaths.filter(isImagePath).map((filePath) => toInputAsset(filePath, false)));
+  const dataUrlInputs = await Promise.all(
+    (request.inputDataUrls ?? []).filter((dataUrl) => dataUrl.length > 0).map((dataUrl) => persistInputDataUrl(dataUrl, imagesDir))
+  );
+  const inputs = [...pathInputs, ...dataUrlInputs];
+  if (inputs.length > MAX_GPT_IMAGE_INPUTS) {
+    throw new Error(`输入图片不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。`);
+  }
 
   let mask: InputAsset | undefined;
   if (request.maskPath) {
@@ -1363,6 +1378,21 @@ async function persistMaskDataUrl(dataUrl: string, imagesDir: string): Promise<I
   const ext = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png";
   await ensureDir(imagesDir);
   const fileName = `mask-${Date.now()}-${randomUUID()}.${ext}`;
+  const filePath = path.join(imagesDir, fileName);
+  await fs.writeFile(filePath, Buffer.from(dataUrlToBase64(dataUrl), "base64"));
+  const asset = await toInputAsset(filePath, false);
+  return {
+    ...asset,
+    dataUrl
+  };
+}
+
+export async function persistInputDataUrl(dataUrl: string, imagesDir: string): Promise<InputAsset> {
+  const mimeMatch = /^data:([^;]+);base64,/.exec(dataUrl);
+  const mimeType = mimeMatch?.[1] ?? "image/png";
+  const ext = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png";
+  await ensureDir(imagesDir);
+  const fileName = `ref-${Date.now()}-${randomUUID()}.${ext}`;
   const filePath = path.join(imagesDir, fileName);
   await fs.writeFile(filePath, Buffer.from(dataUrlToBase64(dataUrl), "base64"));
   const asset = await toInputAsset(filePath, false);
@@ -2656,6 +2686,19 @@ async function handleSelectMask(): Promise<InputAsset | null> {
   return toInputAsset(result.filePaths[0], true);
 }
 
+export function selectProviderForRunRequest(state: AppStateFile, request: RunJobRequest): StoredProviderConfig {
+  const provider = request.providerId
+    ? state.providers.find((candidate) => candidate.id === request.providerId)
+    : state.providers.find((candidate) => candidate.id === state.activeProviderId) ?? state.providers[0];
+  if (!provider) {
+    throw new Error("任务对应的 API 配置不存在。");
+  }
+  if (!provider.enabled) {
+    throw new Error("任务对应的 API 配置已停用。");
+  }
+  return provider;
+}
+
 function selectProviderForQueueItem(state: AppStateFile, item: GenerationQueueItem): StoredProviderConfig {
   const provider = state.providers.find((candidate) => candidate.id === item.providerId);
   if (!provider) {
@@ -3036,6 +3079,7 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
     const state = await readState();
     provider = selectProviderForQueueItem(state, item);
     request = validateAgentRunJobRequest(item.request, provider);
+    request = applyModelAliasToRequest(request, provider);
     const adapter = getImageProviderAdapterForRequest(request);
     if (!adapter) {
       throw new Error(unsupportedImageProviderMessage());
@@ -3396,11 +3440,11 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   }
 
   const state = await readState();
-  const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
-  if (!canRunRequestWithConfig(normalizedRequest, activeProvider)) {
+  const provider = selectProviderForRunRequest(state, normalizedRequest);
+  if (!canRunRequestWithConfig(normalizedRequest, provider)) {
     throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
   }
-  getApiKeyForConfigOrThrow(activeProvider);
+  getApiKeyForConfigOrThrow(provider);
   const imagesDir = getImagesDir(state);
   const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir);
   const referencePreflight = buildReferencePreflightOrThrow(inputs, mask);
@@ -3408,7 +3452,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   let job!: GenerationJob;
   let queueItem!: GenerationQueueItem;
   await mutateStateAndQueue((currentState, queue) => {
-    const currentProvider = currentState.providers.find(p => p.id === currentState.activeProviderId) ?? currentState.providers[0];
+    const currentProvider = selectProviderForRunRequest(currentState, normalizedRequest);
     if (!canRunRequestWithConfig(normalizedRequest, currentProvider)) {
       throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
     }
@@ -3527,11 +3571,53 @@ function canRunRequestWithConfig(request: RunJobRequest, config: StoredProviderC
   if (request.params.launchId !== config.activeLaunchId) return false;
 
   const requestedModelId = normalizeModelId(request.params.model);
+  const aliasModelIds = new Set((config.modelAliases ?? []).map((entry) => normalizeModelId(entry.targetModelId)));
+  if (aliasModelIds.has(requestedModelId)) return true;
   return config.discoveredModels.some(
     (model) => model.providerKind === request.params.providerKind && normalizeModelId(model.id) === requestedModelId
   );
 }
 
+
+function applyModelAliasToRequest(request: RunJobRequest, provider: StoredProviderConfig): RunJobRequest {
+  const aliases = provider.modelAliases ?? [];
+  const requestedModelId = normalizeModelId(request.params.model);
+  const splitMode = provider.modelAliasSplitMode === true;
+  const hasModelAliases = aliases.some((entry) => normalizeModelId(entry.targetModelId) === requestedModelId);
+
+  // 拆分档位：Gemini 用分辨率，gpt-image(OpenAI) 用尺寸预设推导
+  const tier = isGeminiImageParams(request.params)
+    ? isSplitResolutionTier(request.params.resolution) ? request.params.resolution : undefined
+    : isOpenAIImageParams(request.params) ? gptSizeToResolutionTier(request.params.size) : undefined;
+
+  if (splitMode && hasModelAliases) {
+    if (!tier) {
+      throw new Error(`拆分模式仅支持 1K/2K/4K，请选择对应分辨率/尺寸。`);
+    }
+    const match = aliases.find((entry) =>
+      normalizeModelId(entry.targetModelId) === requestedModelId && entryResolutionTier(entry) === tier
+    );
+    if (!match) {
+      throw new Error(`未配置 ${tier} 档位的模型映射（拆分模式）。`);
+    }
+    return { ...request, params: { ...request.params, model: match.aliasModelId } };
+  }
+
+  if (aliases.length === 0) return request;
+  const match = aliases.find((entry) => {
+    if (normalizeModelId(entry.targetModelId) !== requestedModelId) return false;
+    if (!tier) return true;
+    return entryResolutionTier(entry) === tier;
+  });
+  if (!match) return request;
+  return {
+    ...request,
+    params: {
+      ...request.params,
+      model: match.aliasModelId
+    }
+  };
+}
 async function handleDownloadAsset(_event: IpcMainInvokeEvent, request: DownloadRequest): Promise<string | null> {
   const state = await readState();
   let sourcePath: string;
@@ -4550,6 +4636,19 @@ async function setQueueRuntimeConfigForCli(patch: QueueRuntimeConfigPatch) {
   return {
     config: normalizeQueueRuntimeConfig(nextState.queueConfig)
   };
+}
+
+export async function handleQueueConfigSet(
+  _event: IpcMainInvokeEvent,
+  patch: unknown
+): Promise<{ config: QueueRuntimeConfig }> {
+  const validation = validateQueueRuntimeConfigPatch(patch);
+  if (!validation.ok) {
+    throw new Error(validation.message ?? "队列并发配置无效。");
+  }
+  const result = await setQueueRuntimeConfigForCli(patch as QueueRuntimeConfigPatch);
+  sendQueueSnapshot(await buildDesktopQueueSnapshot());
+  return result;
 }
 
 function parseProviderConcurrencyAssignments(values: string[]): Record<string, number> {
@@ -5851,7 +5950,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
   }
 }
 
-function registerIpcHandlers(): void {
+export function registerIpcHandlers(): void {
   ipcMain.handle("app:getSnapshot", () => runGalleryOperation(handleGetSnapshot));
   ipcMain.handle("config:save", handleSaveConfig);
   ipcMain.handle("provider:add", handleAddProvider);
@@ -5887,6 +5986,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("job:run", handleRunJob);
   ipcMain.handle("job:cancel", (_event, jobId: string) => handleCancelJob(jobId));
   ipcMain.handle("queue:getSnapshot", handleGetQueueSnapshot);
+  ipcMain.handle("queue:configSet", handleQueueConfigSet);
   ipcMain.handle("queue:cancel", handleCancelQueueItem);
   ipcMain.handle("queue:retry", handleRetryQueueItem);
   ipcMain.handle("asset:download", handleDownloadAsset);

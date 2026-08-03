@@ -1,6 +1,8 @@
 import type React from "react";
+import { useEffect, useId, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, KeyRound, LibraryBig, Loader2, Plus, Radar, Rocket, Save, Wrench, X } from "lucide-react";
 import type { FocusedLaunchId, ProviderConfig, ProviderKind } from "../shared/types";
+import { CATALOG_TARGET_MODEL_OPTIONS, detectResolutionTierFromModelId, isSplitResolutionTier, normalizeModelAlias, type ModelAliasEntry } from "../shared/modelAliasMapping";
 import { DialogShell } from "./DialogShell";
 import type { UiCopy } from "./i18n";
 
@@ -229,6 +231,11 @@ interface ApiConfigDetailProps {
   onSubmit: () => void;
   onDiscover: () => void;
   onDelete: () => void;
+  onPersist?: (aliases: ModelAliasEntry[], splitMode: boolean) => void;
+  modelAliases?: ModelAliasEntry[];
+  onModelAliasesChange?: (aliases: ModelAliasEntry[]) => void;
+  modelAliasSplitMode?: boolean;
+  onModelAliasSplitModeChange?: (value: boolean) => void;
 }
 
 interface AddApiConfigDetailProps {
@@ -300,6 +307,11 @@ interface ApiConfigDialogProps {
   onApiKeyChange: (value: string) => void;
   onBaseURLChange: (value: string) => void;
   onSubmit: () => void;
+  onPersist?: (aliases: ModelAliasEntry[], splitMode: boolean) => void;
+  modelAliases?: ModelAliasEntry[];
+  onModelAliasesChange?: (aliases: ModelAliasEntry[]) => void;
+  modelAliasSplitMode?: boolean;
+  onModelAliasSplitModeChange?: (value: boolean) => void;
 }
 
 export function ApiConfigDialog({
@@ -354,7 +366,12 @@ export function ApiConfigDialog({
   onNameChange,
   onApiKeyChange,
   onBaseURLChange,
-  onSubmit
+  onSubmit,
+  onPersist,
+  modelAliases,
+  onModelAliasesChange,
+  modelAliasSplitMode,
+  onModelAliasSplitModeChange,
 }: ApiConfigDialogProps) {
   const renderCard = (config: ProviderConfig, active: boolean) => (
     <ApiConfigCard
@@ -472,6 +489,11 @@ export function ApiConfigDialog({
               onSubmit={onSubmit}
               onDiscover={() => onDiscoverConfig(selectedConfig)}
               onDelete={() => onDeleteConfig(selectedConfig)}
+              onPersist={onPersist}
+              modelAliases={modelAliases}
+              onModelAliasesChange={onModelAliasesChange}
+            modelAliasSplitMode={modelAliasSplitMode}
+            onModelAliasSplitModeChange={onModelAliasSplitModeChange}
             />
           )}
         </div>
@@ -602,6 +624,185 @@ export function AddApiConfigDetail({
   );
 }
 
+interface ModelAliasMappingSectionProps {
+  copy: UiCopy;
+  aliases?: readonly ModelAliasEntry[];
+  splitMode?: boolean;
+  onSplitModeChange?: (value: boolean) => void;
+  onPersist?: (aliases: ModelAliasEntry[], splitMode: boolean) => void;
+  onChange?: (aliases: ModelAliasEntry[]) => void;
+  disabled?: boolean;
+}
+
+interface ModelAliasDraftRow {
+  aliasModelId: string;
+  tier: "1K" | "2K" | "4K";
+  targetModelId: string;
+}
+
+
+function aliasEntryTier(entry: ModelAliasEntry): "1K" | "2K" | "4K" {
+  if (entry.tier === "1K" || entry.tier === "2K" || entry.tier === "4K") return entry.tier;
+  const detected = detectResolutionTierFromModelId(entry.aliasModelId);
+  return detected === "1K" || detected === "2K" || detected === "4K" ? detected : "1K";
+}
+
+export function ModelAliasMappingSection({
+  copy,
+  aliases,
+  onChange,
+  disabled,
+  splitMode,
+  onSplitModeChange,
+  onPersist
+}: ModelAliasMappingSectionProps) {
+  const bodyId = useId();
+  const [expanded, setExpanded] = useState(() => (aliases?.length ?? 0) > 0);
+  const [draft, setDraft] = useState<ModelAliasDraftRow[]>(() =>
+    (aliases ?? []).map((entry) => ({ aliasModelId: entry.aliasModelId, targetModelId: entry.targetModelId, tier: aliasEntryTier(entry) }))
+  );
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    (aliases ?? []).map((entry) => ({ aliasModelId: entry.aliasModelId, targetModelId: entry.targetModelId, tier: aliasEntryTier(entry) }))
+    setSaved(false);
+  }, [aliases]);
+
+  const updateRow = (index: number, patch: Partial<ModelAliasDraftRow>) => {
+    setDraft((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+    setSaved(false);
+  };
+
+  const removeRow = (index: number) => {
+    setDraft((rows) => rows.filter((_, i) => i !== index));
+    setSaved(false);
+  };
+
+  const addRow = () => {
+    setDraft((rows) => [...rows, { aliasModelId: "", targetModelId: CATALOG_TARGET_MODEL_OPTIONS[0] ?? "", tier: "1K" }]);
+    setSaved(false);
+  };
+
+  const handleSave = () => {
+    if (!onChange) return;
+    const normalized = draft
+      .map((row) => normalizeModelAlias({ aliasModelId: row.aliasModelId, targetModelId: row.targetModelId, ...(row.tier ? { tier: row.tier } : {}) }))
+      .filter((entry): entry is ModelAliasEntry => entry !== null);
+    onChange(normalized);
+    onPersist?.(normalized, splitMode === true);
+    setSaved(true);
+  };
+
+  return (
+    <section className="api-model-section" aria-label={copy.modelAliasTitle}>
+      <button
+        type="button"
+        className="section-toggle"
+        onClick={() => setExpanded((current) => !current)}
+        aria-expanded={expanded}
+        aria-controls={bodyId}
+      >
+        <span className="section-toggle-label">
+          <LibraryBig size={16} />
+          <span>{copy.modelAliasTitle}</span>
+        </span>
+        <span className="section-toggle-state">
+          {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+        </span>
+      </button>
+      <p className="api-model-summary">{copy.modelAliasDescription}</p>
+      {expanded && (
+        <div id={bodyId} className="model-alias-body">
+          {draft.length === 0 ? (
+            <p className="api-model-summary">{copy.modelAliasEmpty}</p>
+          ) : (
+            <div className="model-alias-list">
+              {draft.map((row, index) => (
+                <div
+                  className="model-alias-row"
+                  key={index}
+                  style={{ display: "grid", gridTemplateColumns: splitMode ? "minmax(0, 1fr) auto minmax(0, 1fr) auto" : "minmax(0, 1fr) minmax(0, 1fr) auto", gap: "6px", alignItems: "center" }}
+                >
+                  <input
+                    value={row.aliasModelId}
+                    onChange={(event) => updateRow(index, { aliasModelId: event.target.value })}
+                    placeholder={copy.modelAliasAliasPlaceholder}
+                    aria-label={copy.modelAliasAliasPlaceholder}
+                    disabled={disabled}
+                  />
+                  {splitMode && (
+                    <label>
+                      <span className="model-alias-target-label">{copy.modelAliasTierLabel}</span>
+                      <select
+                        value={row.tier}
+                        onChange={(event) => updateRow(index, { tier: event.target.value as "1K" | "2K" | "4K" })}
+                        disabled={disabled}
+                      >
+                        {(["1K", "2K", "4K"] as const).map((tier) => (
+                          <option key={tier} value={tier}>{tier}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <label>
+                    <span className="model-alias-target-label">{copy.modelAliasTargetLabel}</span>
+                    <select
+                      value={row.targetModelId}
+                      onChange={(event) => updateRow(index, { targetModelId: event.target.value })}
+                      disabled={disabled}
+                    >
+                      {row.targetModelId === "" && (
+                        <option value="" disabled>
+                          {copy.modelAliasTargetLabel}
+                        </option>
+                      )}
+                      {CATALOG_TARGET_MODEL_OPTIONS.map((modelId) => (
+                        <option key={modelId} value={modelId}>
+                          {modelId}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    className="icon-button ghost danger"
+                    onClick={() => removeRow(index)}
+                    disabled={disabled}
+                    aria-label={copy.modelAliasRemove}
+                    data-tooltip={copy.modelAliasRemove}
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <label className="model-alias-split-toggle" title={copy.modelAliasResolutionHint}>
+            <input
+              type="checkbox"
+              checked={splitMode === true}
+              onChange={(event) => onSplitModeChange?.(event.target.checked)}
+              disabled={disabled || !onSplitModeChange}
+            />
+            <span className="model-alias-split-toggle-label">{copy.modelAliasSplitMode}</span>
+            <small className="model-alias-split-toggle-hint">{splitMode ? copy.modelAliasSplitModeHintOn : copy.modelAliasResolutionHint}</small>
+          </label>
+          <div className="button-row">
+            <button type="button" className="secondary" onClick={addRow} disabled={disabled}>
+              <Plus size={15} />
+              {copy.modelAliasAdd}
+            </button>
+            <button type="button" className={saved ? "saved-action" : undefined} onClick={handleSave} disabled={disabled || !onChange}>
+              {saved ? <CheckCircle2 size={15} /> : <Save size={15} />}
+              {saved ? copy.modelAliasSaved : copy.save}
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ApiConfigDetail({
   copy,
   selectedConfig,
@@ -631,7 +832,12 @@ export function ApiConfigDetail({
   onBaseURLChange,
   onSubmit,
   onDiscover,
-  onDelete
+  onDelete,
+  onPersist,
+  modelAliases,
+  onModelAliasesChange,
+  modelAliasSplitMode,
+  onModelAliasSplitModeChange,
 }: ApiConfigDetailProps) {
   return (
     <form
@@ -727,6 +933,15 @@ export function ApiConfigDetail({
           </div>
         ) : null}
       </section>
+      <ModelAliasMappingSection
+        copy={copy}
+        aliases={modelAliases}
+        onChange={onModelAliasesChange}
+        splitMode={modelAliasSplitMode}
+        onSplitModeChange={onModelAliasSplitModeChange}
+        onPersist={onPersist}
+        disabled={saving}
+      />
     </form>
   );
 }
