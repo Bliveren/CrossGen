@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-07-30T07:08:03.000Z",
+  "lastUpdated": "2026-08-04T03:27:56.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
       "title": "Product-owner exact-package acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The product owner installs and tests the exact v0.3.2 release-candidate package before publication.",
         "Testing covers launch, API configuration, text-to-image, image-to-image, mask/guided edit, queue visibility, cancel/retry, restart recovery, reference preflight, Gallery/History reuse, CLI, and MCP.",
@@ -16,18 +16,36 @@
         "GitHub Release publication, Latest marking, and update manifest promotion happen only after this approval is recorded."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-08-04T03:27:56.000Z",
+        "commit": "0411e396e99a057c504d6b40e240b57eead00d2d",
+        "environment": "macOS local product-owner acceptance on the exact signed and notarized v0.3.2 candidate package. The release shell loaded .env.local for signing and notarization credentials; secrets are not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
+          "pnpm verify:release:mac",
+          "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:cli-mcp-smoke",
+          "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:agent-integration-smoke"
+        ],
         "references": [
           {
             "label": "v0.3.2 development plan",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.2-plan.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending exact-package product-owner testing and explicit release approval."
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
+            "public": false,
+            "description": "Signed and notarized v0.3.2 macOS arm64 DMG tested for product-owner acceptance. SHA256 969d0ac90626a441f3d8964d6c42ec88bf60bf2f888ad21489a54eb3697acf42, size 103973534 bytes."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
+            "public": false,
+            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP tested for product-owner acceptance. SHA256 0b84253f8ce6f7c30a99345f24a3755ad94ecb1c9d1c42138470924c0ef36e22, size 99672412 bytes."
+          }
+        ],
+        "summary": "Product owner approval recorded after exact-package testing of the signed and notarized v0.3.2 macOS candidate. Approval wording: '实测可以标注通过，继续推进 mac 版本 release'."
       }
     },
     {
@@ -119,7 +137,7 @@
       "id": "macos-signed",
       "title": "Developer ID signed macOS release package",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "macOS artifacts are built from the exact v0.3.2 release-candidate commit.",
         "Developer ID signing is performed without exposing secret values.",
@@ -128,11 +146,12 @@
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:59:20.000Z",
-        "commit": "ff5b2b250e1e91d3a7323a79a8ca9de71830d64d",
-        "environment": "macOS local signing-readiness preflight. One valid Developer ID Application code signing identity is available in the local keychain, but the release shell does not currently export CSC_NAME. No signing, packaging, or notarization was attempted.",
+        "verifiedAt": "2026-08-04T03:27:56.000Z",
+        "commit": "0411e396e99a057c504d6b40e240b57eead00d2d",
+        "environment": "macOS local release shell with .env.local loaded. Developer ID signing identity and notarization credentials were available in the shell for the exact v0.3.2 macOS candidate.",
         "commands": [
-          "pnpm verify:signing-ready"
+          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
+          "pnpm verify:release:mac"
         ],
         "references": [
           {
@@ -140,15 +159,22 @@
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.2 release-candidate macOS signing evidence. Signing readiness preflight on commit ff5b2b250e1e91d3a7323a79a8ca9de71830d64d found one valid Developer ID Application identity, but CSC_NAME was unset in the current release shell, so package:mac:signed cannot run yet."
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
+            "public": false,
+            "description": "Developer ID signed macOS arm64 release candidate built from commit 0411e396e99a057c504d6b40e240b57eead00d2d."
+          }
+        ],
+        "summary": "Developer ID signing passed for the exact v0.3.2 macOS candidate. The signed app extracted from the DMG passed macOS release verification."
       }
     },
     {
       "id": "macos-notarized",
       "title": "Apple notarized macOS release package",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Apple notarization is submitted for the exact v0.3.2 macOS candidate artifact.",
         "Notarization succeeds without exposing Apple credentials.",
@@ -157,11 +183,12 @@
         "The evidence records the exact artifact identity, SHA256, and validation command results."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:59:20.000Z",
-        "commit": "ff5b2b250e1e91d3a7323a79a8ca9de71830d64d",
-        "environment": "macOS local signing-readiness preflight. Apple notarization credentials were not exported in the current release shell. No notarization submission was attempted.",
+        "verifiedAt": "2026-08-04T03:27:56.000Z",
+        "commit": "0411e396e99a057c504d6b40e240b57eead00d2d",
+        "environment": "macOS local release shell with .env.local loaded. Apple notarization credentials were available in the shell for the exact v0.3.2 macOS candidate.",
         "commands": [
-          "pnpm verify:signing-ready"
+          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
+          "pnpm verify:release:mac"
         ],
         "references": [
           {
@@ -169,8 +196,15 @@
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.2 release-candidate notarization evidence. Signing readiness preflight on commit ff5b2b250e1e91d3a7323a79a8ca9de71830d64d found APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID unset in the current release shell."
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
+            "public": false,
+            "description": "Apple notarization succeeded for the signed v0.3.2 macOS arm64 DMG built from commit 0411e396e99a057c504d6b40e240b57eead00d2d."
+          }
+        ],
+        "summary": "Apple notarization succeeded for the exact v0.3.2 macOS candidate. The notarized DMG also passed macOS release verification."
       }
     },
     {
@@ -300,7 +334,7 @@
       "id": "cli-mcp-packaged-smoke",
       "title": "Packaged CLI and MCP smoke",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Packaged CLI launcher smoke runs against the exact v0.3.2 candidate package.",
         "MCP direct app executable smoke runs against the exact v0.3.2 candidate package.",
@@ -309,9 +343,9 @@
         "Source-tree CLI/MCP smoke is not used as a substitute for packaged smoke."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": "Exact v0.3.2 RC package smoke remains pending. The historical local macOS pre-RC package was built from 200ea00fc43956482b25c90af29a15ed75081c77 and is superseded by 830ad09b51a1ad749450dfb96e7bca2775bd9fb4.",
+        "verifiedAt": "2026-08-04T03:27:56.000Z",
+        "commit": "0411e396e99a057c504d6b40e240b57eead00d2d",
+        "environment": "macOS local packaged smoke against the exact v0.3.2 candidate app executable extracted from the signed and notarized DMG built on commit 0411e396e99a057c504d6b40e240b57eead00d2d.",
         "commands": [
           "pnpm package:mac",
           "codesign --verify --deep --strict release/mac-arm64/CrossGen.app",
@@ -334,16 +368,16 @@
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
             "public": false,
-            "description": "Superseded historical local pre-RC macOS arm64 DMG from 200ea00fc43956482b25c90af29a15ed75081c77. It must not be reused for v0.3.2-rc.1 after 830ad09b51a1ad749450dfb96e7bca2775bd9fb4."
+            "description": "Packaged CLI and MCP smoke target for the exact v0.3.2 macOS candidate built from commit 0411e396e99a057c504d6b40e240b57eead00d2d."
           },
           {
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-mac-arm64.zip",
             "public": false,
-            "description": "Superseded historical local pre-RC macOS arm64 ZIP from 200ea00fc43956482b25c90af29a15ed75081c77. It must not be reused for v0.3.2-rc.1 after 830ad09b51a1ad749450dfb96e7bca2775bd9fb4."
+            "description": "Packaged CLI and MCP smoke target for the exact v0.3.2 macOS candidate built from commit 0411e396e99a057c504d6b40e240b57eead00d2d."
           }
         ],
-        "summary": "Pending exact v0.3.2 release-candidate package smoke. The earlier local non-notarized macOS pre-RC package passed packaged CLI/MCP smoke, but it is superseded by later source changes and cannot be reused as RC evidence."
+        "summary": "Packaged CLI launcher and MCP executable smoke passed against the exact notarized v0.3.2 macOS candidate. The app executable also reported version 0.3.2."
       }
     },
     {
@@ -359,11 +393,11 @@
         "No CLI/MCP productization UI is required for v0.3.2."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:24:15.000Z",
-        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
-        "environment": "macOS local source-tree smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
+        "verifiedAt": "2026-08-04T03:27:56.000Z",
+        "commit": "0411e396e99a057c504d6b40e240b57eead00d2d",
+        "environment": "macOS local packaged smoke against the exact v0.3.2 candidate app executable built from commit 0411e396e99a057c504d6b40e240b57eead00d2d.",
         "commands": [
-          "pnpm verify:agent-integration-smoke"
+          "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:agent-integration-smoke"
         ],
         "references": [
           {
@@ -376,10 +410,10 @@
             "kind": "local-command-output",
             "path": "terminal transcript: pnpm verify:agent-integration-smoke",
             "public": false,
-            "description": "Agent integration smoke passed after v0.3.2 blocker hardening."
+            "description": "Agent integration smoke passed against the exact macOS candidate package on commit 0411e396e99a057c504d6b40e240b57eead00d2d."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 blocker hardening commit. Agent integration remains backward-compatible with additive queue/status fields."
+        "summary": "Agent integration smoke passed against the exact notarized v0.3.2 macOS candidate package."
       }
     },
     {
