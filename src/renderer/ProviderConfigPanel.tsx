@@ -404,6 +404,7 @@ export function ApiConfigDialog({
               <small>{copy.apiAccessEditHint}</small>
             </div>
             {renderCard(activeConfig, true)}
+            <div className="api-config-active-divider" aria-hidden="true" />
             <div className="api-config-card-list" aria-label={copy.apiAccessList}>
               {inactiveConfigs.map((config) => renderCard(config, false))}
               {addFormOpen && (

@@ -92,6 +92,7 @@ interface HistoryItemCardProps {
   downloadButtonLabel: string;
   onToggleSelection: (checked: boolean) => void;
   onHoverOpen: () => void;
+  onHoverClose: () => void;
   onOpen: () => void;
   onImageContextMenu: (event: React.MouseEvent<HTMLElement>) => void;
   onStartEditName: () => void;
@@ -425,6 +426,7 @@ export function HistoryItemCard({
   downloadButtonLabel,
   onToggleSelection,
   onHoverOpen,
+  onHoverClose,
   onOpen,
   onImageContextMenu,
   onStartEditName,
@@ -458,7 +460,13 @@ export function HistoryItemCard({
       ].filter(Boolean).join(" ")}
       data-status={job.status}
       onMouseEnter={onHoverOpen}
+      onMouseLeave={onHoverClose}
       onFocus={onHoverOpen}
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+        if (nextTarget && event.currentTarget.contains(nextTarget)) return;
+        onHoverClose();
+      }}
     >
       {batchMode && (
         <input

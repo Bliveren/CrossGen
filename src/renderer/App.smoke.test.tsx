@@ -78,6 +78,23 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector<HTMLButtonElement>(".prompt-copy-button")?.dataset.tooltip).toBe("Copy prompt");
   });
 
+  it("cross-fades mode-specific controls when switching between text and image modes", async () => {
+    await renderApp(snapshot());
+
+    const modeStage = () => document.querySelector<HTMLElement>(".mode-content-stage")!;
+
+    expect(modeStage().dataset.mode).toBe("text2img");
+    expect(modeStage().dataset.referenceTools).toBe("false");
+    expect(modeStage().querySelector(".parameter-config-bar")).not.toBeNull();
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+
+    expect(modeStage().dataset.mode).toBe("img2img");
+    expect(modeStage().dataset.referenceTools).toBe("true");
+    expect(modeStage().querySelector(".reference-grid")).not.toBeNull();
+    expect(modeStage().querySelector(".mode-content-pane.is-entering")).not.toBeNull();
+  });
+
   it("keeps diagnostics and tag popovers layered above rail paging and actions", () => {
     const css = readFileSync("src/renderer/styles.css", "utf8");
 
@@ -225,7 +242,7 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
-  it("renders queue snapshot counts and failed task diagnostics", async () => {
+  it("renders active queue status in the left sidebar without a duplicate details panel", async () => {
     const failedTask = queueTask({
       queueId: "queue-failed",
       historyJobId: "history-failed",
@@ -275,47 +292,26 @@ describe("renderer multi-model smoke", () => {
     );
     await flushAsync();
 
-    expect(document.body.textContent).toContain("1 running · 1 queued · 1 need attention");
-    await click(document.querySelector<HTMLButtonElement>(".queue-widget-summary")!);
-
+    const queueWidget = document.querySelector<HTMLElement>(".sidebar-queue-widget")!;
+    expect(queueWidget).not.toBeNull();
+    expect(queueWidget.textContent).toContain("1 running · 1 queued · 1 need attention");
     expect(document.body.textContent).toContain("Running prompt");
-    expect(document.body.textContent).toContain("Queued prompt");
-    expect(document.body.textContent).toContain("Failed queue prompt");
-
-    const failedCard = document.querySelector<HTMLElement>('.queue-task-card[data-status="failed"]')!;
-    await click(failedCard.querySelector<HTMLButtonElement>('button[aria-label="Details"]')!);
-
-    expect(document.body.textContent).toContain("Task diagnostic");
-    expect(document.body.textContent).toContain("provider_empty_output");
-    expect(document.body.textContent).toContain("chat");
-    expect(document.body.textContent).toContain("data null");
-    expect(document.body.textContent).toContain("Switch route or inspect provider compatibility.");
-    expect(document.body.textContent).toContain("Reference preflight");
-    expect(document.body.textContent).toContain("large-reference.png");
-    expect(document.body.textContent).toContain("8000x6000");
-    expect(document.body.textContent).toContain("Downsampled request copy");
-    expect(document.body.textContent).toContain("Alpha: has alpha");
+    expect(queueWidget.textContent).not.toContain("Failed queue prompt");
+    expect(document.querySelector(".queue-panel")).toBeNull();
+    expect(document.querySelector(".queue-task-card")).toBeNull();
   });
 
-  it("requires explicit confirmation before retrying queue tasks and can cancel active items", async () => {
-    const failedTask = queueTask({ queueId: "queue-retry", status: "failed", promptPreview: "Retry prompt", retryable: true, chargedRetryRisk: true, canCancel: false });
-    const runningTask = queueTask({ queueId: "queue-cancel", status: "running", promptPreview: "Cancel prompt", canCancel: true });
-    const bridge = await renderApp(snapshot(), queueSnapshot({ running: [runningTask], failed: [failedTask] }));
+  it("hides the sidebar queue status when no queue tasks are active", async () => {
+    await renderApp(
+      snapshot(),
+      queueSnapshot({
+        failed: [queueTask({ queueId: "queue-failed", status: "failed", promptPreview: "Failed prompt" })],
+        succeededRecent: [queueTask({ queueId: "queue-done", status: "succeeded", promptPreview: "Done prompt" })]
+      })
+    );
     await flushAsync();
-    await click(document.querySelector<HTMLButtonElement>(".queue-widget-summary")!);
 
-    const runningCard = [...document.querySelectorAll<HTMLElement>(".queue-task-card")].find((item) => item.textContent?.includes("Cancel prompt"))!;
-    await click(runningCard.querySelector<HTMLButtonElement>('button[aria-label="Cancel task"]')!);
-    expect(bridge.cancelQueueItem).toHaveBeenCalledWith("queue-cancel");
-
-    const failedCard = [...document.querySelectorAll<HTMLElement>(".queue-task-card")].find((item) => item.textContent?.includes("Retry prompt"))!;
-    await click(failedCard.querySelector<HTMLButtonElement>('button[aria-label="Retry"]')!);
-
-    expect(document.body.textContent).toContain("Retrying may submit another paid provider request.");
-    expect(bridge.retryQueueItem).not.toHaveBeenCalled();
-
-    await click(buttonByText("Retry task", ".confirm-dialog button"));
-    expect(bridge.retryQueueItem).toHaveBeenCalledWith("queue-retry");
+    expect(document.querySelector(".sidebar-queue-widget")).toBeNull();
   });
 
   it("surfaces History source, duration, failed details, interrupted guidance, and retry confirmation", async () => {
@@ -854,6 +850,33 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.switchProvider).toHaveBeenCalledWith("gemini-access");
     expect(launchButton("GPT Image 2").disabled).toBe(true);
     expect(launchButton("Nano Banana 3").disabled).toBe(false);
+  });
+
+  it("highlights the API config currently being edited separately from the active config", async () => {
+    const openaiConfig = providerConfig({ id: "openai-access", name: "OpenAI access" });
+    const geminiConfig = providerConfig({
+      id: "gemini-access",
+      kind: "gemini",
+      name: "Gemini access",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta"
+    });
+    await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
+
+    await openSavedApiAccess();
+    expect(document.querySelector(".api-config-active-divider")).not.toBeNull();
+
+    const activeCard = apiConfigCardByText("OpenAI access");
+    const inactiveCard = apiConfigCardByText("Gemini access");
+    expect(activeCard.classList.contains("active")).toBe(true);
+    expect(activeCard.classList.contains("selected")).toBe(true);
+    expect(inactiveCard.classList.contains("selected")).toBe(false);
+
+    await click(apiConfigCardMainByText("Gemini access"));
+
+    expect(activeCard.classList.contains("active")).toBe(true);
+    expect(activeCard.classList.contains("selected")).toBe(false);
+    expect(inactiveCard.classList.contains("active")).toBe(false);
+    expect(inactiveCard.classList.contains("selected")).toBe(true);
   });
 
   it("discovers models from a saved API config card and shows the model list in details", async () => {
@@ -1414,7 +1437,7 @@ describe("renderer multi-model smoke", () => {
     expect(sourceChips).toEqual(["MCP", "CLI"]);
   });
 
-  it("keeps a History card expanded until another card is hovered or the user clicks elsewhere", async () => {
+  it("expands History card actions only while the card is hovered", async () => {
     const first = geminiJob(0, { outputs: [imageAsset("history-hover-a.png")] });
     const second = geminiJob(1, { outputs: [imageAsset("history-hover-b.png", "job_gemini_1")] });
     await renderApp(snapshot({ history: [first, second] }));
@@ -1426,13 +1449,13 @@ describe("renderer multi-model smoke", () => {
     expect(cards[0]!.classList.contains("hover-open")).toBe(true);
 
     await pointer(cards[0]!, "mouseout");
-    expect(cards[0]!.classList.contains("hover-open")).toBe(true);
+    expect(cards[0]!.classList.contains("hover-open")).toBe(false);
 
     await pointer(cards[1]!, "mouseover");
     expect(cards[0]!.classList.contains("hover-open")).toBe(false);
     expect(cards[1]!.classList.contains("hover-open")).toBe(true);
 
-    await pointer(document.body, "pointerdown");
+    await pointer(cards[1]!, "mouseout");
     expect(cards[1]!.classList.contains("hover-open")).toBe(false);
   });
 

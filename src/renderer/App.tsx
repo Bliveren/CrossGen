@@ -230,6 +230,89 @@ function PerfProfiler({ id, children }: { id: string; children: ReactNode }) {
   );
 }
 
+const MODE_CONTENT_TRANSITION_MS = 180;
+
+interface ModeContentPane {
+  key: string;
+  mode: TabMode;
+  hasReferenceTools: boolean;
+  children: ReactNode;
+}
+
+function ModeContentTransition({
+  transitionKey,
+  mode,
+  hasReferenceTools,
+  children
+}: {
+  transitionKey: string;
+  mode: TabMode;
+  hasReferenceTools: boolean;
+  children: ReactNode;
+}) {
+  const previousPaneRef = useRef<ModeContentPane>({
+    key: transitionKey,
+    mode,
+    hasReferenceTools,
+    children
+  });
+  const removalTimersRef = useRef<number[]>([]);
+  const [exitingPanes, setExitingPanes] = useState<ModeContentPane[]>([]);
+  const currentPane: ModeContentPane = {
+    key: transitionKey,
+    mode,
+    hasReferenceTools,
+    children
+  };
+
+  useEffect(() => {
+    const previousPane = previousPaneRef.current;
+    if (previousPane.key === transitionKey) return;
+
+    setExitingPanes((panes) => [...panes.filter((pane) => pane.key !== previousPane.key), previousPane].slice(-2));
+    const timer = window.setTimeout(() => {
+      setExitingPanes((panes) => panes.filter((pane) => pane.key !== previousPane.key));
+      removalTimersRef.current = removalTimersRef.current.filter((item) => item !== timer);
+    }, MODE_CONTENT_TRANSITION_MS);
+    removalTimersRef.current.push(timer);
+  }, [transitionKey]);
+
+  useEffect(() => {
+    previousPaneRef.current = currentPane;
+  });
+
+  useEffect(
+    () => () => {
+      removalTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      removalTimersRef.current = [];
+    },
+    []
+  );
+
+  const renderPane = (pane: ModeContentPane, state: "entering" | "exiting") => (
+    <div
+      key={`${state}:${pane.key}`}
+      className={`mode-content-pane is-${state}`}
+      data-mode={pane.mode}
+      data-reference-tools={pane.hasReferenceTools ? "true" : "false"}
+      aria-hidden={state === "exiting" ? "true" : undefined}
+    >
+      {pane.children}
+    </div>
+  );
+
+  return (
+    <div
+      className="mode-content-stage"
+      data-mode={mode}
+      data-reference-tools={hasReferenceTools ? "true" : "false"}
+    >
+      {renderPane(currentPane, "entering")}
+      {exitingPanes.filter((pane) => pane.key !== transitionKey).map((pane) => renderPane(pane, "exiting"))}
+    </div>
+  );
+}
+
 const StableGalleryRailPanel = memo(
   function StableGalleryRailPanel({ children }: { dependencies: readonly unknown[]; children: ReactNode }) {
     return <>{children}</>;
@@ -560,21 +643,17 @@ function ReferencePreflightDetails({ copy, items }: { copy: UiCopy; items?: Refe
   );
 }
 
-function visibleQueueTasks(snapshot: QueueSnapshot): QueueTaskSummary[] {
+function activeQueueTasks(snapshot: QueueSnapshot): QueueTaskSummary[] {
   const tasks = [
     ...snapshot.running,
-    ...snapshot.queued,
-    ...snapshot.failed,
-    ...snapshot.interrupted,
-    ...snapshot.cancelled,
-    ...snapshot.recentJobs
+    ...snapshot.queued
   ];
   const seen = new Set<string>();
   return tasks.filter((task) => {
     if (seen.has(task.queueId)) return false;
     seen.add(task.queueId);
-    return task.status !== "succeeded";
-  }).slice(0, 8);
+    return task.status === "running" || task.status === "queued";
+  }).slice(0, 3);
 }
 
 function findActiveGenerationTask(snapshot: QueueSnapshot, runningQueueId: string | null, runningJobId: string | null): QueueTaskSummary | undefined {
@@ -586,30 +665,21 @@ function findActiveGenerationTask(snapshot: QueueSnapshot, runningQueueId: strin
 
 function QueueStatusPanel({
   copy,
-  snapshot,
-  expanded,
-  formatDurationLabel,
-  onToggle,
-  onCancel,
-  onRetry,
-  onDetails
+  snapshot
 }: {
   copy: UiCopy;
   snapshot: QueueSnapshot;
-  expanded: boolean;
-  formatDurationLabel: (ms?: number) => string;
-  onToggle: () => void;
-  onCancel: (task: QueueTaskSummary) => void;
-  onRetry: (task: QueueTaskSummary) => void;
-  onDetails: (task: QueueTaskSummary) => void;
 }) {
-  const tasks = visibleQueueTasks(snapshot);
+  const tasks = activeQueueTasks(snapshot);
+  if (tasks.length === 0) return null;
+
+  const primaryTask = tasks[0];
   const needsAttention = snapshot.counts.failed + snapshot.counts.interrupted > 0;
   return (
-    <section className="queue-widget" data-expanded={expanded ? "true" : "false"} data-attention={needsAttention ? "true" : "false"} aria-label={copy.queue.title}>
-      <button type="button" className="queue-widget-summary" onClick={onToggle} aria-expanded={expanded} aria-label={expanded ? copy.queue.closePanel : copy.queue.openPanel}>
+    <section className="queue-widget sidebar-queue-widget" data-attention={needsAttention ? "true" : "false"} aria-label={copy.queue.title} role="status">
+      <div className="queue-widget-summary">
         <span className="queue-widget-icon">
-          {snapshot.counts.running > 0 ? <Loader2 className="spin" size={16} /> : needsAttention ? <AlertTriangle size={16} /> : <List size={16} />}
+          {snapshot.counts.running > 0 ? <Loader2 className="spin" size={16} /> : <List size={16} />}
         </span>
         <span className="queue-widget-title">
           <strong>{copy.queue.title}</strong>
@@ -619,56 +689,12 @@ function QueueStatusPanel({
           <small>{copy.queue.concurrency(snapshot.concurrency.runningGlobal, snapshot.concurrency.maxGlobal)}</small>
           <small>{copy.queue.workers(snapshot.workers.online, snapshot.workers.total)}</small>
         </span>
-      </button>
-      {expanded && (
-        <div className="queue-panel">
-          <div className="queue-panel-header">
-            <strong>{copy.queue.subtitle}</strong>
-            <span>{copy.queue.workers(snapshot.workers.online, snapshot.workers.total)}</span>
-          </div>
-          {tasks.length === 0 ? (
-            <p className="queue-empty">{copy.queue.empty}</p>
-          ) : (
-            <div className="queue-task-list">
-              {tasks.map((task) => (
-                <article key={task.queueId} className="queue-task-card" data-status={task.status}>
-                  <div className="queue-task-main">
-                    <span className="queue-task-status">{queueStatusLabel(copy, task)}</span>
-                    <strong>{task.promptPreview || task.queueId}</strong>
-                    <small>{queueStageLabel(copy, task)} · {copy.queue.attempt(task.attemptIndex, task.maxAttempts)} · {copy.queue.elapsed(formatDurationLabel(task.elapsedMs))}</small>
-                  </div>
-                  <div className="queue-task-side">
-                    <span>{queueSourceLabel(copy, task)}</span>
-                    <span>{task.inputCount}{task.hasMask ? ` + ${copy.mask}` : ""}</span>
-                  </div>
-                  <div className="queue-task-actions">
-                    <button type="button" className="icon-button" onClick={() => onDetails(task)} aria-label={copy.queue.details} data-tooltip={copy.queue.details}>
-                      <Info size={14} />
-                    </button>
-                    {task.canCancel && (
-                      <button
-                        type="button"
-                        className="icon-button"
-                        onClick={() => onCancel(task)}
-                        disabled={task.cancelRequested}
-                        aria-label={task.cancelRequested ? copy.queue.cancelRequested : copy.queue.cancel}
-                        data-tooltip={task.cancelRequested ? copy.queue.cancelRequested : copy.queue.cancel}
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                    {task.retryable && (
-                      <button type="button" className="icon-button" onClick={() => onRetry(task)} aria-label={copy.queue.retry} data-tooltip={copy.queue.retry}>
-                        <RefreshCw size={14} />
-                      </button>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      </div>
+      <div className="queue-widget-active-task" data-status={primaryTask.status}>
+        <span>{queueStatusLabel(copy, primaryTask)}</span>
+        <strong>{primaryTask.promptPreview || primaryTask.queueId}</strong>
+        <small>{queueStageLabel(copy, primaryTask)} · {copy.queue.attempt(primaryTask.attemptIndex, primaryTask.maxAttempts)}</small>
+      </div>
     </section>
   );
 }
@@ -1222,7 +1248,6 @@ export function App() {
   const [runningJobId, setRunningJobId] = useState<string | null>(null);
   const [runningQueueId, setRunningQueueId] = useState<string | null>(null);
   const [queueSnapshot, setQueueSnapshot] = useState<QueueSnapshot>(fallbackQueueSnapshot);
-  const [isQueuePanelOpen, setIsQueuePanelOpen] = useState(false);
   const [queueDiagnosticTask, setQueueDiagnosticTask] = useState<QueueTaskSummary | null>(null);
   const [historyDiagnosticJob, setHistoryDiagnosticJob] = useState<GenerationJob | null>(null);
   const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
@@ -2005,19 +2030,6 @@ export function App() {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [isTagManagerOpen]);
-
-  useEffect(() => {
-    if (!expandedHistoryCardId) return undefined;
-
-    const closeExpandedHistoryCard = (event: Event) => {
-      const target = event.target instanceof Element ? event.target : null;
-      if (target?.closest(".history-item")) return;
-      setExpandedHistoryCardId(null);
-    };
-
-    window.addEventListener("pointerdown", closeExpandedHistoryCard, true);
-    return () => window.removeEventListener("pointerdown", closeExpandedHistoryCard, true);
-  }, [expandedHistoryCardId]);
 
   useEffect(() => {
     const updateViewportWidth = () => setViewportWidth(window.innerWidth);
@@ -3987,7 +3999,6 @@ export function App() {
       onConfirm: async () => {
         const next = await bridge.retryQueueItem(task.queueId);
         setQueueSnapshot(next);
-        setIsQueuePanelOpen(true);
       }
     });
   }
@@ -6295,6 +6306,11 @@ export function App() {
           <span>{notice.text}</span>
         </section>
 
+        <QueueStatusPanel
+          copy={copy}
+          snapshot={queueSnapshot}
+        />
+
         <section className="sidebar-utility-bar sidebar-bottom" ref={sidebarUtilityBarRef}>
           <div className="sidebar-utility-left">
             <button type="button" className="language-pill" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
@@ -6570,126 +6586,120 @@ export function App() {
                 </div>
               </div>
               {validationError && <p className="inline-check error">{validationError}</p>}
-              <QueueStatusPanel
-                copy={copy}
-                snapshot={queueSnapshot}
-                expanded={isQueuePanelOpen}
-                formatDurationLabel={formatDuration}
-                onToggle={() => setIsQueuePanelOpen((current) => !current)}
-                onCancel={(task) => void cancelQueueTask(task)}
-                onRetry={requestQueueRetry}
-                onDetails={setQueueDiagnosticTask}
-              />
             </div>
 
-            {!showReferenceTools && (
-              <ParameterConfigLauncher
-                copy={copy}
-                quickControls={parameterQuickControls}
-                onOpen={() => setIsParameterDialogOpen(true)}
-              />
-            )}
-
-            {showReferenceTools && (
-              <>
-                <div
-                  className={isReferenceDragOver ? "reference-grid drag-over" : "reference-grid"}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "copy";
-                    if (!isReferenceDragOver) setIsReferenceDragOver(true);
-                  }}
-                  onDragLeave={(event) => {
-                    if (event.currentTarget.contains(event.relatedTarget as Node)) return;
-                    setIsReferenceDragOver(false);
-                  }}
-                  onDrop={handleReferenceDrop}
-                >
-                  {inputAssets.length === 0 ? (
-                    <div className="empty-inline">{copy.dropReferencesHint}</div>
-                  ) : (
-                    inputAssets.map((asset, index) => (
-                      <div
-                        key={asset.id}
-                        className={[
-                          "asset-tile",
-                          "reference-thumb-tile",
-                          index === 0 ? "primary-reference" : "",
-                          index === 0 && maskPreview ? "has-mask" : ""
-                        ].filter(Boolean).join(" ")}
-                        role="button"
-                        tabIndex={0}
-                        title={copy.referenceTileHint}
-                        data-tooltip={copy.referenceTileHint}
-                        onClick={() => handleReferenceTileClick(asset.id)}
-                        onDoubleClick={() => openReferencePreview(asset.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            openReferencePreview(asset.id);
-                            return;
-                          }
-                          if (event.key === " ") {
-                            event.preventDefault();
-                            promoteReferenceAssetToFirst(asset.id);
-                          }
-                        }}
-                      >
-                        {assetSource(asset) && <img src={assetSource(asset)} alt={asset.name} />}
-                        <button
-                          type="button"
-                          className="tile-remove"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeInputAsset(asset.id);
-                          }}
-                          aria-label={copy.delete}
-                          data-tooltip={copy.delete}
-                        >
-                          <X size={14} />
-                        </button>
-                        <div className="reference-thumb-meta">
-                          <strong>{index === 0 ? copy.source : `${copy.reference} ${index + 1}`}</strong>
-                          <span>{asset.name}</span>
-                        </div>
-                        {index === 0 && maskPreview && <span className="reference-mask-badge">{copy.mask}</span>}
-                      </div>
-                    ))
-                  )}
-                  <button
-                    type="button"
-                    className="icon-button reference-add-button"
-                    onClick={selectImages}
-                    aria-label={copy.addLocalReferences}
-                    data-tooltip={copy.addLocalReferences}
-                  >
-                    <Plus size={18} />
-                  </button>
-                  {referenceLimitToast && (
-                    <div key={referenceLimitToast.id} className="reference-limit-toast" role="status">
-                      {referenceLimitToast.text}
-                    </div>
-                  )}
-                </div>
-                {(geminiParams || (generalParams && generalFallbackSupportsReferenceImages(generalParams.providerKind))) && (
-                  <p className="inline-check reference-rights-reminder">
-                    <AlertTriangle size={14} />
-                    <span>{copy.uploadRightsReminder}</span>
-                  </p>
-                )}
-                {showMaskRouteNotice && (
-                  <p className="inline-check warning mask-route-notice">
-                    <AlertTriangle size={14} />
-                    <span>{copy.exactMaskRouteNotice}</span>
-                  </p>
-                )}
+            <ModeContentTransition
+              transitionKey={`${tabMode}:${showReferenceTools ? "references" : "prompt-only"}:${requestMode}`}
+              mode={tabMode}
+              hasReferenceTools={showReferenceTools}
+            >
+              {!showReferenceTools ? (
                 <ParameterConfigLauncher
                   copy={copy}
                   quickControls={parameterQuickControls}
                   onOpen={() => setIsParameterDialogOpen(true)}
                 />
-              </>
-            )}
+              ) : (
+                <>
+                  <div
+                    className={isReferenceDragOver ? "reference-grid drag-over" : "reference-grid"}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "copy";
+                      if (!isReferenceDragOver) setIsReferenceDragOver(true);
+                    }}
+                    onDragLeave={(event) => {
+                      if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+                      setIsReferenceDragOver(false);
+                    }}
+                    onDrop={handleReferenceDrop}
+                  >
+                    {inputAssets.length === 0 ? (
+                      <div className="empty-inline">{copy.dropReferencesHint}</div>
+                    ) : (
+                      inputAssets.map((asset, index) => (
+                        <div
+                          key={asset.id}
+                          className={[
+                            "asset-tile",
+                            "reference-thumb-tile",
+                            index === 0 ? "primary-reference" : "",
+                            index === 0 && maskPreview ? "has-mask" : ""
+                          ].filter(Boolean).join(" ")}
+                          role="button"
+                          tabIndex={0}
+                          title={copy.referenceTileHint}
+                          data-tooltip={copy.referenceTileHint}
+                          onClick={() => handleReferenceTileClick(asset.id)}
+                          onDoubleClick={() => openReferencePreview(asset.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              openReferencePreview(asset.id);
+                              return;
+                            }
+                            if (event.key === " ") {
+                              event.preventDefault();
+                              promoteReferenceAssetToFirst(asset.id);
+                            }
+                          }}
+                        >
+                          {assetSource(asset) && <img src={assetSource(asset)} alt={asset.name} />}
+                          <button
+                            type="button"
+                            className="tile-remove"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeInputAsset(asset.id);
+                            }}
+                            aria-label={copy.delete}
+                            data-tooltip={copy.delete}
+                          >
+                            <X size={14} />
+                          </button>
+                          <div className="reference-thumb-meta">
+                            <strong>{index === 0 ? copy.source : `${copy.reference} ${index + 1}`}</strong>
+                            <span>{asset.name}</span>
+                          </div>
+                          {index === 0 && maskPreview && <span className="reference-mask-badge">{copy.mask}</span>}
+                        </div>
+                      ))
+                    )}
+                    <button
+                      type="button"
+                      className="icon-button reference-add-button"
+                      onClick={selectImages}
+                      aria-label={copy.addLocalReferences}
+                      data-tooltip={copy.addLocalReferences}
+                    >
+                      <Plus size={18} />
+                    </button>
+                    {referenceLimitToast && (
+                      <div key={referenceLimitToast.id} className="reference-limit-toast" role="status">
+                        {referenceLimitToast.text}
+                      </div>
+                    )}
+                  </div>
+                  {(geminiParams || (generalParams && generalFallbackSupportsReferenceImages(generalParams.providerKind))) && (
+                    <p className="inline-check reference-rights-reminder">
+                      <AlertTriangle size={14} />
+                      <span>{copy.uploadRightsReminder}</span>
+                    </p>
+                  )}
+                  {showMaskRouteNotice && (
+                    <p className="inline-check warning mask-route-notice">
+                      <AlertTriangle size={14} />
+                      <span>{copy.exactMaskRouteNotice}</span>
+                    </p>
+                  )}
+                  <ParameterConfigLauncher
+                    copy={copy}
+                    quickControls={parameterQuickControls}
+                    onOpen={() => setIsParameterDialogOpen(true)}
+                  />
+                </>
+              )}
+            </ModeContentTransition>
 
           </section>
         </div>
@@ -6859,6 +6869,7 @@ export function App() {
                         downloadButtonLabel={result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}
                         onToggleSelection={(checked) => toggleHistoryJobSelection(job.id, checked)}
                         onHoverOpen={() => setExpandedHistoryCardId(job.id)}
+                        onHoverClose={() => setExpandedHistoryCardId((current) => current === job.id ? null : current)}
                         onOpen={() => {
                           setActiveGalleryAssetId(null);
                           setActiveJob(job);

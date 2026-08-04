@@ -169,6 +169,7 @@ import { launchWindowsInstaller } from "./services/windowsUpdateLauncher.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAX_HISTORY = 100;
 const FALLBACK_KEY_PREFIX = "plain:";
+const API_KEY_DECRYPTION_MESSAGE = "已保存的 API Key 无法解密，可能来自旧版本安装、系统钥匙串变更或本地状态损坏。请在 API 配置中重新粘贴并保存 API Key。";
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 const MAX_GALLERY_FOLDER_NAME_BYTES = 120;
 const MAX_GALLERY_FILE_NAME_BYTES = 180;
@@ -233,6 +234,9 @@ protocol.registerSchemesAsPrivileged([
   }
 ]);
 
+app.setName(BRAND_NAME);
+preserveLegacyUserDataPath();
+
 interface PackageMetadata {
   crossgen?: {
     updateManifestUrl?: unknown;
@@ -240,6 +244,13 @@ interface PackageMetadata {
   image2tools?: {
     updateManifestUrl?: unknown;
   };
+}
+
+class ApiKeyDecryptionError extends Error {
+  constructor(cause?: unknown) {
+    super(API_KEY_DECRYPTION_MESSAGE, cause === undefined ? undefined : { cause });
+    this.name = "ApiKeyDecryptionError";
+  }
 }
 
 let stateCache: AppStateFile | null = null;
@@ -691,9 +702,13 @@ function decryptApiKey(config: StoredProviderConfig): string | null {
 
   if (config.encryption === "safeStorage") {
     if (!safeStorage.isEncryptionAvailable()) {
-      throw new Error("已保存 API Key，但当前系统无法使用 Electron safeStorage 解密。请重新保存 API Key。");
+      throw new ApiKeyDecryptionError();
     }
-    return safeStorage.decryptString(Buffer.from(config.encryptedApiKey, "base64"));
+    try {
+      return safeStorage.decryptString(Buffer.from(config.encryptedApiKey, "base64"));
+    } catch (error) {
+      throw new ApiKeyDecryptionError(error);
+    }
   }
 
   if (config.encryption === "localFallback" && config.encryptedApiKey.startsWith(FALLBACK_KEY_PREFIX)) {
@@ -747,6 +762,9 @@ function getApiKeyForConfigOrThrow(config: StoredProviderConfig): string {
 
 function normalizeError(error: unknown): string {
   if (error instanceof Error) {
+    if (error instanceof ApiKeyDecryptionError) {
+      return error.message;
+    }
     const message = redactLikelySecrets(error.message);
     if (error.cause instanceof Error) {
       return `${message}: ${redactLikelySecrets(error.cause.message)}`;
@@ -5902,12 +5920,10 @@ function registerIpcHandlers(): void {
 }
 
 app.whenReady().then(async () => {
-  app.setName(BRAND_NAME);
   const themeSource = process.env[THEME_SOURCE_ENV];
   if (themeSource === "light" || themeSource === "dark" || themeSource === "system") {
     nativeTheme.themeSource = themeSource;
   }
-  preserveLegacyUserDataPath();
   await cleanupStaleReferencePreflightTempDirs().catch((error) => {
     console.warn("[CrossGen] Failed to clean stale reference preflight temp files.", sanitizeError(error));
   });
