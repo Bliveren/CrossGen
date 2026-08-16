@@ -1,3 +1,5 @@
+
+
 <h1 align="center">CrossGen</h1>
 
 <p align="center">
@@ -193,7 +195,7 @@ After configuring an API profile in the desktop app, use the packaged `crossgen`
 crossgen doctor --agent --json
 crossgen models list --json
 crossgen generate --prompt "A precise isometric app icon" --yes --wait --json
-crossgen job status <job-id> --json
+crossgen job status <queue-id-or-history-job-id> --json
 crossgen asset export <asset-id> --to ./assets/app-icon.png --yes --json
 ```
 
