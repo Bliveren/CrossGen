@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-08-19T14:26:02.000Z",
+  "lastUpdated": "2026-08-19T15:47:38.083Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -22,12 +22,12 @@
         "commands": [],
         "references": [
           {
-            "label": "v0.3.2 development plan",
-            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.2-plan.md"
+            "label": "v0.3.2 release evidence rules",
+            "url": "https://github.com/Bliveren/image2tools/blob/main/docs/release/README.md"
           }
         ],
         "artifacts": [],
-        "summary": "Pending refreshed v0.3.2 evidence after post-acceptance provider routing fixes. Previous evidence for this gate is retained in git history but cannot approve the new exact package until the updated package is rebuilt and retested."
+        "summary": "Product owner reported that macOS release-candidate package testing has been performed and asked to advance Windows and Linux release work. Because Windows self-test found and fixed a queue-file rename issue after that macOS candidate, final public publication still needs explicit approval of the final v0.3.2 package set built from the final source commit."
       }
     },
     {
@@ -206,7 +206,7 @@
       "id": "windows-native-release",
       "title": "Native Windows release package validation",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Windows installer artifacts are built from the exact v0.3.2 release-candidate commit.",
         "The Windows verifier runs on a native Windows runner.",
@@ -215,25 +215,49 @@
         "Any Windows-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-08-19T15:47:38.083Z",
+        "commit": "24cdfa5d69ea73ab4e23aa922b6960ec2ad482b2",
+        "environment": "Native Windows 11 Pro 10.0.26100 local release shell. Full NSIS silent install, app launch, main-window detection, silent uninstall, packaged CLI/MCP smoke, and packaged agent integration smoke were run against the v0.3.2 Windows package built after the queue-file atomic rename retry fix.",
+        "commands": [
+          "pnpm package:win",
+          "pnpm verify:release:windows",
+          "$env:CROSSGEN_APP_EXECUTABLE = (Resolve-Path .\\release\\win-unpacked\\CrossGen.exe).Path; pnpm verify:cli-mcp-smoke",
+          "$env:CROSSGEN_APP_EXECUTABLE = (Resolve-Path .\\release\\win-unpacked\\CrossGen.exe).Path; pnpm verify:agent-integration-smoke"
+        ],
         "references": [
           {
-            "label": "Latest main CI package preflight",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
+            "label": "Native Windows and Linux release package tracker",
+            "url": "https://github.com/Bliveren/image2tools/issues/4"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.2 release-candidate Windows artifact identity. Main CI package preflight is already green but is not a substitute for RC evidence."
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-Setup.exe",
+            "public": false,
+            "description": "v0.3.2 Windows x64 NSIS installer. SHA256 246573943d6aed247be09d414f5c652981ea359586fa27b9720801f4b3085f50, size 99114412 bytes."
+          },
+          {
+            "kind": "local-file",
+            "path": "release/CrossGen-Setup.exe.blockmap",
+            "public": false,
+            "description": "v0.3.2 Windows installer blockmap. SHA256 a7827438a683fef66253de05829dc2d235f652445feeb5cd64b5d5311ef257b9, size 104143 bytes."
+          },
+          {
+            "kind": "local-directory",
+            "path": "release/win-unpacked/",
+            "public": false,
+            "description": "Unpacked Windows app used by native launch verification and packaged CLI/MCP smoke."
+          }
+        ],
+        "summary": "Windows native release validation passed on the rebuilt v0.3.2 package. The earlier packaged MCP smoke exposed a transient Windows queue-file rename failure; the queue store now retries EPERM, EBUSY, and EACCES atomic rename failures, and the rebuilt installer passed full install/uninstall plus packaged CLI/MCP and agent integration smoke."
       }
     },
     {
       "id": "linux-native-release",
       "title": "Linux AppImage package validation",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Linux AppImage artifacts are built from the exact v0.3.2 release-candidate commit.",
         "Packaged CLI/MCP and agent integration smoke pass against the Linux package.",
@@ -242,18 +266,36 @@
         "Any Linux-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-08-19T15:47:38.083Z",
+        "commit": "24cdfa5d69ea73ab4e23aa922b6960ec2ad482b2",
+        "environment": "Ubuntu 24.04.4 LTS on WSL2 6.6.87.2 local Linux release clone with the same queue-file atomic rename retry patch applied from commit 24cdfa5d69ea73ab4e23aa922b6960ec2ad482b2. Xvfb was used for packaged Linux app launch and CLI/MCP smoke.",
+        "commands": [
+          "CI=true pnpm package",
+          "pnpm verify:release:linux",
+          "CROSSGEN_APP_EXECUTABLE=\"$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)\" CROSSGEN_APP_EXTRA_ARGS=\"--no-sandbox\" xvfb-run -a node scripts/verify-cli-mcp-smoke.mjs",
+          "CROSSGEN_APP_EXECUTABLE=\"$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)\" CROSSGEN_APP_EXTRA_ARGS=\"--no-sandbox\" xvfb-run -a node scripts/verify-agent-integration-smoke.mjs"
+        ],
         "references": [
           {
-            "label": "Latest main CI package preflight",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30473022642"
+            "label": "Native Windows and Linux release package tracker",
+            "url": "https://github.com/Bliveren/image2tools/issues/4"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.2 release-candidate Linux artifact identity. Main CI package preflight is already green but is not a substitute for RC evidence."
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-linux-x86_64.AppImage",
+            "public": false,
+            "description": "v0.3.2 Linux x64 AppImage. SHA256 dcb5f5ec994e413564d5b239189e41a9cc2fea02066e88bc672498979a059cc7, size 120881029 bytes."
+          },
+          {
+            "kind": "local-directory",
+            "path": "release/linux-unpacked/",
+            "public": false,
+            "description": "Unpacked Linux app used by Xvfb native launch verification and packaged CLI/MCP smoke in the Linux release clone."
+          }
+        ],
+        "summary": "Linux AppImage validation passed. The verifier confirmed the AppImage and unpacked executable are x86-64 ELF binaries, launched the unpacked app, launched the direct AppImage, extracted the AppImage and launched the extracted app under Xvfb, then packaged CLI/MCP and agent integration smoke passed against the unpacked Linux executable."
       }
     },
     {
