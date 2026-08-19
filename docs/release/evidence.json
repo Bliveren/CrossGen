@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-08-19T15:55:02.000Z",
+  "lastUpdated": "2026-08-19T17:09:32.061Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -215,9 +215,9 @@
         "Any Windows-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T15:47:38.083Z",
-        "commit": "24cdfa5d69ea73ab4e23aa922b6960ec2ad482b2",
-        "environment": "Native Windows 11 Pro 10.0.26100 local release shell. Full NSIS silent install, app launch, main-window detection, silent uninstall, packaged CLI/MCP smoke, and packaged agent integration smoke were run against the v0.3.2 Windows package built after the queue-file atomic rename retry fix.",
+        "verifiedAt": "2026-08-19T16:54:18.066Z",
+        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
+        "environment": "Native Windows 11 Pro 10.0.26100 local release shell. Full NSIS silent install, app launch, main-window detection, silent uninstall, packaged CLI/MCP smoke, and packaged agent integration smoke were run against the v0.3.2 Windows package rebuilt from the final source commit, including the queue-file atomic rename retry fix and opt-in reference image optimization change.",
         "commands": [
           "pnpm package:win",
           "pnpm verify:release:windows",
@@ -231,7 +231,7 @@
           },
           {
             "label": "v0.3.2 RC 1 draft release assets for product-owner testing",
-            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-4b8ca9b9284305c4bb1e"
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-1a9c1d97770b5ef8f71a"
           }
         ],
         "artifacts": [
@@ -239,13 +239,13 @@
             "kind": "local-package",
             "path": "release/CrossGen-Setup.exe",
             "public": false,
-            "description": "v0.3.2 Windows x64 NSIS installer. SHA256 246573943d6aed247be09d414f5c652981ea359586fa27b9720801f4b3085f50, size 99114412 bytes."
+            "description": "v0.3.2 Windows x64 NSIS installer. SHA256 91010cc3414b0e3c1454f28d2d45d313025078d5ebb02f8f267871dda3e09175, size 99115559 bytes."
           },
           {
             "kind": "local-file",
             "path": "release/CrossGen-Setup.exe.blockmap",
             "public": false,
-            "description": "v0.3.2 Windows installer blockmap. SHA256 a7827438a683fef66253de05829dc2d235f652445feeb5cd64b5d5311ef257b9, size 104143 bytes."
+            "description": "v0.3.2 Windows installer blockmap. SHA256 dc1a4aaac46ccf17792842364f62e05a25dbd2b63c28950f99d1296f69184e46, size 104207 bytes."
           },
           {
             "kind": "local-directory",
@@ -254,7 +254,7 @@
             "description": "Unpacked Windows app used by native launch verification and packaged CLI/MCP smoke."
           }
         ],
-        "summary": "Windows native release validation passed on the rebuilt v0.3.2 package. The earlier packaged MCP smoke exposed a transient Windows queue-file rename failure; the queue store now retries EPERM, EBUSY, and EACCES atomic rename failures, and the rebuilt installer passed full install/uninstall plus packaged CLI/MCP and agent integration smoke. The candidate artifacts were uploaded to a draft v0.3.2 RC 1 GitHub Release for product-owner business testing; the draft uses GitHub's untagged draft URL and is not the final public v0.3.2 release."
+        "summary": "Windows native release validation passed on the rebuilt v0.3.2 package from the final source commit. The earlier packaged MCP smoke exposed a transient Windows queue-file rename failure; the queue store now retries EPERM, EBUSY, and EACCES atomic rename failures, and the rebuilt installer passed full install/uninstall plus packaged CLI/MCP and agent integration smoke. The candidate artifacts were replaced on the draft v0.3.2 RC 1 GitHub Release for product-owner business testing; the draft uses GitHub's untagged draft URL and is not the final public v0.3.2 release."
       }
     },
     {
@@ -270,14 +270,14 @@
         "Any Linux-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T15:47:38.083Z",
-        "commit": "24cdfa5d69ea73ab4e23aa922b6960ec2ad482b2",
-        "environment": "Ubuntu 24.04.4 LTS on WSL2 6.6.87.2 local Linux release clone with the same queue-file atomic rename retry patch applied from commit 24cdfa5d69ea73ab4e23aa922b6960ec2ad482b2. Xvfb was used for packaged Linux app launch and CLI/MCP smoke.",
+        "verifiedAt": "2026-08-19T17:05:58.981Z",
+        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
+        "environment": "Ubuntu 24.04.4 LTS on WSL2 6.6.87.2 local Linux release clone synced to the final source commit. Xvfb was used for packaged Linux app launch, CLI/MCP smoke, and agent integration smoke.",
         "commands": [
           "CI=true pnpm package",
           "pnpm verify:release:linux",
-          "CROSSGEN_APP_EXECUTABLE=\"$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)\" CROSSGEN_APP_EXTRA_ARGS=\"--no-sandbox\" xvfb-run -a node scripts/verify-cli-mcp-smoke.mjs",
-          "CROSSGEN_APP_EXECUTABLE=\"$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)\" CROSSGEN_APP_EXTRA_ARGS=\"--no-sandbox\" xvfb-run -a node scripts/verify-agent-integration-smoke.mjs"
+          "CROSSGEN_APP_EXECUTABLE=\"$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)\" CROSSGEN_APP_EXTRA_ARGS=\"--no-sandbox --disable-gpu\" xvfb-run -a node scripts/verify-cli-mcp-smoke.mjs",
+          "CROSSGEN_APP_EXECUTABLE=\"$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)\" CROSSGEN_APP_EXTRA_ARGS=\"--no-sandbox --disable-gpu\" xvfb-run -a node scripts/verify-agent-integration-smoke.mjs"
         ],
         "references": [
           {
@@ -286,7 +286,7 @@
           },
           {
             "label": "v0.3.2 RC 1 draft release assets for product-owner testing",
-            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-4b8ca9b9284305c4bb1e"
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-1a9c1d97770b5ef8f71a"
           }
         ],
         "artifacts": [
@@ -294,7 +294,7 @@
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-linux-x86_64.AppImage",
             "public": false,
-            "description": "v0.3.2 Linux x64 AppImage. SHA256 dcb5f5ec994e413564d5b239189e41a9cc2fea02066e88bc672498979a059cc7, size 120881029 bytes."
+            "description": "v0.3.2 Linux x64 AppImage. SHA256 081f7d7ff051b9e3f5737521d4e3f510fbf1d4c670477b2af759351c722833db, size 120885130 bytes."
           },
           {
             "kind": "local-directory",
@@ -303,7 +303,7 @@
             "description": "Unpacked Linux app used by Xvfb native launch verification and packaged CLI/MCP smoke in the Linux release clone."
           }
         ],
-        "summary": "Linux AppImage validation passed. The verifier confirmed the AppImage and unpacked executable are x86-64 ELF binaries, launched the unpacked app, launched the direct AppImage, extracted the AppImage and launched the extracted app under Xvfb, then packaged CLI/MCP and agent integration smoke passed against the unpacked Linux executable. The candidate artifacts were uploaded to a draft v0.3.2 RC 1 GitHub Release for product-owner business testing; the draft uses GitHub's untagged draft URL and is not the final public v0.3.2 release."
+        "summary": "Linux AppImage validation passed on the rebuilt v0.3.2 package from the final source commit. The verifier confirmed the AppImage and unpacked executable are x86-64 ELF binaries, launched the unpacked app, launched the direct AppImage, extracted the AppImage and launched the extracted app under Xvfb, then packaged CLI/MCP and agent integration smoke passed against the unpacked Linux executable. The candidate artifact was refreshed on the draft v0.3.2 RC 1 GitHub Release for product-owner business testing; the draft uses GitHub's untagged draft URL and is not the final public v0.3.2 release."
       }
     },
     {
@@ -330,7 +330,7 @@
           },
           {
             "label": "v0.3.2 RC 1 draft release assets for product-owner testing",
-            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-4b8ca9b9284305c4bb1e"
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-1a9c1d97770b5ef8f71a"
           }
         ],
         "artifacts": [],
