@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-08-19T13:35:40.564Z",
+  "lastUpdated": "2026-08-19T14:26:02.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -120,7 +120,7 @@
       "id": "macos-signed",
       "title": "Developer ID signed macOS release package",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "macOS artifacts are built from the exact v0.3.2 release-candidate commit.",
         "Developer ID signing is performed without exposing secret values.",
@@ -129,25 +129,41 @@
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-08-19T14:26:02.000Z",
+        "commit": "842ae4b3e1b1464180c19c5edeb94193f2024900",
+        "environment": "macOS local release shell with .env.local loaded. Developer ID signing identity and notarization credentials were available in the shell for the exact v0.3.2 macOS candidate. Secrets are not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
+          "pnpm verify:release:mac"
+        ],
         "references": [
           {
             "label": "Release evidence rules",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending refreshed v0.3.2 evidence after post-acceptance provider routing fixes. Previous evidence for this gate is retained in git history but cannot approve the new exact package until the updated package is rebuilt and retested."
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
+            "public": false,
+            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 b91e86120e2ac2006f0722da02f5cc34490e7f6c9d6b08d66df0fc39b00c55df, size 103975324 bytes."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
+            "public": false,
+            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 6308a2c82a5a9a1b2a66a96f6cbb59666af54f478fe2eaefa1c0de21106cbd9d, size 99675738 bytes."
+          }
+        ],
+        "summary": "Developer ID signing passed for the exact v0.3.2 macOS candidate built from 842ae4b3e1b1464180c19c5edeb94193f2024900. macOS release verification launched the app twice from the DMG and detected main windows in both cycles."
       }
     },
     {
       "id": "macos-notarized",
       "title": "Apple notarized macOS release package",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Apple notarization is submitted for the exact v0.3.2 macOS candidate artifact.",
         "Notarization succeeds without exposing Apple credentials.",
@@ -156,18 +172,34 @@
         "The evidence records the exact artifact identity, SHA256, and validation command results."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-08-19T14:26:02.000Z",
+        "commit": "842ae4b3e1b1464180c19c5edeb94193f2024900",
+        "environment": "macOS local release shell with .env.local loaded. Apple notarization credentials were available in the shell for the exact v0.3.2 macOS candidate. Secrets are not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
+          "pnpm verify:release:mac"
+        ],
         "references": [
           {
             "label": "Release evidence rules",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending refreshed v0.3.2 evidence after post-acceptance provider routing fixes. Previous evidence for this gate is retained in git history but cannot approve the new exact package until the updated package is rebuilt and retested."
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
+            "public": false,
+            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 b91e86120e2ac2006f0722da02f5cc34490e7f6c9d6b08d66df0fc39b00c55df, size 103975324 bytes."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
+            "public": false,
+            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 6308a2c82a5a9a1b2a66a96f6cbb59666af54f478fe2eaefa1c0de21106cbd9d, size 99675738 bytes."
+          }
+        ],
+        "summary": "Apple notarization succeeded for the exact v0.3.2 macOS candidate built from 842ae4b3e1b1464180c19c5edeb94193f2024900. The notarized DMG also passed macOS release verification."
       }
     },
     {
@@ -297,7 +329,7 @@
       "id": "cli-mcp-packaged-smoke",
       "title": "Packaged CLI and MCP smoke",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Packaged CLI launcher smoke runs against the exact v0.3.2 candidate package.",
         "MCP direct app executable smoke runs against the exact v0.3.2 candidate package.",
@@ -306,10 +338,13 @@
         "Source-tree CLI/MCP smoke is not used as a substitute for packaged smoke."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-08-19T14:26:02.000Z",
+        "commit": "842ae4b3e1b1464180c19c5edeb94193f2024900",
+        "environment": "macOS local packaged smoke against the exact v0.3.2 candidate app executable built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900.",
+        "commands": [
+          "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:cli-mcp-smoke",
+          "release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen --cli version --json"
+        ],
         "references": [
           {
             "label": "Latest main CI package preflight after blocker hardening",
@@ -320,8 +355,21 @@
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.2-pre-rc-evidence.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending refreshed v0.3.2 evidence after post-acceptance provider routing fixes. Previous evidence for this gate is retained in git history but cannot approve the new exact package until the updated package is rebuilt and retested."
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
+            "public": false,
+            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 b91e86120e2ac2006f0722da02f5cc34490e7f6c9d6b08d66df0fc39b00c55df, size 103975324 bytes."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
+            "public": false,
+            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 6308a2c82a5a9a1b2a66a96f6cbb59666af54f478fe2eaefa1c0de21106cbd9d, size 99675738 bytes."
+          }
+        ],
+        "summary": "Packaged CLI launcher and MCP executable smoke passed against the exact notarized v0.3.2 macOS candidate. The app executable reported version 0.3.2 in Electron command mode."
       }
     },
     {
@@ -337,9 +385,9 @@
         "No CLI/MCP productization UI is required for v0.3.2."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-04T03:27:56.000Z",
-        "commit": "0411e396e99a057c504d6b40e240b57eead00d2d",
-        "environment": "macOS local packaged smoke against the exact v0.3.2 candidate app executable built from commit 0411e396e99a057c504d6b40e240b57eead00d2d.",
+        "verifiedAt": "2026-08-19T14:26:02.000Z",
+        "commit": "842ae4b3e1b1464180c19c5edeb94193f2024900",
+        "environment": "macOS local packaged smoke against the exact v0.3.2 candidate app executable built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900.",
         "commands": [
           "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:agent-integration-smoke"
         ],
@@ -352,9 +400,21 @@
         "artifacts": [
           {
             "kind": "local-command-output",
-            "path": "terminal transcript: pnpm verify:agent-integration-smoke",
+            "path": "terminal transcript: packaged pnpm verify:agent-integration-smoke",
             "public": false,
-            "description": "Agent integration smoke passed against the exact macOS candidate package on commit 0411e396e99a057c504d6b40e240b57eead00d2d."
+            "description": "Agent integration smoke passed against the exact macOS candidate package on commit 842ae4b3e1b1464180c19c5edeb94193f2024900."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
+            "public": false,
+            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 b91e86120e2ac2006f0722da02f5cc34490e7f6c9d6b08d66df0fc39b00c55df, size 103975324 bytes."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
+            "public": false,
+            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 6308a2c82a5a9a1b2a66a96f6cbb59666af54f478fe2eaefa1c0de21106cbd9d, size 99675738 bytes."
           }
         ],
         "summary": "Agent integration smoke passed against the exact notarized v0.3.2 macOS candidate package."
