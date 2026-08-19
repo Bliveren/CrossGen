@@ -56,9 +56,22 @@ const DEFAULT_QUEUE_FILE: GenerationQueueFile = {
 
 const WORKER_HOST_EXPIRED_RETENTION_MS = 24 * 60 * 60 * 1000;
 const MAX_RETAINED_WORKER_HOSTS = 20;
+const ATOMIC_RENAME_RETRYABLE_ERROR_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
+const ATOMIC_RENAME_MAX_ATTEMPTS = 6;
+const ATOMIC_RENAME_RETRY_DELAY_MS = 50;
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableAtomicRenameError(error: unknown): boolean {
+  return isNodeError(error) &&
+    typeof error.code === "string" &&
+    ATOMIC_RENAME_RETRYABLE_ERROR_CODES.has(error.code);
 }
 
 export async function readQueueFile(queuePath: string): Promise<GenerationQueueFile> {
@@ -80,8 +93,23 @@ export async function readQueueFile(queuePath: string): Promise<GenerationQueueF
 export async function writeQueueFile(queuePath: string, queue: GenerationQueueFile): Promise<void> {
   await fs.mkdir(path.dirname(queuePath), { recursive: true });
   const tmpPath = `${queuePath}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(tmpPath, `${JSON.stringify(queue, null, 2)}\n`, "utf8");
-  await fs.rename(tmpPath, queuePath);
+  try {
+    await fs.writeFile(tmpPath, `${JSON.stringify(queue, null, 2)}\n`, "utf8");
+    for (let attempt = 1; attempt <= ATOMIC_RENAME_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        await fs.rename(tmpPath, queuePath);
+        return;
+      } catch (error) {
+        if (!isRetryableAtomicRenameError(error) || attempt === ATOMIC_RENAME_MAX_ATTEMPTS) {
+          throw error;
+        }
+        await sleep(ATOMIC_RENAME_RETRY_DELAY_MS * attempt);
+      }
+    }
+  } catch (error) {
+    await fs.rm(tmpPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function quarantineCorruptQueueFile(queuePath: string): Promise<void> {

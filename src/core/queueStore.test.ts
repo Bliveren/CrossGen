@@ -1,7 +1,8 @@
+import { promises as fs } from "node:fs";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createQueueStore } from "./queueStore";
 import type { GenerationQueueItem, GenerationQueueWorkerHost, QueueStage } from "../shared/types";
 
@@ -218,6 +219,40 @@ describe("queueStore", () => {
     expect(files.some((file) => file.startsWith("queue.json.corrupt-"))).toBe(true);
 
     await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("retries transient rename failures while writing the queue", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "crossgen-queue-"));
+    const queuePath = path.join(tempDir, "queue.json");
+    const store = createQueueStore({
+      queuePath,
+      lockPath: `${queuePath}.lock`
+    });
+    const actualRename = fs.rename.bind(fs);
+    let renameAttempts = 0;
+    const renameSpy = vi.spyOn(fs, "rename").mockImplementation(async (source, target) => {
+      if (target === queuePath && renameAttempts < 2) {
+        renameAttempts += 1;
+        const error = new Error("The operation was denied briefly.") as NodeJS.ErrnoException;
+        error.code = "EPERM";
+        throw error;
+      }
+      renameAttempts += 1;
+      return actualRename(source, target);
+    });
+
+    try {
+      await store.appendItem(queueItem({ queueId: "queue-retry" }));
+
+      const queue = await store.read();
+      const files = await readdir(tempDir);
+      expect(queue.items.map((item) => item.queueId)).toEqual(["queue-retry"]);
+      expect(renameAttempts).toBe(3);
+      expect(files.some((file) => file.endsWith(".tmp"))).toBe(false);
+    } finally {
+      renameSpy.mockRestore();
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("serializes concurrent claims so two hosts cannot claim the same item", async () => {
