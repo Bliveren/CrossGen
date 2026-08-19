@@ -49,6 +49,7 @@ import type {
   ProviderConfigInput,
   QueueSnapshot,
   QueueSource,
+  ReferenceImageMode,
   ReferencePreflightSummary,
   RunJobRequest,
   StorageKind,
@@ -1213,8 +1214,14 @@ async function resolveRequestInputs(request: RunJobRequest, imagesDir: string): 
   return { inputs, mask };
 }
 
-function buildReferencePreflightOrThrow(inputs: InputAsset[], mask?: InputAsset): ReferencePreflightSummary[] | undefined {
-  const summary = buildReferencePreflightSummaries(inputs, mask);
+function allowReferenceDownsamplingForRequest(request: RunJobRequest): boolean {
+  return request.params.referenceImageMode === "optimized";
+}
+
+function buildReferencePreflightOrThrow(inputs: InputAsset[], mask: InputAsset | undefined, request: RunJobRequest): ReferencePreflightSummary[] | undefined {
+  const summary = buildReferencePreflightSummaries(inputs, mask, {
+    allowReferenceDownsampling: allowReferenceDownsamplingForRequest(request)
+  });
   const blockingMessage = referencePreflightBlockingMessage(summary);
   if (blockingMessage) {
     throw new Error(blockingMessage);
@@ -1264,7 +1271,7 @@ function summaryForMaskAsset(summaries: ReferencePreflightSummary[] | undefined,
 }
 
 function requestCopyMimeType(asset: InputAsset): { mimeType: string; extension: string } {
-  if (asset.mimeType === "image/jpeg") return { mimeType: "image/jpeg", extension: ".jpg" };
+  if (asset.mimeType === "image/jpeg" || asset.hasAlpha === false) return { mimeType: "image/jpeg", extension: ".jpg" };
   return { mimeType: "image/png", extension: ".png" };
 }
 
@@ -1348,7 +1355,8 @@ async function prepareReferenceRequestJob(job: GenerationJob): Promise<{
   referencePreflight?: ReferencePreflightSummary[];
   cleanupPaths: string[];
 }> {
-  const initialSummary = job.referencePreflight ?? buildReferencePreflightSummaries(job.inputAssets, job.maskAsset);
+  const allowReferenceDownsampling = job.params.referenceImageMode === "optimized";
+  const initialSummary = buildReferencePreflightSummaries(job.inputAssets, job.maskAsset, { allowReferenceDownsampling });
   const blockingMessage = referencePreflightBlockingMessage(initialSummary);
   if (blockingMessage) throw new Error(blockingMessage);
   const cleanupPaths: string[] = [];
@@ -1357,6 +1365,7 @@ async function prepareReferenceRequestJob(job: GenerationJob): Promise<{
   const providerInputs = await Promise.all(job.inputAssets.map(async (asset) => {
     const summary = summaryForReferenceAsset(nextSummaries, asset);
     if (!summary?.request.downsampled) return asset;
+    if (!allowReferenceDownsampling) return asset;
     const prepared = await downsampleReferenceAssetForRequest(asset, summary);
     cleanupPaths.push(prepared.cleanupPath);
     const index = nextSummaries.findIndex((item) => item.role === "reference" && item.id === asset.id);
@@ -2710,7 +2719,7 @@ async function getOrCreateHistoryJobForQueueItem(
   }
 
   const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
-  const referencePreflight = item.referencePreflight ?? buildReferencePreflightOrThrow(inputs, mask);
+  const referencePreflight = item.referencePreflight ?? buildReferencePreflightOrThrow(inputs, mask, request);
   const job = createJob(request, provider, inputs, mask, item.source, referencePreflight);
   await upsertJob(job);
   return job;
@@ -3440,7 +3449,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   getApiKeyForConfigOrThrow(activeProvider);
   const imagesDir = getImagesDir(state);
   const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir);
-  const referencePreflight = buildReferencePreflightOrThrow(inputs, mask);
+  const referencePreflight = buildReferencePreflightOrThrow(inputs, mask, normalizedRequest);
   const queuedAt = Date.now();
   let job!: GenerationJob;
   let queueItem!: GenerationQueueItem;
@@ -4729,6 +4738,7 @@ interface AgentGenerationEnqueueInput {
   quality?: string;
   aspectRatio?: string;
   resolution?: string;
+  referenceImageMode?: string;
 }
 
 interface AgentGenerationEnqueueTransactionResult {
@@ -4748,6 +4758,14 @@ function parsePositiveIntegerOption(value: string | undefined, name: string): nu
     throwCliCommandError("INVALID_ARGUMENT", `${name} must be a positive integer.`, [`Use ${name} <number>.`]);
   }
   return parsed;
+}
+
+function normalizeReferenceImageModeOption(value: string | undefined): ReferenceImageMode | undefined {
+  if (value === undefined) return undefined;
+  const normalized = value.trim();
+  if (!normalized) return undefined;
+  if (normalized === "original" || normalized === "optimized") return normalized;
+  throwCliCommandError("INVALID_ARGUMENT", "Unsupported reference image upload mode.", ["Use reference image mode original or optimized."]);
 }
 
 function selectProviderForAgent(state: AppStateFile, providerId?: string): StoredProviderConfig {
@@ -4794,6 +4812,7 @@ function agentModelProviderKind(provider: StoredProviderConfig, model: string, o
 function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGenerationEnqueueInput): ImageParams {
   const model = activeProviderModel(provider, input.model);
   const timeoutMs = input.timeoutMs ?? provider.timeoutMs;
+  const referenceImageMode = normalizeReferenceImageModeOption(input.referenceImageMode);
   const modelProviderKind = agentModelProviderKind(provider, model, input.model);
   const activeLaunchId = input.model?.trim()
     ? modelProviderKind === "gemini"
@@ -4808,6 +4827,7 @@ function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGener
       ...DEFAULT_GENERAL_IMAGE_PARAMS,
       providerKind: provider.kind,
       model,
+      ...(referenceImageMode ? { referenceImageMode } : {}),
       timeoutMs
     };
   }
@@ -4816,6 +4836,7 @@ function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGener
       ...DEFAULT_GEMINI_IMAGE_PARAMS,
       providerKind: "gemini",
       model,
+      ...(referenceImageMode ? { referenceImageMode } : {}),
       aspectRatio: (input.aspectRatio as GeminiAspectRatio | undefined) ?? DEFAULT_GEMINI_IMAGE_PARAMS.aspectRatio,
       resolution: (input.resolution as GeminiResolution | undefined) ?? DEFAULT_GEMINI_IMAGE_PARAMS.resolution,
       timeoutMs
@@ -4826,6 +4847,7 @@ function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGener
     providerKind: "openai",
     launchId: GPT_IMAGE_2_LAUNCH_ID,
     model,
+    ...(referenceImageMode ? { referenceImageMode } : {}),
     imageRoute:
       input.mode === "generate"
         ? provider.openAIImageRouting?.preferredGenerateRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute
@@ -4903,7 +4925,7 @@ async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
   const targetGalleryFolderId = normalizeTargetGalleryFolderId(state, input.targetGalleryFolderId);
   const request = validateAgentRunJobRequest(buildAgentRunJobRequest(provider, input), provider);
   const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
-  const referencePreflight = buildReferencePreflightOrThrow(inputs, mask);
+  const referencePreflight = buildReferencePreflightOrThrow(inputs, mask, request);
   const job = createJob(request, provider, inputs, mask, input.source, referencePreflight);
   const queueItem = createGenerationQueueItem({
     source: input.source,
@@ -5061,6 +5083,7 @@ async function runCliGeneratePromptFileBatch(input: {
   const quality = getCliOption(input.args, "--quality");
   const aspectRatio = getCliOption(input.args, "--aspect-ratio");
   const resolution = getCliOption(input.args, "--resolution");
+  const referenceImageMode = getCliOption(input.args, "--reference-image-mode");
   const targetGalleryFolderId = getCliOption(input.args, "--folder");
   const items: CliGeneratePromptFileBatchItem[] = [];
 
@@ -5084,7 +5107,8 @@ async function runCliGeneratePromptFileBatch(input: {
         size: entry.size ?? size,
         quality: entry.quality ?? quality,
         aspectRatio: entry.aspectRatio ?? aspectRatio,
-        resolution: entry.resolution ?? resolution
+        resolution: entry.resolution ?? resolution,
+        referenceImageMode: entry.referenceImageMode ?? referenceImageMode
       });
       const execution: CliGenerationBatchExecution = input.waitRequested
         ? await runQueuedGenerationForAgent(result.queueId, "cli-worker", input.waitMs)
@@ -5294,7 +5318,8 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
         size,
         quality,
         aspectRatio,
-        resolution
+        resolution,
+        referenceImageMode
       }) => {
         try {
           const result = await enqueueGenerationForAgent({
@@ -5312,7 +5337,8 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
             size,
             quality,
             aspectRatio,
-            resolution
+            resolution,
+            referenceImageMode
           });
           const backgroundWorkerStarted = startBackgroundQueuedGeneration(result.queueId, "mcp");
           const normalizedWaitMs = typeof waitMs === "number" && Number.isFinite(waitMs) && waitMs > 0 ? Math.floor(waitMs) : undefined;
@@ -5517,7 +5543,8 @@ async function runCliCommandMode(args: string[]): Promise<number> {
         size: getCliOption(args, "--size"),
         quality: getCliOption(args, "--quality"),
         aspectRatio: getCliOption(args, "--aspect-ratio"),
-        resolution: getCliOption(args, "--resolution")
+        resolution: getCliOption(args, "--resolution"),
+        referenceImageMode: getCliOption(args, "--reference-image-mode")
       });
       const execution = waitRequested
         ? await runQueuedGenerationForAgent(result.queueId, "cli-worker", waitMs)

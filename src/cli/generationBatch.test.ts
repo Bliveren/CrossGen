@@ -6,7 +6,7 @@ describe("generation prompt file parser", () => {
     const entries = parseGenerationPromptFile(`
 # comment
 yellow product poster
-{"prompt":"blue hero image","model":"gpt-image-2","provider":"provider-1","folder":"folder-1","idempotency_key":"idem-2","timeout_ms":"30000","max_attempts":2,"aspect_ratio":"1:1"}
+{"prompt":"blue hero image","model":"gpt-image-2","provider":"provider-1","folder":"folder-1","idempotency_key":"idem-2","timeout_ms":"30000","max_attempts":2,"aspect_ratio":"1:1","reference_image_mode":"optimized"}
 `);
 
     expect(entries).toEqual([
@@ -20,7 +20,8 @@ yellow product poster
         idempotencyKey: "idem-2",
         timeoutMs: 30000,
         maxAttempts: 2,
-        aspectRatio: "1:1"
+        aspectRatio: "1:1",
+        referenceImageMode: "optimized"
       }
     ]);
   });

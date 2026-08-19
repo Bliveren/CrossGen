@@ -60,6 +60,7 @@ export interface GenerationMcpControllers {
     quality?: string;
     aspectRatio?: string;
     resolution?: string;
+    referenceImageMode?: string;
   }): Promise<unknown>;
   jobCancel(args: { queueId: string; confirm: boolean }): Promise<unknown | null>;
   jobRetry(args: { jobId: string; confirm: boolean }): Promise<unknown>;
@@ -465,6 +466,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
         quality: stringProperty("Optional OpenAI quality."),
         aspectRatio: stringProperty("Optional Gemini aspect ratio."),
         resolution: stringProperty("Optional Gemini resolution."),
+        referenceImageMode: { type: "string", enum: ["original", "optimized"], description: "Optional reference image upload mode. Defaults to original; optimized uses a temporary smaller request copy." },
         confirm: confirmProperty("Must be true to submit a paid generation request.")
       }, ["prompt", "confirm"]),
       annotations: writeAnnotations(),
@@ -487,7 +489,8 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
           size: typeof args.size === "string" ? args.size.trim() : undefined,
           quality: typeof args.quality === "string" ? args.quality.trim() : undefined,
           aspectRatio: typeof args.aspectRatio === "string" ? args.aspectRatio.trim() : undefined,
-          resolution: typeof args.resolution === "string" ? args.resolution.trim() : undefined
+          resolution: typeof args.resolution === "string" ? args.resolution.trim() : undefined,
+          referenceImageMode: typeof args.referenceImageMode === "string" ? args.referenceImageMode.trim() : undefined
         });
       }
     },
@@ -509,6 +512,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
         quality: stringProperty("Optional OpenAI quality."),
         aspectRatio: stringProperty("Optional Gemini aspect ratio."),
         resolution: stringProperty("Optional Gemini resolution."),
+        referenceImageMode: { type: "string", enum: ["original", "optimized"], description: "Optional reference image upload mode. Defaults to original; optimized uses a temporary smaller request copy." },
         confirm: confirmProperty("Must be true to submit a paid edit request.")
       }, ["prompt", "inputPaths", "confirm"]),
       annotations: writeAnnotations(),
@@ -534,7 +538,8 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
           size: typeof args.size === "string" ? args.size.trim() : undefined,
           quality: typeof args.quality === "string" ? args.quality.trim() : undefined,
           aspectRatio: typeof args.aspectRatio === "string" ? args.aspectRatio.trim() : undefined,
-          resolution: typeof args.resolution === "string" ? args.resolution.trim() : undefined
+          resolution: typeof args.resolution === "string" ? args.resolution.trim() : undefined,
+          referenceImageMode: typeof args.referenceImageMode === "string" ? args.referenceImageMode.trim() : undefined
         });
       }
     },

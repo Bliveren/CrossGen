@@ -55,6 +55,7 @@ import {
   GEMINI_ASPECT_RATIO_OPTIONS,
   GEMINI_RESOLUTION_OPTIONS,
   MAX_GPT_IMAGE_INPUTS,
+  REFERENCE_IMAGE_MODE_OPTIONS,
   maskMimeTypeForSource,
   mimeTypeFromDataUrl,
   stripTransientPreviewsFromJob,
@@ -93,6 +94,7 @@ import type {
   QueueSnapshot,
   QueueTaskSummary,
   ReferencePreflightSummary,
+  ReferenceImageMode,
   StorageKind,
   TaskDiagnostic,
   WorkMode,
@@ -780,6 +782,7 @@ function createOpenAIParams(modelId: string, current: ImageParams, config?: Prov
     providerKind: "openai",
     launchId: GPT_IMAGE_2_LAUNCH_ID,
     model: modelId || GPT_IMAGE_2_MODEL_ID,
+    referenceImageMode: current.referenceImageMode,
     size: config?.defaultSize ?? base.size,
     quality: config?.defaultQuality ?? base.quality,
     timeoutMs: config?.timeoutMs ?? base.timeoutMs
@@ -862,6 +865,7 @@ function createGeminiParams(modelId: string, current: ImageParams, config?: Prov
     providerKind: "gemini",
     launchId: NANO_BANANA_3_LAUNCH_ID,
     model: modelId || NANO_BANANA_3_MODEL_ID,
+    referenceImageMode: current.referenceImageMode,
     timeoutMs: config?.timeoutMs ?? base.timeoutMs
   };
 }
@@ -874,6 +878,7 @@ function createGeneralParams(providerKind: ProviderKind, modelId: string, curren
     providerKind,
     launchId: GENERAL_LAUNCH_ID,
     model: modelId || base.model || config?.activeModelId || config?.defaultModel || "",
+    referenceImageMode: current.referenceImageMode,
     timeoutMs: config?.timeoutMs ?? base.timeoutMs
   };
 }
@@ -3251,6 +3256,14 @@ export function App() {
       ...patch,
       providerKind: "gemini",
       launchId: NANO_BANANA_3_LAUNCH_ID
+    }));
+  }
+
+  function updateReferenceImageMode(referenceImageMode: ReferenceImageMode) {
+    markDraftChanged();
+    setParams((current) => ({
+      ...current,
+      referenceImageMode
     }));
   }
 
@@ -5762,6 +5775,29 @@ export function App() {
       </label>
     </>
   );
+  const referenceImageModeControl = showReferenceTools ? (
+    <>
+      <label title={copy.referenceImageModeInfo}>
+        <span className="route-label">
+          <span>{copy.referenceImageMode}</span>
+          <span className="route-info-icon" aria-label={copy.referenceImageModeInfo} data-tooltip={copy.referenceImageModeInfo} title={copy.referenceImageModeInfo}>
+            <Info size={12} />
+          </span>
+        </span>
+        <select
+          value={params.referenceImageMode ?? "original"}
+          onChange={(event) => updateReferenceImageMode(event.target.value as ReferenceImageMode)}
+        >
+          {REFERENCE_IMAGE_MODE_OPTIONS.map((mode) => (
+            <option key={mode} value={mode}>
+              {mode === "optimized" ? copy.referenceImageModeOptimized : copy.referenceImageModeOriginal}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="inline-check reference-upload-mode-note">{copy.referenceImageModeInfo}</p>
+    </>
+  ) : null;
   const advancedControls = openAIParams ? (
     <div className="advanced-controls">
       {sizeSelectValue === "custom" && (
@@ -5777,6 +5813,7 @@ export function App() {
           />
         </label>
       )}
+      {referenceImageModeControl}
       <label>
         {copy.compression}
         <div
@@ -5876,6 +5913,7 @@ export function App() {
     </div>
   ) : geminiParams ? (
     <div className="advanced-controls">
+      {referenceImageModeControl}
       <label className="checkbox-row">
         <input type="checkbox" checked={geminiParams.thinking} onChange={(event) => updateGeminiParams({ thinking: event.target.checked })} />
         {copy.thinking}
@@ -5897,6 +5935,7 @@ export function App() {
     </div>
   ) : (
     <div className="advanced-controls">
+      {referenceImageModeControl}
       <p className="inline-check">{generalModeNotice}</p>
     </div>
   );

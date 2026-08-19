@@ -12,7 +12,8 @@ import type {
   ImageQuality,
   ModerationMode,
   OpenAIImageParams,
-  ProviderKind
+  ProviderKind,
+  ReferenceImageMode
 } from "./types.js";
 import {
   GENERAL_LAUNCH_ID,
@@ -37,6 +38,7 @@ export const DEFAULT_IMAGE_PARAMS: OpenAIImageParams = {
   launchId: GPT_IMAGE_2_LAUNCH_ID,
   model: GPT_IMAGE_2_MODEL,
   imageRoute: "auto",
+  referenceImageMode: "original",
   size: "auto",
   quality: "auto",
   outputFormat: "png",
@@ -53,6 +55,7 @@ export const DEFAULT_GEMINI_IMAGE_PARAMS: GeminiImageParams = {
   providerKind: "gemini",
   launchId: NANO_BANANA_3_LAUNCH_ID,
   model: NANO_BANANA_3_MODEL_ID,
+  referenceImageMode: "original",
   aspectRatio: "1:1",
   resolution: "1K",
   outputCount: 1,
@@ -65,6 +68,7 @@ export const DEFAULT_GENERAL_IMAGE_PARAMS: GeneralImageParams = {
   providerKind: "custom",
   launchId: GENERAL_LAUNCH_ID,
   model: "",
+  referenceImageMode: "original",
   outputCount: 1,
   timeoutMs: 240000
 };
@@ -73,6 +77,7 @@ export const IMAGE_QUALITY_OPTIONS = ["auto", "low", "medium", "high"] as const 
 export const IMAGE_FORMAT_OPTIONS = ["png", "jpeg", "webp"] as const satisfies readonly ImageFormat[];
 export const IMAGE_BACKGROUND_OPTIONS = ["auto", "opaque"] as const satisfies readonly ImageBackground[];
 export const MODERATION_MODE_OPTIONS = ["auto", "low"] as const satisfies readonly ModerationMode[];
+export const REFERENCE_IMAGE_MODE_OPTIONS = ["original", "optimized"] as const satisfies readonly ReferenceImageMode[];
 export const PROVIDER_KIND_OPTIONS = ["openai", "gemini", "custom"] as const satisfies readonly ProviderKind[];
 export const FOCUSED_LAUNCH_OPTIONS = [GPT_IMAGE_2_LAUNCH_ID, NANO_BANANA_3_LAUNCH_ID, GENERAL_LAUNCH_ID] as const satisfies readonly FocusedLaunchId[];
 export const GEMINI_ASPECT_RATIO_OPTIONS = ["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"] as const satisfies readonly GeminiAspectRatio[];
@@ -260,6 +265,9 @@ export function validateOpenAIImageParams(params: unknown): ValidationResult {
   if (!isOneOf(params.moderation, MODERATION_MODE_OPTIONS)) {
     return { ok: false, message: "内容审核参数需为 auto 或 low。" };
   }
+  if (params.referenceImageMode !== undefined && !isOneOf(params.referenceImageMode, REFERENCE_IMAGE_MODE_OPTIONS)) {
+    return { ok: false, message: "参考图传输模式无效。" };
+  }
   const size = validateGptImage2Size(params.size);
   if (!size.ok) return size;
   if (!isInteger(params.n) || params.n < 1 || params.n > 10) {
@@ -289,6 +297,9 @@ export function validateGeminiImageParams(params: unknown): ValidationResult {
   }
   if (typeof params.model !== "string" || !params.model.trim()) {
     return { ok: false, message: "模型参数无效。" };
+  }
+  if (params.referenceImageMode !== undefined && !isOneOf(params.referenceImageMode, REFERENCE_IMAGE_MODE_OPTIONS)) {
+    return { ok: false, message: "参考图传输模式无效。" };
   }
   if (!isOneOf(params.aspectRatio, GEMINI_ASPECT_RATIO_OPTIONS)) {
     return { ok: false, message: "Gemini 图片比例参数无效。" };
@@ -323,6 +334,9 @@ export function validateGeneralImageParams(params: unknown): ValidationResult {
   }
   if (typeof params.model !== "string") {
     return { ok: false, message: "模型参数无效。" };
+  }
+  if (params.referenceImageMode !== undefined && !isOneOf(params.referenceImageMode, REFERENCE_IMAGE_MODE_OPTIONS)) {
+    return { ok: false, message: "参考图传输模式无效。" };
   }
   if (!isInteger(params.outputCount) || params.outputCount < 1 || params.outputCount > 1) {
     return { ok: false, message: "General 首期输出数量固定为 1。" };

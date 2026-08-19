@@ -36,10 +36,34 @@ describe("reference preflight", () => {
     ]);
   });
 
-  it("plans a non-destructive request copy for oversized references without a mask", () => {
+  it("keeps oversized references unchanged unless optimized request copies are enabled", () => {
     const summaries = buildReferencePreflightSummaries([
       asset({ id: "large", name: "large.jpg", mimeType: "image/jpeg", width: 8000, height: 6000, sizeBytes: 40 * 1024 * 1024 })
     ]);
+
+    expect(summaries?.[0]).toMatchObject({
+      id: "large",
+      role: "reference",
+      reason: "byte_limit",
+      blocked: false,
+      original: { mime: "image/jpeg", width: 8000, height: 6000, bytes: 40 * 1024 * 1024 },
+      request: {
+        mime: "image/jpeg",
+        width: 8000,
+        height: 6000,
+        downsampled: false
+      }
+    });
+    expect(summaries?.[0]?.warning).toContain("keep the original file size");
+    expect(referencePreflightBlockingMessage(summaries)).toBeUndefined();
+  });
+
+  it("plans a non-destructive request copy when optimized reference uploads are enabled", () => {
+    const summaries = buildReferencePreflightSummaries(
+      [asset({ id: "large", name: "large.jpg", mimeType: "image/jpeg", width: 8000, height: 6000, sizeBytes: 40 * 1024 * 1024 })],
+      undefined,
+      { allowReferenceDownsampling: true }
+    );
 
     expect(summaries?.[0]).toMatchObject({
       id: "large",
@@ -56,6 +80,25 @@ describe("reference preflight", () => {
     expect(summaries?.[0]?.request.height).toBeLessThan(6000);
     expect(summaries?.[0]?.warning).toContain("temporary downsampled request copy");
     expect(referencePreflightBlockingMessage(summaries)).toBeUndefined();
+  });
+
+  it("re-encodes non-alpha PNG references as JPEG request copies for faster uploads", () => {
+    const summaries = buildReferencePreflightSummaries(
+      [asset({ id: "photo", name: "photo.png", mimeType: "image/png", width: 1402, height: 1122, sizeBytes: 3 * 1024 * 1024, hasAlpha: false })],
+      undefined,
+      { allowReferenceDownsampling: true }
+    );
+
+    expect(summaries?.[0]).toMatchObject({
+      id: "photo",
+      role: "reference",
+      reason: "byte_limit",
+      blocked: false,
+      request: {
+        mime: "image/jpeg",
+        downsampled: true
+      }
+    });
   });
 
   it("preserves mask and source sizes when a mask is present", () => {

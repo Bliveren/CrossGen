@@ -12,6 +12,8 @@ export type ImageBackground = "auto" | "opaque";
 
 export type ModerationMode = "auto" | "low";
 
+export type ReferenceImageMode = "original" | "optimized";
+
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
 
 export type MediaKind = "image" | "animated-gif" | "video";
@@ -311,6 +313,7 @@ export interface OpenAIImageParams {
   launchId: "gpt-image-2";
   model: string;
   imageRoute: OpenAIImageRouteSelection;
+  referenceImageMode?: ReferenceImageMode;
   size: string;
   quality: ImageQuality;
   outputFormat: ImageFormat;
@@ -331,6 +334,7 @@ export interface GeminiImageParams {
   providerKind: "gemini";
   launchId: "nano-banana-3";
   model: string;
+  referenceImageMode?: ReferenceImageMode;
   aspectRatio: GeminiAspectRatio;
   resolution: GeminiResolution;
   outputCount: number;
@@ -343,6 +347,7 @@ export interface GeneralImageParams {
   providerKind: ProviderKind;
   launchId: "general";
   model: string;
+  referenceImageMode?: ReferenceImageMode;
   outputCount: number;
   timeoutMs: number;
 }

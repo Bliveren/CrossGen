@@ -62,6 +62,7 @@ describe("gpt-image-2 validation", () => {
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, outputFormat: "gif" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, background: "transparent" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, moderation: "strict" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, referenceImageMode: "silent-compress" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
   });
 
   it("validates provider-specific image param union members", () => {

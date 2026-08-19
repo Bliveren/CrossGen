@@ -9,7 +9,7 @@ export interface ReferencePreflightLimits {
 }
 
 export const DEFAULT_REFERENCE_PREFLIGHT_LIMITS: ReferencePreflightLimits = {
-  warnBytes: 12 * 1024 * 1024,
+  warnBytes: 2 * 1024 * 1024,
   warnPixels: 16_000_000,
   hardBytes: 50 * 1024 * 1024,
   hardPixels: 50_000_000,
@@ -23,6 +23,7 @@ interface ReferencePreflightAssetInput {
 
 interface BuildReferencePreflightOptions {
   limits?: Partial<ReferencePreflightLimits>;
+  allowReferenceDownsampling?: boolean;
 }
 
 function normalizedLimits(input?: Partial<ReferencePreflightLimits>): ReferencePreflightLimits {
@@ -91,7 +92,7 @@ function estimatedRequestMetadata(
   const originalPixels = Math.max(1, original.width * original.height);
   const targetPixels = Math.max(1, target.width * target.height);
   return {
-    mime: original.mime === "image/jpeg" ? "image/jpeg" : "image/png",
+    mime: original.mime === "image/jpeg" || original.hasAlpha === false ? "image/jpeg" : "image/png",
     width: target.width,
     height: target.height,
     bytes: Math.max(1, Math.min(original.bytes, Math.round(original.bytes * (targetPixels / originalPixels)))),
@@ -137,6 +138,7 @@ function warningFor(input: {
   reason: ReferencePreflightReason;
   blocked: boolean;
   limits: ReferencePreflightLimits;
+  allowReferenceDownsampling: boolean;
 }): string | undefined {
   const label = input.role === "mask" ? "Mask" : "Reference image";
   const name = input.asset.name ? ` "${input.asset.name}"` : "";
@@ -147,12 +149,18 @@ function warningFor(input: {
     return `${label}${name} dimensions (${dimensions}) do not match the source image dimensions. Use a mask with the same width and height as the first reference image before retrying.`;
   }
   if (input.blocked) {
-    return `${label}${name} is too large for a safe provider request (${dimensions}, ${input.metadata.bytes} bytes). Reduce image size before retrying.`;
+    if (input.allowReferenceDownsampling) {
+      return `${label}${name} is too large for a safe provider request (${dimensions}, ${input.metadata.bytes} bytes). Reduce image size before retrying.`;
+    }
+    return `${label}${name} is too large for a safe provider request (${dimensions}, ${input.metadata.bytes} bytes). Enable optimized request copies in Parameters or reduce image size before retrying.`;
   }
   if (input.role === "mask" && (input.metadata.bytes > input.limits.warnBytes || (pixels ?? 0) > input.limits.warnPixels)) {
     return `${label}${name} is preserved without downsampling; large masks may reduce compatible endpoint success rates.`;
   }
   if ((input.reason === "byte_limit" || input.reason === "provider_limit") && !input.request.downsampled) {
+    if (!input.allowReferenceDownsampling) {
+      return `${label}${name} is large (${input.metadata.bytes} bytes). CrossGen will keep the original file size for this request. You can enable optimized request copies in Parameters if you want a temporary smaller upload copy without changing the source file.`;
+    }
     return `${label}${name} is large (${input.metadata.bytes} bytes), but CrossGen could not plan a safe request copy because dimensions were unavailable.`;
   }
   if (input.reason === "byte_limit") {
@@ -179,7 +187,7 @@ export function buildReferencePreflightSummaries(
   if (assets.length === 0) return undefined;
 
   const limits = normalizedLimits(options.limits);
-  const allowReferenceDownsampling = !maskAsset;
+  const allowReferenceDownsampling = options.allowReferenceDownsampling ?? false;
   const firstReference = inputAssets[0] ? metadataFor(inputAssets[0]) : undefined;
   const maskMetadata = maskAsset ? metadataFor(maskAsset) : undefined;
   const maskDimensionMismatch = Boolean(firstReference && maskMetadata && dimensionsKnown(firstReference) && dimensionsKnown(maskMetadata) && !dimensionsEqual(firstReference, maskMetadata));
@@ -199,7 +207,7 @@ export function buildReferencePreflightSummaries(
       reason,
       blocked
     };
-    const warning = warningFor({ asset, metadata: original, request: summary.request, role, reason, blocked, limits });
+    const warning = warningFor({ asset, metadata: original, request: summary.request, role, reason, blocked, limits, allowReferenceDownsampling });
     return warning ? { ...summary, warning } : summary;
   });
 }

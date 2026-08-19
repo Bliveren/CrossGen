@@ -204,6 +204,10 @@ export interface UiCopy {
   imageRouteInpaintLocked: string;
   imageRouteUnverifiedDefault: string;
   imageRouteInfo: string;
+  referenceImageMode: string;
+  referenceImageModeOriginal: string;
+  referenceImageModeOptimized: string;
+  referenceImageModeInfo: string;
   hide: string;
   show: string;
   promptTemplates: string;
@@ -674,6 +678,10 @@ export const translations: Record<Language, UiCopy> = {
     imageRouteInpaintLocked: "Mask edits use Image API.",
     imageRouteUnverifiedDefault: "Unverified, using the default strategy",
     imageRouteInfo: "CrossGen automatically probes the fastest path after API setup. For aggregator platforms, the chat path is recommended.",
+    referenceImageMode: "Reference upload",
+    referenceImageModeOriginal: "Original",
+    referenceImageModeOptimized: "Optimized copy",
+    referenceImageModeInfo: "CrossGen keeps reference images at original size by default. Choose optimized copy to send a temporary smaller request copy; the original file is unchanged.",
     hide: "Hide",
     show: "Show",
     promptTemplates: "Prompt templates",
@@ -1209,6 +1217,10 @@ export const translations: Record<Language, UiCopy> = {
     imageRouteInpaintLocked: "蒙版编辑固定使用 Image API。",
     imageRouteUnverifiedDefault: "未验证，按默认策略使用",
     imageRouteInfo: "CrossGen会在用户配置好api后自动探测最快路径，如果使用聚合平台，推荐使用chat路径",
+    referenceImageMode: "参考图传输",
+    referenceImageModeOriginal: "使用原图",
+    referenceImageModeOptimized: "优化副本",
+    referenceImageModeInfo: "CrossGen默认保留参考图原始大小。选择优化副本时，仅发送临时缩小后的请求副本，原图文件不会被修改。",
     hide: "收起",
     show: "展开",
     promptTemplates: "提示词模板",

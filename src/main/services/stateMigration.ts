@@ -29,6 +29,7 @@ import {
   IMAGE_FORMAT_OPTIONS,
   IMAGE_QUALITY_OPTIONS,
   MODERATION_MODE_OPTIONS,
+  REFERENCE_IMAGE_MODE_OPTIONS,
   defaultStreamingPartialsEnabled,
   normalizeBaseURL
 } from "../../shared/validation.js";
@@ -455,6 +456,7 @@ export function normalizeImageParams(value: unknown): ImageParams {
       providerKind,
       launchId: GENERAL_LAUNCH_ID,
       model: nonEmptyString(input.model, defaults.model),
+      referenceImageMode: oneOf(input.referenceImageMode, REFERENCE_IMAGE_MODE_OPTIONS, defaults.referenceImageMode ?? "original"),
       outputCount: boundedInteger(input.outputCount, 1, 1, defaults.outputCount),
       timeoutMs: boundedInteger(input.timeoutMs, 30000, 600000, defaults.timeoutMs)
     };
@@ -467,6 +469,7 @@ export function normalizeImageParams(value: unknown): ImageParams {
       providerKind: "gemini",
       launchId: NANO_BANANA_3_LAUNCH_ID,
       model: nonEmptyString(input.model, defaults.model),
+      referenceImageMode: oneOf(input.referenceImageMode, REFERENCE_IMAGE_MODE_OPTIONS, defaults.referenceImageMode ?? "original"),
       aspectRatio: oneOf(input.aspectRatio, ["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"] as const, defaults.aspectRatio),
       resolution: oneOf(input.resolution, ["0.5K", "1K", "2K", "4K"] as const, defaults.resolution),
       outputCount: boundedInteger(input.outputCount, 1, 1, defaults.outputCount),
@@ -486,6 +489,7 @@ function normalizeOpenAIImageParams(input: Record<string, unknown>): OpenAIImage
     launchId: GPT_IMAGE_2_LAUNCH_ID,
     model: nonEmptyString(input.model, GPT_IMAGE_2_MODEL_ID),
     imageRoute: oneOf(input.imageRoute, ["auto", "image-api", "responses", "chat-completions"] as const, DEFAULT_IMAGE_PARAMS.imageRoute),
+    referenceImageMode: oneOf(input.referenceImageMode, REFERENCE_IMAGE_MODE_OPTIONS, DEFAULT_IMAGE_PARAMS.referenceImageMode ?? "original"),
     size: nonEmptyString(input.size, DEFAULT_IMAGE_PARAMS.size),
     quality: oneOf(input.quality, IMAGE_QUALITY_OPTIONS, DEFAULT_IMAGE_PARAMS.quality),
     outputFormat: oneOf(input.outputFormat, IMAGE_FORMAT_OPTIONS, DEFAULT_IMAGE_PARAMS.outputFormat),

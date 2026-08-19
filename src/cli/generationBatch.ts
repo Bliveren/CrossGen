@@ -11,6 +11,7 @@ export interface GenerationPromptFileEntry {
   quality?: string;
   aspectRatio?: string;
   resolution?: string;
+  referenceImageMode?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -63,7 +64,8 @@ function parseJsonLine(line: string, lineNumber: number): GenerationPromptFileEn
     size: optionalString(parsed, "size"),
     quality: optionalString(parsed, "quality"),
     aspectRatio: optionalString(parsed, "aspectRatio", "aspect_ratio"),
-    resolution: optionalString(parsed, "resolution")
+    resolution: optionalString(parsed, "resolution"),
+    referenceImageMode: optionalString(parsed, "referenceImageMode", "reference_image_mode")
   };
 }
 
