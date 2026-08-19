@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-08-19T15:47:38.083Z",
+  "lastUpdated": "2026-08-19T15:55:02.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -228,6 +228,10 @@
           {
             "label": "Native Windows and Linux release package tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/4"
+          },
+          {
+            "label": "v0.3.2 RC 1 draft release assets for product-owner testing",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-4b8ca9b9284305c4bb1e"
           }
         ],
         "artifacts": [
@@ -250,7 +254,7 @@
             "description": "Unpacked Windows app used by native launch verification and packaged CLI/MCP smoke."
           }
         ],
-        "summary": "Windows native release validation passed on the rebuilt v0.3.2 package. The earlier packaged MCP smoke exposed a transient Windows queue-file rename failure; the queue store now retries EPERM, EBUSY, and EACCES atomic rename failures, and the rebuilt installer passed full install/uninstall plus packaged CLI/MCP and agent integration smoke."
+        "summary": "Windows native release validation passed on the rebuilt v0.3.2 package. The earlier packaged MCP smoke exposed a transient Windows queue-file rename failure; the queue store now retries EPERM, EBUSY, and EACCES atomic rename failures, and the rebuilt installer passed full install/uninstall plus packaged CLI/MCP and agent integration smoke. The candidate artifacts were uploaded to a draft v0.3.2 RC 1 GitHub Release for product-owner business testing; the draft uses GitHub's untagged draft URL and is not the final public v0.3.2 release."
       }
     },
     {
@@ -279,6 +283,10 @@
           {
             "label": "Native Windows and Linux release package tracker",
             "url": "https://github.com/Bliveren/image2tools/issues/4"
+          },
+          {
+            "label": "v0.3.2 RC 1 draft release assets for product-owner testing",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-4b8ca9b9284305c4bb1e"
           }
         ],
         "artifacts": [
@@ -295,7 +303,7 @@
             "description": "Unpacked Linux app used by Xvfb native launch verification and packaged CLI/MCP smoke in the Linux release clone."
           }
         ],
-        "summary": "Linux AppImage validation passed. The verifier confirmed the AppImage and unpacked executable are x86-64 ELF binaries, launched the unpacked app, launched the direct AppImage, extracted the AppImage and launched the extracted app under Xvfb, then packaged CLI/MCP and agent integration smoke passed against the unpacked Linux executable."
+        "summary": "Linux AppImage validation passed. The verifier confirmed the AppImage and unpacked executable are x86-64 ELF binaries, launched the unpacked app, launched the direct AppImage, extracted the AppImage and launched the extracted app under Xvfb, then packaged CLI/MCP and agent integration smoke passed against the unpacked Linux executable. The candidate artifacts were uploaded to a draft v0.3.2 RC 1 GitHub Release for product-owner business testing; the draft uses GitHub's untagged draft URL and is not the final public v0.3.2 release."
       }
     },
     {
@@ -319,10 +327,14 @@
           {
             "label": "Update manifest rules",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/updates/README.md"
+          },
+          {
+            "label": "v0.3.2 RC 1 draft release assets for product-owner testing",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-4b8ca9b9284305c4bb1e"
           }
         ],
         "artifacts": [],
-        "summary": "Pending final v0.3.2 release asset upload and update manifest promotion. The manifest must remain on v0.3.1 until exact-package approval."
+        "summary": "Pending final v0.3.2 public release asset upload and update manifest promotion. A draft v0.3.2 RC 1 release now contains Windows and Linux candidate assets for product-owner testing, but docs/updates/latest.json must remain on v0.3.1 until final exact-package approval and final public release URLs exist."
       }
     },
     {
