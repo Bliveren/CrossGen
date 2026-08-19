@@ -75,7 +75,7 @@ export async function probeOpenAIImageRouting(
   fetchImpl: typeof fetch = fetch,
   nowIso: () => string = () => new Date().toISOString()
 ): Promise<OpenAIImageRouting | undefined> {
-  if (config.kind !== "openai" || config.activeLaunchId !== GPT_IMAGE_2_LAUNCH_ID) return config.openAIImageRouting;
+  if (!shouldProbeOpenAIImageRouting(config)) return config.openAIImageRouting;
 
   const model = config.activeModelId || config.defaultModel || GPT_IMAGE_2_MODEL_ID;
   const probeTimeoutMs = Math.min(Math.max(Math.floor(config.timeoutMs / 8), 2500), 8000);
@@ -104,6 +104,20 @@ export async function probeOpenAIImageRouting(
     probes,
     updatedAt: nowIso()
   };
+}
+
+function shouldProbeOpenAIImageRouting(config: StoredProviderConfig): boolean {
+  if (config.kind === "openai") return config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID;
+  if (config.kind !== "custom") return false;
+  const activeModelId = (config.activeModelId || "").trim().toLowerCase();
+  const defaultModel = (config.defaultModel || "").trim().toLowerCase();
+  const discoveredOpenAIImageModel = config.discoveredModels.some(
+    (model) => model.providerKind === "openai" && model.id.trim().toLowerCase() === GPT_IMAGE_2_MODEL_ID.toLowerCase()
+  );
+  return config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ||
+    activeModelId === GPT_IMAGE_2_MODEL_ID.toLowerCase() ||
+    defaultModel === GPT_IMAGE_2_MODEL_ID.toLowerCase() ||
+    discoveredOpenAIImageModel;
 }
 
 export async function probeOpenAIImageRoute(

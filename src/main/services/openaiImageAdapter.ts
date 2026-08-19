@@ -69,6 +69,18 @@ interface OpenAIStreamOptions {
   };
 }
 
+export interface CompatibleChatImageRequest {
+  model: string;
+  prompt: string;
+  inputAssets: InputAsset[];
+  maskAsset?: InputAsset;
+  timeoutMs: number;
+  params?: Record<string, unknown>;
+  features?: Record<string, unknown>;
+  providerMetadata?: Record<string, unknown>;
+  stream?: boolean;
+}
+
 type JsonImageFetchPurpose = "empty-retry" | "backfill";
 type EditImageFieldName = "image" | "image[]" | "images";
 
@@ -525,11 +537,12 @@ function preferredOpenAIImageRouteForJob(
   options: OpenAIStreamOptions,
   mode: "generate" | "edit"
 ) {
-  if (job.maskAsset) return "image-api";
   if (job.params.imageRoute !== "auto") return job.params.imageRoute;
   const probedRoute = mode === "generate"
     ? options.routePreference?.preferredGenerateRoute
-    : options.routePreference?.preferredEditRoute;
+    : job.mode === "inpaint" || job.maskAsset
+      ? options.routePreference?.preferredGuidedEditRoute ?? options.routePreference?.preferredEditRoute
+      : options.routePreference?.preferredEditRoute;
   return probedRoute ?? "chat-completions";
 }
 
@@ -758,6 +771,45 @@ async function fetchChatCompletionsImageResponse(
   );
 }
 
+export async function runCompatibleChatImageRequest(
+  job: GenerationJob,
+  request: CompatibleChatImageRequest,
+  apiKey: string,
+  baseURL: string,
+  runtime: OpenAIImageRuntime,
+  options: Pick<OpenAIStreamOptions, "abortSignal" | "attemptContext"> = {}
+): Promise<GenerationJob> {
+  emitCompatibleChatAttempt(job, runtime, options);
+  const response = await fetchWithTimeout(
+    runtime.fetch,
+    buildEndpoint(baseURL, "/chat/completions"),
+    {
+      method: "POST",
+      signal: options.abortSignal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        Accept: request.stream === false ? "application/json" : "text/event-stream"
+      },
+      body: JSON.stringify(await compatibleChatImageRequestBody(request))
+    },
+    request.timeoutMs
+  );
+  const parseJob = compatibleChatParseJob(job, request);
+  const parsed = await handleImagesResponse(response, parseJob, job.mode === "generate" ? "image_generation" : "image_edit", runtime);
+  return {
+    ...job,
+    outputs: parsed.outputs,
+    usage: parsed.usage,
+    providerMetadata: {
+      ...job.providerMetadata,
+      ...request.providerMetadata
+    },
+    status: "succeeded",
+    updatedAt: new Date().toISOString()
+  };
+}
+
 async function chatCompletionsImageRequestBody(job: OpenAIImageJob): Promise<Record<string, unknown>> {
   return {
     model: job.params.model,
@@ -775,6 +827,93 @@ async function chatCompletionsImageRequestBody(job: OpenAIImageJob): Promise<Rec
   };
 }
 
+async function compatibleChatImageRequestBody(request: CompatibleChatImageRequest): Promise<Record<string, unknown>> {
+  return {
+    model: request.model,
+    stream: request.stream ?? true,
+    params: request.params ?? {},
+    features: request.features ?? {
+      image_generation: false
+    },
+    messages: [
+      {
+        role: "user",
+        content: await compatibleChatImageContent(request)
+      }
+    ]
+  };
+}
+
+async function compatibleChatImageContent(request: CompatibleChatImageRequest): Promise<Array<Record<string, unknown>>> {
+  const content: Array<Record<string, unknown>> = [
+    {
+      type: "text",
+      text: request.prompt.trim()
+    }
+  ];
+
+  for (const asset of request.inputAssets) {
+    content.push({
+      type: "image_url",
+      image_url: {
+        url: await assetToDataUrl(asset)
+      }
+    });
+  }
+
+  if (request.maskAsset) {
+    content.push({
+      type: "image_url",
+      image_url: {
+        url: await assetToDataUrl(request.maskAsset)
+      }
+    });
+  }
+
+  return content;
+}
+
+function compatibleChatParseJob(job: GenerationJob, request: CompatibleChatImageRequest): OpenAIImageJob {
+  return {
+    ...job,
+    providerKind: "openai",
+    launchId: "gpt-image-2",
+    modelId: request.model,
+    params: {
+      providerKind: "openai",
+      launchId: "gpt-image-2",
+      model: request.model,
+      imageRoute: "chat-completions",
+      size: "auto",
+      quality: "auto",
+      outputFormat: "png",
+      outputCompression: 100,
+      background: "auto",
+      n: 1,
+      stream: request.stream ?? true,
+      partialImages: request.stream === false ? 0 : 1,
+      moderation: "auto",
+      timeoutMs: request.timeoutMs
+    }
+  };
+}
+
+function emitCompatibleChatAttempt(
+  job: GenerationJob,
+  runtime: OpenAIImageRuntime,
+  options: Pick<OpenAIStreamOptions, "attemptContext">
+): void {
+  const context = options.attemptContext;
+  if (!context) return;
+  context.count += 1;
+  runtime.sendJobEvent({
+    jobId: job.id,
+    type: "attempt",
+    attemptIndex: context.count,
+    route: "chat-completions"
+  });
+}
+
 async function chatCompletionsImageContent(job: OpenAIImageJob): Promise<Array<Record<string, unknown>>> {
   const content: Array<Record<string, unknown>> = [
     {
@@ -788,6 +927,15 @@ async function chatCompletionsImageContent(job: OpenAIImageJob): Promise<Array<R
       type: "image_url",
       image_url: {
         url: await assetToDataUrl(asset)
+      }
+    });
+  }
+
+  if (job.maskAsset) {
+    content.push({
+      type: "image_url",
+      image_url: {
+        url: await assetToDataUrl(job.maskAsset)
       }
     });
   }

@@ -13,9 +13,9 @@ export interface ProviderKeyResolver {
 }
 
 export function getProviderEnvKeyNames(providerKind: ProviderKind): string[] {
-  if (providerKind === "gemini") return ["CROSSGEN_GEMINI_API_KEY", "CROSSGEN_API_KEY"];
-  if (providerKind === "custom") return ["CROSSGEN_CUSTOM_API_KEY", "CROSSGEN_API_KEY"];
-  return ["CROSSGEN_OPENAI_API_KEY", "CROSSGEN_API_KEY"];
+  if (providerKind === "gemini") return ["CROSSGEN_GEMINI_API_KEY", "IMAGE2TOOLS_GEMINI_API_KEY", "AIHUB_GEMINI_API_KEY", "CROSSGEN_API_KEY", "IMAGE2TOOLS_API_KEY", "AIHUB_API_KEY"];
+  if (providerKind === "custom") return ["CROSSGEN_CUSTOM_API_KEY", "IMAGE2TOOLS_API_KEY", "AIHUB_API_KEY", "CROSSGEN_API_KEY"];
+  return ["CROSSGEN_OPENAI_API_KEY", "IMAGE2TOOLS_API_KEY", "AIHUB_API_KEY", "CROSSGEN_API_KEY"];
 }
 
 export function describeKeySource(source: KeySource): string {

@@ -134,6 +134,39 @@ describe("OpenAI image route probing", () => {
     ]);
   });
 
+  it("probes custom compatible providers when they already expose GPT Image 2", async () => {
+    const requests: Array<string> = [];
+    const fetchImpl = (async (url: string | URL | Request) => {
+      requests.push(String(url));
+      return new Response(JSON.stringify({ error: { message: "validation error" } }), {
+        status: 400,
+        headers: { "content-type": "application/json" }
+      });
+    }) as typeof fetch;
+
+    const routing = await probeOpenAIImageRouting(
+      {
+        ...defaultStoredConfig,
+        kind: "custom",
+        baseURL: "https://api.test/v1",
+        activeLaunchId: "gpt-image-2",
+        activeModelId: "gpt-image-2",
+        defaultModel: "gpt-image-2",
+        discoveredModels: [{ id: "gpt-image-2", providerKind: "openai" }],
+        timeoutMs: 60000
+      },
+      "sk-test",
+      fetchImpl,
+      () => "2026-07-19T12:00:00.000Z"
+    );
+
+    expect(routing?.probes).toHaveLength(9);
+    expect(requests).toHaveLength(9);
+    expect(routing?.preferredGenerateRoute).toBe("chat-completions");
+    expect(routing?.preferredEditRoute).toBe("chat-completions");
+    expect(routing?.preferredGuidedEditRoute).toBe("chat-completions");
+  });
+
   it("keeps text-to-image route verification separate from image-to-image verification", async () => {
     const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);

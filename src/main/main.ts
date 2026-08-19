@@ -58,6 +58,7 @@ import type {
   TemplateExportFormat,
   UpdateCheckResult,
   UpdateInstallResult,
+  WorkMode,
   WorkspaceDraft,
   WorkspaceDraftInput
 } from "../shared/types.js";
@@ -80,6 +81,7 @@ import {
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
+  getProviderKindForFocusedModelId,
   getFocusedModelDefinition,
   getModelDisplayName,
   isGeneralFallbackProvider,
@@ -150,6 +152,7 @@ import { probeOpenAIImageRouting } from "./services/openaiImageRouting.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
+import { canRunRequestWithConfig } from "./services/providerRequestMatch.js";
 import { assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, historyAssetReadRoots, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
 import {
   diskGalleryFoldersFromState,
@@ -247,8 +250,8 @@ interface PackageMetadata {
 }
 
 class ApiKeyDecryptionError extends Error {
-  constructor(cause?: unknown) {
-    super(API_KEY_DECRYPTION_MESSAGE, cause === undefined ? undefined : { cause });
+  constructor() {
+    super(API_KEY_DECRYPTION_MESSAGE);
     this.name = "ApiKeyDecryptionError";
   }
 }
@@ -706,8 +709,8 @@ function decryptApiKey(config: StoredProviderConfig): string | null {
     }
     try {
       return safeStorage.decryptString(Buffer.from(config.encryptedApiKey, "base64"));
-    } catch (error) {
-      throw new ApiKeyDecryptionError(error);
+    } catch {
+      throw new ApiKeyDecryptionError();
     }
   }
 
@@ -2818,6 +2821,17 @@ async function completeGenerationQueueItemWithState(
         partialAssetIds: mergeStringIds(nextExecution.partialAssetIds, jobToPersist.outputs.filter((asset) => asset.sourceType === "partial").map((asset) => asset.id)),
         galleryAssetIds
       };
+    } else if (execution.status === "failed" || execution.status === "cancelled") {
+      const existingJob = item.historyJobId ? currentState.history.find((job) => job.id === item.historyJobId) : undefined;
+      if (existingJob) {
+        const jobToPersist = terminalJobForQueueExecution(existingJob, execution, nowIso);
+        eventJob = jobToPersist;
+        nextState = upsertJobInState(nextState, jobToPersist);
+        nextExecution = {
+          ...nextExecution,
+          historyJobId: jobToPersist.id
+        };
+      }
     }
 
     const completed = completeGenerationQueueItemInQueue(queue, item, nextExecution, nowMs);
@@ -3538,16 +3552,6 @@ async function handleRetryQueueItem(_event: IpcMainInvokeEvent, jobId: string): 
   const snapshot = await buildDesktopQueueSnapshot(result.queue);
   sendQueueSnapshot(snapshot);
   return snapshot;
-}
-
-function canRunRequestWithConfig(request: RunJobRequest, config: StoredProviderConfig): boolean {
-  if (request.params.providerKind === config.kind) return true;
-  if (request.params.launchId !== config.activeLaunchId) return false;
-
-  const requestedModelId = normalizeModelId(request.params.model);
-  return config.discoveredModels.some(
-    (model) => model.providerKind === request.params.providerKind && normalizeModelId(model.id) === requestedModelId
-  );
 }
 
 async function handleDownloadAsset(_event: IpcMainInvokeEvent, request: DownloadRequest): Promise<string | null> {
@@ -4703,7 +4707,7 @@ async function retryGenerationQueueItemForCli(jobId: string) {
 
 interface AgentGenerationEnqueueInput {
   source: QueueSource;
-  mode: "generate" | "edit";
+  mode: WorkMode;
   prompt: string;
   inputPaths: string[];
   maskPath?: string;
@@ -4768,10 +4772,33 @@ function activeProviderModel(provider: StoredProviderConfig, override?: string):
   return override?.trim() || provider.activeModelId || provider.defaultModel;
 }
 
+function agentModelProviderKind(provider: StoredProviderConfig, model: string, override?: string): StoredProviderConfig["kind"] {
+  const normalizedModel = normalizeModelId(model);
+  const discoveredModel = provider.discoveredModels.find((candidate) => normalizeModelId(candidate.id) === normalizedModel);
+  const focusedProviderKind = getProviderKindForFocusedModelId(model);
+
+  if (override?.trim()) {
+    return focusedProviderKind ?? discoveredModel?.providerKind ?? provider.kind;
+  }
+
+  if (provider.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID) return "openai";
+  if (provider.activeLaunchId === NANO_BANANA_3_LAUNCH_ID) return "gemini";
+  return focusedProviderKind ?? discoveredModel?.providerKind ?? provider.kind;
+}
+
 function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGenerationEnqueueInput): ImageParams {
   const model = activeProviderModel(provider, input.model);
   const timeoutMs = input.timeoutMs ?? provider.timeoutMs;
-  if (provider.activeLaunchId === GENERAL_LAUNCH_ID) {
+  const modelProviderKind = agentModelProviderKind(provider, model, input.model);
+  const activeLaunchId = input.model?.trim()
+    ? modelProviderKind === "gemini"
+      ? NANO_BANANA_3_LAUNCH_ID
+      : modelProviderKind === "openai"
+        ? GPT_IMAGE_2_LAUNCH_ID
+        : GENERAL_LAUNCH_ID
+    : provider.activeLaunchId;
+
+  if (activeLaunchId === GENERAL_LAUNCH_ID) {
     return {
       ...DEFAULT_GENERAL_IMAGE_PARAMS,
       providerKind: provider.kind,
@@ -4779,7 +4806,7 @@ function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGener
       timeoutMs
     };
   }
-  if (provider.kind === "gemini" || provider.activeLaunchId === NANO_BANANA_3_LAUNCH_ID) {
+  if (modelProviderKind === "gemini" || activeLaunchId === NANO_BANANA_3_LAUNCH_ID) {
     return {
       ...DEFAULT_GEMINI_IMAGE_PARAMS,
       providerKind: "gemini",
@@ -4792,11 +4819,14 @@ function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGener
   return {
     ...DEFAULT_IMAGE_PARAMS,
     providerKind: "openai",
+    launchId: GPT_IMAGE_2_LAUNCH_ID,
     model,
     imageRoute:
       input.mode === "generate"
         ? provider.openAIImageRouting?.preferredGenerateRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute
-        : provider.openAIImageRouting?.preferredEditRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute,
+        : input.mode === "inpaint"
+          ? provider.openAIImageRouting?.preferredGuidedEditRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute
+          : provider.openAIImageRouting?.preferredEditRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute,
     size: input.size ?? (provider.defaultSize || DEFAULT_IMAGE_PARAMS.size),
     quality: (input.quality as ImageQuality | undefined) ?? provider.defaultQuality,
     stream: false,
@@ -4955,7 +4985,7 @@ function readGenerationPromptFileEntriesFromCli(args: string[]): { path: string;
 function getCliGenerationInputPaths(args: string[], command: string): string[] {
   const explicit = getCliOptions(args, "--input");
   if (explicit.length > 0) return explicit;
-  return command === "edit" ? getCliPositionalsAfter(args, command) : [];
+  return command === "edit" || command === "inpaint" ? getCliPositionalsAfter(args, command) : [];
 }
 
 function cliCommandErrorPayload(error: CliCommandModeError) {
@@ -5321,8 +5351,7 @@ function normalizeCliMcpMode(value: string | undefined): McpMode {
 }
 
 function envApiKeyAvailable(kind: StoredProviderConfig["kind"]): boolean {
-  const providerSpecific = kind === "gemini" ? "CROSSGEN_GEMINI_API_KEY" : kind === "custom" ? "CROSSGEN_CUSTOM_API_KEY" : "CROSSGEN_OPENAI_API_KEY";
-  return Boolean(process.env[providerSpecific]?.trim() || process.env.CROSSGEN_API_KEY?.trim());
+  return getProviderEnvKeyNames(kind).some((name) => Boolean(process.env[name]?.trim()));
 }
 
 function savedApiKeyPresentForCli(config: StoredProviderConfig): boolean {
@@ -5407,7 +5436,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       return 0;
     }
 
-    if (command === "generate" || command === "edit") {
+    if (command === "generate" || command === "edit" || command === "inpaint") {
       const promptFileBatch = command === "generate" ? readGenerationPromptFileEntriesFromCli(args) : null;
       const prompt = readGenerationPromptFromCli(args, command);
       if (!promptFileBatch && !prompt.trim()) {

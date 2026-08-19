@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -203,6 +203,7 @@ function resultFromJob(gate, envelope, startedAt) {
   const queueItem = job?.queueItem;
   const status = historyJob?.status ?? queueItem?.status ?? data.status ?? "unknown";
   const diagnostic = historyJob?.diagnostic ?? queueItem?.diagnostic;
+  const taskRoute = historyJob?.taskRoute ?? queueItem?.taskRoute ?? job?.taskRoute;
   const outputCount = Number(historyJob?.outputCount ?? 0);
   const durationMs = Number(historyJob?.durationMs ?? queueItem?.elapsedMs ?? 0);
   if (status === "succeeded" && outputCount > 0) {
@@ -212,7 +213,7 @@ function resultFromJob(gate, envelope, startedAt) {
       model: gate.model || historyJob?.modelId || queueItem?.modelId || null,
       operation: gate.operation,
       routeSelection: "crossgen-auto",
-      resolvedRoute: diagnostic?.route ?? queueItem?.route ?? null,
+      resolvedRoute: taskRoute?.route ?? diagnostic?.route ?? queueItem?.route ?? null,
       inputImageCount: gate.inputImageCount,
       mask: gate.mask,
       timeoutSeconds: Math.round(timeoutMs / 1000),
@@ -303,7 +304,11 @@ async function main() {
     throw new Error("CrossGen saved-config gate requires a configured provider API key. doctor --agent reported apiKeyAvailable=false.");
   }
   const providerList = requireOk(await runCli(["provider", "list"]), "provider list");
-  const providers = Array.isArray(providerList.providers) ? providerList.providers : [];
+  const modelsList = requireOk(await runCli(["models", "list"]), "models list");
+  const providers = mergeProviderModelSummaries(
+    Array.isArray(providerList.providers) ? providerList.providers : [],
+    Array.isArray(modelsList.providers) ? modelsList.providers : []
+  );
 
   const activeProvider = doctor.activeProvider ?? {};
   const openAIProvider = selectOpenAIProvider(providers, activeProvider);
@@ -381,7 +386,7 @@ main().catch((error) => {
 
 function openAIGates(provider, fixtures) {
   if (!provider) return [];
-  const model = openAIModel || provider.activeModelId || provider.defaultModel || "";
+  const model = openAIModel || openAIModelForProvider(provider);
   return [
     {
       id: "G1-crossgen-text-to-image",
@@ -397,7 +402,7 @@ function openAIGates(provider, fixtures) {
         "--folder",
         "null",
         ...providerArgs(provider),
-        ...modelArgs(openAIModel),
+        ...modelArgs(model),
         ...waitArgs(),
         "--yes"
       ]
@@ -418,7 +423,7 @@ function openAIGates(provider, fixtures) {
         "--folder",
         "null",
         ...providerArgs(provider),
-        ...modelArgs(openAIModel),
+        ...modelArgs(model),
         ...waitArgs(),
         "--yes"
       ]
@@ -431,7 +436,7 @@ function openAIGates(provider, fixtures) {
       inputImageCount: 1,
       mask: true,
       args: [
-        "edit",
+        "inpaint",
         "--prompt",
         "Use the transparent center of the mask to change only the center guided region into a bright green circle. Keep the rest stable.",
         "--input",
@@ -441,7 +446,7 @@ function openAIGates(provider, fixtures) {
         "--folder",
         "null",
         ...providerArgs(provider),
-        ...modelArgs(openAIModel),
+        ...modelArgs(model),
         ...waitArgs(),
         "--yes"
       ]
@@ -451,7 +456,7 @@ function openAIGates(provider, fixtures) {
 
 function geminiGates(provider, fixtures) {
   if (!provider) return [];
-  const model = geminiModel || provider.activeModelId || provider.defaultModel || "";
+  const model = geminiModel || geminiModelForProvider(provider);
   return [
     {
       id: "G4-crossgen-gemini-text-to-image",
@@ -467,7 +472,7 @@ function geminiGates(provider, fixtures) {
         "--folder",
         "null",
         ...providerArgs(provider),
-        ...modelArgs(geminiModel),
+        ...modelArgs(model),
         ...waitArgs(),
         "--yes"
       ]
@@ -488,7 +493,7 @@ function geminiGates(provider, fixtures) {
         "--folder",
         "null",
         ...providerArgs(provider),
-        ...modelArgs(geminiModel),
+        ...modelArgs(model),
         ...waitArgs(),
         "--yes"
       ]
@@ -517,6 +522,24 @@ function selectProviderById(providers, id, predicate) {
   return providers.find((provider) => provider.id === id && predicate(provider)) ?? null;
 }
 
+function mergeProviderModelSummaries(providers, modelProviderEntries) {
+  const byId = new Map();
+  for (const provider of providers) {
+    if (provider?.id) byId.set(provider.id, { ...provider, models: [] });
+  }
+  for (const entry of modelProviderEntries) {
+    const provider = entry?.provider;
+    if (!provider?.id) continue;
+    const current = byId.get(provider.id) ?? provider;
+    byId.set(provider.id, {
+      ...provider,
+      ...current,
+      models: Array.isArray(entry.models) ? entry.models : []
+    });
+  }
+  return [...byId.values()];
+}
+
 function publicCliArg(arg) {
   return String(arg).includes(path.sep) ? path.basename(String(arg)) : String(arg);
 }
@@ -534,12 +557,34 @@ function publicActiveProvider(provider) {
 
 function isOpenAIProvider(provider) {
   if (!provider?.enabled || !provider.apiKeySaved) return false;
-  return provider.kind === "openai" || provider.activeLaunchId === "gpt-image-2" || /gpt-image/i.test(provider.activeModelId ?? provider.defaultModel ?? "");
+  if (provider.kind === "openai") return true;
+  if (Array.isArray(provider.models) && provider.models.some((model) => model.providerKind === "openai" && /gpt-image/i.test(model.modelId ?? ""))) return true;
+  return provider.activeLaunchId === "gpt-image-2" || /gpt-image/i.test(provider.activeModelId ?? provider.defaultModel ?? "");
 }
 
 function isGeminiProvider(provider) {
   if (!provider?.enabled || !provider.apiKeySaved) return false;
-  return provider.kind === "gemini" || /gemini|banana/i.test(`${provider.activeLaunchId ?? ""} ${provider.activeModelId ?? ""} ${provider.defaultModel ?? ""}`);
+  if (provider.kind === "gemini") return true;
+  if (Array.isArray(provider.discoveredModels) && provider.discoveredModels.some((model) => model.providerKind === "gemini")) return true;
+  if (Array.isArray(provider.models) && provider.models.some((model) => model.providerKind === "gemini")) return true;
+  return /gemini|banana/i.test(`${provider.activeLaunchId ?? ""} ${provider.activeModelId ?? ""} ${provider.defaultModel ?? ""}`);
+}
+
+function openAIModelForProvider(provider) {
+  const preferredModel = provider.models?.find((model) =>
+    model.providerKind === "openai" && String(model.modelId).toLowerCase() === "gpt-image-2"
+  )?.modelId ?? provider.models?.find((model) => model.providerKind === "openai")?.modelId;
+  return preferredModel || provider.activeModelId || provider.defaultModel || "";
+}
+
+function geminiModelForProvider(provider) {
+  const preferredModel = provider.models?.find((model) =>
+    model.providerKind === "gemini" && String(model.modelId).toLowerCase() === "gemini-3.1-flash-image"
+  )?.modelId ?? provider.models?.find((model) => model.providerKind === "gemini")?.modelId;
+  const preferredDiscoveredModel = provider.discoveredModels?.find((model) =>
+    model.providerKind === "gemini" && String(model.id).toLowerCase() === "gemini-3.1-flash-image"
+  )?.id ?? provider.discoveredModels?.find((model) => model.providerKind === "gemini")?.id;
+  return preferredModel || preferredDiscoveredModel || provider.activeModelId || provider.defaultModel || "";
 }
 
 function publicSelectedProvider(provider) {

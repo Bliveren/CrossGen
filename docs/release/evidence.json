@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-08-04T03:27:56.000Z",
+  "lastUpdated": "2026-08-19T13:35:40.564Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
       "title": "Product-owner exact-package acceptance",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "The product owner installs and tests the exact v0.3.2 release-candidate package before publication.",
         "Testing covers launch, API configuration, text-to-image, image-to-image, mask/guided edit, queue visibility, cancel/retry, restart recovery, reference preflight, Gallery/History reuse, CLI, and MCP.",
@@ -16,43 +16,25 @@
         "GitHub Release publication, Latest marking, and update manifest promotion happen only after this approval is recorded."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-04T03:27:56.000Z",
-        "commit": "0411e396e99a057c504d6b40e240b57eead00d2d",
-        "environment": "macOS local product-owner acceptance on the exact signed and notarized v0.3.2 candidate package. The release shell loaded .env.local for signing and notarization credentials; secrets are not recorded.",
-        "commands": [
-          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
-          "pnpm verify:release:mac",
-          "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:cli-mcp-smoke",
-          "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:agent-integration-smoke"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "v0.3.2 development plan",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.2-plan.md"
           }
         ],
-        "artifacts": [
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
-            "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 DMG tested for product-owner acceptance. SHA256 969d0ac90626a441f3d8964d6c42ec88bf60bf2f888ad21489a54eb3697acf42, size 103973534 bytes."
-          },
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
-            "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP tested for product-owner acceptance. SHA256 0b84253f8ce6f7c30a99345f24a3755ad94ecb1c9d1c42138470924c0ef36e22, size 99672412 bytes."
-          }
-        ],
-        "summary": "Product owner approval recorded after exact-package testing of the signed and notarized v0.3.2 macOS candidate. Approval wording: '实测可以标注通过，继续推进 mac 版本 release'."
+        "artifacts": [],
+        "summary": "Pending refreshed v0.3.2 evidence after post-acceptance provider routing fixes. Previous evidence for this gate is retained in git history but cannot approve the new exact package until the updated package is rebuilt and retested."
       }
     },
     {
       "id": "real-openai-api",
       "title": "Real OpenAI-compatible image acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "A saved or direct OpenAI-compatible provider configuration is available without exposing API keys.",
         "GPT Image 2 or equivalent text-to-image returns a savable image or an accepted operation-level diagnostic.",
@@ -61,10 +43,11 @@
         "Each operation respects the user-configured timeout and records route, model, input image count, mask usage, attempts, elapsed seconds, output count, diagnostic, and next actions."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-30T07:06:02.341Z",
-        "commit": "c9d8f2fe4b44c08bb14ec7f5e4d8a8ba87d7d712",
-        "environment": "macOS local paid direct compatible-provider gate using the product-owner selected compatible endpoint. API keys and the full private Base URL were loaded from local environment and are not recorded.",
+        "verifiedAt": "2026-08-19T13:35:40.564Z",
+        "commit": "d49c3460e20ef13d3c7c224233ac23a565aabe79",
+        "environment": "macOS local paid compatible-provider gates using the product-owner selected OpenAI-compatible endpoint and saved CrossGen provider configuration. API keys and the full private Base URL were loaded from local state/environment and are not recorded.",
         "commands": [
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-crossgen-gate",
           "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate"
         ],
         "references": [
@@ -76,19 +59,25 @@
         "artifacts": [
           {
             "kind": "local-file",
-            "path": "real-api-artifacts/provider-gate/2026-07-30T07-03-11-668Z/summary.json",
+            "path": "real-api-artifacts/crossgen-gate/2026-08-19T13-27-25-029Z/summary.json",
             "public": false,
-            "description": "Paid direct compatible-provider gate summary on main@c9d8f2f. G1 text-to-image and G2 image-to-image passed; G3 guided-region returned provider_empty_output with no saved image."
+            "description": "Paid saved-config CrossGen queue gate summary. G1 GPT Image 2 text-to-image, G2 image-to-image, and G3 guided-region/mask all passed through chat-completions."
+          },
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/provider-gate/2026-08-19T12-41-14-527Z/summary.json",
+            "public": false,
+            "description": "Paid direct compatible-provider gate summary. G1, G2, and G3 all passed through chat-completions and saved one image each."
           }
         ],
-        "summary": "OpenAI-compatible text-to-image and image-to-image passed on the product-owner selected compatible endpoint (G1 51.45s, G2 95.26s). Guided-region/mask editing returned provider_empty_output with no saved image, so this gate remains pending product acceptance of the diagnostic or a provider/route fix."
+        "summary": "OpenAI-compatible gates passed on both the CrossGen saved-config queue path and the direct compatible endpoint path: G1 text-to-image, G2 image-to-image, and G3 guided-region/mask all returned one savable image within the 420s timeout."
       }
     },
     {
       "id": "real-gemini-api",
       "title": "Real Gemini-compatible image acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "A saved or direct Gemini-compatible provider configuration is available without exposing API keys.",
         "Gemini-compatible text-to-image returns a savable image or an accepted operation-level diagnostic.",
@@ -97,12 +86,12 @@
         "Missing Gemini-compatible provider configuration is not misreported as a generation failure."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-30T07:08:02.995Z",
-        "commit": "c9d8f2fe4b44c08bb14ec7f5e4d8a8ba87d7d712",
-        "environment": "macOS local paid direct compatible-provider single-gate retries using the product-owner selected compatible endpoint. API keys and the full private Base URL were loaded from local environment and are not recorded.",
+        "verifiedAt": "2026-08-19T13:35:40.564Z",
+        "commit": "d49c3460e20ef13d3c7c224233ac23a565aabe79",
+        "environment": "macOS local paid compatible-provider gates using the product-owner selected Gemini-compatible image model exposed by the saved CrossGen provider configuration and direct compatible endpoint. API keys and the full private Base URL were loaded from local state/environment and are not recorded.",
         "commands": [
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 CROSSGEN_REAL_PROVIDER_GATE_FILTER=G4 pnpm verify:real-provider-gate",
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 CROSSGEN_REAL_PROVIDER_GATE_FILTER=G5 pnpm verify:real-provider-gate"
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-crossgen-gate",
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate"
         ],
         "references": [
           {
@@ -113,31 +102,25 @@
         "artifacts": [
           {
             "kind": "local-file",
-            "path": "real-api-artifacts/provider-gate/2026-07-30T07-06-26-000Z/summary.json",
+            "path": "real-api-artifacts/crossgen-gate/2026-08-19T13-27-25-029Z/summary.json",
             "public": false,
-            "description": "Paid direct compatible-provider single-gate summary on main@c9d8f2f. G4 Gemini-compatible text-to-image passed in 40.56s."
+            "description": "Paid saved-config CrossGen queue gate summary. G4 Gemini-compatible text-to-image and G5 image-to-image passed through chat-completions."
           },
           {
             "kind": "local-file",
-            "path": "real-api-artifacts/provider-gate/2026-07-30T07-07-19-173Z/summary.json",
+            "path": "real-api-artifacts/provider-gate/2026-08-19T12-41-14-527Z/summary.json",
             "public": false,
-            "description": "Paid direct compatible-provider single-gate summary on main@c9d8f2f. G5 Gemini-compatible image-to-image passed in 43.75s."
-          },
-          {
-            "kind": "local-file",
-            "path": "real-api-artifacts/provider-gate/2026-07-30T07-03-11-668Z/summary.json",
-            "public": false,
-            "description": "Full consecutive paid gate summary on main@c9d8f2f. G4/G5 returned provider upstream 500 after G3, so provider stability under consecutive full-matrix execution remains pending."
+            "description": "Paid direct compatible-provider gate summary. G4 and G5 passed through chat-completions and saved one image each."
           }
         ],
-        "summary": "Gemini-compatible text-to-image and image-to-image passed as isolated gates on the product-owner selected compatible endpoint. In the full consecutive matrix run, G4/G5 returned upstream 500 immediately after G3; therefore this gate remains pending a repeat clean full run or explicit product acceptance of the provider stability diagnostic."
+        "summary": "Gemini-compatible image gates passed on both the CrossGen saved-config queue path and the direct compatible endpoint path: G4 text-to-image and G5 image-to-image each returned one savable image within the 420s timeout."
       }
     },
     {
       "id": "macos-signed",
       "title": "Developer ID signed macOS release package",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "macOS artifacts are built from the exact v0.3.2 release-candidate commit.",
         "Developer ID signing is performed without exposing secret values.",
@@ -146,35 +129,25 @@
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-04T03:27:56.000Z",
-        "commit": "0411e396e99a057c504d6b40e240b57eead00d2d",
-        "environment": "macOS local release shell with .env.local loaded. Developer ID signing identity and notarization credentials were available in the shell for the exact v0.3.2 macOS candidate.",
-        "commands": [
-          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
-          "pnpm verify:release:mac"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Release evidence rules",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
           }
         ],
-        "artifacts": [
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
-            "public": false,
-            "description": "Developer ID signed macOS arm64 release candidate built from commit 0411e396e99a057c504d6b40e240b57eead00d2d."
-          }
-        ],
-        "summary": "Developer ID signing passed for the exact v0.3.2 macOS candidate. The signed app extracted from the DMG passed macOS release verification."
+        "artifacts": [],
+        "summary": "Pending refreshed v0.3.2 evidence after post-acceptance provider routing fixes. Previous evidence for this gate is retained in git history but cannot approve the new exact package until the updated package is rebuilt and retested."
       }
     },
     {
       "id": "macos-notarized",
       "title": "Apple notarized macOS release package",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "Apple notarization is submitted for the exact v0.3.2 macOS candidate artifact.",
         "Notarization succeeds without exposing Apple credentials.",
@@ -183,28 +156,18 @@
         "The evidence records the exact artifact identity, SHA256, and validation command results."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-04T03:27:56.000Z",
-        "commit": "0411e396e99a057c504d6b40e240b57eead00d2d",
-        "environment": "macOS local release shell with .env.local loaded. Apple notarization credentials were available in the shell for the exact v0.3.2 macOS candidate.",
-        "commands": [
-          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
-          "pnpm verify:release:mac"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Release evidence rules",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
           }
         ],
-        "artifacts": [
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
-            "public": false,
-            "description": "Apple notarization succeeded for the signed v0.3.2 macOS arm64 DMG built from commit 0411e396e99a057c504d6b40e240b57eead00d2d."
-          }
-        ],
-        "summary": "Apple notarization succeeded for the exact v0.3.2 macOS candidate. The notarized DMG also passed macOS release verification."
+        "artifacts": [],
+        "summary": "Pending refreshed v0.3.2 evidence after post-acceptance provider routing fixes. Previous evidence for this gate is retained in git history but cannot approve the new exact package until the updated package is rebuilt and retested."
       }
     },
     {
@@ -334,7 +297,7 @@
       "id": "cli-mcp-packaged-smoke",
       "title": "Packaged CLI and MCP smoke",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "Packaged CLI launcher smoke runs against the exact v0.3.2 candidate package.",
         "MCP direct app executable smoke runs against the exact v0.3.2 candidate package.",
@@ -343,16 +306,10 @@
         "Source-tree CLI/MCP smoke is not used as a substitute for packaged smoke."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-04T03:27:56.000Z",
-        "commit": "0411e396e99a057c504d6b40e240b57eead00d2d",
-        "environment": "macOS local packaged smoke against the exact v0.3.2 candidate app executable extracted from the signed and notarized DMG built on commit 0411e396e99a057c504d6b40e240b57eead00d2d.",
-        "commands": [
-          "pnpm package:mac",
-          "codesign --verify --deep --strict release/mac-arm64/CrossGen.app",
-          "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:cli-mcp-smoke",
-          "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:agent-integration-smoke",
-          "release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen --cli version --json"
-        ],
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
         "references": [
           {
             "label": "Latest main CI package preflight after blocker hardening",
@@ -363,21 +320,8 @@
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.2-pre-rc-evidence.md"
           }
         ],
-        "artifacts": [
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
-            "public": false,
-            "description": "Packaged CLI and MCP smoke target for the exact v0.3.2 macOS candidate built from commit 0411e396e99a057c504d6b40e240b57eead00d2d."
-          },
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
-            "public": false,
-            "description": "Packaged CLI and MCP smoke target for the exact v0.3.2 macOS candidate built from commit 0411e396e99a057c504d6b40e240b57eead00d2d."
-          }
-        ],
-        "summary": "Packaged CLI launcher and MCP executable smoke passed against the exact notarized v0.3.2 macOS candidate. The app executable also reported version 0.3.2."
+        "artifacts": [],
+        "summary": "Pending refreshed v0.3.2 evidence after post-acceptance provider routing fixes. Previous evidence for this gate is retained in git history but cannot approve the new exact package until the updated package is rebuilt and retested."
       }
     },
     {
@@ -528,7 +472,7 @@
       "id": "real-provider-operation-matrix",
       "title": "v0.3.2 real provider operation matrix",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "OpenAI-compatible text-to-image is recorded as pass, pass-with-diagnostic, or blocker by operation.",
         "OpenAI-compatible image-to-image is recorded separately from text-to-image.",
@@ -537,13 +481,12 @@
         "Every gate records route, model, timeout, elapsed seconds, input image count, output count, diagnostic category, and next actions without exposing secrets."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-30T07:08:02.995Z",
-        "commit": "c9d8f2fe4b44c08bb14ec7f5e4d8a8ba87d7d712",
-        "environment": "macOS local paid direct compatible-provider matrix using the product-owner selected compatible endpoint. API keys and the full private Base URL were loaded from local environment and are not recorded.",
+        "verifiedAt": "2026-08-19T13:35:40.564Z",
+        "commit": "d49c3460e20ef13d3c7c224233ac23a565aabe79",
+        "environment": "macOS local paid operation-level matrix using saved CrossGen configuration plus direct compatible endpoint verification. Secrets were loaded from local app state and .env.local and are not recorded.",
         "commands": [
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate",
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 CROSSGEN_REAL_PROVIDER_GATE_FILTER=G4 pnpm verify:real-provider-gate",
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 CROSSGEN_REAL_PROVIDER_GATE_FILTER=G5 pnpm verify:real-provider-gate"
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-crossgen-gate",
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate"
         ],
         "references": [
           {
@@ -554,24 +497,18 @@
         "artifacts": [
           {
             "kind": "local-file",
-            "path": "real-api-artifacts/provider-gate/2026-07-30T07-03-11-668Z/summary.json",
+            "path": "real-api-artifacts/crossgen-gate/2026-08-19T13-27-25-029Z/summary.json",
             "public": false,
-            "description": "Full paid direct compatible-provider matrix on main@c9d8f2f. G1/G2 passed, G3 returned provider_empty_output, and G4/G5 returned upstream 500 in the consecutive full run."
+            "description": "Saved-config CrossGen operation matrix passed 5/5: GPT Image 2 text, image, guided-region, Gemini-compatible text, and Gemini-compatible image gates. Routes resolved to chat-completions."
           },
           {
             "kind": "local-file",
-            "path": "real-api-artifacts/provider-gate/2026-07-30T07-06-26-000Z/summary.json",
+            "path": "real-api-artifacts/provider-gate/2026-08-19T12-41-14-527Z/summary.json",
             "public": false,
-            "description": "Filtered G4 retry passed on main@c9d8f2f."
-          },
-          {
-            "kind": "local-file",
-            "path": "real-api-artifacts/provider-gate/2026-07-30T07-07-19-173Z/summary.json",
-            "public": false,
-            "description": "Filtered G5 retry passed on main@c9d8f2f."
+            "description": "Direct compatible-provider operation matrix passed 5/5: G1 56.06s, G2 55.17s, G3 86.49s, G4 64.20s, G5 86.23s, all with one saved image."
           }
         ],
-        "summary": "Paid operation-level evidence now exists for the selected compatible endpoint: G1 and G2 passed in the full matrix; G3 guided-region/mask returned provider_empty_output; G4 and G5 passed when retried individually but failed with upstream 500 in the full consecutive run. The matrix remains pending until guided-region diagnostics and provider stability are accepted or fixed."
+        "summary": "The v0.3.2 real provider operation matrix passed 5/5 in both required paths. OpenAI-compatible G1/G2/G3 and Gemini-compatible G4/G5 all used chat-completions, respected the 420s timeout, and produced one savable image with no diagnostic-required results."
       }
     },
     {

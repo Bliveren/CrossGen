@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_IMAGE_PARAMS } from "../shared/validation";
+import { DEFAULT_GEMINI_IMAGE_PARAMS, DEFAULT_IMAGE_PARAMS } from "../shared/validation";
 import type { ProviderConfigInput } from "../shared/types";
 import { buildProviderConfigForSave } from "./services/providerConfigSave";
+import { canRunRequestWithConfig } from "./services/providerRequestMatch";
 import { defaultStoredConfig, type StoredProviderConfig } from "./services/stateMigration";
 
 function savedConfig(patch: Partial<StoredProviderConfig> = {}): StoredProviderConfig {
@@ -128,5 +129,32 @@ describe("main config save builder", () => {
 
     expect(next.activeLaunchId).toBe("gpt-image-2");
     expect(next.activeModelId).toBe("gpt-image-2");
+  });
+
+  it("allows custom providers to run discovered Gemini image models", () => {
+    const provider: StoredProviderConfig = {
+      ...savedConfig({
+        kind: "custom",
+        activeLaunchId: "gpt-image-2",
+        activeModelId: "gpt-image-2",
+        discoveredModels: [
+          { id: "gemini-3.1-flash-image", providerKind: "gemini" },
+          { id: "gpt-image-2", providerKind: "openai" }
+        ]
+      })
+    };
+    const request = {
+      mode: "generate" as const,
+      prompt: "test",
+      inputPaths: [],
+      params: {
+        ...DEFAULT_GEMINI_IMAGE_PARAMS,
+        providerKind: "gemini" as const,
+        launchId: "nano-banana-3" as const,
+        model: "gemini-3.1-flash-image"
+      }
+    };
+
+    expect(canRunRequestWithConfig(request, provider)).toBe(true);
   });
 });

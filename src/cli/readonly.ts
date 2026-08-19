@@ -107,6 +107,25 @@ function promptPreview(prompt: string, maxLength = 180): string {
   return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength - 1)}...` : trimmed;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function publicTaskRoute(job: GenerationJob) {
+  const taskRoute = job.providerMetadata?.taskRoute;
+  if (!isRecord(taskRoute)) return undefined;
+  return {
+    operation: typeof taskRoute.operation === "string" ? taskRoute.operation : undefined,
+    providerKind: typeof taskRoute.providerKind === "string" ? taskRoute.providerKind : undefined,
+    modelId: typeof taskRoute.modelId === "string" ? taskRoute.modelId : undefined,
+    route: typeof taskRoute.route === "string" ? taskRoute.route : undefined,
+    inputImageCount: typeof taskRoute.inputImageCount === "number" ? taskRoute.inputImageCount : undefined,
+    hasMask: typeof taskRoute.hasMask === "boolean" ? taskRoute.hasMask : undefined,
+    timeoutMs: typeof taskRoute.timeoutMs === "number" ? taskRoute.timeoutMs : undefined,
+    attemptIndex: typeof taskRoute.attemptIndex === "number" ? taskRoute.attemptIndex : undefined
+  };
+}
+
 function liveWorkerHosts(queue: GenerationQueueFile, now = Date.now()): number {
   return queue.workerHosts.filter((host) => Date.parse(host.leaseExpiresAt) > now).length;
 }
@@ -204,6 +223,7 @@ function publicHistoryJob(job: GenerationJob) {
       createdAt: output.createdAt
     })),
     usage: job.usage,
+    taskRoute: publicTaskRoute(job),
     hasProviderMetadata: Boolean(job.providerMetadata)
   };
 }

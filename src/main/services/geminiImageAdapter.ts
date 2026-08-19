@@ -19,7 +19,7 @@ import {
   validateGeminiRunJobRequest
 } from "../../shared/validation.js";
 import type { ImageJobRuntime, ImageProviderAdapter, ImageProviderRuntime } from "./imageProviderAdapter.js";
-import { fetchWithTimeout } from "./openaiImageAdapter.js";
+import { fetchWithTimeout, runCompatibleChatImageRequest } from "./openaiImageAdapter.js";
 import {
   firstString,
   isRecord,
@@ -93,7 +93,11 @@ export const geminiImageAdapter: ImageProviderAdapter = {
     return validateGeminiRunJobRequest(request);
   },
   runJob(job: GenerationJob, apiKey: string, config: StoredProviderConfig, runtime: ImageJobRuntime) {
-    return runGeminiImageJob(asGeminiImageJob(job), apiKey, config.baseURL, runtime);
+    const geminiJob = asGeminiImageJob(job);
+    if (!isNativeGeminiProviderConfig(config)) {
+      return runGeminiCompatibleChatImageJob(geminiJob, apiKey, config.baseURL, runtime);
+    }
+    return runGeminiImageJob(geminiJob, apiKey, config.baseURL, runtime);
   }
 };
 
@@ -261,6 +265,78 @@ export async function runGeminiImageJob(
   );
 
   return handleGeminiGenerateContentResponse(response, job, runtime, deadlineMs);
+}
+
+async function runGeminiCompatibleChatImageJob(
+  job: GeminiImageJob,
+  apiKey: string,
+  baseURL: string,
+  runtime: GeminiImageRuntime
+): Promise<GenerationJob> {
+  return runCompatibleChatImageRequest(
+    job,
+    {
+      model: job.params.model,
+      prompt: buildGeminiCompatibleChatPrompt(job),
+      inputAssets: job.inputAssets,
+      maskAsset: job.maskAsset,
+      timeoutMs: job.params.timeoutMs,
+      params: {},
+      features: {
+        voice: false,
+        image_generation: false,
+        code_interpreter: false,
+        web_search: false
+      },
+      stream: true
+    },
+    apiKey,
+    baseURL,
+    runtime,
+    {
+      abortSignal: runtime.abortSignal,
+      attemptContext: { count: 0 }
+    }
+  );
+}
+
+function buildGeminiCompatibleChatPrompt(job: GeminiImageJob): string {
+  const imageSize = geminiImageSizeForResolution(job.params.resolution);
+  const constraints = [
+    "Output requirements:",
+    `- Final image aspect ratio: ${job.params.aspectRatio}.`,
+    `- Target image size: ${imageSize}.`,
+    "- Keep the final canvas at this aspect ratio even when reference images are provided."
+  ].join("\n\n");
+
+  if (job.mode === "generate") {
+    return [job.prompt.trim(), constraints].filter(Boolean).join("\n\n");
+  }
+
+  const referenceCount = job.inputAssets.length;
+  const referenceLabel = referenceCount === 1 ? "reference image" : "reference images";
+  const guidance = [
+    "Attached reference guidance:",
+    `- The request includes ${referenceCount} attached ${referenceLabel}. Use the attached image content as visual input; do not ignore it.`,
+    "- Reflect the visible subjects, style, colors, layout, and salient details from the reference image content where they are relevant to the user's prompt.",
+    "- If the user's prompt asks for changes, apply those changes while keeping reference-derived details where applicable.",
+    "- If the prompt describes conflict or action, keep it stylized and non-graphic, with no blood, gore, injury detail, or explicit harm."
+  ];
+
+  if (job.maskAsset) {
+    guidance.push("- A mask is attached. Use it as guidance for the editable area on the first reference image and keep unmasked regions stable where possible.");
+  }
+
+  return [job.prompt.trim(), constraints, guidance.join("\n")].filter(Boolean).join("\n\n");
+}
+
+function isNativeGeminiProviderConfig(config: StoredProviderConfig): boolean {
+  if (config.kind !== "gemini") return false;
+  try {
+    return new URL(config.baseURL).hostname === "generativelanguage.googleapis.com";
+  } catch {
+    return false;
+  }
 }
 
 async function inputAssetsToInlineDataParts(inputAssets: InputAsset[], maskAsset?: InputAsset): Promise<GeminiInlineData[]> {

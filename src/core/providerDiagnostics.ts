@@ -87,8 +87,8 @@ export function diagnosticProviderKind(providerKind: ProviderKind, baseURL?: str
 export function defaultRouteForRequest(request: RunJobRequest, providerKind: ProviderKind): string | undefined {
   if (providerKind === "gemini") return "gemini-generateContent";
   if (request.params.launchId === "general") return "openai-compatible-images";
+  if (request.params.providerKind === "gemini") return "chat-completions";
   if (request.params.providerKind !== "openai") return undefined;
-  if (request.mode !== "generate" && (request.maskPath || request.maskDataUrl)) return "image-api";
   if (request.params.imageRoute !== "auto") return request.params.imageRoute;
   return "chat-completions";
 }

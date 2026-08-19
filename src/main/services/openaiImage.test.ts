@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { GenerationJob, InputAsset, JobProgressEvent, OpenAIImageParams } from "../../shared/types";
+import type { GenerationJob, InputAsset, JobProgressEvent, OpenAIImageParams, OpenAIImageRouting } from "../../shared/types";
 import { DEFAULT_BASE_URL, DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
 import type { StoredProviderConfig } from "./stateMigration";
 import { baseRequestBody, buildEndpoint, normalizeOpenAIJobParams, normalizeOpenAIRequestParams, openaiImageAdapter, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImageAdapter";
@@ -408,7 +408,7 @@ describe("OpenAI image service", () => {
         mode: "inpaint",
         inputAssets: [source],
         maskAsset: mask,
-        params: params({ stream: false })
+        params: params({ stream: false, imageRoute: "image-api" })
       }),
       "sk-test-key",
       "https://api.test/v1",
@@ -428,6 +428,68 @@ describe("OpenAI image service", () => {
     expect(form?.get("moderation")).toBeNull();
     expect(form?.get("stream")).toBeNull();
     expect(form?.get("mask")).toBeInstanceOf(File);
+  });
+
+  it("uses chat-completions for masked inpaint when guided routes prefer chat", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
+    const sourcePath = path.join(tmpDir, "source.png");
+    const maskPath = path.join(tmpDir, "mask.png");
+    await writeFile(sourcePath, Buffer.from(tinyPngBase64, "base64"));
+    await writeFile(maskPath, Buffer.from(tinyPngBase64, "base64"));
+    const source: InputAsset = { id: "source", name: "source.png", path: sourcePath, mimeType: "image/png", sizeBytes: 1 };
+    const mask: InputAsset = { id: "mask", name: "mask.png", path: maskPath, mimeType: "image/png", sizeBytes: 1 };
+    let requestUrl = "";
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requestUrl = String(url);
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+    const routePreference: OpenAIImageRouting = {
+      preferredGenerateRoute: "chat-completions",
+      preferredEditRoute: "image-api",
+      preferredGuidedEditRoute: "chat-completions",
+      preferredGenerateRouteVerified: true,
+      preferredEditRouteVerified: true,
+      preferredGuidedEditRouteVerified: true,
+      probes: [],
+      updatedAt: new Date().toISOString()
+    };
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "inpaint",
+        inputAssets: [source],
+        maskAsset: mask,
+        params: params({ stream: false, imageRoute: "auto" })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime,
+      { routePreference }
+    );
+
+    expect(requestUrl).toBe("https://api.test/v1/chat/completions");
+    expect(requestBody).toMatchObject({
+      model: "gpt-image-2",
+      stream: true,
+      messages: [
+        {
+          role: "user",
+          content: expect.arrayContaining([
+            expect.objectContaining({ type: "text" }),
+            expect.objectContaining({
+              type: "image_url",
+              image_url: expect.objectContaining({ url: expect.stringContaining("data:image/png;base64,") })
+            })
+          ])
+        }
+      ]
+    });
+    const content = (requestBody.messages as Array<{ content: Array<{ type: string }> }>)[0].content;
+    expect(content.filter((item) => item.type === "image_url")).toHaveLength(2);
+    expect(result.status).toBe("succeeded");
   });
 
   it("uses image[] multipart fields for multi-image edits", async () => {
@@ -1447,12 +1509,12 @@ describe("OpenAI image service", () => {
 
     await expect(
       runOpenAIImageJob(
-        job({
-          mode: "inpaint",
-          inputAssets: [source],
-          maskAsset: mask,
-          params: params({ stream: false })
-        }),
+      job({
+        mode: "inpaint",
+        inputAssets: [source],
+        maskAsset: mask,
+        params: params({ stream: false, imageRoute: "image-api" })
+      }),
         "sk-test-key",
         "https://api.test/v1",
         runtime

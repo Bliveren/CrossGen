@@ -317,6 +317,77 @@ describe("Gemini image adapter", () => {
     expect(parts[2]).toEqual({ inlineData: { mimeType: "image/png", data: tinyMaskBase64 } });
   });
 
+  it("runs Gemini-capable custom providers through compatible chat completions", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-gemini-inputs-"));
+    const sourcePath = path.join(tmpDir, "source.png");
+    await writeFile(sourcePath, Buffer.from(tinyPngBase64, "base64"));
+    const source: InputAsset = { id: "source", name: "source.png", path: sourcePath, mimeType: "image/png", sizeBytes: 1 };
+    let requestUrl = "";
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requestUrl = String(url);
+      requestBody = JSON.parse(String(init?.body));
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  content: `![image](data:image/png;base64,${tinyPngBase64})`
+                }
+              }
+            ]
+          })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await geminiImageAdapter.runJob(
+      job({
+        mode: "edit",
+        inputAssets: [source]
+      }),
+      "mock-gateway-key",
+      config({
+        id: "custom",
+        kind: "custom",
+        baseURL: "https://gateway.test/v1",
+        activeLaunchId: "gpt-image-2",
+        activeModelId: "gpt-image-2",
+        defaultModel: "gpt-image-2",
+        discoveredModels: [
+          { id: "gemini-3.1-flash-image", providerKind: "gemini" },
+          { id: "gpt-image-2", providerKind: "openai" }
+        ]
+      }),
+      runtime
+    );
+
+    expect(requestUrl).toBe("https://gateway.test/v1/chat/completions");
+    expect(requestBody).toMatchObject({
+      model: "gemini-3.1-flash-image",
+      stream: true,
+      params: {},
+      features: {
+        voice: false,
+        image_generation: false,
+        code_interpreter: false,
+        web_search: false
+      }
+    });
+    const content = (requestBody.messages as Array<{ content: Array<{ type: string; image_url?: { url?: string } }> }>)[0].content;
+    expect(content[0]?.type).toBe("text");
+    expect(content.filter((item) => item.type === "image_url")).toHaveLength(1);
+    expect(content[1]?.image_url?.url).toContain("data:image/png;base64,");
+    expect(result.status).toBe("succeeded");
+    expect(result.providerKind).toBe("gemini");
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
   it("tests connections and discovers generateContent models", async () => {
     const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
       expect(String(url)).toBe("https://api.test/v1beta/models");

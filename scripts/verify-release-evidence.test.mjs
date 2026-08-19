@@ -93,7 +93,7 @@ describe("release evidence verifier", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Release evidence validated:");
     expect(result.stdout).toContain("Pending required gate(s):");
-    expect(result.stdout).toContain("real-provider-operation-matrix");
+    expect(result.stdout).toContain("product-owner-acceptance");
   });
 
   it("fails --require-complete for the pending v0.3.2 ledger", async () => {
@@ -102,7 +102,7 @@ describe("release evidence verifier", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Required release evidence gates are not passed");
     expect(result.stderr).toContain("product-owner-acceptance");
-    expect(result.stderr).toContain("real-provider-operation-matrix");
+    expect(result.stderr).toContain("update-manifest-assets");
   });
 
   it("rejects v0.3.1 evidence as default evidence after the package version advances", async () => {

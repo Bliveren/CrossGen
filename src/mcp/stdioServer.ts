@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Readable, Writable } from "node:stream";
-import type { JobStatus } from "../shared/types.js";
+import type { JobStatus, WorkMode } from "../shared/types.js";
 
 export type ReadonlyMcpMode = "readonly" | "write" | "generate";
 
@@ -45,7 +45,7 @@ export interface ReadonlyMcpReaders {
 
 export interface GenerationMcpControllers {
   generationSubmit(args: {
-    mode: "generate" | "edit";
+    mode: WorkMode;
     prompt: string;
     inputPaths: string[];
     maskPath?: string;
@@ -520,7 +520,7 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
         const inputPaths = stringArray(args, "inputPaths");
         if (!Array.isArray(inputPaths)) return inputPaths;
         return controllers.generationSubmit({
-          mode: "edit",
+          mode: typeof args.maskPath === "string" && args.maskPath.trim() ? "inpaint" : "edit",
           prompt,
           inputPaths,
           maskPath: typeof args.maskPath === "string" ? args.maskPath.trim() : undefined,
