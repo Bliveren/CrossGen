@@ -215,6 +215,7 @@ const LEGACY_USER_DATA_NAME = "Image2Tools";
 const DATA_DIR_ENV = "CROSSGEN_DATA_DIR";
 const USER_DATA_DIR_ENV = "CROSSGEN_USER_DATA_DIR";
 const LEGACY_USER_DATA_DIR_ENV = "IMAGE2TOOLS_USER_DATA_DIR";
+let mainWindow: BrowserWindow | null = null;
 const PERF_RESULT_PATH_ENV = "CROSSGEN_PERF_RESULT_PATH";
 const RENDERER_PERF_RESULT_PATH_ENV = "CROSSGEN_RENDERER_PERF_RESULT_PATH";
 const THEME_SOURCE_ENV = "CROSSGEN_THEME_SOURCE";
@@ -362,6 +363,10 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: false
     }
+  });
+  window.once("ready-to-show", () => window.show());
+  window.on("closed", () => {
+    if (mainWindow === window) mainWindow = null;
   });
 
   const devServerURL = process.env.VITE_DEV_SERVER_URL;
@@ -5976,10 +5981,10 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
-  const window = createWindow();
+  mainWindow = createWindow();
   const rendererPerformanceResultPath = process.env[RENDERER_PERF_RESULT_PATH_ENV];
   if (rendererPerformanceResultPath) {
-    void runRendererPerformanceCapture(window, rendererPerformanceResultPath).finally(() => app.quit());
+    void runRendererPerformanceCapture(mainWindow, rendererPerformanceResultPath).finally(() => app.quit());
     return;
   }
   void startGalleryWatcher();
@@ -5988,7 +5993,7 @@ app.whenReady().then(async () => {
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      mainWindow = createWindow();
     }
   });
 });
