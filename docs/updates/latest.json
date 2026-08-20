@@ -1,30 +1,30 @@
 {
-  "version": "0.3.1",
-  "pubDate": "2026-07-24T05:00:00.000Z",
-  "notes": "CrossGen 0.3.1 makes the desktop app, CLI, and AI Agent share a reliable image task runtime with durable queue execution, Gallery/History reuse, and packaged MCP integration.",
+  "version": "0.3.2",
+  "pubDate": "2026-08-20T01:54:25.905Z",
+  "notes": "CrossGen 0.3.2 improves release reliability with refreshed Windows and Linux release packages, opt-in reference image handling, and tighter provider diagnostics.",
   "assets": [
     {
       "platform": "darwin",
-      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-mac-arm64.dmg",
-      "fileName": "CrossGen-0.3.1-mac-arm64.dmg",
-      "sha256": "8ee5d1d863a0dd11e568ea3bb37f37904279d7975d9e6a8fbac3bd3f0f5f6eef",
-      "sizeBytes": 103962233,
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.2/CrossGen-0.3.2-mac-arm64.dmg",
+      "fileName": "CrossGen-0.3.2-mac-arm64.dmg",
+      "sha256": "088959eb5d5fd090bd3b79c4d5a512f51f82c6c3ddc1629a71021d10bb9e8aaa",
+      "sizeBytes": 103982077,
       "arch": "arm64"
     },
     {
       "platform": "win32",
-      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-Setup.exe",
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.2/CrossGen-Setup.exe",
       "fileName": "CrossGen-Setup.exe",
-      "sha256": "26b3cfa67589b0b0236241dc7e254c66ec7e4e54b118872abfdfc36e1a92401b",
-      "sizeBytes": 99157094,
+      "sha256": "47794047a751415ee2a2bbf96c87c7ed1bc4b968e07af01e7b805227e40a453d",
+      "sizeBytes": 99115558,
       "arch": "x64"
     },
     {
       "platform": "linux",
-      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.1/CrossGen-0.3.1-linux-x86_64.AppImage",
-      "fileName": "CrossGen-0.3.1-linux-x86_64.AppImage",
-      "sha256": "22eba75aaab6b81ba2d992f9fee610205e7d6e43990e3d20c3d35642fbc3de62",
-      "sizeBytes": 120847964,
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.2/CrossGen-0.3.2-linux-x86_64.AppImage",
+      "fileName": "CrossGen-0.3.2-linux-x86_64.AppImage",
+      "sha256": "081f7d7ff051b9e3f5737521d4e3f510fbf1d4c670477b2af759351c722833db",
+      "sizeBytes": 120885130,
       "arch": "x64"
     }
   ]

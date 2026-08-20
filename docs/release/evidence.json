@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-08-19T17:09:32.061Z",
+  "lastUpdated": "2026-08-20T01:54:25.905Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
       "title": "Product-owner exact-package acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The product owner installs and tests the exact v0.3.2 release-candidate package before publication.",
         "Testing covers launch, API configuration, text-to-image, image-to-image, mask/guided edit, queue visibility, cancel/retry, restart recovery, reference preflight, Gallery/History reuse, CLI, and MCP.",
@@ -16,18 +16,34 @@
         "GitHub Release publication, Latest marking, and update manifest promotion happen only after this approval is recorded."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-08-20T01:20:29.547Z",
+        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
+        "environment": "Native Windows 11 Pro 10.0.26100 local release shell. Product-owner local acceptance of the exact v0.3.2 Windows test package and native launch verification completed before final publication.",
+        "commands": [
+          "Start-Process -FilePath 'C:\\work\\image2tools\\release\\win-unpacked\\CrossGen.exe'",
+          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; pnpm verify:release:windows"
+        ],
         "references": [
           {
             "label": "v0.3.2 release evidence rules",
             "url": "https://github.com/Bliveren/image2tools/blob/main/docs/release/README.md"
           }
         ],
-        "artifacts": [],
-        "summary": "Product owner reported that macOS release-candidate package testing has been performed and asked to advance Windows and Linux release work. Because Windows self-test found and fixed a queue-file rename issue after that macOS candidate, final public publication still needs explicit approval of the final v0.3.2 package set built from the final source commit."
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-Setup.exe",
+            "public": false,
+            "description": "v0.3.2 Windows x64 NSIS installer approved during local acceptance. SHA256 47794047a751415ee2a2bbf96c87c7ed1bc4b968e07af01e7b805227e40a453d, size 99115558 bytes."
+          },
+          {
+            "kind": "local-directory",
+            "path": "release/win-unpacked/",
+            "public": false,
+            "description": "Unpacked Windows app launched locally during product-owner acceptance."
+          }
+        ],
+        "summary": "Product owner confirmed the exact v0.3.2 Windows package passed local launch and full-install verification and approved advancing the Windows/Linux release."
       }
     },
     {
@@ -129,9 +145,9 @@
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T14:26:02.000Z",
-        "commit": "842ae4b3e1b1464180c19c5edeb94193f2024900",
-        "environment": "macOS local release shell with .env.local loaded. Developer ID signing identity and notarization credentials were available in the shell for the exact v0.3.2 macOS candidate. Secrets are not recorded.",
+        "verifiedAt": "2026-08-20T01:09:18.000Z",
+        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
+        "environment": "macOS local release shell with .env.local loaded. Developer ID signing identity and notarization credentials were available in the shell for the exact final v0.3.2 macOS candidate. Secrets are not recorded.",
         "commands": [
           "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
           "pnpm verify:release:mac"
@@ -147,16 +163,16 @@
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
             "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 b91e86120e2ac2006f0722da02f5cc34490e7f6c9d6b08d66df0fc39b00c55df, size 103975324 bytes."
+            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 8c800767883ee5ceb1f59a693374a8e334411bef. SHA256 088959eb5d5fd090bd3b79c4d5a512f51f82c6c3ddc1629a71021d10bb9e8aaa, size 103982077 bytes."
           },
           {
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-mac-arm64.zip",
             "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 6308a2c82a5a9a1b2a66a96f6cbb59666af54f478fe2eaefa1c0de21106cbd9d, size 99675738 bytes."
+            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 8c800767883ee5ceb1f59a693374a8e334411bef. SHA256 fb08175c692a69f3c282bd125929fbe7125c44e2e2014f0f695626b4d799c7cb, size 99677419 bytes."
           }
         ],
-        "summary": "Developer ID signing passed for the exact v0.3.2 macOS candidate built from 842ae4b3e1b1464180c19c5edeb94193f2024900. macOS release verification launched the app twice from the DMG and detected main windows in both cycles."
+        "summary": "Developer ID signing passed for the exact final v0.3.2 macOS candidate built from 8c800767883ee5ceb1f59a693374a8e334411bef. macOS release verification launched the app twice from the DMG and detected main windows in both cycles."
       }
     },
     {
@@ -172,9 +188,9 @@
         "The evidence records the exact artifact identity, SHA256, and validation command results."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T14:26:02.000Z",
-        "commit": "842ae4b3e1b1464180c19c5edeb94193f2024900",
-        "environment": "macOS local release shell with .env.local loaded. Apple notarization credentials were available in the shell for the exact v0.3.2 macOS candidate. Secrets are not recorded.",
+        "verifiedAt": "2026-08-20T01:09:18.000Z",
+        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
+        "environment": "macOS local release shell with .env.local loaded. Apple notarization credentials were available in the shell for the exact final v0.3.2 macOS candidate. Secrets are not recorded.",
         "commands": [
           "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
           "pnpm verify:release:mac"
@@ -190,16 +206,16 @@
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
             "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 b91e86120e2ac2006f0722da02f5cc34490e7f6c9d6b08d66df0fc39b00c55df, size 103975324 bytes."
+            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 8c800767883ee5ceb1f59a693374a8e334411bef. SHA256 088959eb5d5fd090bd3b79c4d5a512f51f82c6c3ddc1629a71021d10bb9e8aaa, size 103982077 bytes."
           },
           {
             "kind": "local-package",
             "path": "release/CrossGen-0.3.2-mac-arm64.zip",
             "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 6308a2c82a5a9a1b2a66a96f6cbb59666af54f478fe2eaefa1c0de21106cbd9d, size 99675738 bytes."
+            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 8c800767883ee5ceb1f59a693374a8e334411bef. SHA256 fb08175c692a69f3c282bd125929fbe7125c44e2e2014f0f695626b4d799c7cb, size 99677419 bytes."
           }
         ],
-        "summary": "Apple notarization succeeded for the exact v0.3.2 macOS candidate built from 842ae4b3e1b1464180c19c5edeb94193f2024900. The notarized DMG also passed macOS release verification."
+        "summary": "Apple notarization succeeded for the exact final v0.3.2 macOS candidate built from 8c800767883ee5ceb1f59a693374a8e334411bef. The notarized DMG also passed macOS release verification."
       }
     },
     {
@@ -215,7 +231,7 @@
         "Any Windows-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T16:54:18.066Z",
+        "verifiedAt": "2026-08-20T01:20:29.547Z",
         "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
         "environment": "Native Windows 11 Pro 10.0.26100 local release shell. Full NSIS silent install, app launch, main-window detection, silent uninstall, packaged CLI/MCP smoke, and packaged agent integration smoke were run against the v0.3.2 Windows package rebuilt from the final source commit, including the queue-file atomic rename retry fix and opt-in reference image optimization change.",
         "commands": [
@@ -230,8 +246,8 @@
             "url": "https://github.com/Bliveren/image2tools/issues/4"
           },
           {
-            "label": "v0.3.2 RC 1 draft release assets for product-owner testing",
-            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-91e0c6060a55760af3de"
+            "label": "v0.3.2 final GitHub Release",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.2"
           }
         ],
         "artifacts": [
@@ -239,13 +255,13 @@
             "kind": "local-package",
             "path": "release/CrossGen-Setup.exe",
             "public": false,
-            "description": "v0.3.2 Windows x64 NSIS installer. SHA256 91010cc3414b0e3c1454f28d2d45d313025078d5ebb02f8f267871dda3e09175, size 99115559 bytes."
+            "description": "v0.3.2 Windows x64 NSIS installer. SHA256 47794047a751415ee2a2bbf96c87c7ed1bc4b968e07af01e7b805227e40a453d, size 99115558 bytes."
           },
           {
             "kind": "local-file",
             "path": "release/CrossGen-Setup.exe.blockmap",
             "public": false,
-            "description": "v0.3.2 Windows installer blockmap. SHA256 dc1a4aaac46ccf17792842364f62e05a25dbd2b63c28950f99d1296f69184e46, size 104207 bytes."
+            "description": "v0.3.2 Windows installer blockmap. SHA256 9e902c5bada448b6fe4df70b7d73435036da187e74aa1c28e9a571eaeadd626d, size 104207 bytes."
           },
           {
             "kind": "local-directory",
@@ -254,7 +270,7 @@
             "description": "Unpacked Windows app used by native launch verification and packaged CLI/MCP smoke."
           }
         ],
-        "summary": "Windows native release validation passed on the rebuilt v0.3.2 package from the final source commit. The earlier packaged MCP smoke exposed a transient Windows queue-file rename failure; the queue store now retries EPERM, EBUSY, and EACCES atomic rename failures, and the rebuilt installer passed full install/uninstall plus packaged CLI/MCP and agent integration smoke. The candidate artifacts were replaced on the draft v0.3.2 RC 1 GitHub Release for product-owner business testing; the draft uses GitHub's untagged draft URL and is not the final public v0.3.2 release."
+        "summary": "Windows native release validation passed on the rebuilt v0.3.2 package from the final source commit. The earlier packaged MCP smoke exposed a transient Windows queue-file rename failure; the queue store now retries EPERM, EBUSY, and EACCES atomic rename failures, and the rebuilt installer passed full install/uninstall plus packaged CLI/MCP and agent integration smoke. The current installer build was revalidated locally and published in the final v0.3.2 GitHub Release."
       }
     },
     {
@@ -285,8 +301,8 @@
             "url": "https://github.com/Bliveren/image2tools/issues/4"
           },
           {
-            "label": "v0.3.2 RC 1 draft release assets for product-owner testing",
-            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-91e0c6060a55760af3de"
+            "label": "v0.3.2 final GitHub Release",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.2"
           }
         ],
         "artifacts": [
@@ -303,14 +319,14 @@
             "description": "Unpacked Linux app used by Xvfb native launch verification and packaged CLI/MCP smoke in the Linux release clone."
           }
         ],
-        "summary": "Linux AppImage validation passed on the rebuilt v0.3.2 package from the final source commit. The verifier confirmed the AppImage and unpacked executable are x86-64 ELF binaries, launched the unpacked app, launched the direct AppImage, extracted the AppImage and launched the extracted app under Xvfb, then packaged CLI/MCP and agent integration smoke passed against the unpacked Linux executable. The candidate artifact was refreshed on the draft v0.3.2 RC 1 GitHub Release for product-owner business testing; the draft uses GitHub's untagged draft URL and is not the final public v0.3.2 release."
+        "summary": "Linux AppImage validation passed on the rebuilt v0.3.2 package from the final source commit. The verifier confirmed the AppImage and unpacked executable are x86-64 ELF binaries, launched the unpacked app, launched the direct AppImage, extracted the AppImage and launched the extracted app under Xvfb, then packaged CLI/MCP and agent integration smoke passed against the unpacked Linux executable. The refreshed AppImage was published in the final v0.3.2 GitHub Release."
       }
     },
     {
       "id": "update-manifest-assets",
       "title": "Formal update manifest distribution assets",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The final v0.3.2 release assets are uploaded to GitHub Releases.",
         "docs/updates/latest.json is updated only after product-owner exact-package approval.",
@@ -319,22 +335,41 @@
         "The release evidence verifier passes with --require-complete before publication."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-08-20T01:54:25.905Z",
+        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
+        "environment": "Native Windows 11 Pro 10.0.26100 local release shell with GitHub CLI authenticated as Bliveren. The v0.3.2 draft release was promoted to the final public GitHub Release and docs/updates/latest.json was updated from the published release asset URLs, SHA256 digests, and sizes.",
+        "commands": [
+          "gh release upload v0.3.2-rc.1 -R Bliveren/CrossGen .\\release\\CrossGen-Setup.exe .\\release\\CrossGen-Setup.exe.blockmap --clobber",
+          "git tag -a v0.3.2 8c800767883ee5ceb1f59a693374a8e334411bef -m \"v0.3.2\"",
+          "git push origin v0.3.2",
+          "$notes = <final release notes>; gh release edit v0.3.2-rc.1 -R Bliveren/CrossGen --tag v0.3.2 --title \"CrossGen v0.3.2\" --notes $notes --draft=false --prerelease=false --latest --verify-tag",
+          "gh release view v0.3.2 -R Bliveren/CrossGen --json assets"
+        ],
         "references": [
           {
             "label": "Update manifest rules",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/updates/README.md"
           },
           {
-            "label": "v0.3.2 RC 1 draft release assets for product-owner testing",
-            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-91e0c6060a55760af3de"
+            "label": "v0.3.2 final GitHub Release",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.2"
           }
         ],
-        "artifacts": [],
-        "summary": "Pending final v0.3.2 public release asset upload and update manifest promotion. A draft v0.3.2 RC 1 release now contains Windows and Linux candidate assets for product-owner testing, but docs/updates/latest.json must remain on v0.3.1 until final exact-package approval and final public release URLs exist."
+        "artifacts": [
+          {
+            "kind": "public-manifest",
+            "path": "docs/updates/latest.json",
+            "public": true,
+            "description": "Update manifest promoted to v0.3.2 with public GitHub Release URLs, SHA256 digests, and sizeBytes for darwin arm64 DMG, win32 x64 installer, and linux x64 AppImage."
+          },
+          {
+            "kind": "public-release",
+            "path": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.2",
+            "public": true,
+            "description": "Final v0.3.2 GitHub Release marked Latest and containing macOS, Windows, and Linux assets."
+          }
+        ],
+        "summary": "Final v0.3.2 GitHub Release assets were published and docs/updates/latest.json now points at the public v0.3.2 release downloads with their published SHA256 digests and byte sizes."
       }
     },
     {
