@@ -86,7 +86,7 @@ export function buildAgentRuntimeStatus(options: BuildAgentRuntimeStatusOptions)
     runtimeKind,
     cliExecutable: options.appExecutable,
     mcpCommand: options.appExecutable,
-    recommendedArgs: ["--mcp"],
+    recommendedArgs: mcpArgs,
     appExecutable: options.appExecutable,
     packagedExecutable: options.isPackaged ? options.appExecutable : null,
     dataDir: options.dataDir,

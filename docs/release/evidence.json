@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "releaseVersion": "0.3.2",
-  "lastUpdated": "2026-08-20T01:54:25.905Z",
+  "releaseVersion": "0.3.3",
+  "lastUpdated": "2026-08-20T13:05:12.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
       "title": "Product-owner exact-package acceptance",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "The product owner installs and tests the exact v0.3.2 release-candidate package before publication.",
         "Testing covers launch, API configuration, text-to-image, image-to-image, mask/guided edit, queue visibility, cancel/retry, restart recovery, reference preflight, Gallery/History reuse, CLI, and MCP.",
@@ -16,41 +16,20 @@
         "GitHub Release publication, Latest marking, and update manifest promotion happen only after this approval is recorded."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T01:20:29.547Z",
-        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
-        "environment": "Native Windows 11 Pro 10.0.26100 local release shell. Product-owner local acceptance of the exact v0.3.2 Windows test package and native launch verification completed before final publication.",
-        "commands": [
-          "Start-Process -FilePath 'C:\\work\\image2tools\\release\\win-unpacked\\CrossGen.exe'",
-          "$env:IMAGE2TOOLS_WINDOWS_VERIFY_MODE='full-install'; pnpm verify:release:windows"
-        ],
-        "references": [
-          {
-            "label": "v0.3.2 release evidence rules",
-            "url": "https://github.com/Bliveren/image2tools/blob/main/docs/release/README.md"
-          }
-        ],
-        "artifacts": [
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-Setup.exe",
-            "public": false,
-            "description": "v0.3.2 Windows x64 NSIS installer approved during local acceptance. SHA256 47794047a751415ee2a2bbf96c87c7ed1bc4b968e07af01e7b805227e40a453d, size 99115558 bytes."
-          },
-          {
-            "kind": "local-directory",
-            "path": "release/win-unpacked/",
-            "public": false,
-            "description": "Unpacked Windows app launched locally during product-owner acceptance."
-          }
-        ],
-        "summary": "Product owner confirmed the exact v0.3.2 Windows package passed local launch and full-install verification and approved advancing the Windows/Linux release."
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending exact v0.3.3 evidence for product-owner-acceptance. Prior v0.3.2 evidence is archived separately and is not reused."
       }
     },
     {
       "id": "real-openai-api",
       "title": "Real OpenAI-compatible image acceptance",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "A saved or direct OpenAI-compatible provider configuration is available without exposing API keys.",
         "GPT Image 2 or equivalent text-to-image returns a savable image or an accepted operation-level diagnostic.",
@@ -59,41 +38,20 @@
         "Each operation respects the user-configured timeout and records route, model, input image count, mask usage, attempts, elapsed seconds, output count, diagnostic, and next actions."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T13:35:40.564Z",
-        "commit": "d49c3460e20ef13d3c7c224233ac23a565aabe79",
-        "environment": "macOS local paid compatible-provider gates using the product-owner selected OpenAI-compatible endpoint and saved CrossGen provider configuration. API keys and the full private Base URL were loaded from local state/environment and are not recorded.",
-        "commands": [
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-crossgen-gate",
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate"
-        ],
-        "references": [
-          {
-            "label": "v0.3.2 provider gate matrix",
-            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.2-provider-gate-matrix.md"
-          }
-        ],
-        "artifacts": [
-          {
-            "kind": "local-file",
-            "path": "real-api-artifacts/crossgen-gate/2026-08-19T13-27-25-029Z/summary.json",
-            "public": false,
-            "description": "Paid saved-config CrossGen queue gate summary. G1 GPT Image 2 text-to-image, G2 image-to-image, and G3 guided-region/mask all passed through chat-completions."
-          },
-          {
-            "kind": "local-file",
-            "path": "real-api-artifacts/provider-gate/2026-08-19T12-41-14-527Z/summary.json",
-            "public": false,
-            "description": "Paid direct compatible-provider gate summary. G1, G2, and G3 all passed through chat-completions and saved one image each."
-          }
-        ],
-        "summary": "OpenAI-compatible gates passed on both the CrossGen saved-config queue path and the direct compatible endpoint path: G1 text-to-image, G2 image-to-image, and G3 guided-region/mask all returned one savable image within the 420s timeout."
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending exact v0.3.3 evidence for real-openai-api. Prior v0.3.2 evidence is archived separately and is not reused."
       }
     },
     {
       "id": "real-gemini-api",
       "title": "Real Gemini-compatible image acceptance",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "A saved or direct Gemini-compatible provider configuration is available without exposing API keys.",
         "Gemini-compatible text-to-image returns a savable image or an accepted operation-level diagnostic.",
@@ -102,41 +60,20 @@
         "Missing Gemini-compatible provider configuration is not misreported as a generation failure."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T13:35:40.564Z",
-        "commit": "d49c3460e20ef13d3c7c224233ac23a565aabe79",
-        "environment": "macOS local paid compatible-provider gates using the product-owner selected Gemini-compatible image model exposed by the saved CrossGen provider configuration and direct compatible endpoint. API keys and the full private Base URL were loaded from local state/environment and are not recorded.",
-        "commands": [
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-crossgen-gate",
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate"
-        ],
-        "references": [
-          {
-            "label": "v0.3.2 provider gate matrix",
-            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.2-provider-gate-matrix.md"
-          }
-        ],
-        "artifacts": [
-          {
-            "kind": "local-file",
-            "path": "real-api-artifacts/crossgen-gate/2026-08-19T13-27-25-029Z/summary.json",
-            "public": false,
-            "description": "Paid saved-config CrossGen queue gate summary. G4 Gemini-compatible text-to-image and G5 image-to-image passed through chat-completions."
-          },
-          {
-            "kind": "local-file",
-            "path": "real-api-artifacts/provider-gate/2026-08-19T12-41-14-527Z/summary.json",
-            "public": false,
-            "description": "Paid direct compatible-provider gate summary. G4 and G5 passed through chat-completions and saved one image each."
-          }
-        ],
-        "summary": "Gemini-compatible image gates passed on both the CrossGen saved-config queue path and the direct compatible endpoint path: G4 text-to-image and G5 image-to-image each returned one savable image within the 420s timeout."
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending exact v0.3.3 evidence for real-gemini-api. Prior v0.3.2 evidence is archived separately and is not reused."
       }
     },
     {
       "id": "macos-signed",
       "title": "Developer ID signed macOS release package",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "macOS artifacts are built from the exact v0.3.2 release-candidate commit.",
         "Developer ID signing is performed without exposing secret values.",
@@ -145,41 +82,20 @@
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T01:09:18.000Z",
-        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
-        "environment": "macOS local release shell with .env.local loaded. Developer ID signing identity and notarization credentials were available in the shell for the exact final v0.3.2 macOS candidate. Secrets are not recorded.",
-        "commands": [
-          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
-          "pnpm verify:release:mac"
-        ],
-        "references": [
-          {
-            "label": "Release evidence rules",
-            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
-          }
-        ],
-        "artifacts": [
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
-            "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 8c800767883ee5ceb1f59a693374a8e334411bef. SHA256 088959eb5d5fd090bd3b79c4d5a512f51f82c6c3ddc1629a71021d10bb9e8aaa, size 103982077 bytes."
-          },
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
-            "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 8c800767883ee5ceb1f59a693374a8e334411bef. SHA256 fb08175c692a69f3c282bd125929fbe7125c44e2e2014f0f695626b4d799c7cb, size 99677419 bytes."
-          }
-        ],
-        "summary": "Developer ID signing passed for the exact final v0.3.2 macOS candidate built from 8c800767883ee5ceb1f59a693374a8e334411bef. macOS release verification launched the app twice from the DMG and detected main windows in both cycles."
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending exact v0.3.3 evidence for macos-signed. Prior v0.3.2 evidence is archived separately and is not reused."
       }
     },
     {
       "id": "macos-notarized",
       "title": "Apple notarized macOS release package",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "Apple notarization is submitted for the exact v0.3.2 macOS candidate artifact.",
         "Notarization succeeds without exposing Apple credentials.",
@@ -188,41 +104,20 @@
         "The evidence records the exact artifact identity, SHA256, and validation command results."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T01:09:18.000Z",
-        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
-        "environment": "macOS local release shell with .env.local loaded. Apple notarization credentials were available in the shell for the exact final v0.3.2 macOS candidate. Secrets are not recorded.",
-        "commands": [
-          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
-          "pnpm verify:release:mac"
-        ],
-        "references": [
-          {
-            "label": "Release evidence rules",
-            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
-          }
-        ],
-        "artifacts": [
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
-            "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 8c800767883ee5ceb1f59a693374a8e334411bef. SHA256 088959eb5d5fd090bd3b79c4d5a512f51f82c6c3ddc1629a71021d10bb9e8aaa, size 103982077 bytes."
-          },
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
-            "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 8c800767883ee5ceb1f59a693374a8e334411bef. SHA256 fb08175c692a69f3c282bd125929fbe7125c44e2e2014f0f695626b4d799c7cb, size 99677419 bytes."
-          }
-        ],
-        "summary": "Apple notarization succeeded for the exact final v0.3.2 macOS candidate built from 8c800767883ee5ceb1f59a693374a8e334411bef. The notarized DMG also passed macOS release verification."
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending exact v0.3.3 evidence for macos-notarized. Prior v0.3.2 evidence is archived separately and is not reused."
       }
     },
     {
       "id": "windows-native-release",
       "title": "Native Windows release package validation",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "Windows installer artifacts are built from the exact v0.3.2 release-candidate commit.",
         "The Windows verifier runs on a native Windows runner.",
@@ -231,53 +126,20 @@
         "Any Windows-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T01:20:29.547Z",
-        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
-        "environment": "Native Windows 11 Pro 10.0.26100 local release shell. Full NSIS silent install, app launch, main-window detection, silent uninstall, packaged CLI/MCP smoke, and packaged agent integration smoke were run against the v0.3.2 Windows package rebuilt from the final source commit, including the queue-file atomic rename retry fix and opt-in reference image optimization change.",
-        "commands": [
-          "pnpm package:win",
-          "pnpm verify:release:windows",
-          "$env:CROSSGEN_APP_EXECUTABLE = (Resolve-Path .\\release\\win-unpacked\\CrossGen.exe).Path; pnpm verify:cli-mcp-smoke",
-          "$env:CROSSGEN_APP_EXECUTABLE = (Resolve-Path .\\release\\win-unpacked\\CrossGen.exe).Path; pnpm verify:agent-integration-smoke"
-        ],
-        "references": [
-          {
-            "label": "Native Windows and Linux release package tracker",
-            "url": "https://github.com/Bliveren/image2tools/issues/4"
-          },
-          {
-            "label": "v0.3.2 final GitHub Release",
-            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.2"
-          }
-        ],
-        "artifacts": [
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-Setup.exe",
-            "public": false,
-            "description": "v0.3.2 Windows x64 NSIS installer. SHA256 47794047a751415ee2a2bbf96c87c7ed1bc4b968e07af01e7b805227e40a453d, size 99115558 bytes."
-          },
-          {
-            "kind": "local-file",
-            "path": "release/CrossGen-Setup.exe.blockmap",
-            "public": false,
-            "description": "v0.3.2 Windows installer blockmap. SHA256 9e902c5bada448b6fe4df70b7d73435036da187e74aa1c28e9a571eaeadd626d, size 104207 bytes."
-          },
-          {
-            "kind": "local-directory",
-            "path": "release/win-unpacked/",
-            "public": false,
-            "description": "Unpacked Windows app used by native launch verification and packaged CLI/MCP smoke."
-          }
-        ],
-        "summary": "Windows native release validation passed on the rebuilt v0.3.2 package from the final source commit. The earlier packaged MCP smoke exposed a transient Windows queue-file rename failure; the queue store now retries EPERM, EBUSY, and EACCES atomic rename failures, and the rebuilt installer passed full install/uninstall plus packaged CLI/MCP and agent integration smoke. The current installer build was revalidated locally and published in the final v0.3.2 GitHub Release."
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending exact v0.3.3 evidence for windows-native-release. Prior v0.3.2 evidence is archived separately and is not reused."
       }
     },
     {
       "id": "linux-native-release",
       "title": "Linux AppImage package validation",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "Linux AppImage artifacts are built from the exact v0.3.2 release-candidate commit.",
         "Packaged CLI/MCP and agent integration smoke pass against the Linux package.",
@@ -286,47 +148,20 @@
         "Any Linux-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T17:05:58.981Z",
-        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
-        "environment": "Ubuntu 24.04.4 LTS on WSL2 6.6.87.2 local Linux release clone synced to the final source commit. Xvfb was used for packaged Linux app launch, CLI/MCP smoke, and agent integration smoke.",
-        "commands": [
-          "CI=true pnpm package",
-          "pnpm verify:release:linux",
-          "CROSSGEN_APP_EXECUTABLE=\"$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)\" CROSSGEN_APP_EXTRA_ARGS=\"--no-sandbox --disable-gpu\" xvfb-run -a node scripts/verify-cli-mcp-smoke.mjs",
-          "CROSSGEN_APP_EXECUTABLE=\"$(find release -maxdepth 2 -type f -path '*/linux*-unpacked/crossgen' -print -quit)\" CROSSGEN_APP_EXTRA_ARGS=\"--no-sandbox --disable-gpu\" xvfb-run -a node scripts/verify-agent-integration-smoke.mjs"
-        ],
-        "references": [
-          {
-            "label": "Native Windows and Linux release package tracker",
-            "url": "https://github.com/Bliveren/image2tools/issues/4"
-          },
-          {
-            "label": "v0.3.2 final GitHub Release",
-            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.2"
-          }
-        ],
-        "artifacts": [
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-linux-x86_64.AppImage",
-            "public": false,
-            "description": "v0.3.2 Linux x64 AppImage. SHA256 081f7d7ff051b9e3f5737521d4e3f510fbf1d4c670477b2af759351c722833db, size 120885130 bytes."
-          },
-          {
-            "kind": "local-directory",
-            "path": "release/linux-unpacked/",
-            "public": false,
-            "description": "Unpacked Linux app used by Xvfb native launch verification and packaged CLI/MCP smoke in the Linux release clone."
-          }
-        ],
-        "summary": "Linux AppImage validation passed on the rebuilt v0.3.2 package from the final source commit. The verifier confirmed the AppImage and unpacked executable are x86-64 ELF binaries, launched the unpacked app, launched the direct AppImage, extracted the AppImage and launched the extracted app under Xvfb, then packaged CLI/MCP and agent integration smoke passed against the unpacked Linux executable. The refreshed AppImage was published in the final v0.3.2 GitHub Release."
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending exact v0.3.3 evidence for linux-native-release. Prior v0.3.2 evidence is archived separately and is not reused."
       }
     },
     {
       "id": "update-manifest-assets",
       "title": "Formal update manifest distribution assets",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "The final v0.3.2 release assets are uploaded to GitHub Releases.",
         "docs/updates/latest.json is updated only after product-owner exact-package approval.",
@@ -335,41 +170,13 @@
         "The release evidence verifier passes with --require-complete before publication."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T01:54:25.905Z",
-        "commit": "8c800767883ee5ceb1f59a693374a8e334411bef",
-        "environment": "Native Windows 11 Pro 10.0.26100 local release shell with GitHub CLI authenticated as Bliveren. The v0.3.2 draft release was promoted to the final public GitHub Release and docs/updates/latest.json was updated from the published release asset URLs, SHA256 digests, and sizes.",
-        "commands": [
-          "gh release upload v0.3.2-rc.1 -R Bliveren/CrossGen .\\release\\CrossGen-Setup.exe .\\release\\CrossGen-Setup.exe.blockmap --clobber",
-          "git tag -a v0.3.2 8c800767883ee5ceb1f59a693374a8e334411bef -m \"v0.3.2\"",
-          "git push origin v0.3.2",
-          "$notes = <final release notes>; gh release edit v0.3.2-rc.1 -R Bliveren/CrossGen --tag v0.3.2 --title \"CrossGen v0.3.2\" --notes $notes --draft=false --prerelease=false --latest --verify-tag",
-          "gh release view v0.3.2 -R Bliveren/CrossGen --json assets"
-        ],
-        "references": [
-          {
-            "label": "Update manifest rules",
-            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/updates/README.md"
-          },
-          {
-            "label": "v0.3.2 final GitHub Release",
-            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.2"
-          }
-        ],
-        "artifacts": [
-          {
-            "kind": "public-manifest",
-            "path": "docs/updates/latest.json",
-            "public": true,
-            "description": "Update manifest promoted to v0.3.2 with public GitHub Release URLs, SHA256 digests, and sizeBytes for darwin arm64 DMG, win32 x64 installer, and linux x64 AppImage."
-          },
-          {
-            "kind": "public-release",
-            "path": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.2",
-            "public": true,
-            "description": "Final v0.3.2 GitHub Release marked Latest and containing macOS, Windows, and Linux assets."
-          }
-        ],
-        "summary": "Final v0.3.2 GitHub Release assets were published and docs/updates/latest.json now points at the public v0.3.2 release downloads with their published SHA256 digests and byte sizes."
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending exact v0.3.3 evidence for update-manifest-assets. Prior v0.3.2 evidence is archived separately and is not reused."
       }
     },
     {
@@ -385,9 +192,9 @@
         "Known harmless warnings are documented and do not hide failed tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:40:30.000Z",
-        "commit": "b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317",
-        "environment": "macOS local source-tree hardening verification plus main CI. GitHub Actions runs 30483929425, 30484588228, and 30485183338 passed; 30485183338 is the latest CI run for this commit.",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm build",
           "pnpm verify:mock-api",
@@ -399,19 +206,19 @@
         ],
         "references": [
           {
-            "label": "main CI run 30485183338 after RC execution plan update",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30485183338"
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
           }
         ],
         "artifacts": [
           {
             "kind": "local-command-output",
-            "path": "terminal transcript: pnpm build",
+            "path": "terminal transcript",
             "public": false,
-            "description": "Local build passed with 42 test files and 406 tests after v0.3.2 blocker hardening."
+            "description": "Exact candidate build and no-cost mock/smoke commands passed. Known jsdom canvas warnings were non-fatal; all tests passed."
           }
         ],
-        "summary": "Passed locally on the v0.3.2 blocker hardening source and through GitHub Actions run 30485183338 on commit b3127b6aebbd0f1e7ea0924e2a6175dbf1fa8317. jsdom canvas warnings are known harmless warnings and the affected tests passed."
+        "summary": "Passed on the exact v0.3.3 candidate source. Full build reported 44 test files and 424 tests; mock OpenAI, Gemini, and model discovery verifiers passed."
       }
     },
     {
@@ -427,38 +234,35 @@
         "Source-tree CLI/MCP smoke is not used as a substitute for packaged smoke."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T14:26:02.000Z",
-        "commit": "842ae4b3e1b1464180c19c5edeb94193f2024900",
-        "environment": "macOS local packaged smoke against the exact v0.3.2 candidate app executable built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900.",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
-          "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:cli-mcp-smoke",
-          "release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen --cli version --json"
+          "CROSSGEN_APP_EXECUTABLE=<candidate app executable> pnpm verify:cli-mcp-smoke",
+          "CROSSGEN_APP_EXECUTABLE=<candidate app executable> pnpm verify:agent-integration-smoke",
+          "CROSSGEN_SMOKE_CLI_COMMAND=<candidate resources/cli/crossgen> CROSSGEN_SMOKE_MCP_COMMAND=<candidate resources/cli/crossgen> pnpm verify:agent-integration-smoke"
         ],
         "references": [
           {
-            "label": "Latest main CI package preflight after blocker hardening",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
-          },
-          {
-            "label": "v0.3.2 pre-RC evidence",
-            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.2-pre-rc-evidence.md"
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
           }
         ],
         "artifacts": [
           {
             "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
+            "path": "release/CrossGen-0.3.3-mac-arm64.dmg",
             "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 b91e86120e2ac2006f0722da02f5cc34490e7f6c9d6b08d66df0fc39b00c55df, size 103975324 bytes."
+            "description": "Exact v0.3.3 macOS arm64 DMG. SHA256 06ed8ac8998c4e2ca0ded1f1fd5da5a7479dd19beb7d8c41d821c477bff3e72a; size 103901149 bytes."
           },
           {
             "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
+            "path": "release/CrossGen-0.3.3-mac-arm64.zip",
             "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 6308a2c82a5a9a1b2a66a96f6cbb59666af54f478fe2eaefa1c0de21106cbd9d, size 99675738 bytes."
+            "description": "Exact v0.3.3 macOS arm64 ZIP. SHA256 1cff0ea4306cd43cc1d91894784bc2d7340fd7f9002d500dc7742b52129bcdf8; size 99655411 bytes."
           }
         ],
-        "summary": "Packaged CLI launcher and MCP executable smoke passed against the exact notarized v0.3.2 macOS candidate. The app executable reported version 0.3.2 in Electron command mode."
+        "summary": "Passed against the exact v0.3.3 macOS arm64 unpacked App executable and packaged no-Node launcher built from the final candidate head. Both direct App and Resources/cli launcher paths completed CLI/MCP smoke."
       }
     },
     {
@@ -474,39 +278,28 @@
         "No CLI/MCP productization UI is required for v0.3.2."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T14:26:02.000Z",
-        "commit": "842ae4b3e1b1464180c19c5edeb94193f2024900",
-        "environment": "macOS local packaged smoke against the exact v0.3.2 candidate app executable built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900.",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
-          "CROSSGEN_APP_EXECUTABLE=\"$PWD/release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen\" pnpm verify:agent-integration-smoke"
+          "CROSSGEN_APP_EXECUTABLE=<candidate app executable> pnpm verify:agent-integration-smoke",
+          "CROSSGEN_SMOKE_CLI_COMMAND=<candidate resources/cli/crossgen> CROSSGEN_SMOKE_MCP_COMMAND=<candidate resources/cli/crossgen> pnpm verify:agent-integration-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30483929425 after blocker hardening",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
           }
         ],
         "artifacts": [
           {
             "kind": "local-command-output",
-            "path": "terminal transcript: packaged pnpm verify:agent-integration-smoke",
+            "path": "terminal transcript",
             "public": false,
-            "description": "Agent integration smoke passed against the exact macOS candidate package on commit 842ae4b3e1b1464180c19c5edeb94193f2024900."
-          },
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.dmg",
-            "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 DMG built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 b91e86120e2ac2006f0722da02f5cc34490e7f6c9d6b08d66df0fc39b00c55df, size 103975324 bytes."
-          },
-          {
-            "kind": "local-package",
-            "path": "release/CrossGen-0.3.2-mac-arm64.zip",
-            "public": false,
-            "description": "Signed and notarized v0.3.2 macOS arm64 ZIP built from commit 842ae4b3e1b1464180c19c5edeb94193f2024900. SHA256 6308a2c82a5a9a1b2a66a96f6cbb59666af54f478fe2eaefa1c0de21106cbd9d, size 99675738 bytes."
+            "description": "Packaged agent integration smoke passed without exposing API keys or isolated data paths."
           }
         ],
-        "summary": "Agent integration smoke passed against the exact notarized v0.3.2 macOS candidate package."
+        "summary": "Passed on the exact v0.3.3 macOS candidate for Codex, Claude Code, and Cursor configuration output, all three MCP modes, confirmation boundaries, and doctor diagnostics."
       }
     },
     {
@@ -522,27 +315,27 @@
         "The smoke passes on the v0.3.2 release evidence ledger commit."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:24:15.000Z",
-        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
-        "environment": "macOS local smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm verify:queue-concurrency-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30483929425 after blocker hardening",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
           }
         ],
         "artifacts": [
           {
             "kind": "local-command-output",
-            "path": "terminal transcript: pnpm verify:queue-concurrency-smoke",
+            "path": "terminal transcript",
             "public": false,
-            "description": "Queue concurrency smoke passed with 2 files and 23 tests."
+            "description": "Queue concurrency smoke passed with 2 files and 24 tests."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 blocker hardening commit."
+        "summary": "Queue default/bounded concurrency and two-host claim safety passed on the exact candidate."
       }
     },
     {
@@ -558,27 +351,27 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:24:15.000Z",
-        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
-        "environment": "macOS local smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm verify:gallery-mutation-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30483929425 after blocker hardening",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
           }
         ],
         "artifacts": [
           {
             "kind": "local-command-output",
-            "path": "terminal transcript: pnpm verify:gallery-mutation-smoke",
+            "path": "terminal transcript",
             "public": false,
             "description": "Gallery mutation smoke passed with 3 files and 24 tests."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 blocker hardening commit."
+        "summary": "Gallery folder, asset, duplicate, path, and concurrent mutation tests passed on the exact candidate."
       }
     },
     {
@@ -594,34 +387,34 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:24:15.000Z",
-        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
-        "environment": "macOS local smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm verify:image-core-regression-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30483929425 after blocker hardening",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
           }
         ],
         "artifacts": [
           {
             "kind": "local-command-output",
-            "path": "terminal transcript: pnpm verify:image-core-regression-smoke",
+            "path": "terminal transcript",
             "public": false,
-            "description": "Image core regression smoke passed with 5 files and 193 tests."
+            "description": "Image core regression smoke passed with 5 files and 198 tests."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 blocker hardening commit."
+        "summary": "Image generation adapters, renderer, Gallery, and disk-sync regression smoke passed on the exact candidate with 198 tests."
       }
     },
     {
       "id": "real-provider-operation-matrix",
       "title": "v0.3.2 real provider operation matrix",
       "required": true,
-      "status": "passed",
+      "status": "pending",
       "acceptanceCriteria": [
         "OpenAI-compatible text-to-image is recorded as pass, pass-with-diagnostic, or blocker by operation.",
         "OpenAI-compatible image-to-image is recorded separately from text-to-image.",
@@ -630,34 +423,13 @@
         "Every gate records route, model, timeout, elapsed seconds, input image count, output count, diagnostic category, and next actions without exposing secrets."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-19T13:35:40.564Z",
-        "commit": "d49c3460e20ef13d3c7c224233ac23a565aabe79",
-        "environment": "macOS local paid operation-level matrix using saved CrossGen configuration plus direct compatible endpoint verification. Secrets were loaded from local app state and .env.local and are not recorded.",
-        "commands": [
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-crossgen-gate",
-          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate"
-        ],
-        "references": [
-          {
-            "label": "v0.3.2 provider gate matrix",
-            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.2-provider-gate-matrix.md"
-          }
-        ],
-        "artifacts": [
-          {
-            "kind": "local-file",
-            "path": "real-api-artifacts/crossgen-gate/2026-08-19T13-27-25-029Z/summary.json",
-            "public": false,
-            "description": "Saved-config CrossGen operation matrix passed 5/5: GPT Image 2 text, image, guided-region, Gemini-compatible text, and Gemini-compatible image gates. Routes resolved to chat-completions."
-          },
-          {
-            "kind": "local-file",
-            "path": "real-api-artifacts/provider-gate/2026-08-19T12-41-14-527Z/summary.json",
-            "public": false,
-            "description": "Direct compatible-provider operation matrix passed 5/5: G1 56.06s, G2 55.17s, G3 86.49s, G4 64.20s, G5 86.23s, all with one saved image."
-          }
-        ],
-        "summary": "The v0.3.2 real provider operation matrix passed 5/5 in both required paths. OpenAI-compatible G1/G2/G3 and Gemini-compatible G4/G5 all used chat-completions, respected the 420s timeout, and produced one savable image with no diagnostic-required results."
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Pending exact v0.3.3 evidence for real-provider-operation-matrix. Prior v0.3.2 evidence is archived separately and is not reused."
       }
     },
     {
@@ -673,28 +445,28 @@
         "Renderer smoke tests cover the new queue UI states without layout blocker regressions."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:24:15.000Z",
-        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
-        "environment": "macOS local build and image-core smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm build",
           "pnpm verify:image-core-regression-smoke"
         ],
         "references": [
           {
-            "label": "main CI run 30483929425 after blocker hardening",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
           }
         ],
         "artifacts": [
           {
             "kind": "local-command-output",
-            "path": "terminal transcript: pnpm build",
+            "path": "terminal transcript",
             "public": false,
-            "description": "Renderer smoke tests passed as part of the full build."
+            "description": "Full build and renderer smoke passed; no queue UI regression observed."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 blocker hardening commit. Exact-package product testing remains separate and pending."
+        "summary": "The exact candidate full build and renderer regression smoke passed; queue UI state coverage remains in the existing renderer suite."
       }
     },
     {
@@ -710,28 +482,28 @@
         "Diagnostics record operation, route, model, input image count, mask usage, attempt count, retryability, charged retry risk, and next actions."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:24:15.000Z",
-        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
-        "environment": "macOS local focused tests and full build after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm exec vitest run src/core/referencePreflight.test.ts src/main/services/generalImageAdapter.test.ts src/main/services/geminiImageAdapter.test.ts src/main/services/openaiImageRouting.test.ts src/main/services/stateMigration.test.ts src/renderer/App.smoke.test.tsx",
           "pnpm build"
         ],
         "references": [
           {
-            "label": "main CI run 30483929425 after blocker hardening",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
           }
         ],
         "artifacts": [
           {
             "kind": "local-command-output",
-            "path": "terminal transcript: provider diagnostics focused vitest batch",
+            "path": "terminal transcript",
             "public": false,
-            "description": "Focused provider route, timeout-budget, state migration, reference preflight, and renderer diagnostic tests passed after hardening."
+            "description": "Focused provider diagnostic tests passed on the exact candidate."
           }
         ],
-        "summary": "Passed locally. Provider diagnostics now include operation-separated guided-region route probes, shared timeout budgets through provider downloads, and redacted dry-run summaries. Real provider behavior still requires operation-level gate evidence."
+        "summary": "Provider route, timeout, cancellation, diagnostics, migration, and renderer focused tests passed on the exact candidate."
       }
     },
     {
@@ -747,28 +519,28 @@
         "Temporary request copies are cleaned up on completion, failure, cancellation, and next startup."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:24:15.000Z",
-        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
-        "environment": "macOS local focused tests and full build after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
-          "pnpm exec vitest run src/core/referencePreflight.test.ts src/main/services/generalImageAdapter.test.ts src/main/services/geminiImageAdapter.test.ts src/main/services/openaiImageRouting.test.ts src/main/services/stateMigration.test.ts src/renderer/App.smoke.test.tsx",
+          "pnpm exec vitest run src/core/referencePreflight.test.ts src/main/services/generalImageAdapter.test.ts src/main/services/geminiImageAdapter.test.ts",
           "pnpm build"
         ],
         "references": [
           {
-            "label": "main CI run 30483929425 after blocker hardening",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
           }
         ],
         "artifacts": [
           {
             "kind": "local-command-output",
-            "path": "terminal transcript: reference preflight tests",
+            "path": "terminal transcript",
             "public": false,
-            "description": "Reference preflight tests passed after adding alpha propagation and Queue/History diagnostic display coverage."
+            "description": "Reference preflight focused tests passed on the exact candidate."
           }
         ],
-        "summary": "Passed locally. Reference preflight now preserves alpha metadata and exposes original/request summaries in Queue and History diagnostics. Product testing still needs to inspect the exact package behavior."
+        "summary": "Reference preflight and non-destructive request-copy behavior remained green on the exact candidate."
       }
     },
     {
@@ -784,9 +556,9 @@
         "History/Gallery recovery paths are covered by smoke or focused tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-07-29T19:24:15.000Z",
-        "commit": "830ad09b51a1ad749450dfb96e7bca2775bd9fb4",
-        "environment": "macOS local smoke after v0.3.2 blocker hardening. GitHub Actions run 30483929425 passed for this commit.",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm verify:image-core-regression-smoke",
           "pnpm verify:gallery-mutation-smoke",
@@ -794,19 +566,137 @@
         ],
         "references": [
           {
-            "label": "main CI run 30483929425 after blocker hardening",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/30483929425"
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
           }
         ],
         "artifacts": [
           {
             "kind": "local-command-output",
-            "path": "terminal transcript: image core and Gallery mutation smoke",
+            "path": "terminal transcript",
             "public": false,
-            "description": "History/Gallery recovery-adjacent smoke tests passed before RC gate preparation."
+            "description": "History/Gallery recovery-adjacent smoke passed on the exact candidate."
           }
         ],
-        "summary": "Passed locally after the v0.3.2 blocker hardening commit. Exact-package product testing remains separate and pending."
+        "summary": "History/Gallery recovery-adjacent image and mutation smoke passed on the exact candidate."
+      }
+    },
+    {
+      "id": "agent-access-contract",
+      "title": "Agent Access runtime contract and development-mode MCP arguments",
+      "required": true,
+      "status": "passed",
+      "acceptanceCriteria": [
+        "AgentRuntimeStatus remains schemaVersion 1 and keeps legacy cliExecutable, mcpCommand, and recommendedArgs fields.",
+        "Development runtime MCP args include the Electron app path before --mcp so copied configuration is runnable from the source tree.",
+        "doctor --agent and the desktop Agent Access panel consume the same runtime contract without exposing secrets or private data directories."
+      ],
+      "evidence": {
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
+        "commands": [
+          "pnpm typecheck",
+          "pnpm exec vitest run src/main/services/agentRuntime.test.ts src/cli/readonly.test.ts src/renderer/App.smoke.test.tsx scripts/verify-release-evidence.test.mjs"
+        ],
+        "references": [
+          {
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-command-output",
+            "path": "terminal transcript",
+            "public": false,
+            "description": "Agent Access contract and release verifier focused tests passed."
+          }
+        ],
+        "summary": "Agent Access runtime contract focused tests and typecheck passed. Development MCP args now include the Electron app path before --mcp while packaged legacy fields remain compatible."
+      }
+    },
+    {
+      "id": "agent-cli-link-management",
+      "title": "Managed user-level CLI link and Windows shim safety",
+      "required": true,
+      "status": "passed",
+      "acceptanceCriteria": [
+        "macOS and Linux create and remove only the CrossGen-managed user-level CLI symlink.",
+        "Windows creates and removes only the marked CrossGen shim.",
+        "Unmanaged files are never overwritten and stale links are reported clearly."
+      ],
+      "evidence": {
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
+        "commands": [
+          "pnpm exec vitest run src/main/services/agentRuntime.test.ts"
+        ],
+        "references": [
+          {
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-command-output",
+            "path": "terminal transcript",
+            "public": false,
+            "description": "Managed CLI link safety tests passed for POSIX and Windows semantics."
+          }
+        ],
+        "summary": "Managed POSIX link and Windows shim create/remove, stale-link replacement, and unmanaged-file refusal tests passed."
+      }
+    },
+    {
+      "id": "exact-candidate-package",
+      "title": "Exact v0.3.3 candidate package generation and smoke",
+      "required": true,
+      "status": "passed",
+      "acceptanceCriteria": [
+        "package.json reports 0.3.3 and the package artifact embeds the exact candidate version.",
+        "At least one exact candidate package or unpacked app is generated from the recorded commit.",
+        "The candidate reaches the packaged CLI/MCP smoke path without requiring a global Node.js installation."
+      ],
+      "evidence": {
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
+        "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
+        "commands": [
+          "pnpm package:mac",
+          "pnpm verify:release:mac",
+          "pnpm package:dir",
+          "CROSSGEN_APP_EXECUTABLE=<candidate app executable> pnpm verify:cli-mcp-smoke"
+        ],
+        "references": [
+          {
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.3-mac-arm64.dmg",
+            "public": false,
+            "description": "Exact v0.3.3 macOS arm64 DMG. SHA256 06ed8ac8998c4e2ca0ded1f1fd5da5a7479dd19beb7d8c41d821c477bff3e72a; size 103901149 bytes."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.3-mac-arm64.zip",
+            "public": false,
+            "description": "Exact v0.3.3 macOS arm64 ZIP. SHA256 1cff0ea4306cd43cc1d91894784bc2d7340fd7f9002d500dc7742b52129bcdf8; size 99655411 bytes."
+          },
+          {
+            "kind": "local-directory",
+            "path": "release/mac-arm64/CrossGen.app",
+            "public": false,
+            "description": "Exact v0.3.3 unpacked macOS arm64 app; Info.plist reports CFBundleShortVersionString 0.3.3."
+          }
+        ],
+        "summary": "Exact v0.3.3 macOS arm64 candidate package generated from the final candidate head with embedded version 0.3.3; DMG install/launch verification passed twice and packaged CLI/MCP smoke passed."
       }
     }
   ]
