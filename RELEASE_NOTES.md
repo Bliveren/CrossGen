@@ -1,5 +1,26 @@
 # CrossGen Release Notes
 
+## v0.3.2
+
+CrossGen 0.3.2 is the reliability release for the full image workflow: desktop, CLI, MCP, provider routing, reference images, and queue visibility are validated as one package set.
+
+### User-Facing Highlights
+
+- **Safer reference-image handling**: uploaded reference images remain original-size by default. Temporary optimization is explicit and non-destructive when a provider or workflow needs it.
+- **Visible task progress**: queue work exposes running, waiting, retry, cancel, timeout, and failure states instead of hiding long-running image operations.
+- **Provider route diagnostics**: compatible APIs report the selected route, model, attempts, elapsed time, input-image count, and actionable failure information.
+- **Reliable image workflows**: text-to-image, image-to-image, guided edits, History, Gallery, and local folder reuse are covered by focused regression and real-provider gates.
+- **Desktop, CLI, and MCP parity**: packaged command-line and MCP flows use the same local queue and Gallery rules as the desktop app.
+- **Cross-platform release**: macOS arm64, Windows x64, and Linux x64 packages are included in the public `v0.3.2` release. The macOS package is Developer ID signed and Apple notarized.
+
+### Validation
+
+- `pnpm verify:release-evidence -- --require-complete`
+- Real OpenAI-compatible and Gemini-compatible provider operation matrix
+- macOS signed/notarized package verification
+- Windows native install, launch, CLI/MCP, and agent integration verification
+- Linux AppImage, Xvfb launch, CLI/MCP, and agent integration verification
+
 ## v0.3.0
 
 CrossGen 0.3.0 is the release where Image2Tools becomes a one-stop AI image generation manager. The focus is practical daily work: configure API access once, discover models and compatible routes, generate images, keep useful results organized, edit images quickly, then reuse them as references for the next image-to-image round.

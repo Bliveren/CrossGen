@@ -22,14 +22,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>Download v0.3.1</b></a> ·
+  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>Download v0.3.2</b></a> ·
   <a href="#agent-quickstart"><b>Agent Quickstart</b></a> ·
   <a href="./docs/cli-mcp.md"><b>CLI/MCP Docs</b></a> ·
   <a href="https://discord.gg/XphwmYtY">Discord</a>
 </p>
 
 <p align="center">
-  <a href="#why-crossgen-031">Why 0.3.1</a> ·
+  <a href="#why-crossgen-032">Why 0.3.2</a> ·
   <a href="#visual-tour">Visual Tour</a> ·
   <a href="#core-workflows">Core Workflows</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -37,9 +37,9 @@
   <a href="#technical-notes">Technical Notes</a>
 </p>
 
-## Why CrossGen 0.3.1
+## Why CrossGen 0.3.2
 
-CrossGen 0.3.1 turns the desktop image workspace into an agent-ready local runtime. You can still use the full visual app, while Codex, Claude Code, Cursor, and other local AI agents can discover models, generate or edit images, monitor durable jobs, and export results into a project through CLI or MCP.
+CrossGen 0.3.2 makes the desktop image workspace more reliable for real production work. The visual app, CLI, and MCP share the same queue, provider diagnostics, reference-image handling, History, and Gallery flows, so image generation remains usable even when a compatible provider needs a different route or a task needs retrying.
 
 The desktop app, CLI, and MCP server share the same API profiles, durable generation queue, History, and Gallery. Install CrossGen once; installed CLI and MCP use require no separate Node.js, npm, pnpm, global package, or local HTTP service.
 
@@ -176,7 +176,7 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 
 ## Agent Runtime
 
-CrossGen 0.3.1 exposes the local image runtime through structured JSON CLI commands and an MCP stdio server. The same queue and Gallery rules protect desktop, CLI, and MCP workflows:
+CrossGen 0.3.2 exposes the local image runtime through structured JSON CLI commands and an MCP stdio server. The same queue, diagnostics, and Gallery rules protect desktop, CLI, and MCP workflows:
 
 - `crossgen doctor --agent --json` reports the app path, data directory, provider readiness, queue configuration, and MCP launch hints.
 - `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` prints client-ready MCP configuration.

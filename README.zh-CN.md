@@ -22,14 +22,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载 v0.3.1</b></a> ·
+  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载 v0.3.2</b></a> ·
   <a href="#agent-快速开始"><b>Agent 快速开始</b></a> ·
   <a href="./docs/cli-mcp.md"><b>CLI/MCP 文档</b></a> ·
   <a href="https://discord.gg/XphwmYtY">Discord</a>
 </p>
 
 <p align="center">
-  <a href="#为什么是-crossgen-031">0.3.1 介绍</a> ·
+  <a href="#为什么是-crossgen-032">0.3.2 介绍</a> ·
   <a href="#功能演示">功能演示</a> ·
   <a href="#核心工作流">核心工作流</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -37,9 +37,9 @@
   <a href="#技术说明">技术说明</a>
 </p>
 
-## 为什么是 CrossGen 0.3.1
+## 为什么是 CrossGen 0.3.2
 
-CrossGen 0.3.1 将桌面生图工作台升级为面向 Agent 的本地运行时。你仍然可以使用完整的可视化应用，同时也可以让 Codex、Claude Code、Cursor 和其他本地 AI Agent 通过 CLI 或 MCP 发现模型、生图或编辑图片、追踪持久化任务，并把结果导出到当前项目。
+CrossGen 0.3.2 进一步提升真实生图工作的可靠性。桌面端、CLI 和 MCP 共用同一套队列、接口路径诊断、参考图处理、历史和图库流程，让不同服务商的路径差异、任务重试和素材复用都能在同一个工作流里完成。
 
 | 在桌面端完成可视化工作 | 让 Agent 调用同一本地运行时 |
 | --- | --- |
@@ -176,7 +176,7 @@ CrossGen 的图片编辑区不再只是预览结果，而是串联图库和图�
 
 ## Agent Runtime
 
-CrossGen 0.3.1 通过结构化 JSON CLI 和 MCP stdio server 暴露本地生图运行时。桌面端、CLI 和 MCP 使用同一套队列与图库规则：
+CrossGen 0.3.2 通过结构化 JSON CLI 和 MCP stdio server 暴露本地生图运行时。桌面端、CLI 和 MCP 使用同一套队列、诊断与图库规则：
 
 - `crossgen doctor --agent --json` 返回应用路径、数据目录、provider 就绪状态、队列配置和 MCP 启动建议；
 - `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` 输出可直接粘贴的 MCP 配置；
