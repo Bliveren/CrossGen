@@ -80,7 +80,6 @@ External gate trackers:
 
 Release-specific preparation:
 
-- `v0.3.2`: [evidence.json](./evidence.json)
 - `v0.3.3`: [v0.3.3-preflight.md](./v0.3.3-preflight.md)
 - `v0.3.3`: [evidence.json](./evidence.json)
 - `v0.3.2`: [v0.3.2-evidence.json](./v0.3.2-evidence.json)
