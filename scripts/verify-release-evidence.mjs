@@ -36,6 +36,12 @@ const v032GateIds = [
   "history-gallery-recovery"
 ];
 
+const v033GateIds = [
+  "agent-access-contract",
+  "agent-cli-link-management",
+  "exact-candidate-package"
+];
+
 const v030ChecklistGuards = [
   {
     file: "docs/release/v0.3.0-preflight.md",
@@ -235,6 +241,24 @@ const v031ChecklistGuards = [
   }
 ];
 
+const v033ChecklistGuards = [
+  {
+    file: "docs/release/v0.3.3-preflight.md",
+    text: "完成 Agent Access runtime contract 定向测试与 `pnpm typecheck`。",
+    gateIds: ["agent-access-contract"]
+  },
+  {
+    file: "docs/release/v0.3.3-preflight.md",
+    text: "完成受管 POSIX link / Windows shim 的创建、拒绝覆盖和清理测试。",
+    gateIds: ["agent-cli-link-management"]
+  },
+  {
+    file: "docs/release/v0.3.3-preflight.md",
+    text: "从精确 `v0.3.3` 候选源码生成并验证至少一个可安装或可运行的候选包。",
+    gateIds: ["exact-candidate-package"]
+  }
+];
+
 const commonChecklistGuards = [
   {
     file: "CHECKLIST.md",
@@ -335,6 +359,9 @@ function isAtLeastVersion(value, minimum) {
 }
 
 function knownGateIdsForRelease(releaseVersion) {
+  if (isAtLeastVersion(releaseVersion, "0.3.3")) {
+    return [...baseGateIds, ...v031GateIds, ...v032GateIds, ...v033GateIds];
+  }
   if (isAtLeastVersion(releaseVersion, "0.3.2")) {
     return [...baseGateIds, ...v031GateIds, ...v032GateIds];
   }
@@ -345,6 +372,12 @@ function knownGateIdsForRelease(releaseVersion) {
 }
 
 function checklistGuardsForRelease(releaseVersion) {
+  if (isAtLeastVersion(releaseVersion, "0.3.3")) {
+    // The repository checklists contain historical [x] entries for approved
+    // releases. A new candidate must not inherit those assertions before its
+    // own exact-package evidence exists; v0.3.3 has its own explicit guards.
+    return v033ChecklistGuards;
+  }
   if (isAtLeastVersion(releaseVersion, "0.3.2")) {
     return commonChecklistGuards;
   }

@@ -87,16 +87,16 @@ describe("release evidence verifier", () => {
     expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
-  it("validates the approved default v0.3.2 ledger", async () => {
-    const result = await run([]);
+  it("validates the archived approved v0.3.2 ledger", async () => {
+    const result = await run(["--file", "docs/release/v0.3.2-evidence.json", "--expected-version", "0.3.2"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Release evidence validated: 19/19 required gate(s) passed.");
     expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
-  it("passes --require-complete for the approved v0.3.2 ledger", async () => {
-    const result = await run(["--require-complete"]);
+  it("passes --require-complete for the archived approved v0.3.2 ledger", async () => {
+    const result = await run(["--file", "docs/release/v0.3.2-evidence.json", "--expected-version", "0.3.2", "--require-complete"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Release evidence validated: 19/19 required gate(s) passed.");

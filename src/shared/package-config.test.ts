@@ -5,9 +5,9 @@ import packageJson from "../../package.json";
 import updateManifest from "../../docs/updates/latest.json";
 
 describe("package release configuration", () => {
-  it("stages the v0.3.2 release metadata", () => {
+  it("stages the v0.3.3 release metadata", () => {
     expect(packageJson.name).toBe("crossgen");
-    expect(packageJson.version).toBe("0.3.2");
+    expect(packageJson.version).toBe("0.3.3");
     expect(packageJson.description).toContain("One-stop AI image generation manager");
     expect(packageJson.description).toContain("API access");
     expect(packageJson.description).toContain("Gallery/history reuse");

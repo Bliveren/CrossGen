@@ -95,6 +95,7 @@ describe("agent runtime status", () => {
     expect(status.liveWorkerHost).toBe(false);
     expect(status.nextActions.join("\n")).toContain("pnpm build:main");
     expect(status.mcp.args).toEqual([path.join(root, "app"), "--mcp"]);
+    expect(status.recommendedArgs).toEqual([path.join(root, "app"), "--mcp"]);
     expect(status.commands.version).toContain(`'${path.join(root, "app")}' --cli`);
     expect(status.mcp.configs.find((config) => config.client === "cursor" && config.mode === "generate")?.snippet).toContain("--mcp");
   });

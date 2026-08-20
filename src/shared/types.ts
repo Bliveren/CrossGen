@@ -679,7 +679,7 @@ export interface AgentRuntimeStatus {
   runtimeKind: "development" | "packaged";
   cliExecutable: string;
   mcpCommand: string;
-  recommendedArgs: ["--mcp"];
+  recommendedArgs: string[];
   appExecutable: string;
   packagedExecutable: string | null;
   dataDir: string;
