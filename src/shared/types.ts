@@ -645,6 +645,90 @@ export interface CrossGenJsonFailure {
 
 export type CrossGenJsonResponse<TData = unknown> = CrossGenJsonSuccess<TData> | CrossGenJsonFailure;
 
+export type AgentMcpClientName = "codex" | "claude-code" | "cursor";
+export type AgentMcpMode = "readonly" | "write" | "generate";
+
+export type AgentCliCommandStatus =
+  | "ready"
+  | "not-found"
+  | "stale"
+  | "custom"
+  | "launcher-missing"
+  | "development";
+
+export interface AgentActiveProviderStatus {
+  id: string;
+  kind: ProviderKind;
+  name?: string;
+  enabled: boolean;
+  activeLaunchId?: FocusedLaunchId;
+  activeModelId?: string;
+}
+
+export interface AgentMcpConfigSnippet {
+  client: AgentMcpClientName;
+  mode: AgentMcpMode;
+  format: "codex-toml" | "json";
+  json: string;
+  snippet: string;
+}
+
+export interface AgentRuntimeStatus {
+  schemaVersion: 1;
+  appVersion: string;
+  runtimeKind: "development" | "packaged";
+  cliExecutable: string;
+  mcpCommand: string;
+  recommendedArgs: ["--mcp"];
+  appExecutable: string;
+  packagedExecutable: string | null;
+  dataDir: string;
+  statePath: string;
+  stateFound: boolean;
+  activeProvider: AgentActiveProviderStatus | null;
+  apiKeyAvailable: boolean;
+  liveWorkerHost: boolean;
+  liveWorkerHosts: number;
+  queueConfig: QueueRuntimeConfig;
+  cli: {
+    commandName: "crossgen";
+    status: AgentCliCommandStatus;
+    commandPath: string | null;
+    commandTarget: string | null;
+    launcherPath: string | null;
+    launcherExists: boolean;
+    pathEntryCount: number;
+    linkCommand: string | null;
+    unlinkCommand: string | null;
+    repairHint: string;
+  };
+  mcp: {
+    command: string;
+    args: ["--mcp"];
+    defaultMode: AgentMcpMode;
+    configs: AgentMcpConfigSnippet[];
+  };
+  commands: {
+    version: string;
+    doctor: string;
+    configStatus: string;
+    modelsList: string;
+    queueStatus: string;
+    mcpCodexReadonly: string;
+    mcpCodexGenerate: string;
+  };
+  permissions: {
+    cliMode: "readonly";
+    mcpDefaultMode: "readonly";
+    writeModeRequiresExplicitEnable: boolean;
+    generateModeRequiresExplicitEnable: boolean;
+    paidGenerationRequiresConfirmation: boolean;
+    pathDisclosureRequiresConfirmation: boolean;
+  };
+  knownLimitations: string[];
+  nextActions: string[];
+}
+
 export interface JobProgressEvent {
   jobId: string;
   queueId?: string;
@@ -752,6 +836,7 @@ export interface UpdateInstallResult {
 
 export interface AppBridge {
   getSnapshot: () => Promise<AppSnapshot>;
+  getAgentRuntimeStatus: () => Promise<AgentRuntimeStatus>;
   saveConfig: (input: ProviderConfigInput) => Promise<ProviderConfig>;
   addProvider: (input: ProviderConfigInput) => Promise<AppSnapshot>;
   switchProvider: (providerId: string) => Promise<AppSnapshot>;

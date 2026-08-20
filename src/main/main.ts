@@ -13,6 +13,7 @@ import {
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, readFileSync, watch, type FSWatcher } from "node:fs";
 import { promises as fs } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -152,6 +153,7 @@ import { fetchWithTimeout } from "./services/openaiImageAdapter.js";
 import { probeOpenAIImageRouting } from "./services/openaiImageRouting.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
+import { buildAgentRuntimeStatus } from "./services/agentRuntime.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
 import { canRunRequestWithConfig } from "./services/providerRequestMatch.js";
 import { assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, historyAssetReadRoots, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
@@ -1556,6 +1558,37 @@ async function handleGetSnapshot(): Promise<AppSnapshot> {
 
 async function handleGetQueueSnapshot(): Promise<QueueSnapshot> {
   return buildDesktopQueueSnapshot();
+}
+
+async function handleGetAgentRuntimeStatus() {
+  const state = await readExistingStateForCli();
+  const queue = await readExistingQueueForCli();
+  const activeProvider = state ? state.providers.find((provider) => provider.id === state.activeProviderId) ?? state.providers[0] : undefined;
+  return buildAgentRuntimeStatus({
+    appVersion: getAppVersion(),
+    isPackaged: app.isPackaged,
+    platform: process.platform,
+    appExecutable: process.execPath,
+    resourcesPath: process.resourcesPath,
+    dataDir: app.getPath("userData"),
+    statePath: getStatePath(),
+    stateFound: Boolean(state),
+    activeProvider: activeProvider
+      ? {
+          id: activeProvider.id,
+          kind: activeProvider.kind,
+          name: activeProvider.name,
+          enabled: activeProvider.enabled,
+          activeLaunchId: activeProvider.activeLaunchId,
+          activeModelId: activeProvider.activeModelId
+        }
+      : null,
+    apiKeyAvailable: activeProvider ? envApiKeyAvailable(activeProvider.kind) || savedApiKeyPresentForCli(activeProvider) : false,
+    liveWorkerHosts: queue.workerHosts.filter((host) => Date.parse(host.leaseExpiresAt) > Date.now()).length,
+    queueConfig: buildCliQueueConfig(state),
+    envPath: process.env.PATH,
+    homeDir: homedir()
+  });
 }
 
 function snapshotFromState(state: AppStateFile): AppSnapshot {
@@ -5424,46 +5457,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
     }
 
     if (command === "doctor" && hasCliFlag(args, "--agent")) {
-      const state = await readExistingStateForCli();
-      const queueConfig = buildCliQueueConfig(state);
-      const activeProvider = state ? state.providers.find((provider) => provider.id === state.activeProviderId) ?? state.providers[0] : undefined;
-      const data = {
-        appVersion: getAppVersion(),
-        cliExecutable: process.execPath,
-        packagedExecutable: app.isPackaged ? process.execPath : null,
-        mcpCommand: process.execPath,
-        recommendedArgs: ["--mcp"],
-        dataDir: app.getPath("userData"),
-        statePath: getStatePath(),
-        stateFound: Boolean(state),
-        activeProvider: activeProvider
-          ? {
-              id: activeProvider.id,
-              kind: activeProvider.kind,
-              name: activeProvider.name,
-              enabled: activeProvider.enabled,
-              activeLaunchId: activeProvider.activeLaunchId,
-              activeModelId: activeProvider.activeModelId
-            }
-          : null,
-        apiKeyAvailable: activeProvider ? envApiKeyAvailable(activeProvider.kind) || savedApiKeyPresentForCli(activeProvider) : false,
-        liveWorkerHost: false,
-        queueConfig,
-        permissions: {
-          cliMode: "readonly",
-          mcpDefaultMode: "readonly",
-          writeModeRequiresExplicitEnable: true,
-          generateModeRequiresExplicitEnable: true,
-          paidGenerationRequiresConfirmation: true,
-          pathDisclosureRequiresConfirmation: true
-        },
-        knownLimitations: [
-          "CLI/MCP command mode currently exposes readonly discovery, queue inspection/cancellation, Gallery asset management, and generation/edit tools.",
-          "CLI --wait/default command mode can execute the queued job in the current process. MCP generate mode starts a background queue worker and supports waitMs.",
-          "Agent generation submit/edit tools require explicit confirmation because they may create paid provider requests when a worker executes them."
-        ]
-      };
-      writeCliJson(cliSuccess(requestId, correlationId, data));
+      writeCliJson(cliSuccess(requestId, correlationId, { ...await handleGetAgentRuntimeStatus() }));
       return 0;
     }
 
@@ -5932,6 +5926,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
 
 function registerIpcHandlers(): void {
   ipcMain.handle("app:getSnapshot", () => runGalleryOperation(handleGetSnapshot));
+  ipcMain.handle("app:getAgentRuntimeStatus", handleGetAgentRuntimeStatus);
   ipcMain.handle("config:save", handleSaveConfig);
   ipcMain.handle("provider:add", handleAddProvider);
   ipcMain.handle("provider:switch", handleSwitchProvider);

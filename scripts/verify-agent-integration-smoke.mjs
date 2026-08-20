@@ -240,6 +240,13 @@ async function verifyMcpConfig(dataDir) {
       assert(payload.data.transport === "stdio", "mcp config must use stdio transport.");
       assert(Array.isArray(payload.data.args) && payload.data.args.includes("--mcp"), "mcp config did not include --mcp args.");
       assert(payload.data.env?.CROSSGEN_MCP_MODE === mode, "mcp config did not set CROSSGEN_MCP_MODE.");
+      assert(payload.data.format === (client === "codex" ? "codex-toml" : "json"), `mcp config returned wrong format for ${client}.`);
+      assert(typeof payload.data.snippet === "string" && payload.data.snippet.includes("--mcp"), `mcp config ${client} ${mode} did not include a copyable snippet.`);
+      if (client === "codex") {
+        assert(payload.data.snippet.includes("[mcp_servers.crossgen]"), "Codex config snippet must be TOML.");
+      } else {
+        assert(payload.data.snippet.includes("\"mcpServers\""), `${client} config snippet must use mcpServers JSON.`);
+      }
       assert(JSON.stringify(payload.data.permissions) === JSON.stringify(expectedPermissions(mode)), `mcp config returned wrong permissions for ${mode}.`);
       assert(JSON.stringify(payload.data.supportedModes) === JSON.stringify(modes), "mcp config returned unexpected supportedModes.");
       if (mode === "generate") {
@@ -297,6 +304,12 @@ async function verifyMcpModeTools(dataDir) {
 async function verifyDoctor(dataDir) {
   const payload = await runCli(dataDir, ["doctor", "--agent", "--json"]);
   assertCliOk(payload, "doctor --agent");
+  assert(payload.data.schemaVersion === 1, "doctor did not report schemaVersion 1.");
+  assert(payload.data.cli?.commandName === "crossgen", "doctor did not report crossgen command name.");
+  assert(typeof payload.data.cli?.status === "string", "doctor did not report CLI status.");
+  assert(typeof payload.data.cli?.repairHint === "string", "doctor did not report CLI repairHint.");
+  assert(Array.isArray(payload.data.mcp?.configs) && payload.data.mcp.configs.length === clients.length * modes.length, "doctor did not report MCP configs for all clients and modes.");
+  assert(payload.data.commands?.doctor?.includes("doctor --agent --json"), "doctor did not report agent doctor command.");
   assert(payload.data.permissions?.mcpDefaultMode === "readonly", "doctor did not report readonly MCP default.");
   assert(payload.data.permissions?.paidGenerationRequiresConfirmation === true, "doctor did not report generation confirmation.");
   assert(payload.data.permissions?.pathDisclosureRequiresConfirmation === true, "doctor did not report path disclosure confirmation.");

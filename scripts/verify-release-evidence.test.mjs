@@ -87,22 +87,20 @@ describe("release evidence verifier", () => {
     expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
-  it("validates the default v0.3.2 ledger with pending release gates", async () => {
+  it("validates the approved default v0.3.2 ledger", async () => {
     const result = await run([]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated:");
-    expect(result.stdout).toContain("Pending required gate(s):");
-    expect(result.stdout).toContain("product-owner-acceptance");
+    expect(result.stdout).toContain("Release evidence validated: 19/19 required gate(s) passed.");
+    expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
-  it("fails --require-complete for the pending v0.3.2 ledger", async () => {
+  it("passes --require-complete for the approved v0.3.2 ledger", async () => {
     const result = await run(["--require-complete"]);
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Required release evidence gates are not passed");
-    expect(result.stderr).toContain("product-owner-acceptance");
-    expect(result.stderr).toContain("update-manifest-assets");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Release evidence validated: 19/19 required gate(s) passed.");
+    expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
   it("rejects v0.3.1 evidence as default evidence after the package version advances", async () => {

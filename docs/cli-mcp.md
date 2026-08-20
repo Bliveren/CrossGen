@@ -2,6 +2,12 @@
 
 CrossGen exposes the same local app state to terminal workflows and MCP hosts. The CLI defaults to read-only inspection unless a command asks for explicit confirmation with `--yes`.
 
+The desktop app also exposes an **Agent access** section in the left sidebar.
+It shows the current CLI status, packaged launcher path, direct MCP executable,
+data/state paths, active provider, live queue workers, copyable diagnostics, and
+client-specific MCP configuration snippets. It never edits shell startup files
+or the system `PATH` automatically.
+
 ## Runtime
 
 Desktop use does not require CLI or MCP setup. Open the CrossGen app, configure
@@ -69,7 +75,30 @@ crossgen provider list --json
 crossgen models list --json
 ```
 
-`doctor --agent` reports readiness without disclosing saved API keys. `asset path` is the only command that returns a local absolute asset path, and it requires `--yes`.
+`doctor --agent` reports readiness without disclosing saved API keys. Its
+machine-readable `data` includes:
+
+- `runtimeKind`, `appExecutable`, `packagedExecutable`
+- `dataDir`, `statePath`, `stateFound`
+- `activeProvider`, `apiKeyAvailable`
+- `liveWorkerHost`, `liveWorkerHosts`, `queueConfig`
+- `cli.status`, `cli.commandPath`, `cli.launcherPath`, `cli.launcherExists`
+- `cli.linkCommand`, `cli.unlinkCommand`, and `cli.repairHint`
+- direct MCP command/args and all Codex, Claude Code, and Cursor mode snippets
+- stable `permissions`, `knownLimitations`, and `nextActions`
+
+CLI status values are explicit:
+
+- `ready`: `crossgen` resolves to the current packaged launcher.
+- `not-found`: no `crossgen` command is visible on the current process `PATH`.
+- `stale`: a `crossgen` link exists but points to a missing target.
+- `custom`: a `crossgen` command exists but points to another installation.
+- `launcher-missing`: the packaged app does not contain its launcher.
+- `development`: the current process is a source-tree/dev runtime.
+
+The status is diagnostic only. CrossGen suggests a repair command but does not
+modify shell files or inject a `PATH` entry. `asset path` is the only command
+that returns a local absolute asset path, and it requires `--yes`.
 
 ## Generate Flow
 
@@ -154,6 +183,8 @@ the current CrossGen executable and pass `--mcp`. Generate client configuration:
 crossgen mcp config --client codex --mode readonly --json
 crossgen mcp config --client codex --mode write --json
 crossgen mcp config --client codex --mode generate --json
+crossgen mcp config --client claude-code --mode readonly --json
+crossgen mcp config --client cursor --mode readonly --json
 ```
 
 The server process is started directly from the app executable:
@@ -161,6 +192,14 @@ The server process is started directly from the app executable:
 ```bash
 /path/to/CrossGen --mcp
 ```
+
+The generated object contains `client`, `mode`, `transport`, `command`, `args`,
+`env`, `format`, `config`, `snippet`, `permissions`, `supportedModes`, and an
+optional generate-mode warning. The `snippet` is ready to paste into the
+client's configuration: Codex uses a TOML `[mcp_servers.crossgen]` block;
+Claude Code and Cursor use a JSON `mcpServers.crossgen` object. The desktop
+Agent access panel presents the same snippets and uses the current app
+executable; it never assumes `/Applications/CrossGen.app`.
 
 Modes:
 

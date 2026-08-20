@@ -1,11 +1,20 @@
 # CrossGen Known Limitations
 
-Last updated: 2026-07-30 for v0.3.2 release-candidate validation.
+Last updated: 2026-08-20 for v0.3.3 agent-access development.
 
 This document tracks the current user-facing limits for the released app,
 release-candidate validation, and agent runtime surfaces.
 
 ## Active Limitations
+
+0. **Agent access is local and process-scoped**
+   - The desktop Agent access panel and `doctor --agent` report the
+     executable, launcher, PATH, data directory, queue worker, and permission
+     state visible to the current CrossGen process.
+   - PATH repair is advisory: CrossGen provides a copyable command but never
+     edits shell startup files or injects a system PATH entry.
+   - MCP hosts should call the current packaged CrossGen executable directly
+     with `--mcp`; they do not need a global `crossgen` link.
 
 1. **Generation requires network access and a provider API key**
    - CrossGen does not ship an offline image model or local GPU runtime in

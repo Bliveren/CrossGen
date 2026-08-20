@@ -119,6 +119,7 @@ export interface UiCopy {
   queue: QueueCopy;
   language: string;
   theme: string;
+  close: string;
   themeSystem: string;
   themeLight: string;
   themeDark: string;
@@ -157,6 +158,35 @@ export interface UiCopy {
   apiAccessUntitled: string;
   apiAccessKind: string;
   apiAccessBaseURLSummary: string;
+  agentAccessTitle: string;
+  agentAccessSubtitle: string;
+  agentAccessOpen: string;
+  agentAccessDialogTitle: string;
+  agentAccessDialogDescription: string;
+  agentAccessCliCommand: string;
+  agentAccessLauncher: string;
+  agentAccessMcpDirect: string;
+  agentAccessDataDir: string;
+  agentAccessState: string;
+  agentAccessActiveProvider: string;
+  agentAccessApiKey: string;
+  agentAccessWorkers: string;
+  agentAccessCommands: string;
+  agentAccessMcpConfigs: string;
+  agentAccessRepair: string;
+  agentAccessNoConfig: string;
+  agentAccessLoading: string;
+  agentAccessCopied: string;
+  agentAccessCliStatus: (status: string) => string;
+  agentAccessWorkerCount: (count: number) => string;
+  agentAccessProviderSummary: (name: string, kind: string, model: string) => string;
+  agentAccessYes: string;
+  agentAccessNo: string;
+  agentAccessModeReadonly: string;
+  agentAccessModeWrite: string;
+  agentAccessModeGenerate: string;
+  copyCommand: string;
+  copyConfig: string;
   providerAutoDetected: string;
   apiKey: string;
   baseURL: string;
@@ -593,6 +623,7 @@ export const translations: Record<Language, UiCopy> = {
     },
     language: "Language",
     theme: "Theme",
+    close: "Close",
     themeSystem: "System",
     themeLight: "Light",
     themeDark: "Dark",
@@ -631,6 +662,42 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessUntitled: "Untitled API config",
     apiAccessKind: "API type",
     apiAccessBaseURLSummary: "Base URL",
+    agentAccessTitle: "Agent access",
+    agentAccessSubtitle: "CLI and MCP entrypoints for local coding agents.",
+    agentAccessOpen: "Open agent access",
+    agentAccessDialogTitle: "Agent access",
+    agentAccessDialogDescription: "Use these commands and MCP config snippets when connecting Codex, Claude Code, Cursor, or terminal scripts to this CrossGen install.",
+    agentAccessCliCommand: "CLI command",
+    agentAccessLauncher: "Packaged launcher",
+    agentAccessMcpDirect: "MCP executable",
+    agentAccessDataDir: "Data directory",
+    agentAccessState: "State file",
+    agentAccessActiveProvider: "Active provider",
+    agentAccessApiKey: "API key",
+    agentAccessWorkers: "Queue workers",
+    agentAccessCommands: "Agent checks",
+    agentAccessMcpConfigs: "MCP config",
+    agentAccessRepair: "Repair",
+    agentAccessNoConfig: "Runtime information is not available in browser preview.",
+    agentAccessLoading: "Checking agent runtime",
+    agentAccessCopied: "Agent access text copied.",
+    agentAccessCliStatus: (status: string) => ({
+      ready: "Ready",
+      "not-found": "Not on PATH",
+      stale: "Broken link",
+      custom: "Custom command",
+      "launcher-missing": "Launcher missing",
+      development: "Development"
+    }[status] ?? status),
+    agentAccessWorkerCount: (count: number) => `${count} live worker${count === 1 ? "" : "s"}`,
+    agentAccessProviderSummary: (name: string, kind: string, model: string) => `${name} · ${kind} · ${model}`,
+    agentAccessYes: "Yes",
+    agentAccessNo: "No",
+    agentAccessModeReadonly: "Readonly",
+    agentAccessModeWrite: "Write",
+    agentAccessModeGenerate: "Generate",
+    copyCommand: "Copy command",
+    copyConfig: "Copy config",
     providerAutoDetected: "Auto-detected from API",
     apiKey: "API Key",
     baseURL: "Base URL",
@@ -1132,6 +1199,7 @@ export const translations: Record<Language, UiCopy> = {
     },
     language: "语言",
     theme: "外观",
+    close: "关闭",
     themeSystem: "跟随系统",
     themeLight: "浅色",
     themeDark: "深色",
@@ -1170,6 +1238,42 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessUntitled: "未命名 API 配置",
     apiAccessKind: "API 类型",
     apiAccessBaseURLSummary: "Base URL",
+    agentAccessTitle: "Agent 接入",
+    agentAccessSubtitle: "为本地 coding agents 提供 CLI 与 MCP 入口。",
+    agentAccessOpen: "打开 Agent 接入",
+    agentAccessDialogTitle: "Agent 接入",
+    agentAccessDialogDescription: "连接 Codex、Claude Code、Cursor 或终端脚本时，使用下面的命令和 MCP 配置片段。",
+    agentAccessCliCommand: "CLI 命令",
+    agentAccessLauncher: "打包 launcher",
+    agentAccessMcpDirect: "MCP 可执行文件",
+    agentAccessDataDir: "数据目录",
+    agentAccessState: "状态文件",
+    agentAccessActiveProvider: "当前 provider",
+    agentAccessApiKey: "API Key",
+    agentAccessWorkers: "队列 worker",
+    agentAccessCommands: "Agent 检查",
+    agentAccessMcpConfigs: "MCP 配置",
+    agentAccessRepair: "修复",
+    agentAccessNoConfig: "浏览器预览模式下无法读取运行时信息。",
+    agentAccessLoading: "正在检查 Agent 运行时",
+    agentAccessCopied: "Agent 接入内容已复制。",
+    agentAccessCliStatus: (status: string) => ({
+      ready: "已就绪",
+      "not-found": "未在 PATH 中",
+      stale: "链接失效",
+      custom: "自定义命令",
+      "launcher-missing": "缺少 launcher",
+      development: "开发模式"
+    }[status] ?? status),
+    agentAccessWorkerCount: (count: number) => `${count} 个在线 worker`,
+    agentAccessProviderSummary: (name: string, kind: string, model: string) => `${name} · ${kind} · ${model}`,
+    agentAccessYes: "是",
+    agentAccessNo: "否",
+    agentAccessModeReadonly: "只读",
+    agentAccessModeWrite: "写入",
+    agentAccessModeGenerate: "生成",
+    copyCommand: "复制命令",
+    copyConfig: "复制配置",
     providerAutoDetected: "已根据 API 自动识别",
     apiKey: "API Key",
     baseURL: "Base URL",
