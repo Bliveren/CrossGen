@@ -1,8 +1,8 @@
-import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAgentRuntimeStatus } from "./agentRuntime.js";
+import { buildAgentRuntimeStatus, disableAgentCliLink, enableAgentCliLink } from "./agentRuntime.js";
 
 const queueConfig = {
   maxGlobalRunning: 1,
@@ -85,7 +85,8 @@ describe("agent runtime status", () => {
     const status = buildAgentRuntimeStatus(options(root, {
       isPackaged: false,
       envPath: "",
-      liveWorkerHosts: 0
+      liveWorkerHosts: 0,
+      appRuntimeArgs: [path.join(root, "app")]
     }));
 
     expect(status.runtimeKind).toBe("development");
@@ -93,6 +94,51 @@ describe("agent runtime status", () => {
     expect(status.cli.launcherPath).toBeNull();
     expect(status.liveWorkerHost).toBe(false);
     expect(status.nextActions.join("\n")).toContain("pnpm build:main");
+    expect(status.mcp.args).toEqual([path.join(root, "app"), "--mcp"]);
+    expect(status.commands.version).toContain(`'${path.join(root, "app")}' --cli`);
     expect(status.mcp.configs.find((config) => config.client === "cursor" && config.mode === "generate")?.snippet).toContain("--mcp");
+  });
+
+  it("creates and removes only a managed POSIX CLI link", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "crossgen-agent-link-"));
+    const launcher = path.join(root, "resources", "cli", "crossgen");
+    const link = path.join(root, "home", ".local", "bin", "crossgen");
+    await mkdir(path.dirname(launcher), { recursive: true });
+    await writeFile(launcher, "#!/bin/sh\n", { mode: 0o755 });
+
+    await enableAgentCliLink({ launcherPath: launcher, linkPath: link, platform: "darwin" });
+    expect((await lstat(link)).isSymbolicLink()).toBe(true);
+
+    await disableAgentCliLink({ launcherPath: launcher, linkPath: link, platform: "darwin" });
+    await expect(lstat(link)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("writes a marked Windows shim and refuses unmanaged files", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "crossgen-agent-link-"));
+    const appExecutable = path.join(root, "CrossGen.exe");
+    const launcher = path.join(root, "resources", "cli", "crossgen.cmd");
+    const homeDir = path.join(root, "home");
+    const link = path.join(homeDir, "AppData", "Local", "CrossGen", "bin", "crossgen.cmd");
+    await mkdir(path.dirname(launcher), { recursive: true });
+    await writeFile(appExecutable, "binary");
+    await writeFile(launcher, "@echo off\r\n");
+
+    await enableAgentCliLink({ launcherPath: launcher, linkPath: link, platform: "win32" });
+    expect(await readFile(link, "utf8")).toContain("CrossGen managed CLI shim v1");
+    const status = buildAgentRuntimeStatus(options(root, {
+      platform: "win32",
+      appExecutable,
+      resourcesPath: path.join(root, "resources"),
+      envPath: path.dirname(link),
+      homeDir
+    }));
+    expect(status.cli.linkExists).toBe(true);
+    expect(status.cli.linkManaged).toBe(true);
+    await disableAgentCliLink({ launcherPath: launcher, linkPath: link, platform: "win32" });
+    await expect(lstat(link)).rejects.toMatchObject({ code: "ENOENT" });
+
+    await mkdir(path.dirname(link), { recursive: true });
+    await writeFile(link, "custom");
+    await expect(enableAgentCliLink({ launcherPath: launcher, linkPath: link, platform: "win32" })).rejects.toThrow("refusing to overwrite");
   });
 });

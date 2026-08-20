@@ -308,6 +308,7 @@ async function verifyDoctor(dataDir) {
   assert(payload.data.cli?.commandName === "crossgen", "doctor did not report crossgen command name.");
   assert(typeof payload.data.cli?.status === "string", "doctor did not report CLI status.");
   assert(typeof payload.data.cli?.repairHint === "string", "doctor did not report CLI repairHint.");
+  assert("linkPath" in payload.data.cli && "linkExists" in payload.data.cli && "linkManaged" in payload.data.cli, "doctor did not report managed CLI link state.");
   assert(Array.isArray(payload.data.mcp?.configs) && payload.data.mcp.configs.length === clients.length * modes.length, "doctor did not report MCP configs for all clients and modes.");
   assert(payload.data.commands?.doctor?.includes("doctor --agent --json"), "doctor did not report agent doctor command.");
   assert(payload.data.permissions?.mcpDefaultMode === "readonly", "doctor did not report readonly MCP default.");

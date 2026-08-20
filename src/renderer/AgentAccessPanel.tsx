@@ -1,4 +1,4 @@
-import { CheckCircle2, Clipboard, ExternalLink, KeyRound, Loader2, Wrench, X } from "lucide-react";
+import { CheckCircle2, Clipboard, ExternalLink, KeyRound, Link2, Loader2, Unlink2, Wrench, X } from "lucide-react";
 import type { AgentRuntimeStatus } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
@@ -6,8 +6,11 @@ interface AgentAccessPanelProps {
   copy: UiCopy;
   status: AgentRuntimeStatus | null;
   loading: boolean;
+  cliActionLoading: boolean;
   onClose: () => void;
   onCopy: (value: string) => void;
+  onEnableCli: () => void;
+  onDisableCli: () => void;
 }
 
 function valueOrFallback(value: string | null | undefined): string {
@@ -39,7 +42,7 @@ export function AgentAccessSection({ copy, status, loading, onOpen }: { copy: Ui
   );
 }
 
-export function AgentAccessDialog({ copy, status, loading, onClose, onCopy }: AgentAccessPanelProps) {
+export function AgentAccessDialog({ copy, status, loading, cliActionLoading, onClose, onCopy, onEnableCli, onDisableCli }: AgentAccessPanelProps) {
   const copyValue = (value: string | null | undefined) => {
     if (value) onCopy(value);
   };
@@ -105,7 +108,31 @@ export function AgentAccessDialog({ copy, status, loading, onClose, onCopy }: Ag
               <span>{copy.agentAccessState}</span>
               <code title={status.statePath}>{status.statePath}</code>
             </div>
+            <div className="agent-access-path-row">
+              <span>{copy.agentAccessCliLinkPath}</span>
+              <code title={status.cli.linkPath ?? undefined}>{valueOrFallback(status.cli.linkPath)}</code>
+            </div>
           </div>
+
+          {status.runtimeKind === "packaged" && status.cli.launcherExists && (
+            <section className="agent-access-cli-toggle">
+              <div>
+                <h3>{copy.agentAccessCliToggleTitle}</h3>
+                <p className="muted">{copy.agentAccessCliToggleDescription}</p>
+              </div>
+              {status.cli.linkManaged ? (
+                <button type="button" className="secondary" onClick={onDisableCli} disabled={cliActionLoading}>
+                  {cliActionLoading ? <Loader2 className="spin" size={15} /> : <Unlink2 size={15} />}
+                  {copy.agentAccessDisableCli}
+                </button>
+              ) : (
+                <button type="button" className="secondary" onClick={onEnableCli} disabled={cliActionLoading}>
+                  {cliActionLoading ? <Loader2 className="spin" size={15} /> : <Link2 size={15} />}
+                  {copy.agentAccessEnableCli}
+                </button>
+              )}
+            </section>
+          )}
 
           <section className="agent-access-command-group">
             <div className="agent-access-subtitle-row">

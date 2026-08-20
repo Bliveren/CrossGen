@@ -460,8 +460,8 @@ export function buildCliAssetInspect(state: ReadonlyAppState | null, assetId: st
   };
 }
 
-export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMode; command: string }) {
-  const args = ["--mcp"];
+export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMode; command: string; args?: string[] }) {
+  const args = options.args?.length ? [...options.args] : ["--mcp"];
   const effectiveMode: McpMode = options.mode;
   const server = {
     command: options.command,

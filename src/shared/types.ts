@@ -697,6 +697,9 @@ export interface AgentRuntimeStatus {
     commandTarget: string | null;
     launcherPath: string | null;
     launcherExists: boolean;
+    linkPath: string | null;
+    linkExists: boolean;
+    linkManaged: boolean;
     pathEntryCount: number;
     linkCommand: string | null;
     unlinkCommand: string | null;
@@ -704,7 +707,7 @@ export interface AgentRuntimeStatus {
   };
   mcp: {
     command: string;
-    args: ["--mcp"];
+    args: string[];
     defaultMode: AgentMcpMode;
     configs: AgentMcpConfigSnippet[];
   };
@@ -837,6 +840,8 @@ export interface UpdateInstallResult {
 export interface AppBridge {
   getSnapshot: () => Promise<AppSnapshot>;
   getAgentRuntimeStatus: () => Promise<AgentRuntimeStatus>;
+  enableAgentCli: () => Promise<AgentRuntimeStatus>;
+  disableAgentCli: () => Promise<AgentRuntimeStatus>;
   saveConfig: (input: ProviderConfigInput) => Promise<ProviderConfig>;
   addProvider: (input: ProviderConfigInput) => Promise<AppSnapshot>;
   switchProvider: (providerId: string) => Promise<AppSnapshot>;

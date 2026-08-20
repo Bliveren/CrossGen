@@ -9,8 +9,8 @@ release-candidate validation, and agent runtime surfaces.
 
 0. **Agent access is local and process-scoped**
    - The desktop Agent access panel and `doctor --agent` report the
-     executable, launcher, PATH, data directory, queue worker, and permission
-     state visible to the current CrossGen process.
+     executable, launcher, PATH, data directory, queue worker, permission,
+     and usable API-key state visible to the current CrossGen process.
    - PATH repair is advisory: CrossGen provides a copyable command but never
      edits shell startup files or injects a system PATH entry.
    - MCP hosts should call the current packaged CrossGen executable directly

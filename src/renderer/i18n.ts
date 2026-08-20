@@ -166,6 +166,13 @@ export interface UiCopy {
   agentAccessCliCommand: string;
   agentAccessLauncher: string;
   agentAccessMcpDirect: string;
+  agentAccessCliLinkPath: string;
+  agentAccessCliToggleTitle: string;
+  agentAccessCliToggleDescription: string;
+  agentAccessEnableCli: string;
+  agentAccessDisableCli: string;
+  agentAccessCliEnabled: string;
+  agentAccessCliDisabled: string;
   agentAccessDataDir: string;
   agentAccessState: string;
   agentAccessActiveProvider: string;
@@ -670,6 +677,13 @@ export const translations: Record<Language, UiCopy> = {
     agentAccessCliCommand: "CLI command",
     agentAccessLauncher: "Packaged launcher",
     agentAccessMcpDirect: "MCP executable",
+    agentAccessCliLinkPath: "CLI link path",
+    agentAccessCliToggleTitle: "crossgen command",
+    agentAccessCliToggleDescription: "Create or remove only CrossGen's user-level launcher link. Shell files and PATH are never changed.",
+    agentAccessEnableCli: "Enable command",
+    agentAccessDisableCli: "Disable command",
+    agentAccessCliEnabled: "The CrossGen CLI command is enabled.",
+    agentAccessCliDisabled: "The CrossGen CLI command is disabled.",
     agentAccessDataDir: "Data directory",
     agentAccessState: "State file",
     agentAccessActiveProvider: "Active provider",
@@ -1246,6 +1260,13 @@ export const translations: Record<Language, UiCopy> = {
     agentAccessCliCommand: "CLI 命令",
     agentAccessLauncher: "打包 launcher",
     agentAccessMcpDirect: "MCP 可执行文件",
+    agentAccessCliLinkPath: "CLI 链接路径",
+    agentAccessCliToggleTitle: "crossgen 命令",
+    agentAccessCliToggleDescription: "只创建或移除 CrossGen 用户目录下的 launcher 链接，不修改 shell 文件或 PATH。",
+    agentAccessEnableCli: "启用命令",
+    agentAccessDisableCli: "停用命令",
+    agentAccessCliEnabled: "CrossGen CLI 命令已启用。",
+    agentAccessCliDisabled: "CrossGen CLI 命令已停用。",
     agentAccessDataDir: "数据目录",
     agentAccessState: "状态文件",
     agentAccessActiveProvider: "当前 provider",

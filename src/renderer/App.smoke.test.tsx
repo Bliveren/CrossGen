@@ -2761,79 +2761,86 @@ function createBridge(initialSnapshot: AppSnapshot, initialQueueSnapshot: QueueS
     queueSnapshotListeners.forEach((listener) => listener(next));
   };
 
+  const getAgentRuntimeStatus = vi.fn(async (): Promise<AgentRuntimeStatus> => ({
+    schemaVersion: 1,
+    appVersion: currentSnapshot.appVersion,
+    runtimeKind: "development",
+    cliExecutable: "/tmp/CrossGen",
+    mcpCommand: "/tmp/CrossGen",
+    recommendedArgs: ["--mcp"],
+    appExecutable: "/tmp/CrossGen",
+    packagedExecutable: null,
+    dataDir: "/tmp/crossgen",
+    statePath: "/tmp/crossgen/state.json",
+    stateFound: true,
+    activeProvider: {
+      id: activeConfig().id,
+      kind: activeConfig().kind,
+      name: activeConfig().name,
+      enabled: activeConfig().enabled,
+      activeLaunchId: activeConfig().activeLaunchId,
+      activeModelId: activeConfig().activeModelId
+    },
+    apiKeyAvailable: activeConfig().apiKeySaved,
+    liveWorkerHost: currentQueueSnapshot.workers.online > 0,
+    liveWorkerHosts: currentQueueSnapshot.workers.online,
+    queueConfig: {
+      maxGlobalRunning: currentQueueSnapshot.concurrency.maxGlobal,
+      providerConcurrency: currentQueueSnapshot.concurrency.providerConcurrency
+    },
+    cli: {
+      commandName: "crossgen",
+      status: "development",
+      commandPath: null,
+      commandTarget: null,
+      launcherPath: null,
+      launcherExists: false,
+      linkPath: null,
+      linkExists: false,
+      linkManaged: false,
+      pathEntryCount: 0,
+      linkCommand: null,
+      unlinkCommand: null,
+      repairHint: "Development runtime detected."
+    },
+    mcp: {
+      command: "/tmp/CrossGen",
+      args: ["--mcp"],
+      defaultMode: "readonly",
+      configs: [{
+        client: "codex",
+        mode: "readonly",
+        format: "codex-toml",
+        json: "{}",
+        snippet: "[mcp_servers.crossgen]"
+      }]
+    },
+    commands: {
+      version: "crossgen --version --json",
+      doctor: "crossgen doctor --agent --json",
+      configStatus: "crossgen config status --json",
+      modelsList: "crossgen models list --json",
+      queueStatus: "crossgen queue status --json",
+      mcpCodexReadonly: "crossgen mcp config --client codex --mode readonly --json",
+      mcpCodexGenerate: "crossgen mcp config --client codex --mode generate --json"
+    },
+    permissions: {
+      cliMode: "readonly",
+      mcpDefaultMode: "readonly",
+      writeModeRequiresExplicitEnable: true,
+      generateModeRequiresExplicitEnable: true,
+      paidGenerationRequiresConfirmation: true,
+      pathDisclosureRequiresConfirmation: true
+    },
+    knownLimitations: ["MCP generate mode requires explicit confirmation."],
+    nextActions: ["Use readonly mode by default."]
+  }));
+
   return {
     getSnapshot: vi.fn(async () => currentSnapshot),
-    getAgentRuntimeStatus: vi.fn(async (): Promise<AgentRuntimeStatus> => ({
-      schemaVersion: 1,
-      appVersion: currentSnapshot.appVersion,
-      runtimeKind: "development",
-      cliExecutable: "/tmp/CrossGen",
-      mcpCommand: "/tmp/CrossGen",
-      recommendedArgs: ["--mcp"],
-      appExecutable: "/tmp/CrossGen",
-      packagedExecutable: null,
-      dataDir: "/tmp/crossgen",
-      statePath: "/tmp/crossgen/state.json",
-      stateFound: true,
-      activeProvider: {
-        id: activeConfig().id,
-        kind: activeConfig().kind,
-        name: activeConfig().name,
-        enabled: activeConfig().enabled,
-        activeLaunchId: activeConfig().activeLaunchId,
-        activeModelId: activeConfig().activeModelId
-      },
-      apiKeyAvailable: activeConfig().apiKeySaved,
-      liveWorkerHost: currentQueueSnapshot.workers.online > 0,
-      liveWorkerHosts: currentQueueSnapshot.workers.online,
-      queueConfig: {
-        maxGlobalRunning: currentQueueSnapshot.concurrency.maxGlobal,
-        providerConcurrency: currentQueueSnapshot.concurrency.providerConcurrency
-      },
-      cli: {
-        commandName: "crossgen",
-        status: "development",
-        commandPath: null,
-        commandTarget: null,
-        launcherPath: null,
-        launcherExists: false,
-        pathEntryCount: 0,
-        linkCommand: null,
-        unlinkCommand: null,
-        repairHint: "Development runtime detected."
-      },
-      mcp: {
-        command: "/tmp/CrossGen",
-        args: ["--mcp"],
-        defaultMode: "readonly",
-        configs: [{
-          client: "codex",
-          mode: "readonly",
-          format: "codex-toml",
-          json: "{}",
-          snippet: "[mcp_servers.crossgen]"
-        }]
-      },
-      commands: {
-        version: "crossgen --version --json",
-        doctor: "crossgen doctor --agent --json",
-        configStatus: "crossgen config status --json",
-        modelsList: "crossgen models list --json",
-        queueStatus: "crossgen queue status --json",
-        mcpCodexReadonly: "crossgen mcp config --client codex --mode readonly --json",
-        mcpCodexGenerate: "crossgen mcp config --client codex --mode generate --json"
-      },
-      permissions: {
-        cliMode: "readonly",
-        mcpDefaultMode: "readonly",
-        writeModeRequiresExplicitEnable: true,
-        generateModeRequiresExplicitEnable: true,
-        paidGenerationRequiresConfirmation: true,
-        pathDisclosureRequiresConfirmation: true
-      },
-      knownLimitations: ["MCP generate mode requires explicit confirmation."],
-      nextActions: ["Use readonly mode by default."]
-    })),
+    getAgentRuntimeStatus,
+    enableAgentCli: vi.fn(async () => getAgentRuntimeStatus()),
+    disableAgentCli: vi.fn(async () => getAgentRuntimeStatus()),
     getQueueSnapshot: vi.fn(async () => currentQueueSnapshot),
     saveConfig: vi.fn(async (input) => {
       const config = configById(input.providerId);

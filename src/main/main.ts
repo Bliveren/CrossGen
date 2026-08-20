@@ -153,7 +153,11 @@ import { fetchWithTimeout } from "./services/openaiImageAdapter.js";
 import { probeOpenAIImageRouting } from "./services/openaiImageRouting.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
 import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
-import { buildAgentRuntimeStatus } from "./services/agentRuntime.js";
+import {
+  buildAgentRuntimeStatus,
+  disableAgentCliLink,
+  enableAgentCliLink
+} from "./services/agentRuntime.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
 import { canRunRequestWithConfig } from "./services/providerRequestMatch.js";
 import { assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, historyAssetReadRoots, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
@@ -1583,12 +1587,33 @@ async function handleGetAgentRuntimeStatus() {
           activeModelId: activeProvider.activeModelId
         }
       : null,
-    apiKeyAvailable: activeProvider ? envApiKeyAvailable(activeProvider.kind) || savedApiKeyPresentForCli(activeProvider) : false,
+    apiKeyAvailable: activeProvider ? envApiKeyAvailable(activeProvider.kind) || savedApiKeyAvailableForCli(activeProvider) : false,
     liveWorkerHosts: queue.workerHosts.filter((host) => Date.parse(host.leaseExpiresAt) > Date.now()).length,
     queueConfig: buildCliQueueConfig(state),
     envPath: process.env.PATH,
-    homeDir: homedir()
+    homeDir: homedir(),
+    appRuntimeArgs: app.isPackaged ? [] : [app.getAppPath()]
   });
+}
+
+async function handleEnableAgentCli(): Promise<Awaited<ReturnType<typeof handleGetAgentRuntimeStatus>>> {
+  const status = await handleGetAgentRuntimeStatus();
+  await enableAgentCliLink({
+    launcherPath: status.cli.launcherPath,
+    linkPath: status.cli.linkPath,
+    platform: process.platform
+  });
+  return handleGetAgentRuntimeStatus();
+}
+
+async function handleDisableAgentCli(): Promise<Awaited<ReturnType<typeof handleGetAgentRuntimeStatus>>> {
+  const status = await handleGetAgentRuntimeStatus();
+  await disableAgentCliLink({
+    launcherPath: status.cli.launcherPath,
+    linkPath: status.cli.linkPath,
+    platform: process.platform
+  });
+  return handleGetAgentRuntimeStatus();
 }
 
 function snapshotFromState(state: AppStateFile): AppSnapshot {
@@ -5418,8 +5443,12 @@ function envApiKeyAvailable(kind: StoredProviderConfig["kind"]): boolean {
   return getProviderEnvKeyNames(kind).some((name) => Boolean(process.env[name]?.trim()));
 }
 
-function savedApiKeyPresentForCli(config: StoredProviderConfig): boolean {
-  return Boolean(config.encryptedApiKey);
+function savedApiKeyAvailableForCli(config: StoredProviderConfig): boolean {
+  try {
+    return Boolean(decryptApiKey(config)?.trim());
+  } catch {
+    return false;
+  }
 }
 
 async function runCliCommandMode(args: string[]): Promise<number> {
@@ -5450,7 +5479,8 @@ async function runCliCommandMode(args: string[]): Promise<number> {
       const data = buildCliMcpConfig({
         client: normalizeCliMcpClient(getCliOption(args, "--client")),
         mode: normalizeCliMcpMode(getCliOption(args, "--mode")),
-        command: process.execPath
+        command: process.execPath,
+        args: [...(app.isPackaged ? [] : [app.getAppPath()]), "--mcp"]
       });
       writeCliJson(cliSuccess(requestId, correlationId, data));
       return 0;
@@ -5927,6 +5957,8 @@ async function runCliCommandMode(args: string[]): Promise<number> {
 function registerIpcHandlers(): void {
   ipcMain.handle("app:getSnapshot", () => runGalleryOperation(handleGetSnapshot));
   ipcMain.handle("app:getAgentRuntimeStatus", handleGetAgentRuntimeStatus);
+  ipcMain.handle("app:enableAgentCli", handleEnableAgentCli);
+  ipcMain.handle("app:disableAgentCli", handleDisableAgentCli);
   ipcMain.handle("config:save", handleSaveConfig);
   ipcMain.handle("provider:add", handleAddProvider);
   ipcMain.handle("provider:switch", handleSwitchProvider);

@@ -1247,6 +1247,7 @@ export function App() {
   });
   const [agentRuntimeStatus, setAgentRuntimeStatus] = useState<AgentRuntimeStatus | null>(null);
   const [isAgentRuntimeLoading, setIsAgentRuntimeLoading] = useState(Boolean(bridge));
+  const [isAgentCliActionLoading, setIsAgentCliActionLoading] = useState(false);
   const [isAgentAccessOpen, setIsAgentAccessOpen] = useState(false);
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
@@ -2616,6 +2617,20 @@ export function App() {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
       setIsAgentRuntimeLoading(false);
+    }
+  }
+
+  async function setAgentCliEnabled(enabled: boolean) {
+    if (!bridge) return;
+    setIsAgentCliActionLoading(true);
+    try {
+      const nextStatus = enabled ? await bridge.enableAgentCli() : await bridge.disableAgentCli();
+      setAgentRuntimeStatus(nextStatus);
+      setNotice({ kind: "success", text: enabled ? copy.agentAccessCliEnabled : copy.agentAccessCliDisabled });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsAgentCliActionLoading(false);
     }
   }
 
@@ -7261,8 +7276,11 @@ export function App() {
             copy={copy}
             status={agentRuntimeStatus}
             loading={isAgentRuntimeLoading}
+            cliActionLoading={isAgentCliActionLoading}
             onClose={() => setIsAgentAccessOpen(false)}
             onCopy={(value) => void copyAgentAccessText(value)}
+            onEnableCli={() => void setAgentCliEnabled(true)}
+            onDisableCli={() => void setAgentCliEnabled(false)}
           />
         </DialogShell>
       )}

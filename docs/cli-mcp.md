@@ -62,6 +62,12 @@ may run CrossGen from another directory or keep multiple builds. CrossGen should
 not edit shell startup files automatically. If `~/.local/bin` is not on `PATH`,
 show the status and let the user copy the needed shell configuration manually.
 
+The desktop Agent access panel can enable or disable the managed user-level
+launcher without touching shell files. On Windows it uses a marked shim at
+`%LOCALAPPDATA%\CrossGen\bin\crossgen.cmd`; that directory still needs to be on
+the user's `PATH` for a new terminal command to resolve. Existing unmanaged
+files are never overwritten.
+
 MCP does not require this link. MCP client configuration should call the CrossGen
 app executable directly.
 
@@ -82,7 +88,8 @@ machine-readable `data` includes:
 - `dataDir`, `statePath`, `stateFound`
 - `activeProvider`, `apiKeyAvailable`
 - `liveWorkerHost`, `liveWorkerHosts`, `queueConfig`
-- `cli.status`, `cli.commandPath`, `cli.launcherPath`, `cli.launcherExists`
+- `cli.status`, `cli.commandPath`, `cli.launcherPath`, `cli.launcherExists`,
+  `cli.linkPath`, `cli.linkExists`, and `cli.linkManaged`
 - `cli.linkCommand`, `cli.unlinkCommand`, and `cli.repairHint`
 - direct MCP command/args and all Codex, Claude Code, and Cursor mode snippets
 - stable `permissions`, `knownLimitations`, and `nextActions`
@@ -200,6 +207,11 @@ client's configuration: Codex uses a TOML `[mcp_servers.crossgen]` block;
 Claude Code and Cursor use a JSON `mcpServers.crossgen` object. The desktop
 Agent access panel presents the same snippets and uses the current app
 executable; it never assumes `/Applications/CrossGen.app`.
+
+When CrossGen is running from the source tree, the generated `args` also include
+the repository app path before `--mcp`; this keeps copied MCP configuration
+usable with the Electron development runtime. Packaged installs keep the
+short direct form: `<CrossGen executable> --mcp`.
 
 Modes:
 

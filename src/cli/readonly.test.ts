@@ -380,4 +380,16 @@ describe("readonly CLI builders", () => {
       generateModeWarning: "Generate mode can submit image generation/edit requests. MCP generate hosts start queue execution and tools may pass waitMs for short completion waits."
     });
   });
+
+  it("preserves development runtime arguments in client-ready MCP config", () => {
+    const config = buildCliMcpConfig({
+      client: "cursor",
+      mode: "readonly",
+      command: "/opt/electron",
+      args: ["/workspace/image2tools", "--mcp"]
+    });
+
+    expect(config.args).toEqual(["/workspace/image2tools", "--mcp"]);
+    expect(config.snippet).toContain("\"args\": [\n        \"/workspace/image2tools\",\n        \"--mcp\"\n      ]");
+  });
 });

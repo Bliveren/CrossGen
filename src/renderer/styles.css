@@ -1040,6 +1040,34 @@
     white-space: nowrap;
   }
 
+  .agent-access-cli-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-panel-muted);
+    padding: 10px;
+  }
+
+  .agent-access-cli-toggle h3 {
+    margin: 0 0 4px;
+    font-size: 13px;
+  }
+
+  .agent-access-cli-toggle p {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .agent-access-cli-toggle button {
+    flex: 0 0 auto;
+    min-height: 32px;
+    white-space: nowrap;
+  }
+
   .agent-access-subtitle-row {
     display: flex;
     align-items: baseline;
