@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.3",
-  "lastUpdated": "2026-08-20T13:00:00.000Z",
+  "lastUpdated": "2026-08-20T13:05:12.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -192,8 +192,8 @@
         "Known harmless warnings are documented and do not hide failed tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm build",
@@ -218,7 +218,7 @@
             "description": "Exact candidate build and no-cost mock/smoke commands passed. Known jsdom canvas warnings were non-fatal; all tests passed."
           }
         ],
-        "summary": "Passed on the exact v0.3.3 candidate source. Full build reported 44 test files and 423 tests; mock OpenAI, Gemini, and model discovery verifiers passed."
+        "summary": "Passed on the exact v0.3.3 candidate source. Full build reported 44 test files and 424 tests; mock OpenAI, Gemini, and model discovery verifiers passed."
       }
     },
     {
@@ -234,8 +234,8 @@
         "Source-tree CLI/MCP smoke is not used as a substitute for packaged smoke."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "CROSSGEN_APP_EXECUTABLE=<candidate app executable> pnpm verify:cli-mcp-smoke",
@@ -253,16 +253,16 @@
             "kind": "local-package",
             "path": "release/CrossGen-0.3.3-mac-arm64.dmg",
             "public": false,
-            "description": "Exact v0.3.3 macOS arm64 DMG. SHA256 8a2dd81311cc508886c091e73d0f0effbdeea9379ded0de912cdcb46969c037f; size 103901170 bytes."
+            "description": "Exact v0.3.3 macOS arm64 DMG. SHA256 06ed8ac8998c4e2ca0ded1f1fd5da5a7479dd19beb7d8c41d821c477bff3e72a; size 103901149 bytes."
           },
           {
             "kind": "local-package",
             "path": "release/CrossGen-0.3.3-mac-arm64.zip",
             "public": false,
-            "description": "Exact v0.3.3 macOS arm64 ZIP. SHA256 47e4a01b4c7e1c01c487e73ef885412f8bea60a9bcfd8b0e054741d7734caadb; size 99655411 bytes."
+            "description": "Exact v0.3.3 macOS arm64 ZIP. SHA256 1cff0ea4306cd43cc1d91894784bc2d7340fd7f9002d500dc7742b52129bcdf8; size 99655411 bytes."
           }
         ],
-        "summary": "Passed against the exact v0.3.3 macOS arm64 unpacked App executable and packaged no-Node launcher. Both direct App and Resources/cli launcher paths completed CLI/MCP smoke."
+        "summary": "Passed against the exact v0.3.3 macOS arm64 unpacked App executable and packaged no-Node launcher built from the final candidate head. Both direct App and Resources/cli launcher paths completed CLI/MCP smoke."
       }
     },
     {
@@ -278,8 +278,8 @@
         "No CLI/MCP productization UI is required for v0.3.2."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "CROSSGEN_APP_EXECUTABLE=<candidate app executable> pnpm verify:agent-integration-smoke",
@@ -315,8 +315,8 @@
         "The smoke passes on the v0.3.2 release evidence ledger commit."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm verify:queue-concurrency-smoke"
@@ -351,8 +351,8 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm verify:gallery-mutation-smoke"
@@ -387,8 +387,8 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm verify:image-core-regression-smoke"
@@ -445,8 +445,8 @@
         "Renderer smoke tests cover the new queue UI states without layout blocker regressions."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm build",
@@ -482,8 +482,8 @@
         "Diagnostics record operation, route, model, input image count, mask usage, attempt count, retryability, charged retry risk, and next actions."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm exec vitest run src/core/referencePreflight.test.ts src/main/services/generalImageAdapter.test.ts src/main/services/geminiImageAdapter.test.ts src/main/services/openaiImageRouting.test.ts src/main/services/stateMigration.test.ts src/renderer/App.smoke.test.tsx",
@@ -519,8 +519,8 @@
         "Temporary request copies are cleaned up on completion, failure, cancellation, and next startup."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm exec vitest run src/core/referencePreflight.test.ts src/main/services/generalImageAdapter.test.ts src/main/services/geminiImageAdapter.test.ts",
@@ -556,8 +556,8 @@
         "History/Gallery recovery paths are covered by smoke or focused tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm verify:image-core-regression-smoke",
@@ -592,8 +592,8 @@
         "doctor --agent and the desktop Agent Access panel consume the same runtime contract without exposing secrets or private data directories."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm typecheck",
@@ -627,8 +627,8 @@
         "Unmanaged files are never overwritten and stale links are reported clearly."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm exec vitest run src/main/services/agentRuntime.test.ts"
@@ -661,8 +661,8 @@
         "The candidate reaches the packaged CLI/MCP smoke path without requiring a global Node.js installation."
       ],
       "evidence": {
-        "verifiedAt": "2026-08-20T13:00:00.000Z",
-        "commit": "61847347c44ef43ce22fd0390993846f39fa068f",
+        "verifiedAt": "2026-08-20T13:05:12.000Z",
+        "commit": "f2f0d3d9d8c6b4ead75e3750e05f8895d5dacef7",
         "environment": "macOS 26 arm64 local candidate worktree; secrets and private local paths were not recorded.",
         "commands": [
           "pnpm package:mac",
@@ -681,13 +681,13 @@
             "kind": "local-package",
             "path": "release/CrossGen-0.3.3-mac-arm64.dmg",
             "public": false,
-            "description": "Exact candidate DMG. SHA256 8a2dd81311cc508886c091e73d0f0effbdeea9379ded0de912cdcb46969c037f; size 103901170 bytes."
+            "description": "Exact v0.3.3 macOS arm64 DMG. SHA256 06ed8ac8998c4e2ca0ded1f1fd5da5a7479dd19beb7d8c41d821c477bff3e72a; size 103901149 bytes."
           },
           {
             "kind": "local-package",
             "path": "release/CrossGen-0.3.3-mac-arm64.zip",
             "public": false,
-            "description": "Exact candidate ZIP. SHA256 47e4a01b4c7e1c01c487e73ef885412f8bea60a9bcfd8b0e054741d7734caadb; size 99655411 bytes."
+            "description": "Exact v0.3.3 macOS arm64 ZIP. SHA256 1cff0ea4306cd43cc1d91894784bc2d7340fd7f9002d500dc7742b52129bcdf8; size 99655411 bytes."
           },
           {
             "kind": "local-directory",
@@ -696,7 +696,7 @@
             "description": "Exact v0.3.3 unpacked macOS arm64 app; Info.plist reports CFBundleShortVersionString 0.3.3."
           }
         ],
-        "summary": "Exact v0.3.3 macOS arm64 candidate package generated with embedded version 0.3.3; DMG install/launch verification passed twice and packaged CLI/MCP smoke passed."
+        "summary": "Exact v0.3.3 macOS arm64 candidate package generated from the final candidate head with embedded version 0.3.3; DMG install/launch verification passed twice and packaged CLI/MCP smoke passed."
       }
     }
   ]
