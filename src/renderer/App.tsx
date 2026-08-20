@@ -69,6 +69,7 @@ import {
 } from "../shared/validation";
 import type {
   AppSnapshot,
+  AgentRuntimeStatus,
   FocusedLaunchId,
   GalleryAsset,
   GalleryFolder,
@@ -119,6 +120,7 @@ import {
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { DialogShell } from "./DialogShell";
+import { AgentAccessDialog, AgentAccessSection } from "./AgentAccessPanel";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
 import { ApiConfigDialog, LaunchSection, ProviderSummarySection } from "./ProviderConfigPanel";
 import { ParameterConfigDialog, ParameterConfigLauncher } from "./ParameterConfigPanel";
@@ -1243,6 +1245,10 @@ export function App() {
     kind: bridge ? "info" : "error",
     text: bridge ? copy.notices.ready : copy.notices.browserPreview
   });
+  const [agentRuntimeStatus, setAgentRuntimeStatus] = useState<AgentRuntimeStatus | null>(null);
+  const [isAgentRuntimeLoading, setIsAgentRuntimeLoading] = useState(Boolean(bridge));
+  const [isAgentCliActionLoading, setIsAgentCliActionLoading] = useState(false);
+  const [isAgentAccessOpen, setIsAgentAccessOpen] = useState(false);
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [discoveringProviderId, setDiscoveringProviderId] = useState<string | null>(null);
@@ -2417,6 +2423,7 @@ export function App() {
 
   useEffect(() => {
     void refreshSnapshot();
+    void refreshAgentRuntimeStatus();
   }, []);
 
   useEffect(() => {
@@ -2593,6 +2600,37 @@ export function App() {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
       setIsLoadingSnapshot(false);
+    }
+  }
+
+  async function refreshAgentRuntimeStatus() {
+    if (!bridge) {
+      setAgentRuntimeStatus(null);
+      setIsAgentRuntimeLoading(false);
+      return;
+    }
+    setIsAgentRuntimeLoading(true);
+    try {
+      setAgentRuntimeStatus(await bridge.getAgentRuntimeStatus());
+    } catch (error) {
+      setAgentRuntimeStatus(null);
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsAgentRuntimeLoading(false);
+    }
+  }
+
+  async function setAgentCliEnabled(enabled: boolean) {
+    if (!bridge) return;
+    setIsAgentCliActionLoading(true);
+    try {
+      const nextStatus = enabled ? await bridge.enableAgentCli() : await bridge.disableAgentCli();
+      setAgentRuntimeStatus(nextStatus);
+      setNotice({ kind: "success", text: enabled ? copy.agentAccessCliEnabled : copy.agentAccessCliDisabled });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsAgentCliActionLoading(false);
     }
   }
 
@@ -4326,6 +4364,15 @@ export function App() {
       await navigator.clipboard.writeText(value);
       flashButton(feedbackId);
       setNotice({ kind: "success", text: copy.imagePathCopied });
+    } catch {
+      setNotice({ kind: "error", text: copy.notices.clipboardUnavailable });
+    }
+  }
+
+  async function copyAgentAccessText(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice({ kind: "success", text: copy.agentAccessCopied });
     } catch {
       setNotice({ kind: "error", text: copy.notices.clipboardUnavailable });
     }
@@ -6327,6 +6374,16 @@ export function App() {
           onOpen={() => openApiConfigDialog(activeConfig)}
         />
 
+        <AgentAccessSection
+          copy={copy}
+          status={agentRuntimeStatus}
+          loading={isAgentRuntimeLoading}
+          onOpen={() => {
+            setIsAgentAccessOpen(true);
+            void refreshAgentRuntimeStatus();
+          }}
+        />
+
         <LaunchSection
           copy={copy}
           activeConfig={activeConfig}
@@ -7211,6 +7268,20 @@ export function App() {
                 {galleryFolderDialog.mode === "create" ? copy.galleryFolderCreate : copy.galleryFolderRename}
               </button>
             </div>
+        </DialogShell>
+      )}
+      {isAgentAccessOpen && (
+        <DialogShell className="agent-access-modal" labelledBy="agent-access-dialog-title" onClose={() => setIsAgentAccessOpen(false)}>
+          <AgentAccessDialog
+            copy={copy}
+            status={agentRuntimeStatus}
+            loading={isAgentRuntimeLoading}
+            cliActionLoading={isAgentCliActionLoading}
+            onClose={() => setIsAgentAccessOpen(false)}
+            onCopy={(value) => void copyAgentAccessText(value)}
+            onEnableCli={() => void setAgentCliEnabled(true)}
+            onDisableCli={() => void setAgentCliEnabled(false)}
+          />
         </DialogShell>
       )}
       {storageDialogKind && (

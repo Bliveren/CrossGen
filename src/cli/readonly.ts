@@ -2,6 +2,8 @@ import { listProviderModelCapabilitySummaries } from "../core/modelCapabilities.
 import { DEFAULT_QUEUE_RUNTIME_CONFIG, normalizeQueueRuntimeConfig } from "../core/queueConfig.js";
 import { buildQueueSnapshot, buildQueueTaskSummary, type BuildQueueSnapshotOptions } from "../core/queueSnapshot.js";
 import type {
+  AgentMcpClientName,
+  AgentMcpMode,
   GalleryAsset,
   GalleryFolder,
   GenerationJob,
@@ -58,9 +60,9 @@ export interface CliGalleryListOptions {
   query?: string;
 }
 
-export type McpClientName = "codex" | "claude-code" | "cursor";
+export type McpClientName = AgentMcpClientName;
 
-export type McpMode = "readonly" | "write" | "generate";
+export type McpMode = AgentMcpMode;
 
 function activeProvider(state: ReadonlyAppState): ReadonlyProviderConfig | undefined {
   return state.providers.find((provider) => provider.id === state.activeProviderId) ?? state.providers[0];
@@ -458,9 +460,28 @@ export function buildCliAssetInspect(state: ReadonlyAppState | null, assetId: st
   };
 }
 
-export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMode; command: string }) {
-  const args = ["--mcp"];
+export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMode; command: string; args?: string[] }) {
+  const args = options.args?.length ? [...options.args] : ["--mcp"];
   const effectiveMode: McpMode = options.mode;
+  const server = {
+    command: options.command,
+    args,
+    env: {
+      CROSSGEN_MCP_MODE: effectiveMode
+    }
+  };
+  const clientConfig = options.client === "codex"
+    ? { mcp_servers: { crossgen: server } }
+    : { mcpServers: { crossgen: server } };
+  const format: "codex-toml" | "json" = options.client === "codex" ? "codex-toml" : "json";
+  const snippet = options.client === "codex"
+    ? [
+        "[mcp_servers.crossgen]",
+        `command = ${JSON.stringify(options.command)}`,
+        `args = [${args.map((arg) => JSON.stringify(arg)).join(", ")}]`,
+        `env = { CROSSGEN_MCP_MODE = ${JSON.stringify(effectiveMode)} }`
+      ].join("\n")
+    : JSON.stringify(clientConfig, null, 2);
   return {
     client: options.client,
     requestedMode: options.mode,
@@ -468,9 +489,10 @@ export function buildCliMcpConfig(options: { client: McpClientName; mode: McpMod
     transport: "stdio",
     command: options.command,
     args,
-    env: {
-      CROSSGEN_MCP_MODE: effectiveMode
-    },
+    env: server.env,
+    format,
+    config: clientConfig,
+    snippet,
     permissions: {
       readonly: true,
       write: effectiveMode === "write" || effectiveMode === "generate",
