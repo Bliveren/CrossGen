@@ -256,6 +256,26 @@ const v033ChecklistGuards = [
     file: "docs/release/v0.3.3-preflight.md",
     text: "从精确 `v0.3.3` 候选源码生成并验证至少一个可安装或可运行的候选包。",
     gateIds: ["exact-candidate-package"]
+  },
+  {
+    file: "docs/release/v0.3.3-preflight.md",
+    text: "在精确候选上运行 build、CLI/MCP smoke、agent integration smoke 和图片核心回归。",
+    gateIds: ["build-and-mock-verifiers", "cli-mcp-packaged-smoke", "agent-integration-smoke", "image-core-regression"]
+  },
+  {
+    file: "docs/release/v0.3.3-preflight.md",
+    text: "在原生 Windows/Linux runner 上完成精确候选包验证。",
+    gateIds: ["windows-native-release", "linux-native-release"]
+  },
+  {
+    file: "docs/release/v0.3.3-preflight.md",
+    text: "完成精确候选的真实 provider gate。",
+    gateIds: ["real-openai-api", "real-gemini-api", "real-provider-operation-matrix"]
+  },
+  {
+    file: "docs/release/v0.3.3-preflight.md",
+    text: "完成产品负责人安装实测并记录明确批准。",
+    gateIds: ["product-owner-acceptance"]
   }
 ];
 
