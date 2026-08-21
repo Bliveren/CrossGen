@@ -219,6 +219,8 @@ crossgen mcp config --client cursor --mode generate --json
 
 MCP 直接通过 `--mcp` 连接已安装的 CrossGen 应用，不要求先启用 `crossgen` shell 命令。请按实际工作流选择最小权限：
 
+MCP 运行时在连续 15 分钟没有协议活动时会回收会话，宿主进程消失时也会主动退出，避免宿主遗留的 stdio 管道不断累积 Electron 进程。需要更长空闲时间时可设置 `CROSSGEN_MCP_IDLE_TIMEOUT_MS`（毫秒）；设置为 `0` 可关闭回收保护。
+
 | 模式 | Agent 能力 |
 | --- | --- |
 | `readonly` | 查询 provider、模型、能力、队列、任务、文件夹和图库资产 |

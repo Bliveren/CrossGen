@@ -97,6 +97,8 @@ export interface ReadonlyMcpStdioServerOptions {
   jobControllers?: GenerationMcpControllers;
   input?: Readable;
   output?: Writable;
+  /** End an otherwise idle stdio session; 0 disables this guard. */
+  idleTimeoutMs?: number;
   sanitizeError?: (error: unknown) => string;
 }
 
@@ -1097,7 +1099,59 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
   }
 
   return new Promise((resolve) => {
+    let settled = false;
+    let idleTimer: NodeJS.Timeout | null = null;
+    let parentWatchdog: NodeJS.Timeout | null = null;
+    const parentPid = process.ppid;
+    const signalHandlers: Array<[NodeJS.Signals, () => void]> = [];
+    const idleTimeoutMs = Number.isFinite(options.idleTimeoutMs) && (options.idleTimeoutMs ?? 0) > 0
+      ? Math.floor(options.idleTimeoutMs as number)
+      : 0;
+
+    const clearRuntimeGuards = (): void => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+      if (parentWatchdog) {
+        clearInterval(parentWatchdog);
+        parentWatchdog = null;
+      }
+      for (const [signal, handler] of signalHandlers) {
+        process.removeListener(signal, handler);
+      }
+      signalHandlers.length = 0;
+    };
+
+    const finish = (exitCode: number): void => {
+      if (settled) return;
+      settled = true;
+      clearRuntimeGuards();
+      resolve(exitCode);
+    };
+
+    const armIdleTimer = (): void => {
+      if (!idleTimeoutMs || settled) return;
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => finish(0), idleTimeoutMs);
+      idleTimer.unref?.();
+    };
+
+    for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
+      const handler = (): void => finish(1);
+      signalHandlers.push([signal, handler]);
+      process.once(signal, handler);
+    }
+
+    // Reap an orphan if the MCP host disappears without closing stdio.
+    parentWatchdog = setInterval(() => {
+      if (process.ppid === 1 || (parentPid > 1 && process.ppid !== parentPid)) finish(1);
+    }, 30000);
+    parentWatchdog.unref?.();
+    armIdleTimer();
+
     input.on("data", (chunk: Buffer | string) => {
+      armIdleTimer();
       try {
         pending = Buffer.concat([pending, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8")]);
         const extracted = extractJsonMessages(pending);
@@ -1110,15 +1164,23 @@ export async function runReadonlyMcpStdioServer(options: ReadonlyMcpStdioServerO
     });
 
     input.on("error", (error: unknown) => {
-      writeMessage(jsonRpcError(null, -32603, sanitizeError(error)));
-      resolve(1);
+      try {
+        writeMessage(jsonRpcError(null, -32603, sanitizeError(error)));
+      } finally {
+        finish(1);
+      }
     });
 
     input.on("end", () => {
       const trailing = pending.toString("utf8").trim();
       if (trailing && !bufferStartsWithAscii(pending, "content-length:")) enqueueJson(trailing);
-      void chain.then(() => resolve(0), () => resolve(1));
+      void chain.then(() => finish(0), () => finish(1));
     });
+
+    // MCP hosts can discard a broken stdio transport without sending stdin EOF.
+    // Exit promptly so a reconnect does not leave the previous Electron process alive.
+    output.on("error", () => finish(1));
+    output.on("close", () => finish(1));
 
     if (typeof input.resume === "function") {
       input.resume();

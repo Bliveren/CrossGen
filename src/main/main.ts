@@ -228,6 +228,8 @@ const RENDERER_PERF_RESULT_PATH_ENV = "CROSSGEN_RENDERER_PERF_RESULT_PATH";
 const THEME_SOURCE_ENV = "CROSSGEN_THEME_SOURCE";
 const RENDERER_SCREENSHOT_DIR_ENV = "CROSSGEN_RENDERER_SCREENSHOT_DIR";
 const CLI_SCHEMA_VERSION = 1;
+const MCP_IDLE_TIMEOUT_MS_ENV = "CROSSGEN_MCP_IDLE_TIMEOUT_MS";
+const DEFAULT_MCP_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const DESKTOP_QUEUE_WORKER_INTERVAL_MS = 5000;
 const DESKTOP_QUEUE_WORKER_RECHECK_MS = 250;
 const DESKTOP_QUEUE_WORKER_LEASE_MS = 30000;
@@ -5259,6 +5261,7 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
     mode: requestedMode,
     serverVersion: getAppVersion(),
     input: createMcpInputStream(),
+    idleTimeoutMs: getMcpIdleTimeoutMs(),
     readers: {
       configStatus: async () => buildCliConfigStatus(await readExistingStateForCli(), await readExistingQueueForCli()),
       providerList: async () => buildCliProviderList(await readExistingStateForCli()),
@@ -5437,6 +5440,16 @@ function normalizeCliMcpClient(value: string | undefined): McpClientName {
 
 function normalizeCliMcpMode(value: string | undefined): McpMode {
   return value === "write" || value === "generate" ? value : "readonly";
+}
+
+function getMcpIdleTimeoutMs(): number {
+  const raw = process.env[MCP_IDLE_TIMEOUT_MS_ENV]?.trim();
+  if (raw === "0") return 0;
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
+  }
+  return DEFAULT_MCP_IDLE_TIMEOUT_MS;
 }
 
 function envApiKeyAvailable(kind: StoredProviderConfig["kind"]): boolean {

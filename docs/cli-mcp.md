@@ -186,6 +186,12 @@ pnpm verify:cli-mcp-smoke
 MCP does not need the CLI launcher. Host configuration should point directly at
 the current CrossGen executable and pass `--mcp`. Generate client configuration:
 
+The MCP runtime reclaims a session after 15 minutes without protocol activity
+and exits when its host process disappears. This prevents abandoned stdio
+sessions from accumulating Electron processes. Set
+`CROSSGEN_MCP_IDLE_TIMEOUT_MS=0` to disable the idle guard, or set a different
+timeout in milliseconds.
+
 ```bash
 crossgen mcp config --client codex --mode readonly --json
 crossgen mcp config --client codex --mode write --json

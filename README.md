@@ -219,6 +219,10 @@ crossgen mcp config --client cursor --mode generate --json
 
 MCP connects directly to the installed CrossGen executable with `--mcp`; enabling the `crossgen` shell command is not required. Choose the smallest permission mode that fits the workflow:
 
+The MCP runtime reclaims an otherwise idle session after 15 minutes and exits
+when its host process disappears, so abandoned host pipes do not accumulate
+Electron processes. Set `CROSSGEN_MCP_IDLE_TIMEOUT_MS=0` to disable this guard.
+
 | Mode | Agent capabilities |
 | --- | --- |
 | `readonly` | Inspect providers, models, capabilities, queue, jobs, folders, and Gallery assets |

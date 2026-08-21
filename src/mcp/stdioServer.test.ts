@@ -1,5 +1,5 @@
 import { PassThrough, Writable } from "node:stream";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   runReadonlyMcpStdioServer,
   type GalleryMcpWriters,
@@ -140,6 +140,57 @@ function lineResponses(output: string) {
 }
 
 describe("readonly MCP stdio server", () => {
+  it("reclaims an idle session when the host leaves stdin open", async () => {
+    vi.useFakeTimers();
+    try {
+      const input = new PassThrough();
+      const captured = captureOutput();
+      const run = runReadonlyMcpStdioServer({
+        mode: "readonly",
+        serverVersion: "0.3.0-test",
+        readers: readers(),
+        input,
+        output: captured.output,
+        idleTimeoutMs: 25
+      });
+
+      await vi.advanceTimersByTimeAsync(24);
+      let settled = false;
+      void run.then(() => {
+        settled = true;
+      });
+      await Promise.resolve();
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(run).resolves.toBe(0);
+      input.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("exits when the MCP output transport closes", async () => {
+    const input = new PassThrough();
+    const output = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback();
+      }
+    });
+    const run = runReadonlyMcpStdioServer({
+      mode: "readonly",
+      serverVersion: "0.3.0-test",
+      readers: readers(),
+      input,
+      output
+    });
+
+    output.destroy();
+
+    await expect(run).resolves.toBe(1);
+    input.destroy();
+  });
+
   it("initializes and lists readonly tools", async () => {
     const { exitCode, output } = await runServer(
       [
