@@ -55,6 +55,7 @@ describe("agent runtime status", () => {
     expect(status.cli.commandTarget).toBe(launcher);
     expect(status.cli.launcherExists).toBe(true);
     expect(status.mcp.args).toEqual(["--mcp"]);
+    expect(status.mcp.command).toBe(launcher);
     expect(status.mcp.configs).toHaveLength(9);
     expect(status.mcp.configs.find((config) => config.client === "codex")?.format).toBe("codex-toml");
     expect(status.mcp.configs.find((config) => config.client === "codex")?.snippet).toContain("[mcp_servers.crossgen]");
@@ -95,6 +96,7 @@ describe("agent runtime status", () => {
     expect(status.liveWorkerHost).toBe(false);
     expect(status.nextActions.join("\n")).toContain("pnpm build:main");
     expect(status.mcp.args).toEqual([path.join(root, "app"), "--mcp"]);
+    expect(status.mcp.command).toBe(path.join(root, "CrossGen.app", "Contents", "MacOS", "CrossGen"));
     expect(status.recommendedArgs).toEqual([path.join(root, "app"), "--mcp"]);
     expect(status.commands.version).toContain(`'${path.join(root, "app")}' --cli`);
     expect(status.mcp.configs.find((config) => config.client === "cursor" && config.mode === "generate")?.snippet).toContain("--mcp");

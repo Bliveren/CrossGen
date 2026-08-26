@@ -11,7 +11,8 @@ import {
   type IpcMainInvokeEvent
 } from "electron";
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, readFileSync, watch, type FSWatcher } from "node:fs";
+import { createReadStream, existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
+import type { Readable, Writable } from "node:stream";
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -149,6 +150,7 @@ import {
   type McpMode
 } from "../cli/readonly.js";
 import { runReadonlyMcpStdioServer } from "../mcp/stdioServer.js";
+import { runMcpWithBroker, socketPathForUserData } from "../mcp/broker.js";
 import { fetchWithTimeout } from "./services/openaiImageAdapter.js";
 import { probeOpenAIImageRouting } from "./services/openaiImageRouting.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
@@ -5257,11 +5259,14 @@ async function readGalleryStateForCli(): Promise<AppStateFile> {
 
 async function runMcpCommandMode(args: string[]): Promise<number> {
   const requestedMode = normalizeCliMcpMode(getCliOption(args, "--mode") ?? process.env.CROSSGEN_MCP_MODE);
-  return runReadonlyMcpStdioServer({
-    mode: requestedMode,
+  const runSession = ({ input, output, mode, idleTimeoutMs }: { input: Readable; output: Writable; mode: string; idleTimeoutMs: number }) => {
+    const sessionMode = normalizeCliMcpMode(mode);
+    return runReadonlyMcpStdioServer({
+    mode: sessionMode,
     serverVersion: getAppVersion(),
-    input: createMcpInputStream(),
-    idleTimeoutMs: getMcpIdleTimeoutMs(),
+    input,
+    output,
+    idleTimeoutMs,
     readers: {
       configStatus: async () => buildCliConfigStatus(await readExistingStateForCli(), await readExistingQueueForCli()),
       providerList: async () => buildCliProviderList(await readExistingStateForCli()),
@@ -5275,7 +5280,7 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
       galleryList: async (options) => buildCliGalleryList(await readExistingStateForCli(), options),
       assetInspect: async (assetId) => buildCliAssetInspect(await readExistingStateForCli(), assetId)
     },
-    writers: requestedMode === "readonly" ? undefined : {
+    writers: sessionMode === "readonly" ? undefined : {
       folderCreate: async ({ name, parentId }) => {
         const folder = await mutateGalleryStateForCli(async (state, context) => {
           const outcome = await createCoreGalleryFolder(state, context, { name, parentId });
@@ -5359,11 +5364,11 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
         };
       }
     },
-    queueControllers: requestedMode === "readonly" ? undefined : {
+    queueControllers: sessionMode === "readonly" ? undefined : {
       queueConfigSet: async ({ maxGlobalRunning, providerConcurrency, clearProviderIds }) =>
         setQueueRuntimeConfigForCli({ maxGlobalRunning, providerConcurrency, clearProviderIds })
     },
-    jobControllers: requestedMode === "generate" ? {
+    jobControllers: sessionMode === "generate" ? {
       generationSubmit: async ({
         mode,
         prompt,
@@ -5424,6 +5429,15 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
       jobRetry: async ({ jobId }) => retryGenerationQueueItemForCli(jobId)
     } : undefined,
     sanitizeError: (error) => redactLikelySecrets(normalizeError(error))
+    });
+  };
+  return runMcpWithBroker({
+    socketPath: socketPathForUserData(app.getPath("userData")),
+    mode: requestedMode,
+    idleTimeoutMs: getMcpIdleTimeoutMs(),
+    input: createMcpInputStream(),
+    output: process.stdout,
+    runSession
   });
 }
 
@@ -5489,10 +5503,12 @@ async function runCliCommandMode(args: string[]): Promise<number> {
     }
 
     if (command === "mcp" && subcommand === "config") {
+      const packagedMcpLauncher = path.join(process.resourcesPath, "cli", process.platform === "win32" ? "crossgen.cmd" : "crossgen");
+      const mcpCommand = app.isPackaged && existsSync(packagedMcpLauncher) ? packagedMcpLauncher : process.execPath;
       const data = buildCliMcpConfig({
         client: normalizeCliMcpClient(getCliOption(args, "--client")),
         mode: normalizeCliMcpMode(getCliOption(args, "--mode")),
-        command: process.execPath,
+        command: mcpCommand,
         args: [...(app.isPackaged ? [] : [app.getAppPath()]), "--mcp"]
       });
       writeCliJson(cliSuccess(requestId, correlationId, data));

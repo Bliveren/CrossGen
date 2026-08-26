@@ -3,7 +3,7 @@
 CrossGen exposes the same local app state to terminal workflows and MCP hosts. The CLI defaults to read-only inspection unless a command asks for explicit confirmation with `--yes`.
 
 The desktop app also exposes an **Agent access** section in the left sidebar.
-It shows the current CLI status, packaged launcher path, direct MCP executable,
+It shows the current CLI status, packaged launcher path, MCP executable,
 data/state paths, active provider, live queue workers, copyable diagnostics, and
 client-specific MCP configuration snippets. It never edits shell startup files
 or the system `PATH` automatically.
@@ -23,7 +23,7 @@ node dist/cli/crossgen.js --version --json
 
 For installed packages, CLI and MCP are intentionally separate:
 
-- MCP uses the current CrossGen app executable directly with `--mcp`.
+- Packaged MCP uses the bundled launcher with `--mcp` and shares one local worker on macOS/Linux.
 - CLI uses the package-provided native launcher, which directly forwards to the
   CrossGen app executable with `--cli`.
 - Installed CLI/MCP use does not require Node.js, npm, pnpm, or a global Node
@@ -183,14 +183,13 @@ pnpm verify:cli-mcp-smoke
 
 ## MCP Setup
 
-MCP does not need the CLI launcher. Host configuration should point directly at
-the current CrossGen executable and pass `--mcp`. Generate client configuration:
-
-The MCP runtime reclaims a session after 15 minutes without protocol activity
-and exits when its host process disappears. This prevents abandoned stdio
-sessions from accumulating Electron processes. Set
-`CROSSGEN_MCP_IDLE_TIMEOUT_MS=0` to disable the idle guard, or set a different
-timeout in milliseconds.
+Packaged MCP configuration uses the CLI launcher. On macOS and Linux, the
+launcher reuses a per-user Unix-socket worker when several agent hosts connect
+in parallel, so only the first session starts Electron. Windows currently uses
+one direct process per stdio host until its named-pipe proxy is implemented.
+The MCP runtime also exits when its host process disappears. Set
+`CROSSGEN_MCP_IDLE_TIMEOUT_MS=0` to disable the idle guard in direct app mode,
+or set a different timeout in milliseconds.
 
 ```bash
 crossgen mcp config --client codex --mode readonly --json
@@ -200,10 +199,10 @@ crossgen mcp config --client claude-code --mode readonly --json
 crossgen mcp config --client cursor --mode readonly --json
 ```
 
-The server process is started directly from the app executable:
+The packaged server is started through the launcher:
 
 ```bash
-/path/to/CrossGen --mcp
+/path/to/resources/cli/crossgen --mcp
 ```
 
 The generated object contains `client`, `mode`, `transport`, `command`, `args`,
@@ -211,13 +210,13 @@ The generated object contains `client`, `mode`, `transport`, `command`, `args`,
 optional generate-mode warning. The `snippet` is ready to paste into the
 client's configuration: Codex uses a TOML `[mcp_servers.crossgen]` block;
 Claude Code and Cursor use a JSON `mcpServers.crossgen` object. The desktop
-Agent access panel presents the same snippets and uses the current app
-executable; it never assumes `/Applications/CrossGen.app`.
+Agent access panel presents the same snippets and uses the current packaged
+launcher; it never assumes `/Applications/CrossGen.app`.
 
 When CrossGen is running from the source tree, the generated `args` also include
 the repository app path before `--mcp`; this keeps copied MCP configuration
-usable with the Electron development runtime. Packaged installs keep the
-short direct form: `<CrossGen executable> --mcp`.
+usable with the Electron development runtime. Packaged installs use the
+launcher form: `<resources>/cli/crossgen --mcp`.
 
 Modes:
 

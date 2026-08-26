@@ -31,6 +31,30 @@ fi
 
 case "${1:-}" in
   --mcp)
+    # MCP hosts may start several stdio sessions. Reuse the packaged worker
+    # through its per-user Unix socket when it is already running; only the
+    # first session starts Electron. This keeps agent reconnects lightweight.
+    if [ "$(uname -s)" != "Darwin" ] && [ "$(uname -s)" != "Linux" ]; then
+      exec "$CROSSGEN_APP_EXECUTABLE" "$@"
+    fi
+    if [ -n "${CROSSGEN_DATA_DIR:-}" ]; then
+      mcp_socket="$CROSSGEN_DATA_DIR/.crossgen-mcp.sock"
+    else
+      mcp_socket="${HOME}/Library/Application Support/Image2Tools/.crossgen-mcp.sock"
+      if [ "$(uname -s)" = "Linux" ]; then
+        mcp_socket="${XDG_CONFIG_HOME:-$HOME/.config}/Image2Tools/.crossgen-mcp.sock"
+      fi
+    fi
+    if command -v nc >/dev/null 2>&1 && [ -S "$mcp_socket" ]; then
+      # The broker consumes one private handshake before forwarding MCP bytes.
+      # Keep stdin/stdout streaming so stdio hosts remain transparent.
+      if {
+        printf '{"crossgenMcpBroker":1,"mode":"%s"}\n' "${CROSSGEN_MCP_MODE:-readonly}"
+        cat
+      } | nc -U "$mcp_socket"; then
+        exit 0
+      fi
+    fi
     exec "$CROSSGEN_APP_EXECUTABLE" "$@"
     ;;
   *)

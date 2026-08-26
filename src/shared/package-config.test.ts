@@ -56,6 +56,8 @@ describe("package release configuration", () => {
     }
     expect(shellLauncher).toContain('exec "$CROSSGEN_APP_EXECUTABLE" --cli "$@"');
     expect(shellLauncher).toContain('exec "$CROSSGEN_APP_EXECUTABLE" "$@"');
+    expect(shellLauncher).toContain('nc -U "$mcp_socket"');
+    expect(shellLauncher).toContain('crossgenMcpBroker');
     expect(shellLauncher).toContain("CROSSGEN_DATA_DIR");
     expect(shellLauncher).not.toMatch(/\bnode\b/);
     expect(shellLauncher).not.toContain("dist/cli/crossgen.js");

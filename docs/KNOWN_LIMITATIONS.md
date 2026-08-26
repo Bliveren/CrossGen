@@ -30,8 +30,10 @@ release-candidate validation, and agent runtime surfaces.
      absolute-path disclosure require explicit confirmation such as `--yes` or
      MCP `confirm: true`.
 
-3. **No HTTP server or background daemon**
-   - MCP uses stdio only.
+3. **MCP transport remains stdio**
+   - Packaged macOS/Linux launchers share one per-user Unix-socket worker when
+     multiple stdio hosts connect. Windows currently uses one direct process
+     per stdio host until the named-pipe proxy is implemented.
    - A queued async generation item needs a live worker host: the desktop app,
      MCP generate mode, or a waiting CLI worker.
    - If there is no live worker, async submission returns a machine-readable

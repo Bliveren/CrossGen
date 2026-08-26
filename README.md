@@ -183,7 +183,7 @@ CrossGen 0.3.2 exposes the local image runtime through structured JSON CLI comma
 - `crossgen generate ... --yes --wait --json` and MCP `crossgen_generate_image` submit work through the durable queue.
 - `crossgen asset export <asset-id> --to <path> --yes --json` copies a managed image into a project without moving the Gallery source.
 
-CLI and MCP are separate entry points. MCP can point directly at the installed CrossGen app executable with `--mcp` and does not require a CLI wrapper. The packaged CLI launcher forwards to the app executable and does not require Node.js, npm, pnpm, or a global package. CLI and MCP default to read-only behavior. Write and generation modes are explicit, paid generation requires confirmation, and local path disclosure is opt-in.
+CLI and MCP are separate entry points. Packaged MCP configuration uses the bundled CLI launcher with `--mcp`; on macOS and Linux it reuses one per-user worker for parallel agent sessions. The launcher does not require Node.js, npm, pnpm, or a global package. CLI and MCP default to read-only behavior. Write and generation modes are explicit, paid generation requires confirmation, and local path disclosure is opt-in.
 
 ### Generate from a local agent or terminal
 
@@ -217,11 +217,12 @@ crossgen mcp config --client claude-code --mode generate --json
 crossgen mcp config --client cursor --mode generate --json
 ```
 
-MCP connects directly to the installed CrossGen executable with `--mcp`; enabling the `crossgen` shell command is not required. Choose the smallest permission mode that fits the workflow:
+MCP uses the bundled launcher with `--mcp`; enabling a global `crossgen` shell command is not required. Choose the smallest permission mode that fits the workflow:
 
-The MCP runtime reclaims an otherwise idle session after 15 minutes and exits
-when its host process disappears, so abandoned host pipes do not accumulate
-Electron processes. Set `CROSSGEN_MCP_IDLE_TIMEOUT_MS=0` to disable this guard.
+The packaged macOS/Linux launcher shares one local MCP worker across parallel
+agent sessions. The runtime reclaims an otherwise idle session after 15 minutes
+and exits when its host process disappears. Set
+`CROSSGEN_MCP_IDLE_TIMEOUT_MS=0` to disable this guard.
 
 | Mode | Agent capabilities |
 | --- | --- |

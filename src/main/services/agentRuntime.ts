@@ -42,6 +42,7 @@ export function buildAgentRuntimeStatus(options: BuildAgentRuntimeStatusOptions)
   const runtimeKind = options.isPackaged ? "packaged" : "development";
   const launcherPath = runtimeKind === "packaged" ? packagedCliLauncherPath(options.resourcesPath, options.platform) : null;
   const launcherExists = Boolean(launcherPath && fileExecutable(launcherPath, options.platform));
+  const mcpCommand = launcherExists ? launcherPath! : options.appExecutable;
   const pathEntries = pathEntriesFromEnv(options.envPath);
   const commandCandidate = findCrossgenOnPath(pathEntries, options.platform);
   const status = resolveCliStatus({
@@ -85,7 +86,7 @@ export function buildAgentRuntimeStatus(options: BuildAgentRuntimeStatusOptions)
     appVersion: options.appVersion,
     runtimeKind,
     cliExecutable: options.appExecutable,
-    mcpCommand: options.appExecutable,
+    mcpCommand,
     recommendedArgs: mcpArgs,
     appExecutable: options.appExecutable,
     packagedExecutable: options.isPackaged ? options.appExecutable : null,
@@ -113,12 +114,12 @@ export function buildAgentRuntimeStatus(options: BuildAgentRuntimeStatusOptions)
       repairHint
     },
     mcp: {
-      command: options.appExecutable,
+      command: mcpCommand,
       args: mcpArgs,
       defaultMode: "readonly",
       configs: MCP_CLIENTS.flatMap((client) =>
         MCP_MODES.map((mode) => {
-          const config = buildCliMcpConfig({ client, mode, command: options.appExecutable, args: mcpArgs });
+          const config = buildCliMcpConfig({ client, mode, command: mcpCommand, args: mcpArgs });
           return {
             client,
             mode,
@@ -147,7 +148,7 @@ export function buildAgentRuntimeStatus(options: BuildAgentRuntimeStatusOptions)
       pathDisclosureRequiresConfirmation: true
     },
     knownLimitations: [
-      "MCP hosts should call the current CrossGen app executable directly with --mcp; they do not need the CLI link.",
+      "Packaged MCP hosts should use the bundled CLI launcher with --mcp; it reuses one local worker for parallel agent sessions.",
       "The packaged CLI launcher does not require Node.js, npm, pnpm, or a global package.",
       "PATH detection only reports the environment visible to the current CrossGen process.",
       "Async generation requires a live worker host: the desktop app, MCP generate mode, or a waiting CLI worker.",
@@ -437,7 +438,7 @@ function nextActionsForStatus(status: AgentCliCommandStatus): string[] {
   }
   return [
     "Copy the repair command if you want a global `crossgen` shell command.",
-    "MCP setup can skip PATH and call the current app executable directly with --mcp.",
+    "MCP setup can use the bundled launcher directly; it does not require a global `crossgen` link.",
     ...common
   ];
 }

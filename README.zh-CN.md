@@ -183,7 +183,7 @@ CrossGen 0.3.2 通过结构化 JSON CLI 和 MCP stdio server 暴露本地生图�
 - `crossgen generate ... --yes --wait --json` 与 MCP `crossgen_generate_image` 都通过持久化队列提交生图；
 - `crossgen asset export <asset-id> --to <path> --yes --json` 可将图库受管图片复制到项目目录，不移动图库源文件。
 
-CLI 和 MCP 是两个独立入口。MCP 可直接连接已安装的 CrossGen 应用可执行文件并传入 `--mcp`，不依赖 CLI wrapper；安装包内的 CLI launcher 会直接转发到应用可执行文件，也不需要 Node.js、npm、pnpm 或全局包。CLI/MCP 默认只读；写入和生图模式必须显式开启；付费生图需要确认；本地路径披露也必须显式确认。
+CLI 和 MCP 是两个独立入口。打包后的 MCP 使用安装包内 CLI launcher 并传入 `--mcp`；macOS/Linux 下多个 agent 会话会复用同一个本地 worker，不会各自拉起 Electron。launcher 不需要 Node.js、npm、pnpm 或全局包。CLI/MCP 默认只读；写入和生图模式必须显式开启；付费生图需要确认；本地路径披露也必须显式确认。
 
 ### 让本地 Agent 或终端调用 CrossGen 生图
 
@@ -217,9 +217,9 @@ crossgen mcp config --client claude-code --mode generate --json
 crossgen mcp config --client cursor --mode generate --json
 ```
 
-MCP 直接通过 `--mcp` 连接已安装的 CrossGen 应用，不要求先启用 `crossgen` shell 命令。请按实际工作流选择最小权限：
+MCP 通过安装包内 launcher 传入 `--mcp`，不要求先启用全局 `crossgen` shell 命令。请按实际工作流选择最小权限：
 
-MCP 运行时在连续 15 分钟没有协议活动时会回收会话，宿主进程消失时也会主动退出，避免宿主遗留的 stdio 管道不断累积 Electron 进程。需要更长空闲时间时可设置 `CROSSGEN_MCP_IDLE_TIMEOUT_MS`（毫秒）；设置为 `0` 可关闭回收保护。
+打包后的 macOS/Linux launcher 会让多个 agent 会话复用同一个 MCP worker。MCP 运行时在连续 15 分钟没有协议活动时会回收会话，宿主进程消失时也会主动退出。需要更长空闲时间时可设置 `CROSSGEN_MCP_IDLE_TIMEOUT_MS`（毫秒）；设置为 `0` 可关闭回收保护。
 
 | 模式 | Agent 能力 |
 | --- | --- |
