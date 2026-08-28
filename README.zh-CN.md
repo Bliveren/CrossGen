@@ -69,6 +69,21 @@ crossgen mcp config --client cursor --mode generate --json
 
 建议先使用 `readonly`，只有 Agent 确实需要时才开启 `write` 或 `generate`。付费生图、资产导出、破坏性操作、队列控制修改和本地路径披露都要求明确权限或确认。完整命令、工具覆盖、权限模式和安装路径见 [CLI 与 MCP 指南](./docs/cli-mcp.md)。
 
+### CrossGen Artist Skill
+
+CrossGen 仓库内置 Agent 工作流技能 [`skills/crossgen-artist`](./skills/crossgen-artist/)。它会指导 Codex 等兼容 Agent 自动发现模型能力，选择生成、编辑或局部重绘，提交带幂等键的队列任务，轮询完成状态，检查图库资产，并在不意外泄露 API Key 或本地路径的前提下导出结果。
+
+从 CrossGen 源码仓库为 Codex 安装：
+
+```bash
+mkdir -p "$HOME/.codex/skills"
+ln -sfn "$(pwd)/skills/crossgen-artist" "$HOME/.codex/skills/crossgen-artist"
+```
+
+之后可以使用 `$crossgen-artist` 调用。该 skill 与 CrossGen 一起版本管理，确保说明始终匹配内置 CLI/MCP 契约。使用打包应用时，应使用对应版本源码或 release archive 中的 skill 文件；后续会在 Agent access 中补充一键安装入口。
+
+桌面端 **Agent access** 面板是 MCP 配置的唯一来源。可在面板中复制对应客户端的配置片段：模型发现先使用 `readonly`，只有确实需要时再切换到 `write` 或 `generate`。CrossGen 不会静默修改 Codex 配置，也不会自动开启付费生图。
+
 > 已经在桌面、CLI 或 Agent 工作流中使用 CrossGen？可以 [Star 仓库](https://github.com/Bliveren/CrossGen)，帮助更多需要本地优先图像工具的用户发现它，也欢迎在 [Discord](https://discord.gg/XphwmYtY) 分享你的真实工作流。
 
 它解决的是很实际的工作问题：

@@ -213,6 +213,21 @@ Claude Code and Cursor use a JSON `mcpServers.crossgen` object. The desktop
 Agent access panel presents the same snippets and uses the current packaged
 launcher; it never assumes `/Applications/CrossGen.app`.
 
+## CrossGen Artist Skill
+
+The repository includes [`skills/crossgen-artist`](../skills/crossgen-artist/), a Codex-compatible skill for model discovery, prompt-to-image generation, reference-image editing, inpainting, durable job polling, Gallery inspection, and explicit asset export. It is intentionally versioned with CrossGen because it depends on the CrossGen CLI/MCP tool names and permission contract.
+
+Install it for the current user from a CrossGen checkout:
+
+```bash
+mkdir -p "$HOME/.codex/skills"
+ln -sfn "$(pwd)/skills/crossgen-artist" "$HOME/.codex/skills/crossgen-artist"
+```
+
+Use `$crossgen-artist` in Codex after installation. The skill does not store provider credentials and does not replace MCP configuration. Configure MCP separately from Agent access or `crossgen mcp config`; keep `readonly` as the default and opt into `write`/`generate` explicitly.
+
+Packaged CrossGen releases should ship the matching skill directory (or a downloadable skill archive). A one-click skill installer and an in-app MCP mode switch are planned product conveniences; until then, CrossGen deliberately exposes copyable, client-specific snippets instead of modifying host configuration files without consent.
+
 When CrossGen is running from the source tree, the generated `args` also include
 the repository app path before `--mcp`; this keeps copied MCP configuration
 usable with the Electron development runtime. Packaged installs use the

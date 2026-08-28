@@ -69,6 +69,21 @@ crossgen mcp config --client cursor --mode generate --json
 
 Start with `readonly`, then enable `write` or `generate` only when the agent needs it. Paid generation, asset export, destructive actions, queue-control changes, and local path disclosure require explicit permission or confirmation. See the [CLI and MCP guide](./docs/cli-mcp.md) for commands, tool coverage, modes, and installed executable paths.
 
+### CrossGen Artist Skill
+
+CrossGen ships an agent workflow skill at [`skills/crossgen-artist`](./skills/crossgen-artist/). It teaches Codex and other compatible agents how to discover model capabilities, choose generation/edit/inpaint operations, submit idempotent queue jobs, poll completion, inspect Gallery assets, and export results without exposing API keys or local paths by accident.
+
+Install it for Codex from a CrossGen checkout:
+
+```bash
+mkdir -p "$HOME/.codex/skills"
+ln -sfn "$(pwd)/skills/crossgen-artist" "$HOME/.codex/skills/crossgen-artist"
+```
+
+Then invoke it as `$crossgen-artist`. The skill is versioned with CrossGen so its instructions stay aligned with the bundled CLI/MCP contract. When CrossGen is installed as a packaged app, use the skill files from the matching source/release archive; a future installer will make this one click from Agent access.
+
+The desktop **Agent access** panel remains the source of truth for MCP setup. Copy a client-specific snippet there, choose `readonly` for discovery, and switch to `write` or `generate` only for workflows that need those permissions. CrossGen does not silently edit Codex configuration or enable paid generation.
+
 > Using CrossGen in a real desktop, CLI, or agent workflow? [Star the repository](https://github.com/Bliveren/CrossGen) so other local-first image-tool users can find it, and share the workflow in [Discord](https://discord.gg/XphwmYtY).
 
 It is built for real image-generation work, not just one-off prompting. Designers, comic and storyboarding teams, UI makers, operators, product teams, and AI image hobbyists often need the same loop:
