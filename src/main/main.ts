@@ -158,7 +158,8 @@ import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./se
 import {
   buildAgentRuntimeStatus,
   disableAgentCliLink,
-  enableAgentCliLink
+  enableAgentCliLink,
+  installArtistSkill
 } from "./services/agentRuntime.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
 import { canRunRequestWithConfig } from "./services/providerRequestMatch.js";
@@ -1596,8 +1597,20 @@ async function handleGetAgentRuntimeStatus() {
     queueConfig: buildCliQueueConfig(state),
     envPath: process.env.PATH,
     homeDir: homedir(),
-    appRuntimeArgs: app.isPackaged ? [] : [app.getAppPath()]
+    appRuntimeArgs: app.isPackaged ? [] : [app.getAppPath()],
+    appPath: app.getAppPath()
   });
+}
+
+async function handleInstallCrossgenArtistSkill(): Promise<Awaited<ReturnType<typeof handleGetAgentRuntimeStatus>>> {
+  await installArtistSkill({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appPath: app.getAppPath(),
+    homeDir: homedir(),
+    version: getAppVersion()
+  });
+  return handleGetAgentRuntimeStatus();
 }
 
 async function handleEnableAgentCli(): Promise<Awaited<ReturnType<typeof handleGetAgentRuntimeStatus>>> {
@@ -5988,6 +6001,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("app:getAgentRuntimeStatus", handleGetAgentRuntimeStatus);
   ipcMain.handle("app:enableAgentCli", handleEnableAgentCli);
   ipcMain.handle("app:disableAgentCli", handleDisableAgentCli);
+  ipcMain.handle("app:installCrossgenArtistSkill", handleInstallCrossgenArtistSkill);
   ipcMain.handle("config:save", handleSaveConfig);
   ipcMain.handle("provider:add", handleAddProvider);
   ipcMain.handle("provider:switch", handleSwitchProvider);

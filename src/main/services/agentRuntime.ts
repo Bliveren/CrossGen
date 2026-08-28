@@ -26,6 +26,7 @@ interface BuildAgentRuntimeStatusOptions {
   envPath?: string;
   homeDir?: string;
   appRuntimeArgs?: string[];
+  appPath?: string;
 }
 
 interface PathCommandCandidate {
@@ -37,6 +38,65 @@ interface PathCommandCandidate {
 
 const MCP_CLIENTS: AgentMcpClientName[] = ["codex", "claude-code", "cursor"];
 const MCP_MODES: AgentMcpMode[] = ["readonly", "write", "generate"];
+const ARTIST_SKILL_NAME = "crossgen-artist";
+const ARTIST_SKILL_MARKER = ".crossgen-managed.json";
+
+function artistSkillSourcePath(options: { isPackaged: boolean; resourcesPath: string; appPath?: string }): string {
+  return options.isPackaged
+    ? path.join(options.resourcesPath, "skills", ARTIST_SKILL_NAME)
+    : path.join(options.appPath ?? process.cwd(), "skills", ARTIST_SKILL_NAME);
+}
+
+function artistSkillInstallPath(homeDir: string | undefined): string {
+  return path.join(homeDir ?? process.env.HOME ?? process.cwd(), ".codex", "skills", ARTIST_SKILL_NAME);
+}
+
+function inspectArtistSkill(options: { sourcePath: string; installPath: string; version: string }) {
+  const available = existsSync(path.join(options.sourcePath, "SKILL.md"));
+  const markerPath = path.join(options.installPath, ARTIST_SKILL_MARKER);
+  let managed = false;
+  try {
+    const marker = JSON.parse(readFileSync(markerPath, "utf8")) as { managedBy?: string; version?: string };
+    managed = marker.managedBy === "CrossGen";
+  } catch {
+    // Missing or malformed markers mean the destination is not CrossGen-managed.
+  }
+  return { available, installed: managed, managed, sourcePath: options.sourcePath, installPath: options.installPath, version: options.version };
+}
+
+export function buildArtistSkillStatus(options: {
+  isPackaged: boolean;
+  resourcesPath: string;
+  appPath?: string;
+  homeDir?: string;
+  version: string;
+}) {
+  return inspectArtistSkill({
+    sourcePath: artistSkillSourcePath(options),
+    installPath: artistSkillInstallPath(options.homeDir),
+    version: options.version
+  });
+}
+
+export async function installArtistSkill(options: {
+  isPackaged: boolean;
+  resourcesPath: string;
+  appPath?: string;
+  homeDir?: string;
+  version: string;
+}): Promise<void> {
+  const status = buildArtistSkillStatus(options);
+  if (!status.available) throw new Error("The bundled CrossGen Artist skill is unavailable in this installation.");
+  const destination = status.installPath;
+  const markerPath = path.join(destination, ARTIST_SKILL_MARKER);
+  if (existsSync(destination) && !status.managed) {
+    throw new Error(`Refusing to overwrite an unmanaged skill at ${destination}.`);
+  }
+  await fs.mkdir(path.dirname(destination), { recursive: true });
+  if (status.managed) await fs.rm(destination, { recursive: true, force: true });
+  await fs.cp(status.sourcePath, destination, { recursive: true, force: true });
+  await fs.writeFile(markerPath, JSON.stringify({ managedBy: "CrossGen", version: options.version, source: status.sourcePath }, null, 2) + "\n", "utf8");
+}
 
 export function buildAgentRuntimeStatus(options: BuildAgentRuntimeStatusOptions): AgentRuntimeStatus {
   const runtimeKind = options.isPackaged ? "packaged" : "development";
@@ -130,6 +190,13 @@ export function buildAgentRuntimeStatus(options: BuildAgentRuntimeStatusOptions)
         })
       )
     },
+    artistSkill: buildArtistSkillStatus({
+      isPackaged: options.isPackaged,
+      resourcesPath: options.resourcesPath,
+      appPath: options.appPath,
+      homeDir: options.homeDir,
+      version: options.appVersion
+    }),
     commands: {
       version: `${cliPrefix} --version --json`,
       doctor: `${cliPrefix} doctor --agent --json`,

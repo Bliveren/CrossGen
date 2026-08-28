@@ -673,6 +673,15 @@ export interface AgentMcpConfigSnippet {
   snippet: string;
 }
 
+export interface CrossGenArtistSkillStatus {
+  available: boolean;
+  installed: boolean;
+  managed: boolean;
+  sourcePath: string;
+  installPath: string;
+  version: string;
+}
+
 export interface AgentRuntimeStatus {
   schemaVersion: 1;
   appVersion: string;
@@ -711,6 +720,7 @@ export interface AgentRuntimeStatus {
     defaultMode: AgentMcpMode;
     configs: AgentMcpConfigSnippet[];
   };
+  artistSkill?: CrossGenArtistSkillStatus;
   commands: {
     version: string;
     doctor: string;
@@ -842,6 +852,7 @@ export interface AppBridge {
   getAgentRuntimeStatus: () => Promise<AgentRuntimeStatus>;
   enableAgentCli: () => Promise<AgentRuntimeStatus>;
   disableAgentCli: () => Promise<AgentRuntimeStatus>;
+  installCrossgenArtistSkill?: () => Promise<AgentRuntimeStatus>;
   saveConfig: (input: ProviderConfigInput) => Promise<ProviderConfig>;
   addProvider: (input: ProviderConfigInput) => Promise<AppSnapshot>;
   switchProvider: (providerId: string) => Promise<AppSnapshot>;

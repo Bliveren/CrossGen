@@ -23,6 +23,7 @@ const bridge: AppBridge = {
   getAgentRuntimeStatus: () => ipcRenderer.invoke("app:getAgentRuntimeStatus") as Promise<AgentRuntimeStatus>,
   enableAgentCli: () => ipcRenderer.invoke("app:enableAgentCli") as Promise<AgentRuntimeStatus>,
   disableAgentCli: () => ipcRenderer.invoke("app:disableAgentCli") as Promise<AgentRuntimeStatus>,
+  installCrossgenArtistSkill: () => ipcRenderer.invoke("app:installCrossgenArtistSkill") as Promise<AgentRuntimeStatus>,
   saveConfig: (input: ProviderConfigInput) => ipcRenderer.invoke("config:save", input),
   addProvider: (input: ProviderConfigInput) => ipcRenderer.invoke("provider:add", input),
   switchProvider: (providerId: string) => ipcRenderer.invoke("provider:switch", providerId),

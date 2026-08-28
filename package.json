@@ -81,6 +81,11 @@
         "from": "build/cli",
         "to": "cli",
         "filter": ["**/*"]
+      },
+      {
+        "from": "skills/crossgen-artist",
+        "to": "skills/crossgen-artist",
+        "filter": ["**/*"]
       }
     ],
     "asarUnpack": [
