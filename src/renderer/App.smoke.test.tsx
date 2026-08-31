@@ -75,13 +75,41 @@ describe("renderer multi-model smoke", () => {
     await renderApp(snapshot());
 
     expect(document.body.textContent).toContain("Agent access");
+    expect(document.querySelector(".agent-access-icon")).not.toBeNull();
+    expect(agentAccessCurrentButton().getAttribute("aria-label")).toBe("Open agent access");
     await click(agentAccessCurrentButton());
 
     expect(document.body.textContent).toContain("Agent access");
+    expect(document.body.textContent).toContain("Start with MCP");
+    expect(document.body.textContent).not.toContain("crossgen doctor --agent --json");
+    await click(buttonByText("Connection guide and advanced configuration", ".agent-access-details-toggle"));
     expect(document.body.textContent).toContain("crossgen doctor --agent --json");
-    await click(document.querySelector<HTMLButtonElement>(".agent-access-copy-row button")!);
+    await click([...document.querySelectorAll<HTMLButtonElement>(".agent-access-details .agent-access-copy-row button")][0]!);
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith("crossgen --version --json");
+  });
+
+  it("consolidates configuration actions and renders a compact status summary", async () => {
+    await renderApp(snapshot({ history: [geminiJob(0), geminiJob(1)] }));
+
+    expect(document.querySelector(".configuration-trigger")).not.toBeNull();
+    expect(document.querySelectorAll(".configuration-popover [role=menuitem]")).toHaveLength(5);
+    expect(document.querySelector(".status-summary-section")).not.toBeNull();
+    expect(document.querySelectorAll(".status-summary-row")).toHaveLength(2);
+    expect(document.querySelector(".status-summary-row[data-status-kind=history]")).toBeNull();
+    expect(document.querySelector('.sidebar-full-stack .status-summary-row[data-status-kind="api"]')).not.toBeNull();
+    const modelSection = document.querySelector(".launch-section")!;
+    const statusSection = document.querySelector(".status-summary-section")!;
+    expect(Boolean(modelSection.compareDocumentPosition(statusSection) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(document.querySelector(".configuration-popover")?.textContent).toContain("Library path settings");
+    expect(document.querySelector('.right-rail-action-group button[aria-label="Library path settings"]')).toBeNull();
+
+    const configurationTrigger = document.querySelector<HTMLButtonElement>(".configuration-trigger")!;
+    await click(configurationTrigger);
+    expect(configurationTrigger.getAttribute("aria-expanded")).toBe("true");
+    expect(configurationTrigger.dataset.tooltip).toBeUndefined();
+    await keyDown(configurationTrigger, "Escape");
+    expect(configurationTrigger.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("adds hover tooltips to compactable prompt action buttons", async () => {
@@ -125,9 +153,8 @@ describe("renderer multi-model smoke", () => {
     const defaultConfig = providerConfig({ apiKeySaved: false, discoveredModels: [] });
     await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
 
-    expect(launchButton("GPT Image 2").disabled).toBe(true);
-    expect(launchButton("Nano Banana 3").disabled).toBe(true);
-    expect(launchButton("General").disabled).toBe(true);
+    expect(launchStartButton().disabled).toBe(true);
+    expect(launchModelSelect().disabled).toBe(true);
     expect(document.body.textContent).toContain("Save an API key first.");
   });
 
@@ -137,7 +164,7 @@ describe("renderer multi-model smoke", () => {
     await flushAsync();
 
     expect(bridge.testConnection).toHaveBeenCalled();
-    expect(document.body.textContent).toContain("Connected");
+    expect(document.querySelector('.status-summary-icon[data-status="ok"]')).not.toBeNull();
 
     vi.mocked(bridge.testConnection).mockClear();
     await click(apiAccessCurrentButton());
@@ -164,10 +191,10 @@ describe("renderer multi-model smoke", () => {
       })
     );
 
-    expect(launchButton("GPT Image 2").disabled).toBe(false);
-    expect(launchButton("Nano Banana 3").disabled).toBe(true);
-    expect(launchButton("General").disabled).toBe(true);
-    expect(launchButton("General").textContent).toContain("No image models discovered");
+    expect(launchStartButton().disabled).toBe(false);
+    expect([...launchModelSelect().options].map((option) => option.textContent).join(" ")).toContain("GPT Image 2");
+    expect([...launchModelSelect().options].map((option) => option.textContent).join(" ")).not.toContain("Nano Banana 3");
+    expect([...launchModelSelect().options].map((option) => option.textContent).join(" ")).not.toContain("General");
   });
 
   it("submits GPT Image 2 multi-count requests without stream partial previews", async () => {
@@ -530,7 +557,8 @@ describe("renderer multi-model smoke", () => {
     await click(document.querySelector<HTMLButtonElement>(".sidebar-collapse-button")!);
     expect(document.querySelector<HTMLElement>(".app-shell")?.classList.contains("sidebar-collapsed")).toBe(true);
 
-    await click(document.querySelector<HTMLButtonElement>('.sidebar-mini-stack button[aria-label="Parameters"]')!);
+    await click(document.querySelector<HTMLButtonElement>(".sidebar-mini-utility .configuration-trigger")!);
+    await click(buttonByText("Parameters", ".configuration-popover [role=menuitem]"));
 
     expect(document.querySelector<HTMLElement>(".app-shell")?.classList.contains("sidebar-collapsed")).toBe(true);
     expect(document.querySelector(".parameter-dialog .advanced-controls")).toBeTruthy();
@@ -542,17 +570,15 @@ describe("renderer multi-model smoke", () => {
     expect(firstHandler).toBeTruthy();
 
     await act(async () => {
-      firstHandler?.({ jobId: "partial-job", type: "partial", image: imageAsset("partial_1.png", "partial-job") });
-      await Promise.resolve();
-    });
-    await act(async () => {
-      firstHandler?.({ jobId: "partial-job", type: "partial", image: imageAsset("partial_2.png", "partial-job") });
-      await Promise.resolve();
+      for (let index = 1; index <= 5; index += 1) {
+        firstHandler?.({ jobId: "partial-job", type: "partial", image: imageAsset(`partial_${index}.png`, "partial-job") });
+        await Promise.resolve();
+      }
     });
 
     expect(bridge.onJobEvent).toHaveBeenCalledTimes(1);
-    expect(document.querySelectorAll(".partial-strip button")).toHaveLength(2);
-    expect(document.body.textContent).toContain("Partial image 2 received.");
+    expect(document.querySelectorAll(".partial-strip button")).toHaveLength(3);
+    expect(document.body.textContent).toContain("Partial image 5 received.");
   });
 
   it("uses transient run previews without refreshing the full snapshot", async () => {
@@ -649,10 +675,10 @@ describe("renderer multi-model smoke", () => {
       })
     );
 
-    expect(launchButton("GPT Image 2").disabled).toBe(false);
-    expect(launchButton("General").disabled).toBe(false);
+    expect([...launchModelSelect().options].map((option) => option.textContent).join(" ")).toContain("GPT Image 2");
+    expect([...launchModelSelect().options].map((option) => option.textContent).join(" ")).toContain("dall-e-3");
 
-    await click(launchButton("General"));
+    await selectAndLaunchModel("dall-e-3");
     await click(buttonByText("Generate", ".primary-run"));
 
     expect(document.body.textContent).toContain("prompt-only generation");
@@ -690,10 +716,10 @@ describe("renderer multi-model smoke", () => {
       })
     );
 
-    expect(launchButton("GPT Image 2").disabled).toBe(false);
-    expect(launchButton("Nano Banana 3").disabled).toBe(false);
+    expect([...launchModelSelect().options].map((option) => option.textContent).join(" ")).toContain("GPT Image 2");
+    expect([...launchModelSelect().options].map((option) => option.textContent).join(" ")).toContain("Nano Banana 3");
 
-    await click(launchButton("Nano Banana 3"));
+    await selectAndLaunchModel("Nano Banana 3");
     await openParameterDialog();
     await changeSelect(selectByLabel("Aspect ratio"), "4:3");
     await click(buttonByText("Generate", ".primary-run"));
@@ -719,10 +745,8 @@ describe("renderer multi-model smoke", () => {
     const bridge = await renderApp(snapshot());
 
     expect(document.body.textContent).toContain("API config");
-    expect(apiAccessCurrentButton().textContent).toContain("OpenAI");
-    expect(apiAccessCurrentButton().textContent).toContain("1 model discovered");
-    expect(apiAccessCurrentButton().textContent).not.toContain("api.openai.com/v1");
-    expect(apiAccessCurrentButton().textContent).not.toContain("Key saved");
+    expect(apiAccessCurrentButton().textContent).toBe("API status");
+    expect(apiAccessCurrentButton().title).toContain("Connected");
 
     await click(apiAccessCurrentButton());
     await changeInput(inputByLabel("API config name"), "Primary gateway");
@@ -803,7 +827,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Gemini gateway");
     expect(document.querySelectorAll(".api-config-card").length).toBe(2);
     expect(document.body.textContent).toContain("Current API config");
-    expect(buttonByText("Nano Banana 3", ".launch-button").disabled).toBe(true);
+    expect(launchStartButton().disabled).toBe(true);
   });
 
   it("adds an API config without a key and leaves it untested", async () => {
@@ -829,10 +853,9 @@ describe("renderer multi-model smoke", () => {
       })
     );
     expect(bridge.testConnection).not.toHaveBeenCalled();
-    expect(apiAccessCurrentButton().textContent).toContain("Custom gateway");
-    expect(apiAccessCurrentButton().textContent).toContain("0 models discovered");
-    expect(apiAccessCurrentButton().textContent).not.toContain("No key saved");
-    expect(buttonByText("GPT Image 2", ".launch-button").disabled).toBe(true);
+    expect(apiAccessCurrentButton().textContent).toBe("API status");
+    expect(apiAccessCurrentButton().title).toContain("Needs setup");
+    expect(launchStartButton().disabled).toBe(true);
   });
 
   it("switches API config and derives launch availability from the selected config discovery", async () => {
@@ -849,8 +872,8 @@ describe("renderer multi-model smoke", () => {
     });
     const bridge = await renderApp(snapshot({ providers: [openaiConfig, geminiConfig], activeProviderId: openaiConfig.id }));
 
-    expect(launchButton("GPT Image 2").disabled).toBe(false);
-    expect(launchButton("Nano Banana 3").disabled).toBe(true);
+    expect(launchStartButton().disabled).toBe(false);
+    expect([...launchModelSelect().options].some((option) => option.textContent?.includes("GPT Image 2"))).toBe(true);
 
     await openSavedApiAccess();
     await click(apiConfigCardMainByText("Gemini access"));
@@ -862,8 +885,8 @@ describe("renderer multi-model smoke", () => {
 
     expect(bridge.saveDraft).toHaveBeenCalled();
     expect(bridge.switchProvider).toHaveBeenCalledWith("gemini-access");
-    expect(launchButton("GPT Image 2").disabled).toBe(true);
-    expect(launchButton("Nano Banana 3").disabled).toBe(false);
+    expect(launchStartButton().disabled).toBe(false);
+    expect([...launchModelSelect().options].some((option) => option.textContent?.includes("Nano Banana 3"))).toBe(true);
   });
 
   it("highlights the API config currently being edited separately from the active config", async () => {
@@ -1748,10 +1771,9 @@ describe("renderer multi-model smoke", () => {
     await renderApp(snapshot({ history: [geminiJob(0)], galleryAssets: [asset] }));
 
     let actionButtons = document.querySelectorAll<HTMLButtonElement>(".right-rail-action-group button");
-    expect(actionButtons).toHaveLength(5);
+    expect(actionButtons).toHaveLength(4);
     expect([...actionButtons].map((button) => button.getAttribute("aria-label"))).toEqual([
       "Grid view",
-      "Library path settings",
       "Batch select",
       "Manage tags",
       "Clear all history records"
@@ -1764,10 +1786,9 @@ describe("renderer multi-model smoke", () => {
 
     await openGalleryRail();
     actionButtons = document.querySelectorAll<HTMLButtonElement>(".right-rail-action-group button");
-    expect(actionButtons).toHaveLength(5);
+    expect(actionButtons).toHaveLength(4);
     expect([...actionButtons].map((button) => button.getAttribute("aria-label"))).toEqual([
       "List view",
-      "Library path settings",
       "Batch select",
       "Manage tags",
       "Clear all Gallery items"
@@ -1922,7 +1943,7 @@ describe("renderer multi-model smoke", () => {
 
     await click(apiAccessCurrentButton());
     await click(buttonByText("Discover models"));
-    await click(launchButton("Nano Banana 3"));
+    await selectAndLaunchModel("Nano Banana 3");
     await click(buttonByText("Generate", ".primary-run"));
 
     expect(bridge.discoverModels).toHaveBeenCalled();
@@ -1949,7 +1970,7 @@ describe("renderer multi-model smoke", () => {
     });
     const bridge = await renderApp(snapshot({ providers: [geminiConfig], activeProviderId: geminiConfig.id }));
 
-    await click(launchButton("Nano Banana 3"));
+    await selectAndLaunchModel("Nano Banana 3");
     await openParameterDialog();
     await changeSelect(selectByLabel("Aspect ratio"), "1:1");
     await click(buttonByText("Generate", ".primary-run"));
@@ -2077,9 +2098,9 @@ describe("renderer multi-model smoke", () => {
       })
     );
 
-    expect(launchButton("GPT Image 2").disabled).toBe(true);
-    expect(launchButton("Nano Banana 3").disabled).toBe(false);
-    expect(launchButton("General").disabled).toBe(false);
+    expect(launchStartButton().disabled).toBe(false);
+    expect([...launchModelSelect().options].some((option) => option.textContent?.includes("Nano Banana 3"))).toBe(true);
+    expect([...launchModelSelect().options].some((option) => option.textContent?.includes("Gemini image fallback"))).toBe(true);
     expect(document.querySelectorAll(".history-item")).toHaveLength(6);
     expect(document.body.textContent).toContain("Show all");
     expect(document.body.textContent).toContain("Nano Banana 3");
@@ -2123,7 +2144,7 @@ describe("renderer multi-model smoke", () => {
     await contextMenu(document.querySelector<HTMLElement>(".gallery-item")!);
     await click(elementByText("Choose from Gallery", ".context-menu-item"));
     await flushAsync();
-    await click(launchButton("General"));
+    await selectAndLaunchModel("dall-e-3");
 
     expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(originalPrompt);
     expect(document.body.textContent).toContain("general-reference.png");
@@ -2147,14 +2168,14 @@ describe("renderer multi-model smoke", () => {
     const updatePanel = sidebar.querySelector<HTMLElement>(".sidebar-utility-bar")!;
     const promptBlock = document.querySelector<HTMLElement>(".prompt-block")!;
 
-    expect(configSection.textContent).toContain("API config");
-    expect(launchSection.textContent).toContain("Launch");
+    expect(configSection.textContent).toContain("API status");
+    expect(launchSection.textContent).toContain("gpt image 2");
     expect(parameterBar.textContent).toContain("Parameters");
     expect(updatePanel.textContent).toContain("0.1.0");
     expect(sidebar.querySelector(".template-sidebar-section")).toBeNull();
     expect(sidebar.querySelector(".draft-section")).toBeNull();
     expect(sidebar.querySelector(".parameter-config-bar")).toBeNull();
-    expect(configSection.compareDocumentPosition(launchSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(launchSection.compareDocumentPosition(configSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(promptBlock.compareDocumentPosition(parameterBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -2313,9 +2334,11 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector(".history")).toBeTruthy();
     const compactStack = document.querySelector<HTMLElement>(".sidebar-mini-stack")!;
     expect(compactStack).toBeTruthy();
-    expect(compactStack.querySelector('button[aria-label="API config"]')).toBeTruthy();
+    expect(document.querySelector(".sidebar-mini-utility .configuration-trigger")).toBeTruthy();
+    expect(document.querySelector(".sidebar-utility-bar")).toBeNull();
     expect(compactStack.querySelector('button[aria-label="Launch"]')).toBeTruthy();
-    expect(compactStack.querySelector('button[aria-label="Parameters"]')).toBeTruthy();
+    expect(compactStack.querySelector('.status-summary-row[data-status-kind="api"]')).toBeTruthy();
+    expect(compactStack.querySelector('.status-summary-row[data-status-kind="agents"]')).toBeTruthy();
 
     await click(document.querySelector<HTMLButtonElement>(".right-rail-collapse-button")!);
 
@@ -2412,10 +2435,10 @@ describe("renderer multi-model smoke", () => {
 
     expect(document.querySelector(".history-list")).toBeTruthy();
     expect(document.querySelector(".launch-button span")).toBeTruthy();
-    expect(document.querySelector(".launch-button small")).toBeTruthy();
+    expect(document.querySelector(".launch-model-chevron")).toBeTruthy();
     expect(document.querySelectorAll(".history-item")).toHaveLength(6);
     expect(buttonByText("Show all")).toBeTruthy();
-    expect(launchButton("General").textContent).toContain("Gemini image fallback with a very long display name");
+    expect([...launchModelSelect().options].some((option) => option.textContent?.includes("Gemini image fallback with a very long display name"))).toBe(true);
   });
 
   it("requires confirmation before clearing all history", async () => {
@@ -2466,7 +2489,8 @@ describe("renderer multi-model smoke", () => {
 
   it("can set History and Gallery storage to the same local path", async () => {
     const bridge = await renderApp(snapshot());
-    const storageConfigButton = document.querySelector<HTMLButtonElement>('button[aria-label="Library path settings"]')!;
+    await click(document.querySelector<HTMLButtonElement>(".configuration-trigger")!);
+    const storageConfigButton = buttonByText("Library path settings", ".configuration-popover button");
 
     await click(storageConfigButton);
     expect(document.body.textContent).toContain("Use the same path for History and Gallery");
@@ -3366,7 +3390,40 @@ function galleryFolder(name: string, patch: Partial<GalleryFolder> = {}): Galler
 }
 
 function launchButton(name: string): HTMLButtonElement {
-  return buttonByText(name, ".launch-button");
+  const select = document.querySelector<HTMLSelectElement>(".launch-picker select");
+  const option = [...(select?.options ?? [])].find((item) => item.textContent?.includes(name));
+  if (select && option) {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
+    setter?.call(select, option.value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  const button = document.querySelector<HTMLButtonElement>(".launch-button");
+  if (!button) throw new Error(`Launch model button containing "${name}" was not found.`);
+  return button;
+}
+
+function launchStartButton(): HTMLButtonElement {
+  const button = document.querySelector<HTMLButtonElement>(".launch-button");
+  if (!button) throw new Error("Launch model button was not found.");
+  return button;
+}
+
+function launchModelSelect(): HTMLSelectElement {
+  const select = document.querySelector<HTMLSelectElement>(".launch-picker select");
+  if (!select) throw new Error("Launch model select was not found.");
+  return select;
+}
+
+async function selectLaunchModelByText(text: string) {
+  const select = launchModelSelect();
+  const option = [...select.options].find((item) => item.textContent?.includes(text));
+  if (!option) throw new Error(`Launch model option containing "${text}" was not found.`);
+  await changeSelect(select, option.value);
+}
+
+async function selectAndLaunchModel(text: string) {
+  await click(launchStartButton());
+  await click(buttonByText(text, ".launch-model-option"));
 }
 
 function launchModelOption(name: string): HTMLButtonElement {
@@ -3374,13 +3431,13 @@ function launchModelOption(name: string): HTMLButtonElement {
 }
 
 function apiAccessCurrentButton(): HTMLButtonElement {
-  const button = document.querySelector<HTMLButtonElement>(".api-access-current");
+  const button = document.querySelector<HTMLButtonElement>('.sidebar-full-stack .status-summary-row[data-status-kind="api"]');
   if (!button) throw new Error("Current API config button was not found.");
   return button;
 }
 
 function agentAccessCurrentButton(): HTMLButtonElement {
-  const button = document.querySelector<HTMLButtonElement>(".agent-access-current");
+  const button = document.querySelector<HTMLButtonElement>('.sidebar-full-stack .status-summary-row[data-status-kind="agents"]');
   if (!button) throw new Error("Current agent access button was not found.");
   return button;
 }

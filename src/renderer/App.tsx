@@ -21,7 +21,6 @@ import {
   Info,
   Images,
   ImageUp,
-  KeyRound,
   Layers,
   List,
   Loader2,
@@ -36,7 +35,6 @@ import {
   Rocket,
   Save,
   Search,
-  SlidersHorizontal,
   Sparkles,
   SquarePen,
   Sun,
@@ -112,7 +110,6 @@ import {
   NANO_BANANA_3_MODEL_ID,
   generalFallbackSupportsReferenceImages,
   getFocusedModelDefinition,
-  getGeneralImageModelCandidate,
   isGeneralFallbackProvider,
   isPotentialGeneralImageModel,
   normalizeModelId
@@ -120,9 +117,10 @@ import {
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { DialogShell } from "./DialogShell";
-import { AgentAccessDialog, AgentAccessSection } from "./AgentAccessPanel";
+import { AgentAccessDialog } from "./AgentAccessPanel";
+import { ConfigurationMenu, StatusSummarySection } from "./SidebarPanel";
 import { HistoryFilterToolbar, HistoryFloatingPager, HistoryItemCard, HistoryListShell } from "./HistoryPanel";
-import { ApiConfigDialog, LaunchSection, ProviderSummarySection } from "./ProviderConfigPanel";
+import { ApiConfigDialog, LaunchSection } from "./ProviderConfigPanel";
 import { ParameterConfigDialog, ParameterConfigLauncher } from "./ParameterConfigPanel";
 import {
   GalleryCompactControls,
@@ -357,6 +355,9 @@ const MIN_PREVIEW_PANEL_RATIO = 0.48;
 const MAX_PREVIEW_PANEL_RATIO = 0.74;
 const RESIZER_WIDTH = 12;
 const HISTORY_COLLAPSED_LIMIT = 6;
+const MAX_RENDERER_PARTIAL_IMAGES = 3;
+const MAX_EDITOR_UNDO_STEPS = 12;
+const MAX_EDITOR_UNDO_BYTES = 96 * 1024 * 1024;
 const HISTORY_PAGE_SIZE_OPTIONS = [6, 12, 24, 48];
 const DEFAULT_HISTORY_MODEL_DISPLAY = "GPT Image 2";
 const PROMPT_ACTION_ICON_BUTTON_WIDTH = 40;
@@ -416,19 +417,12 @@ interface HistoryModelDetails {
   searchText: string;
 }
 
-interface LaunchButtonState {
-  launchId: FocusedLaunchId;
-  displayName: string;
-  modelId: string;
-  providerKind: ProviderKind;
-  available: boolean;
-  reason: string;
-}
-
 interface LaunchModelOption {
   id: string;
   providerKind: ProviderKind;
   displayName: string;
+  launchId: FocusedLaunchId;
+  launchLabel: string;
 }
 
 type OpenAIParamPatch = Partial<Omit<OpenAIImageParams, "providerKind" | "launchId">>;
@@ -518,6 +512,13 @@ function assetSource(asset?: ImageAsset | InputAsset | null): string | undefined
   if ("fileName" in asset && asset.path) return `image2tools-asset://image?path=${encodeURIComponent(asset.path)}`;
   if (asset.path) return `file://${encodeURI(asset.path)}`;
   return undefined;
+}
+
+// Drafts only need stable file metadata. Keeping full image data URLs here makes
+// every autosave and state snapshot carry another multi-megabyte string.
+function assetForDraft(asset: InputAsset): InputAsset {
+  const { dataUrl: _dataUrl, ...metadata } = asset;
+  return metadata;
 }
 
 function getResultAssets(job?: GenerationJob | null): ImageAsset[] {
@@ -971,77 +972,31 @@ function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: 
   }
 }
 
-function getLaunchButtonStates(config: ProviderConfig, copy: UiCopy): LaunchButtonState[] {
-  const hasDiscovery = config.discoveredModels.length > 0;
-  return FOCUSED_MODEL_CATALOG.map((definition) => {
-    const modelOptions = getLaunchModelOptions(config, definition.launchId);
-    const preferredModel = getPreferredLaunchModel(config, definition.launchId, modelOptions);
-    const modelId = preferredModel?.id ?? definition.defaultModelId;
-    const providerKind = preferredModel?.providerKind ?? definition.providerKind;
-    let available = false;
-    let reason = "";
+function launchDefinitionForModel(modelId: string): (typeof FOCUSED_MODEL_CATALOG)[number] | undefined {
+  const normalizedId = normalizeModelId(modelId);
+  return FOCUSED_MODEL_CATALOG.find((definition) => definition.modelIds.some((id) => normalizeModelId(id) === normalizedId));
+}
 
-    if (!config.apiKeySaved) {
-      reason = copy.launchUnavailableNoKey;
-    } else if (config.lastModelDiscoveryError) {
-      reason = config.lastModelDiscoveryError;
-    } else if (!hasDiscovery) {
-      reason = copy.launchUnavailableNoDiscovery;
-    } else if (definition.launchId === GENERAL_LAUNCH_ID) {
-      if (!isGeneralFallbackProvider(config.kind)) {
-        reason = copy.generalRuntimeUnsupported;
-      } else if (!preferredModel) {
-        reason = copy.launchUnavailableNoImageModels;
-      } else {
-        available = true;
-        reason = copy.launchAvailable;
-      }
-    } else if (preferredModel) {
-      available = true;
-      reason = copy.launchAvailable;
-    } else {
-      reason = copy.launchUnavailableModel(definition.modelIds.join(", "));
-    }
-
-    return {
-      launchId: definition.launchId,
-      displayName: definition.displayName,
-      modelId,
-      providerKind,
-      available,
-      reason
-    };
+function getDiscoveredLaunchModelOptions(config: ProviderConfig): LaunchModelOption[] {
+  const seen = new Set<string>();
+  // Discovery reports the model family in providerKind. A custom or OpenAI-compatible
+  // endpoint may legitimately return Gemini-family models, so the active API config
+  // must not filter those models out by transport kind.
+  const models = config.discoveredModels.filter((model) => launchDefinitionForModel(model.id) || isPotentialGeneralImageModel(model));
+  return models.flatMap((model) => {
+    const key = `${model.providerKind}:${normalizeModelId(model.id)}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const definition = launchDefinitionForModel(model.id);
+    return [{
+      ...toLaunchModelOption(model),
+      launchId: definition?.launchId ?? GENERAL_LAUNCH_ID,
+      launchLabel: definition?.displayName ?? "General"
+    }];
   });
 }
 
-function getLaunchModelOptions(config: ProviderConfig, launchId: FocusedLaunchId): LaunchModelOption[] {
-  if (launchId === GENERAL_LAUNCH_ID) {
-    return getGeneralLaunchModelOptions(config);
-  }
-  const definition = FOCUSED_MODEL_CATALOG.find((item) => item.launchId === launchId);
-  if (!definition) return [];
-  const normalizedModelIds = new Set(definition.modelIds.map(normalizeModelId));
-  return config.discoveredModels
-    .filter((model) => normalizedModelIds.has(normalizeModelId(model.id)))
-    .map(toLaunchModelOption);
-}
-
-function getPreferredLaunchModel(config: ProviderConfig, launchId: FocusedLaunchId, options: LaunchModelOption[]): LaunchModelOption | undefined {
-  if (config.activeLaunchId === launchId) {
-    const activeModel = options.find((model) => normalizeModelId(model.id) === normalizeModelId(config.activeModelId));
-    if (activeModel) return activeModel;
-  }
-  return options[0];
-}
-
-function getGeneralLaunchModelOptions(config: ProviderConfig): LaunchModelOption[] {
-  const preferred = getGeneralImageModelCandidate(config.discoveredModels, config.kind);
-  const candidates = config.discoveredModels.filter((model) => isGeneralFallbackProvider(model.providerKind) && isPotentialGeneralImageModel(model));
-  const ordered = preferred ? [preferred, ...candidates.filter((model) => model !== preferred)] : candidates;
-  return ordered.map(toLaunchModelOption);
-}
-
-function toLaunchModelOption(model: { id: string; providerKind: ProviderKind; displayName?: string }): LaunchModelOption {
+function toLaunchModelOption(model: { id: string; providerKind: ProviderKind; displayName?: string }): Omit<LaunchModelOption, "launchId" | "launchLabel"> {
   return {
     id: model.id,
     providerKind: model.providerKind,
@@ -1248,6 +1203,7 @@ export function App() {
   const [agentRuntimeStatus, setAgentRuntimeStatus] = useState<AgentRuntimeStatus | null>(null);
   const [isAgentRuntimeLoading, setIsAgentRuntimeLoading] = useState(Boolean(bridge));
   const [isAgentCliActionLoading, setIsAgentCliActionLoading] = useState(false);
+  const [isArtistSkillActionLoading, setIsArtistSkillActionLoading] = useState(false);
   const [isAgentAccessOpen, setIsAgentAccessOpen] = useState(false);
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
@@ -1267,7 +1223,6 @@ export function App() {
   const [arePromptSecondaryActionsIconOnly, setArePromptSecondaryActionsIconOnly] = useState(false);
   const [isPrimaryRunIconOnly, setIsPrimaryRunIconOnly] = useState(false);
   const [isParameterDialogOpen, setIsParameterDialogOpen] = useState(false);
-  const [openLaunchMenuId, setOpenLaunchMenuId] = useState<FocusedLaunchId | null>(null);
   const [historySearch, setHistorySearch] = useState("");
   const [historyStatusFilter, setHistoryStatusFilter] = useState<"all" | "succeeded" | "failed">("all");
   const [historySort, setHistorySort] = useState<"newest" | "oldest">("newest");
@@ -1513,11 +1468,12 @@ export function App() {
   const streamDisabledReason = openAIParams ? streamPartialPreviewDisabledReason(openAIParams, activeConfig, requestMode, copy) : undefined;
   const streamPartialsAllowed = openAIParams ? !streamDisabledReason : false;
   const apiKeyPlaceholder = selectedApiConfig.apiKeyPreview ?? (selectedApiConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
-  const launchButtons = useMemo(() => getLaunchButtonStates(activeConfig, copy), [copy, activeConfig]);
+  const launchModelOptions = useMemo(() => getDiscoveredLaunchModelOptions(activeConfig), [activeConfig]);
+  const launchModelSelectionReason = !activeConfig.apiKeySaved
+    ? copy.launchUnavailableNoKey
+    : activeConfig.lastModelDiscoveryError ?? (activeConfig.discoveredModels.length > 0 ? copy.launchUnavailableNoImageModels : copy.launchUnavailableNoDiscovery);
   const connectionLabel = connectionStatusLabel(connectionCheck, copy);
-  const connectionTitle = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : connectionLabel;
   const connectionErrorText = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : null;
-  const discoveryText = discoverySummary(activeConfig, copy);
   const selectedDiscoveryText = discoverySummary(selectedApiConfig, copy);
   const selectedModelSummary = selectedApiConfig.lastModelDiscoveryError
     ?? (selectedApiConfig.lastModelDiscoveryAt || selectedApiConfig.discoveredModels.length > 0 ? selectedDiscoveryText : copy.apiAccessNoModels);
@@ -2463,8 +2419,8 @@ export function App() {
           mode: requestMode,
           prompt: effectivePrompt,
           params,
-          inputAssets: effectiveInputAssets,
-          maskAsset: maskAsset ?? undefined,
+          inputAssets: effectiveInputAssets.map(assetForDraft),
+          maskAsset: maskAsset ? assetForDraft(maskAsset) : undefined,
           maskDataUrl: maskDataUrl ?? undefined,
           brushSize
         })
@@ -2497,12 +2453,15 @@ export function App() {
       if (event.type === "partial" && event.image) {
         const fallbackLabel = currentPartialLabel(partialImageCountRef.current);
         partialImageCountRef.current += 1;
-        setPartialImages((current) => [...current, event.image as ImageAsset]);
+        setPartialImages((current) => [...current, event.image as ImageAsset].slice(-MAX_RENDERER_PARTIAL_IMAGES));
         setNotice({ kind: "info", text: copy.notices.partialReceived(event.partialIndex ?? fallbackLabel) });
       }
       if (event.type === "completed") {
         setRunningJobId(null);
         setRunningQueueId(null);
+        // Final outputs are delivered through the queue snapshot/history. Drop
+        // transient progress frames as soon as the task completes.
+        resetPartialImages();
         setNotice({ kind: "success", text: copy.notices.imageCompleted });
       }
       if (event.type === "failed") {
@@ -2634,6 +2593,19 @@ export function App() {
     }
   }
 
+  async function installCrossgenArtistSkill() {
+    if (!bridge?.installCrossgenArtistSkill) return;
+    setIsArtistSkillActionLoading(true);
+    try {
+      setAgentRuntimeStatus(await bridge.installCrossgenArtistSkill());
+      setNotice({ kind: "success", text: copy.agentAccessSkillInstalled });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsArtistSkillActionLoading(false);
+    }
+  }
+
   function restoreDraft(draft?: WorkspaceDraft, config = activeConfig) {
     setHasRestoredDraft(true);
     if (!draft) return;
@@ -2735,8 +2707,8 @@ export function App() {
         mode: requestMode,
         prompt: template.body,
         params,
-        inputAssets: effectiveInputAssets,
-        maskAsset: maskAsset ?? undefined,
+        inputAssets: effectiveInputAssets.map(assetForDraft),
+        maskAsset: maskAsset ? assetForDraft(maskAsset) : undefined,
         maskDataUrl: maskDataUrl ?? undefined,
         brushSize
       });
@@ -3410,8 +3382,8 @@ export function App() {
       mode: requestMode,
       prompt: effectivePrompt,
       params,
-      inputAssets: effectiveInputAssets,
-      maskAsset: maskAsset ?? undefined,
+      inputAssets: effectiveInputAssets.map(assetForDraft),
+      maskAsset: maskAsset ? assetForDraft(maskAsset) : undefined,
       maskDataUrl: maskDataUrl ?? undefined,
       brushSize
     });
@@ -3595,11 +3567,11 @@ export function App() {
     }
   }
 
-  async function launchModel(button: LaunchButtonState) {
-    if (!bridge || !button.available) return;
-    const launchProvider = button.providerKind;
+  async function launchModel(model: LaunchModelOption) {
+    if (!bridge || !model.id) return;
+    const launchProvider = model.providerKind;
     const launchConfig = activeConfig;
-    const nextParams = createLaunchParams(button.launchId, button.modelId, params, launchProvider, launchConfig);
+    const nextParams = createLaunchParams(model.launchId, model.id, params, launchProvider, launchConfig);
     setParams(nextParams);
     if (isGeneralImageParams(nextParams)) {
       setMaskAsset(null);
@@ -3615,45 +3587,11 @@ export function App() {
         defaultSize: defaultSizeForConfigSave(nextParams, activeConfig),
         defaultQuality: defaultQualityForConfigSave(nextParams, activeConfig),
         timeoutMs: nextParams.timeoutMs,
-        activeLaunchId: button.launchId,
-        activeModelId: button.modelId
+        activeLaunchId: model.launchId,
+        activeModelId: model.id
       });
       applyConfig(config);
-      setNotice({ kind: "info", text: copy.notices.launchSelected(button.displayName) });
-    } catch (error) {
-      setNotice({ kind: "error", text: normalizeNotice(error) });
-    } finally {
-      setIsSavingConfig(false);
-    }
-  }
-
-  async function selectLaunchModel(launchId: FocusedLaunchId, selectedModel: LaunchModelOption) {
-    if (!bridge || !selectedModel.id) return;
-    const modelOptions = getLaunchModelOptions(activeConfig, launchId);
-    const isAvailable = modelOptions.some((model) => model.id === selectedModel.id && model.providerKind === selectedModel.providerKind);
-    if (!isAvailable) return;
-    const nextParams = createLaunchParams(launchId, selectedModel.id, params, selectedModel.providerKind, activeConfig);
-    setParams(nextParams);
-    if (isGeneralImageParams(nextParams)) {
-      setMaskAsset(null);
-      setMaskDataUrl(null);
-    }
-    updateCustomSizeFromParams(nextParams, setCustomSize);
-    markDraftChanged();
-    setIsSavingConfig(true);
-    try {
-      const config = await bridge.saveConfig({
-        baseURL: activeConfig.baseURL,
-        defaultModel: defaultModelForConfigSave(activeConfig.kind, nextParams, activeConfig),
-        defaultSize: defaultSizeForConfigSave(nextParams, activeConfig),
-        defaultQuality: defaultQualityForConfigSave(nextParams, activeConfig),
-        timeoutMs: nextParams.timeoutMs,
-        activeLaunchId: launchId,
-        activeModelId: selectedModel.id
-      });
-      applyConfig(config);
-      setOpenLaunchMenuId(null);
-      setNotice({ kind: "info", text: copy.notices.launchSelected(selectedModel.displayName) });
+      setNotice({ kind: "info", text: copy.notices.launchSelected(model.displayName) });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
@@ -3736,8 +3674,8 @@ export function App() {
         mode: requestMode,
         prompt: effectivePrompt,
         params,
-        inputAssets: effectiveInputAssets,
-        maskAsset: maskAsset ?? undefined,
+        inputAssets: effectiveInputAssets.map(assetForDraft),
+        maskAsset: maskAsset ? assetForDraft(maskAsset) : undefined,
         maskDataUrl: maskDataUrl ?? undefined,
         brushSize
       });
@@ -4570,9 +4508,25 @@ export function App() {
     };
   }
 
+  function editorSnapshotBytes(snapshot: EditorSnapshot): number {
+    // JavaScript strings use at least one byte per character; two bytes is a
+    // conservative estimate for large base64 snapshots held by the renderer.
+    const layerBytes = snapshot.drawingLayers.reduce((total, layer) => total + layer.dataUrl.length * 2, 0);
+    const editedBytes = snapshot.editedImageDataUrl?.length ? snapshot.editedImageDataUrl.length * 2 : 0;
+    return layerBytes + editedBytes;
+  }
+
   function pushEditorUndoSnapshot() {
     const snapshot = captureEditorSnapshot();
-    setEditorUndoStack((current) => [...current.slice(-24), snapshot]);
+    setEditorUndoStack((current) => {
+      const next = [...current.slice(-(MAX_EDITOR_UNDO_STEPS - 1)), snapshot];
+      let retainedBytes = next.reduce((total, item) => total + editorSnapshotBytes(item), 0);
+      while (next.length > 1 && retainedBytes > MAX_EDITOR_UNDO_BYTES) {
+        const removed = next.shift();
+        retainedBytes -= removed ? editorSnapshotBytes(removed) : 0;
+      }
+      return next;
+    });
   }
 
   function restoreEditorSnapshot(snapshot: EditorSnapshot) {
@@ -5368,17 +5322,13 @@ export function App() {
       if (next === current) return;
       setGlobalTooltip(null);
     };
-    const handleFocusIn = (event: FocusEvent) => {
-      const target = tooltipTarget(event.target);
-      if (target) showTooltip(target);
-    };
     const handleFocusOut = () => setGlobalTooltip(null);
     const hideTooltip = () => setGlobalTooltip(null);
 
     document.addEventListener("pointerover", handlePointerOver);
     document.addEventListener("pointermove", handlePointerMove);
     document.addEventListener("pointerout", handlePointerOut);
-    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("click", hideTooltip, true);
     document.addEventListener("focusout", handleFocusOut);
     window.addEventListener("scroll", hideTooltip, true);
     window.addEventListener("resize", hideTooltip);
@@ -5386,7 +5336,7 @@ export function App() {
       document.removeEventListener("pointerover", handlePointerOver);
       document.removeEventListener("pointermove", handlePointerMove);
       document.removeEventListener("pointerout", handlePointerOut);
-      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("click", hideTooltip, true);
       document.removeEventListener("focusout", handleFocusOut);
       window.removeEventListener("scroll", hideTooltip, true);
       window.removeEventListener("resize", hideTooltip);
@@ -6327,74 +6277,83 @@ export function App() {
           <ChevronLeft size={16} />
         </button>
 
-        <div className="sidebar-mini-stack" aria-label={copy.parameters}>
-          <button type="button" className="icon-button" onClick={() => openApiConfigDialog(activeConfig)} aria-label={copy.provider} data-tooltip={copy.provider}>
-            <KeyRound size={17} />
-          </button>
-          <button type="button" className="icon-button" onClick={() => setIsSidebarCollapsed(false)} aria-label={copy.launchModels} data-tooltip={copy.launchModels}>
-            <Rocket size={17} />
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            onClick={() => setIsParameterDialogOpen(true)}
-            aria-label={copy.parameters}
-            data-tooltip={copy.parameters}
-          >
-            <SlidersHorizontal size={17} />
-          </button>
-        </div>
-        <div className="sidebar-mini-utility">
-          <button type="button" className="icon-button" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
-            <span className="language-short">{language === "en" ? "En" : "简"}</span>
-          </button>
-          <button type="button" className="icon-button" onClick={toggleThemeMode} aria-label={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`} data-tooltip={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`}>
-            {renderThemeIcon()}
-          </button>
-          {updateCheck?.status === "available" ? (
-            <button type="button" className="icon-button" onClick={downloadAndInstallUpdate} disabled={!bridge || isInstallingUpdate} aria-label={copy.installUpdate} data-tooltip={copy.installUpdate}>
-              {isInstallingUpdate ? <Loader2 className="spin" size={16} /> : <ChevronUp size={17} />}
-            </button>
-          ) : (
-            <button type="button" className="icon-button" onClick={checkForUpdates} disabled={!bridge || isCheckingUpdate} aria-label={copy.checkUpdates} data-tooltip={formatUpdateStatusShort(updateCheck)}>
-              {isCheckingUpdate ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
-            </button>
-          )}
-        </div>
+        {isSidebarCompact && (
+          <>
+            <div className="sidebar-mini-stack" aria-label={copy.statusTitle}>
+              <button type="button" className="icon-button" onClick={() => setIsSidebarCollapsed(false)} aria-label={copy.launchModels} data-tooltip={copy.launchModels}>
+                <Rocket size={17} />
+              </button>
+              <StatusSummarySection
+                copy={copy}
+                activeConfig={activeConfig}
+                connectionStatus={connectionCheck.status}
+                connectionLabel={connectionLabel}
+                testingConnection={isTestingConnection}
+                agentStatus={agentRuntimeStatus}
+                agentLoading={isAgentRuntimeLoading}
+                onApi={() => openApiConfigDialog(activeConfig)}
+                onAgents={() => {
+                  setIsAgentAccessOpen(true);
+                  void refreshAgentRuntimeStatus();
+                }}
+                compact
+              />
+            </div>
+            <div className="sidebar-mini-utility">
+              <ConfigurationMenu
+                copy={copy}
+                compact
+                onApi={() => openApiConfigDialog(activeConfig)}
+                onAgents={() => {
+                  setIsAgentAccessOpen(true);
+                  void refreshAgentRuntimeStatus();
+                }}
+                onParameters={() => setIsParameterDialogOpen(true)}
+                onStorage={openStorageSettings}
+                onUpdate={() => void checkForUpdates()}
+              />
+              <button type="button" className="icon-button" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
+                <span className="language-short">{language === "en" ? "En" : "简"}</span>
+              </button>
+              <button type="button" className="icon-button" onClick={toggleThemeMode} aria-label={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`} data-tooltip={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`}>
+                {renderThemeIcon()}
+              </button>
+              {updateCheck?.status === "available" ? (
+                <button type="button" className="icon-button" onClick={downloadAndInstallUpdate} disabled={!bridge || isInstallingUpdate} aria-label={copy.installUpdate} data-tooltip={copy.installUpdate}>
+                  {isInstallingUpdate ? <Loader2 className="spin" size={16} /> : <ChevronUp size={17} />}
+                </button>
+              ) : (
+                <button type="button" className="icon-button" onClick={checkForUpdates} disabled={!bridge || isCheckingUpdate} aria-label={copy.checkUpdates} data-tooltip={formatUpdateStatusShort(updateCheck)}>
+                  {isCheckingUpdate ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
+                </button>
+              )}
+            </div>
+          </>
+        )}
         <div className="sidebar-full-stack">
-
-        <ProviderSummarySection
-          copy={copy}
-          displayName={apiAccessDisplayName(activeConfig, copy.apiAccessUntitled)}
-          discoveryText={discoveryText}
-          connectionStatus={connectionCheck.status}
-          connectionLabel={connectionLabel}
-          connectionTitle={connectionTitle}
-          testingConnection={isTestingConnection}
-          onOpen={() => openApiConfigDialog(activeConfig)}
-        />
-
-        <AgentAccessSection
-          copy={copy}
-          status={agentRuntimeStatus}
-          loading={isAgentRuntimeLoading}
-          onOpen={() => {
-            setIsAgentAccessOpen(true);
-            void refreshAgentRuntimeStatus();
-          }}
-        />
 
         <LaunchSection
           copy={copy}
           activeConfig={activeConfig}
-          activeProviderKind={params.providerKind}
-          launchButtons={launchButtons}
-          openLaunchMenuId={openLaunchMenuId}
+          modelOptions={launchModelOptions}
+          modelSelectionReason={launchModelSelectionReason}
           saving={isSavingConfig}
-          modelOptionsForLaunch={getLaunchModelOptions}
-          onToggleLaunchMenu={(launchId, open) => setOpenLaunchMenuId(open ? launchId : null)}
-          onLaunch={(button) => void launchModel(button)}
-          onSelectModel={(launchId, model) => void selectLaunchModel(launchId, model)}
+          onLaunch={(model) => void launchModel(model)}
+        />
+
+        <StatusSummarySection
+          copy={copy}
+          activeConfig={activeConfig}
+          connectionStatus={connectionCheck.status}
+          connectionLabel={connectionLabel}
+          testingConnection={isTestingConnection}
+          agentStatus={agentRuntimeStatus}
+          agentLoading={isAgentRuntimeLoading}
+          onApi={() => openApiConfigDialog(activeConfig)}
+          onAgents={() => {
+            setIsAgentAccessOpen(true);
+            void refreshAgentRuntimeStatus();
+          }}
         />
 
         <section className="notice-area" data-kind={notice.kind} aria-live={notice.kind === "error" ? "assertive" : "polite"} aria-atomic="true">
@@ -6407,41 +6366,54 @@ export function App() {
           snapshot={queueSnapshot}
         />
 
-        <section className="sidebar-utility-bar sidebar-bottom" ref={sidebarUtilityBarRef}>
-          <div className="sidebar-utility-left">
-            <button type="button" className="language-pill" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
-              {language === "en" ? "En" : "简"}
-            </button>
-            <button type="button" className="icon-button theme-mode-button" onClick={toggleThemeMode} aria-label={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`} data-tooltip={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`}>
-              {renderThemeIcon()}
-            </button>
-            {updateCheck?.status === "available" ? (
-              <button type="button" className="icon-button utility-check-button" onClick={downloadAndInstallUpdate} disabled={!bridge || isCheckingUpdate || isInstallingUpdate} aria-label={copy.installUpdate} data-tooltip={copy.installUpdate}>
-                {isInstallingUpdate ? <Loader2 className="spin" size={16} /> : <ChevronUp size={16} />}
-              </button>
-            ) : (
-              <button type="button" className="icon-button utility-check-button" onClick={checkForUpdates} disabled={!bridge || isCheckingUpdate} aria-label={copy.checkLatestVersion} data-tooltip={copy.checkLatestVersion}>
-                {isCheckingUpdate ? <Loader2 className="spin" size={16} /> : <RefreshCw size={15} />}
-              </button>
-            )}
-          </div>
-          <div className="sidebar-utility-version">
-            <span className="connection-badge version-status-badge" data-status={versionBadgeStatus(updateCheck)} title={formatUpdateStatusShort(updateCheck)}>
-              {isCheckingUpdate ? (
-                <Loader2 className="spin" size={12} />
-              ) : updateCheck?.status === "error" ? (
-                <AlertTriangle size={12} />
-              ) : updateCheck?.status === "available" ? (
-                <ChevronUp size={12} />
-              ) : (
-                <CheckCircle2 size={12} />
-              )}
-              {formatUpdateStatusShort(updateCheck)}
-            </span>
-            <small>{copy.currentVersion} {snapshot.appVersion}</small>
-          </div>
-        </section>
         </div>
+        {!isSidebarCompact && (
+          <section className="sidebar-utility-bar sidebar-bottom" ref={sidebarUtilityBarRef}>
+            <div className="sidebar-utility-left">
+              <ConfigurationMenu
+                copy={copy}
+                onApi={() => openApiConfigDialog(activeConfig)}
+                onAgents={() => {
+                  setIsAgentAccessOpen(true);
+                  void refreshAgentRuntimeStatus();
+                }}
+                onParameters={() => setIsParameterDialogOpen(true)}
+                onStorage={openStorageSettings}
+                onUpdate={() => void checkForUpdates()}
+              />
+              <button type="button" className="language-pill" onClick={toggleLanguage} aria-label={copy.language} data-tooltip={copy.language}>
+                {language === "en" ? "En" : "简"}
+              </button>
+              <button type="button" className="icon-button theme-mode-button" onClick={toggleThemeMode} aria-label={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`} data-tooltip={`${copy.theme}: ${themeModeLabel(copy, themeMode)}`}>
+                {renderThemeIcon()}
+              </button>
+              {updateCheck?.status === "available" ? (
+                <button type="button" className="icon-button utility-check-button" onClick={downloadAndInstallUpdate} disabled={!bridge || isCheckingUpdate || isInstallingUpdate} aria-label={copy.installUpdate} data-tooltip={copy.installUpdate}>
+                  {isInstallingUpdate ? <Loader2 className="spin" size={16} /> : <ChevronUp size={16} />}
+                </button>
+              ) : (
+                <button type="button" className="icon-button utility-check-button" onClick={checkForUpdates} disabled={!bridge || isCheckingUpdate} aria-label={copy.checkLatestVersion} data-tooltip={copy.checkLatestVersion}>
+                  {isCheckingUpdate ? <Loader2 className="spin" size={16} /> : <RefreshCw size={15} />}
+                </button>
+              )}
+            </div>
+            <div className="sidebar-utility-version">
+              <span className="connection-badge version-status-badge" data-status={versionBadgeStatus(updateCheck)} title={formatUpdateStatusShort(updateCheck)}>
+                {isCheckingUpdate ? (
+                  <Loader2 className="spin" size={12} />
+                ) : updateCheck?.status === "error" ? (
+                  <AlertTriangle size={12} />
+                ) : updateCheck?.status === "available" ? (
+                  <ChevronUp size={12} />
+                ) : (
+                  <CheckCircle2 size={12} />
+                )}
+                {formatUpdateStatusShort(updateCheck)}
+              </span>
+              <small>{copy.currentVersion} {snapshot.appVersion}</small>
+            </div>
+          </section>
+        )}
       </aside>
       </PerfProfiler>
 
@@ -7037,9 +7009,6 @@ export function App() {
                 ? historyViewMode === "grid" ? <List size={15} /> : <Images size={15} />
                 : galleryViewMode === "grid" ? <List size={15} /> : <Images size={15} />}
             </button>
-            <button type="button" className="icon-button secondary" onClick={openStorageSettings} aria-label={copy.libraryConfig} data-tooltip={copy.libraryConfig}>
-              <FolderCog size={15} />
-            </button>
             <button
               type="button"
               className={`icon-button secondary ${rightRailView === "history" ? isHistoryBatchMode ? "active" : "" : isGalleryBatchMode ? "active" : ""}`}
@@ -7281,6 +7250,8 @@ export function App() {
             onCopy={(value) => void copyAgentAccessText(value)}
             onEnableCli={() => void setAgentCliEnabled(true)}
             onDisableCli={() => void setAgentCliEnabled(false)}
+            skillActionLoading={isArtistSkillActionLoading}
+            onInstallSkill={() => void installCrossgenArtistSkill()}
           />
         </DialogShell>
       )}
