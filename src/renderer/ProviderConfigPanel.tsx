@@ -1,5 +1,5 @@
-import type React from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, KeyRound, LibraryBig, Loader2, Plus, Radar, Rocket, Save, Wrench, X } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Info, KeyRound, LibraryBig, Loader2, Plus, Radar, Save, Wrench, X } from "lucide-react";
 import type { FocusedLaunchId, ProviderConfig, ProviderKind } from "../shared/types";
 import { DialogShell } from "./DialogShell";
 import type { UiCopy } from "./i18n";
@@ -7,19 +7,12 @@ import type { UiCopy } from "./i18n";
 type DiscoveredProviderModel = ProviderConfig["discoveredModels"][number];
 type ConnectionStatus = "idle" | "checking" | "ok" | "error";
 
-interface LaunchButtonState {
-  launchId: FocusedLaunchId;
-  displayName: string;
-  modelId: string;
-  providerKind: ProviderKind;
-  available: boolean;
-  reason: string;
-}
-
 interface LaunchModelOption {
   id: string;
   providerKind: ProviderKind;
   displayName: string;
+  launchId: FocusedLaunchId;
+  launchLabel: string;
 }
 
 interface ProviderSummarySectionProps {
@@ -36,14 +29,10 @@ interface ProviderSummarySectionProps {
 interface LaunchSectionProps {
   copy: UiCopy;
   activeConfig: ProviderConfig;
-  activeProviderKind: ProviderKind;
-  launchButtons: LaunchButtonState[];
-  openLaunchMenuId: FocusedLaunchId | null;
+  modelOptions: LaunchModelOption[];
+  modelSelectionReason: string;
   saving: boolean;
-  modelOptionsForLaunch: (config: ProviderConfig, launchId: FocusedLaunchId) => LaunchModelOption[];
-  onToggleLaunchMenu: (launchId: FocusedLaunchId, open: boolean) => void;
-  onLaunch: (button: LaunchButtonState) => void;
-  onSelectModel: (launchId: FocusedLaunchId, model: LaunchModelOption) => void;
+  onLaunch: (model: LaunchModelOption) => void;
 }
 
 interface ApiConfigCardProps {
@@ -59,7 +48,7 @@ interface ApiConfigCardProps {
   tooltip: string;
   displayName: string;
   baseUrlSummary: string;
-  connectionBadge: React.ReactNode;
+  connectionBadge: ReactNode;
   modelSummary: string;
   modelSummaryKind: "error" | "info";
   onUse: () => void;
@@ -81,75 +70,118 @@ interface ApiConfigDraftCardProps {
 export function LaunchSection({
   copy,
   activeConfig,
-  activeProviderKind,
-  launchButtons,
-  openLaunchMenuId,
+  modelOptions,
+  modelSelectionReason,
   saving,
-  modelOptionsForLaunch,
-  onToggleLaunchMenu,
-  onLaunch,
-  onSelectModel
+  onLaunch
 }: LaunchSectionProps) {
+  const activeModel = modelOptions.find((model) => model.id === activeConfig.activeModelId) ?? modelOptions[0];
+  const [selectedModelKey, setSelectedModelKey] = useState(activeModel ? `${activeModel.providerKind}:${activeModel.id}` : "");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const nextActive = modelOptions.find((model) => model.id === activeConfig.activeModelId) ?? modelOptions[0];
+    setSelectedModelKey(nextActive ? `${nextActive.providerKind}:${nextActive.id}` : "");
+  }, [activeConfig.activeModelId, activeConfig.kind, modelOptions]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      triggerRef.current?.focus();
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
+
+  const selectedModel = modelOptions.find((model) => `${model.providerKind}:${model.id}` === selectedModelKey) ?? activeModel;
+  const selectedLaunchLabel = selectedModel ? selectedModel.launchLabel.toLowerCase() : modelSelectionReason;
+  const handleModelChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedModelKey(event.target.value);
+  };
+
+  const selectModel = (model: LaunchModelOption) => {
+    setSelectedModelKey(`${model.providerKind}:${model.id}`);
+    setMenuOpen(false);
+    onLaunch(model);
+  };
+
+  const triggerSelection = () => {
+    if (!selectedModel) return;
+    const isPendingSelection = selectedModel.id !== activeConfig.activeModelId;
+    if (isPendingSelection) {
+      onLaunch(selectedModel);
+      return;
+    }
+    setMenuOpen((current) => !current);
+  };
+
   return (
     <section className="tool-section launch-section">
-      <div className="section-title launch-title">
-        <div className="section-title-label">
-          <Rocket size={16} />
-          <h2>{copy.launchModels}</h2>
-        </div>
-      </div>
-      <div className="launch-strip" aria-label={copy.launchModels}>
-        {launchButtons.map((button) => {
-          const modelOptions = modelOptionsForLaunch(activeConfig, button.launchId);
-          const hasModelMenu = button.available && modelOptions.length > 1;
-          const activeModelOption =
-            modelOptions.find((model) => model.id === activeConfig.activeModelId && model.providerKind === button.providerKind) ??
-            modelOptions.find((model) => model.id === button.modelId && model.providerKind === button.providerKind);
-          const isActive = activeConfig.activeLaunchId === button.launchId;
-          return (
-            <div key={button.launchId} className="launch-item">
-              <button
-                type="button"
-                className={isActive ? "launch-button active" : "launch-button"}
-                onClick={() => {
-                  if (!button.available) return;
-                  onToggleLaunchMenu(button.launchId, hasModelMenu && openLaunchMenuId !== button.launchId);
-                  onLaunch(button);
-                }}
-                disabled={!button.available || saving}
-                title={button.reason}
-                aria-expanded={hasModelMenu ? openLaunchMenuId === button.launchId : undefined}
-              >
-                <span className="launch-button-main">
-                  <span>{button.displayName}</span>
-                  {hasModelMenu && (openLaunchMenuId === button.launchId ? <ChevronUp size={15} /> : <ChevronDown size={15} />)}
-                </span>
-                <small className="launch-model-detail">{button.available ? activeModelOption?.displayName ?? (button.modelId || copy.generalFallback) : button.reason}</small>
-              </button>
-              {hasModelMenu && openLaunchMenuId === button.launchId && (
-                <div className="launch-model-menu" role="listbox" aria-label={`${button.displayName} ${copy.model}`}>
-                  {modelOptions.map((model) => {
-                    const isSelected = activeConfig.activeLaunchId === button.launchId && activeConfig.activeModelId === model.id && activeProviderKind === model.providerKind;
-                    return (
-                      <button
-                        key={`${model.providerKind}:${model.id}`}
-                        type="button"
-                        className={isSelected ? "launch-model-option active" : "launch-model-option"}
-                        onClick={() => onSelectModel(button.launchId, model)}
-                        disabled={saving}
-                        role="option"
-                        aria-selected={isSelected}
-                        title={model.id}
-                      >
-                        <span>{model.displayName}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <div ref={pickerRef} className="launch-picker" aria-label={copy.launchModels}>
+        <label className="launch-picker-select visually-hidden">
+          <span className="visually-hidden">{copy.model}</span>
+          <select value={selectedModelKey} onChange={handleModelChange} disabled={saving || modelOptions.length === 0}>
+            {modelOptions.length === 0 ? (
+              <option value="">{modelSelectionReason}</option>
+            ) : (
+              modelOptions.map((model) => (
+                <option key={`${model.providerKind}:${model.id}`} value={`${model.providerKind}:${model.id}`}>
+                  {model.launchLabel} · {model.displayName}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+        <button
+          ref={triggerRef}
+          type="button"
+          className={`launch-button launch-model-trigger ${menuOpen ? "active" : ""}`}
+          onClick={triggerSelection}
+          disabled={!selectedModel || saving}
+          aria-expanded={menuOpen}
+          aria-haspopup="listbox"
+          aria-label={`${copy.launchModels}: ${selectedModel?.displayName ?? modelSelectionReason}`}
+        >
+          <span className="launch-model-hover-label">{copy.selectModel}</span>
+          <span className="launch-model-name">{selectedLaunchLabel}</span>
+          <ChevronDown className="launch-model-chevron" size={15} />
+          <span className="launch-model-info tooltip-target" data-tooltip={copy.modelSupportHint} aria-label={copy.modelSupportHint}>
+            <Info size={14} />
+          </span>
+        </button>
+        {menuOpen && (
+          <div className="launch-model-menu" role="listbox" aria-label={copy.selectModel}>
+            {modelOptions.map((model) => {
+              const selected = selectedModel?.id === model.id && selectedModel.providerKind === model.providerKind;
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`launch-model-option ${selected ? "selected" : ""}`}
+                  key={`${model.providerKind}:${model.id}`}
+                  onClick={() => selectModel(model)}
+                >
+                  <strong>{model.launchLabel}</strong>
+                  <small>{model.displayName}</small>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -282,7 +314,7 @@ interface ApiConfigDialogProps {
   discoverySummaryForConfig: (config: ProviderConfig) => string;
   discoveryTooltipForConfig: (config: ProviderConfig) => string;
   modelLabel: (model: DiscoveredProviderModel) => string;
-  connectionBadgeForConfig: (config: ProviderConfig) => React.ReactNode;
+  connectionBadgeForConfig: (config: ProviderConfig) => ReactNode;
   onClose: () => void;
   onUseConfig: (config: ProviderConfig) => void;
   onSelectConfig: (config: ProviderConfig) => void;

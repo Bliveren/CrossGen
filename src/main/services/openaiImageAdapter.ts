@@ -87,6 +87,7 @@ type EditImageFieldName = "image" | "image[]" | "images";
 const EDIT_IMAGE_FIELD_NAMES = ["image", "image[]", "images"] as const satisfies readonly EditImageFieldName[];
 const REQUEST_TIMEOUT_MESSAGE = "请求超时，请稍后重试或调高超时时间。";
 const REQUEST_CANCELLED_MESSAGE = "任务已取消。";
+const MAX_STREAM_PARTIAL_PREVIEWS = 3;
 
 export type OpenAIImageRuntime = ImageJobRuntime;
 export type OpenAIImageJob = GenerationJob & { params: OpenAIImageParams };
@@ -1947,6 +1948,16 @@ async function handleStreamResponse(
           partialIndex: index,
           image: images[0]
         });
+        // Keep durable asset metadata for the job, but avoid retaining a full
+        // base64 preview for every provider progress event. Prune after the
+        // current event is sent so a batched event's first image stays visible.
+        const partialIds = outputs.filter((asset) => asset.sourceType === "partial").map((asset) => asset.id);
+        const retainedIds = new Set(partialIds.slice(-MAX_STREAM_PARTIAL_PREVIEWS));
+        for (const asset of outputs) {
+          if (asset.sourceType === "partial" && !retainedIds.has(asset.id)) {
+            delete asset.transientPreview;
+          }
+        }
       }
       if (!isPartial && outputs.filter((asset) => asset.sourceType === "result").length >= expectedFinalResults) {
         return false;

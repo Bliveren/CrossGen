@@ -1,4 +1,5 @@
-import { CheckCircle2, Clipboard, ExternalLink, KeyRound, Link2, Loader2, Unlink2, Wrench, X } from "lucide-react";
+import { useState } from "react";
+import { Bot, CheckCircle2, ChevronDown, ChevronUp, Clipboard, ExternalLink, KeyRound, Link2, Loader2, Unlink2, Wrench, X } from "lucide-react";
 import type { AgentRuntimeStatus } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
@@ -11,38 +12,46 @@ interface AgentAccessPanelProps {
   onCopy: (value: string) => void;
   onEnableCli: () => void;
   onDisableCli: () => void;
+  skillActionLoading: boolean;
+  onInstallSkill: () => void;
 }
 
 function valueOrFallback(value: string | null | undefined): string {
   return value?.trim() || "-";
 }
 
+function clientLabel(client: string): string {
+  if (client === "claude-code") return "Claude Code";
+  if (client === "cursor") return "Cursor";
+  return "Codex";
+}
+
 export function AgentAccessSection({ copy, status, loading, onOpen }: { copy: UiCopy; status: AgentRuntimeStatus | null; loading: boolean; onOpen: () => void }) {
   const statusLabel = loading ? copy.agentAccessLoading : status ? copy.agentAccessCliStatus(status.cli.status) : copy.agentAccessNoConfig;
+  const connected = status?.cli.status === "ready";
+  const hoverLabel = loading ? copy.agentAccessLoading : connected ? copy.agentAccessConnected : copy.agentAccessNotConnected;
   return (
-    <section className="tool-section agent-access-section">
-      <div className="section-title agent-access-title-row">
-        <div className="section-title-label">
-          <KeyRound size={16} />
-          <h2>{copy.agentAccessTitle}</h2>
-        </div>
-        <span className="agent-access-status" data-status={status?.cli.status ?? "unknown"}>
-          {loading ? <Loader2 className="spin" size={13} /> : status?.cli.status === "ready" ? <CheckCircle2 size={13} /> : <Wrench size={13} />}
-          {statusLabel}
+    <section className="agent-access-section" aria-label={copy.agentAccessTitle}>
+      <button type="button" className="agent-access-current" onClick={onOpen} disabled={loading} aria-label={copy.agentAccessOpen} data-tooltip={copy.agentAccessOpen}>
+        <span className="agent-access-icon" data-connected={connected ? "true" : "false"} data-loading={loading ? "true" : "false"}>
+          {loading ? <Loader2 className="spin" size={18} /> : <Bot size={19} strokeWidth={1.8} />}
         </span>
-      </div>
-      <button type="button" className="agent-access-current" onClick={onOpen} disabled={loading}>
         <span className="agent-access-current-main">
-          <strong>{status ? copy.agentAccessCliStatus(status.cli.status) : copy.agentAccessTitle}</strong>
-          <small>{copy.agentAccessSubtitle}</small>
+          <strong>{copy.agentAccessTitle}</strong>
+          <small>{statusLabel}</small>
         </span>
         <ExternalLink size={15} />
       </button>
+      <div className="agent-access-hover-detail" aria-hidden="true">
+        <span className="agent-access-hover-dot" data-connected={connected ? "true" : "false"} />
+        <span>{hoverLabel}</span>
+        <small>{copy.agentAccessSubtitle}</small>
+      </div>
     </section>
   );
 }
 
-export function AgentAccessDialog({ copy, status, loading, cliActionLoading, onClose, onCopy, onEnableCli, onDisableCli }: AgentAccessPanelProps) {
+export function AgentAccessDialog({ copy, status, loading, cliActionLoading, onClose, onCopy, onEnableCli, onDisableCli, skillActionLoading, onInstallSkill }: AgentAccessPanelProps) {
   const copyValue = (value: string | null | undefined) => {
     if (value) onCopy(value);
   };
@@ -50,6 +59,8 @@ export function AgentAccessDialog({ copy, status, loading, cliActionLoading, onC
   const providerSummary = activeProvider
     ? copy.agentAccessProviderSummary(activeProvider.name ?? activeProvider.id, activeProvider.kind, activeProvider.activeModelId ?? "-")
     : "-";
+  const [showDetails, setShowDetails] = useState(false);
+  const [mcpMode, setMcpMode] = useState<"readonly" | "write" | "generate">("readonly");
 
   return (
     <div className="agent-access-dialog">
@@ -72,7 +83,18 @@ export function AgentAccessDialog({ copy, status, loading, cliActionLoading, onC
         <p className="muted">{copy.agentAccessNoConfig}</p>
       ) : (
         <>
-          <div className="agent-access-summary-grid">
+          <section className="agent-access-overview">
+            <div className="agent-access-overview-heading">
+              <div>
+                <span className="eyebrow">{copy.agentAccessConnection}</span>
+                <h3>{status.cli.status === "ready" ? copy.agentAccessConnected : copy.agentAccessNotConnected}</h3>
+              </div>
+              <span className="agent-access-overview-state" data-status={status.cli.status}>
+                {status.cli.status === "ready" ? <CheckCircle2 size={14} /> : <Wrench size={14} />}
+                {copy.agentAccessCliStatus(status.cli.status)}
+              </span>
+            </div>
+            <div className="agent-access-summary-grid">
             <div className="agent-access-summary-item">
               <span>{copy.agentAccessCliCommand}</span>
               <strong>{copy.agentAccessCliStatus(status.cli.status)}</strong>
@@ -89,7 +111,59 @@ export function AgentAccessDialog({ copy, status, loading, cliActionLoading, onC
               <span>{copy.agentAccessWorkers}</span>
               <strong>{copy.agentAccessWorkerCount(status.liveWorkerHosts)}</strong>
             </div>
-          </div>
+            </div>
+          </section>
+
+          <section className="agent-access-mcp-start">
+            <div className="agent-access-subtitle-row">
+              <div>
+                <h3><KeyRound size={15} /> {copy.agentAccessMcpStartTitle}</h3>
+                <p className="muted">{copy.agentAccessMcpStartDescription}</p>
+              </div>
+              <span className="agent-access-mode-badge">{mcpMode === "readonly" ? copy.agentAccessModeReadonly : mcpMode === "write" ? copy.agentAccessModeWrite : copy.agentAccessModeGenerate}</span>
+            </div>
+            <div className="agent-access-copy-row agent-access-mcp-command">
+              <code title={status.mcp.command}>{valueOrFallback(status.mcp.command)}</code>
+              <button type="button" className="icon-button secondary" onClick={() => copyValue(status.mcp.command)} aria-label={copy.copyCommand} data-tooltip={copy.copyCommand}>
+                <Clipboard size={15} />
+              </button>
+            </div>
+            <span className="agent-access-config-prompt">{copy.agentAccessMcpQuickConfig}</span>
+            <div className="agent-access-mode-actions" role="group" aria-label={copy.agentAccessMcpModeSelect}>
+              {(["readonly", "write", "generate"] as const).map((mode) => (
+                <button type="button" className={mcpMode === mode ? "secondary active" : "secondary"} key={mode} onClick={() => setMcpMode(mode)}>
+                  {mode === "readonly" ? copy.agentAccessModeReadonly : mode === "write" ? copy.agentAccessModeWrite : copy.agentAccessModeGenerate}
+                </button>
+              ))}
+            </div>
+            <div className="agent-access-client-actions">
+              {status.mcp.configs.filter((config) => config.mode === mcpMode).map((config) => (
+                <button type="button" className="secondary" key={`${config.client}:${mcpMode}`} onClick={() => copyValue(config.snippet)}>
+                  <Clipboard size={14} />
+                  {clientLabel(config.client)}
+                </button>
+              ))}
+            </div>
+            <small className="agent-access-mcp-note">{copy.agentAccessMcpModeHint}</small>
+          </section>
+
+          <section className="agent-access-skill-card">
+            <div>
+              <h3>{copy.agentAccessSkillTitle}</h3>
+              <p className="muted">{status.artistSkill?.available ? copy.agentAccessSkillDescription : copy.agentAccessSkillUnavailable}</p>
+            </div>
+            <button type="button" className="secondary" onClick={onInstallSkill} disabled={skillActionLoading || !status.artistSkill?.available}>
+              {skillActionLoading ? <Loader2 className="spin" size={15} /> : status.artistSkill?.installed ? <CheckCircle2 size={15} /> : <Bot size={15} />}
+              {status.artistSkill?.installed ? copy.agentAccessUpdateSkill : copy.agentAccessInstallSkill}
+            </button>
+          </section>
+
+          <button type="button" className="agent-access-details-toggle" onClick={() => setShowDetails((current) => !current)} aria-expanded={showDetails}>
+            <span>{copy.agentAccessDetails}</span>
+            {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+
+          {showDetails && <div className="agent-access-details">
 
           <div className="agent-access-paths">
             <div className="agent-access-path-row">
@@ -178,6 +252,7 @@ export function AgentAccessDialog({ copy, status, loading, cliActionLoading, onC
               </div>
             </section>
           )}
+          </div>}
         </>
       )}
     </div>

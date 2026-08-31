@@ -1551,6 +1551,32 @@ describe("OpenAI image service", () => {
     expect(result.usage?.total_tokens).toBe(5);
   });
 
+  it("retains only the latest partial preview data URLs", async () => {
+    const fetchImpl = (async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (let index = 0; index < 5; index += 1) {
+            controller.enqueue(encoder.encode(`event: image_generation.partial_image\ndata: ${JSON.stringify({ type: "image_generation.partial_image", partial_image_index: index, b64_json: tinyPngBase64 })}\n\n`));
+          }
+          controller.enqueue(encoder.encode(`event: image_generation.completed\ndata: ${JSON.stringify({ type: "image_generation.completed", b64_json: tinyPngBase64 })}\n\n`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(job({ params: params({ stream: true, partialImages: 3 }) }), "sk-test-key", "https://api.test/v1", runtime, {
+      streamingPartialsEnabled: true
+    });
+
+    const partials = result.outputs.filter((asset) => asset.sourceType === "partial");
+    expect(partials).toHaveLength(5);
+    expect(partials.slice(0, 2).every((asset) => !asset.transientPreview)).toBe(true);
+    expect(partials.slice(-3).every((asset) => Boolean(asset.transientPreview?.dataUrl))).toBe(true);
+  });
+
   it("accepts JSON image payloads when streaming was requested", async () => {
     const fetchImpl = (async () =>
       Response.json(

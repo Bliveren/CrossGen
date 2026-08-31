@@ -158,8 +158,22 @@ export interface UiCopy {
   apiAccessUntitled: string;
   apiAccessKind: string;
   apiAccessBaseURLSummary: string;
+  configuration: string;
+  configurationHint: string;
+  statusTitle: string;
+  statusSubtitle: string;
+  statusApi: string;
+  statusHistory: string;
+  statusAgents: string;
+  statusMcp: string;
+  statusReady: string;
+  statusNotRunning: string;
+  statusNeedsSetup: string;
   agentAccessTitle: string;
   agentAccessSubtitle: string;
+  agentAccessConnection: string;
+  agentAccessConnected: string;
+  agentAccessNotConnected: string;
   agentAccessOpen: string;
   agentAccessDialogTitle: string;
   agentAccessDialogDescription: string;
@@ -180,6 +194,11 @@ export interface UiCopy {
   agentAccessWorkers: string;
   agentAccessCommands: string;
   agentAccessMcpConfigs: string;
+  agentAccessMcpStartTitle: string;
+  agentAccessMcpStartDescription: string;
+  agentAccessMcpQuickConfig: string;
+  agentAccessMcpModeHint: string;
+  agentAccessDetails: string;
   agentAccessRepair: string;
   agentAccessNoConfig: string;
   agentAccessLoading: string;
@@ -192,6 +211,13 @@ export interface UiCopy {
   agentAccessModeReadonly: string;
   agentAccessModeWrite: string;
   agentAccessModeGenerate: string;
+  agentAccessSkillTitle: string;
+  agentAccessSkillDescription: string;
+  agentAccessInstallSkill: string;
+  agentAccessUpdateSkill: string;
+  agentAccessSkillInstalled: string;
+  agentAccessSkillUnavailable: string;
+  agentAccessMcpModeSelect: string;
   copyCommand: string;
   copyConfig: string;
   providerAutoDetected: string;
@@ -209,6 +235,8 @@ export interface UiCopy {
   connectionError: string;
   connectionErrorDetail: (message: string) => string;
   launchModels: string;
+  selectModel: string;
+  modelSupportHint: string;
   launchAvailable: string;
   launchUnavailableNoKey: string;
   launchUnavailableNoDiscovery: string;
@@ -505,6 +533,7 @@ export interface UiCopy {
   updates: string;
   currentVersion: string;
   checkUpdates: string;
+  versionUpdates: string;
   checkLatestVersion: string;
   checkingUpdates: string;
   installUpdate: string;
@@ -520,6 +549,7 @@ export interface UiCopy {
   zoomLevel: string;
   enterFocusView: string;
   exitFocusView: string;
+  exitLibraryFocus: string;
   clicked: string;
   back: string;
   editImage: string;
@@ -669,8 +699,22 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessUntitled: "Untitled API config",
     apiAccessKind: "API type",
     apiAccessBaseURLSummary: "Base URL",
+    configuration: "Configuration",
+    configurationHint: "Access and runtime settings",
+    statusTitle: "Status",
+    statusSubtitle: "Everything ready to generate",
+    statusApi: "API status",
+    statusHistory: "Generation history",
+    statusAgents: "Agent status",
+    statusMcp: "MCP",
+    statusReady: "Ready",
+    statusNotRunning: "Not running",
+    statusNeedsSetup: "Needs setup",
     agentAccessTitle: "Agent access",
-    agentAccessSubtitle: "CLI and MCP entrypoints for local coding agents.",
+    agentAccessSubtitle: "Local agents can use CrossGen through CLI and MCP.",
+    agentAccessConnection: "Connection",
+    agentAccessConnected: "Agent access ready",
+    agentAccessNotConnected: "Agent access needs setup",
     agentAccessOpen: "Open agent access",
     agentAccessDialogTitle: "Agent access",
     agentAccessDialogDescription: "Use these commands and MCP config snippets when connecting Codex, Claude Code, Cursor, or terminal scripts to this CrossGen install.",
@@ -691,6 +735,11 @@ export const translations: Record<Language, UiCopy> = {
     agentAccessWorkers: "Queue workers",
     agentAccessCommands: "Agent checks",
     agentAccessMcpConfigs: "MCP config",
+    agentAccessMcpStartTitle: "Start with MCP",
+    agentAccessMcpStartDescription: "Use this executable in your coding agent's MCP configuration.",
+    agentAccessMcpQuickConfig: "Copy a readonly startup config for your agent:",
+    agentAccessMcpModeHint: "Readonly is the safe default. Write and Generate modes must be enabled explicitly in the client configuration.",
+    agentAccessDetails: "Connection guide and advanced configuration",
     agentAccessRepair: "Repair",
     agentAccessNoConfig: "Runtime information is not available in browser preview.",
     agentAccessLoading: "Checking agent runtime",
@@ -710,6 +759,13 @@ export const translations: Record<Language, UiCopy> = {
     agentAccessModeReadonly: "Readonly",
     agentAccessModeWrite: "Write",
     agentAccessModeGenerate: "Generate",
+    agentAccessSkillTitle: "CrossGen Artist skill",
+    agentAccessSkillDescription: "Install the matching Codex skill for model-aware image workflows.",
+    agentAccessInstallSkill: "Install skill",
+    agentAccessUpdateSkill: "Update skill",
+    agentAccessSkillInstalled: "Installed",
+    agentAccessSkillUnavailable: "Skill bundle unavailable",
+    agentAccessMcpModeSelect: "MCP permission mode",
     copyCommand: "Copy command",
     copyConfig: "Copy config",
     providerAutoDetected: "Auto-detected from API",
@@ -727,6 +783,8 @@ export const translations: Record<Language, UiCopy> = {
     connectionError: "Connection issue",
     connectionErrorDetail: (message: string) => `Connection issue: ${message}. Check the API key, base URL, API protocol, or network.`,
     launchModels: "Launch",
+    selectModel: "Select model",
+    modelSupportHint: "Select an image model supported by the connected API.",
     launchAvailable: "Available",
     launchUnavailableNoKey: "Save an API key first.",
     launchUnavailableNoDiscovery: "Run model discovery first.",
@@ -1023,6 +1081,7 @@ export const translations: Record<Language, UiCopy> = {
     updates: "Updates",
     currentVersion: "Current",
     checkUpdates: "Check",
+    versionUpdates: "Version updates",
     checkLatestVersion: "Check latest version",
     checkingUpdates: "Checking",
     installUpdate: "Update",
@@ -1038,6 +1097,7 @@ export const translations: Record<Language, UiCopy> = {
     zoomLevel: "Zoom level",
     enterFocusView: "Expand editor",
     exitFocusView: "Exit expanded editor",
+    exitLibraryFocus: "Return to generate",
     clicked: "Done",
     back: "Back",
     editImage: "Edit",
@@ -1252,8 +1312,22 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessUntitled: "未命名 API 配置",
     apiAccessKind: "API 类型",
     apiAccessBaseURLSummary: "Base URL",
+    configuration: "配置",
+    configurationHint: "接入与运行设置",
+    statusTitle: "状态",
+    statusSubtitle: "生成所需功能一目了然",
+    statusApi: "API 状态",
+    statusHistory: "生图历史",
+    statusAgents: "Agent 状态",
+    statusMcp: "MCP",
+    statusReady: "就绪",
+    statusNotRunning: "未运行",
+    statusNeedsSetup: "待配置",
     agentAccessTitle: "Agent 接入",
-    agentAccessSubtitle: "为本地 coding agents 提供 CLI 与 MCP 入口。",
+    agentAccessSubtitle: "本地 Agent 可通过 CLI 与 MCP 使用 CrossGen。",
+    agentAccessConnection: "接入状态",
+    agentAccessConnected: "Agent 接入已就绪",
+    agentAccessNotConnected: "Agent 接入待配置",
     agentAccessOpen: "打开 Agent 接入",
     agentAccessDialogTitle: "Agent 接入",
     agentAccessDialogDescription: "连接 Codex、Claude Code、Cursor 或终端脚本时，使用下面的命令和 MCP 配置片段。",
@@ -1274,6 +1348,11 @@ export const translations: Record<Language, UiCopy> = {
     agentAccessWorkers: "队列 worker",
     agentAccessCommands: "Agent 检查",
     agentAccessMcpConfigs: "MCP 配置",
+    agentAccessMcpStartTitle: "启动 MCP 接入",
+    agentAccessMcpStartDescription: "在 coding agent 的 MCP 配置中使用此可执行文件。",
+    agentAccessMcpQuickConfig: "选择 Agent，复制只读启动配置：",
+    agentAccessMcpModeHint: "默认只读最安全；写入和生图能力需在客户端配置中明确启用。",
+    agentAccessDetails: "接入说明与高级配置",
     agentAccessRepair: "修复",
     agentAccessNoConfig: "浏览器预览模式下无法读取运行时信息。",
     agentAccessLoading: "正在检查 Agent 运行时",
@@ -1293,6 +1372,13 @@ export const translations: Record<Language, UiCopy> = {
     agentAccessModeReadonly: "只读",
     agentAccessModeWrite: "写入",
     agentAccessModeGenerate: "生成",
+    agentAccessSkillTitle: "CrossGen Artist skill",
+    agentAccessSkillDescription: "安装与当前版本匹配的 Codex 生图工作流 skill。",
+    agentAccessInstallSkill: "安装 skill",
+    agentAccessUpdateSkill: "更新 skill",
+    agentAccessSkillInstalled: "已安装",
+    agentAccessSkillUnavailable: "当前安装包没有 skill",
+    agentAccessMcpModeSelect: "MCP 权限模式",
     copyCommand: "复制命令",
     copyConfig: "复制配置",
     providerAutoDetected: "已根据 API 自动识别",
@@ -1310,6 +1396,8 @@ export const translations: Record<Language, UiCopy> = {
     connectionError: "连接异常",
     connectionErrorDetail: (message: string) => `连接异常：${message}。请检查 API Key、Base URL、服务商协议或网络。`,
     launchModels: "启动模型",
+    selectModel: "选择模型",
+    modelSupportHint: "可选择当前接入 API 支持的生图模型。",
     launchAvailable: "可用",
     launchUnavailableNoKey: "请先保存 API Key。",
     launchUnavailableNoDiscovery: "请先探测模型。",
@@ -1606,6 +1694,7 @@ export const translations: Record<Language, UiCopy> = {
     updates: "升级",
     currentVersion: "当前版本",
     checkUpdates: "检查",
+    versionUpdates: "版本更新",
     checkLatestVersion: "检查最新版本",
     checkingUpdates: "检查中",
     installUpdate: "更新",
@@ -1621,6 +1710,7 @@ export const translations: Record<Language, UiCopy> = {
     zoomLevel: "缩放比例",
     enterFocusView: "放大编辑器",
     exitFocusView: "退出放大编辑器",
+    exitLibraryFocus: "返回生图",
     clicked: "完成",
     back: "返回",
     editImage: "编辑",

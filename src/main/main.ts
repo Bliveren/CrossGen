@@ -73,6 +73,7 @@ import {
   defaultStreamingPartialsEnabled,
   getValidationError,
   isOpenAIImageParams,
+  stripTransientPreviewFromImageAsset,
   stripTransientPreviewsFromJob,
   validateApiKey,
   validateProviderConfigInput,
@@ -237,6 +238,7 @@ const DESKTOP_QUEUE_WORKER_INTERVAL_MS = 5000;
 const DESKTOP_QUEUE_WORKER_RECHECK_MS = 250;
 const DESKTOP_QUEUE_WORKER_LEASE_MS = 30000;
 const REFERENCE_PREFLIGHT_TEMP_RETENTION_MS = 24 * 60 * 60 * 1000;
+const MAX_RETAINED_PARTIAL_PREVIEWS = 3;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -1209,6 +1211,8 @@ async function toInputAsset(filePath: string, includePreview: boolean): Promise<
 
 async function selectedFilesToAssets(paths: string[]): Promise<InputAsset[]> {
   const imagePaths = paths.filter(isImagePath);
+  // Keep a runtime preview for local-file and mask editing flows. Draft writes
+  // strip this data URL so it does not become a persistent second copy.
   return Promise.all(imagePaths.map((filePath) => toInputAsset(filePath, true)));
 }
 
@@ -1790,9 +1794,17 @@ async function handleSaveDraft(_event: IpcMainInvokeEvent, input: WorkspaceDraft
   }
   const state = await readState();
   const params = normalizeImageParams(input.params);
+  // Drafts are restored from file metadata; never persist full reference image
+  // data URLs that may have been supplied by an older renderer or external IPC
+  // caller. Keep maskDataUrl separately because painted masks do not always have
+  // a durable path yet.
+  const inputAssets = input.inputAssets.map(({ dataUrl: _dataUrl, ...asset }) => asset);
+  const maskAsset = input.maskAsset ? (({ dataUrl: _dataUrl, ...asset }) => asset)(input.maskAsset) : undefined;
   const draft: WorkspaceDraft = {
     ...input,
     params,
+    inputAssets,
+    maskAsset,
     activeLaunchId: input.activeLaunchId ?? params.launchId,
     activeModelId: input.activeModelId?.trim() || params.model,
     updatedAt: new Date().toISOString()
@@ -3148,6 +3160,12 @@ async function executeGenerationQueueItem(item: GenerationQueueItem, abortSignal
     }
     if (event.type === "partial" && event.image) {
       partialAssets.push(event.image);
+      // Keep every partial asset id for queue/history semantics, while
+      // releasing base64 previews older than the most recent few frames.
+      const stalePreviewCount = partialAssets.length - MAX_RETAINED_PARTIAL_PREVIEWS;
+      for (let index = 0; index < stalePreviewCount; index += 1) {
+        partialAssets[index] = stripTransientPreviewFromImageAsset(partialAssets[index]);
+      }
       void recordGenerationQueuePartialOutput(getGenerationQueueStore(), item.queueId, [event.image.id]);
     }
     sendJobEvent({ ...event, queueId: item.queueId });
