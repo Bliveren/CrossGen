@@ -107,7 +107,7 @@ describe("release evidence verifier", () => {
     const result = await run(["--file", "docs/release/evidence.json", "--expected-version", "0.3.3"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 13/22 required gate(s) passed.");
+    expect(result.stdout).toContain("Release evidence validated: 18/22 required gate(s) passed.");
     expect(result.stdout).toContain("Pending required gate(s):");
     expect(result.stdout).toContain("real-provider-operation-matrix");
   });
