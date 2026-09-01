@@ -185,8 +185,8 @@ pnpm verify:cli-mcp-smoke
 
 Packaged MCP configuration uses the CLI launcher. On macOS and Linux, the
 launcher reuses a per-user Unix-socket worker when several agent hosts connect
-in parallel, so only the first session starts Electron. Windows currently uses
-one direct process per stdio host until its named-pipe proxy is implemented.
+in parallel, so only the first session starts Electron. Windows uses a per-user
+named-pipe worker for the same single-worker behavior.
 The MCP runtime also exits when its host process disappears. Set
 `CROSSGEN_MCP_IDLE_TIMEOUT_MS=0` to disable the idle guard in direct app mode,
 or set a different timeout in milliseconds.

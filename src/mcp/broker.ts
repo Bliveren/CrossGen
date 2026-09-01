@@ -22,11 +22,16 @@ export interface McpBrokerOptions {
 const CONNECT_TIMEOUT_MS = 350;
 const MAX_HANDSHAKE_BYTES = 4096;
 
-export function socketPathForUserData(userDataDir: string): string {
+export function socketPathForUserData(userDataDir: string, platform = process.platform): string {
+  const digest = createHash("sha256").update(userDataDir).digest("hex").slice(0, 20);
+
+  // Windows does not support filesystem Unix-domain sockets. Node's net
+  // module exposes named pipes using the \\.\pipe namespace instead.
+  if (platform === "win32") return `\\\\.\\pipe\\crossgen-mcp-${digest}.sock`;
+
   const candidate = `${userDataDir}/.crossgen-mcp.sock`;
   // macOS limits Unix-domain socket paths to roughly 104 bytes.
   if (Buffer.byteLength(candidate) <= 100) return candidate;
-  const digest = createHash("sha256").update(userDataDir).digest("hex").slice(0, 20);
   return `/tmp/crossgen-mcp-${digest}.sock`;
 }
 

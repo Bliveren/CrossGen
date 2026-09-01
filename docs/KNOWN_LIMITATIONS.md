@@ -32,8 +32,8 @@ release-candidate validation, and agent runtime surfaces.
 
 3. **MCP transport remains stdio**
    - Packaged macOS/Linux launchers share one per-user Unix-socket worker when
-     multiple stdio hosts connect. Windows currently uses one direct process
-     per stdio host until the named-pipe proxy is implemented.
+     multiple stdio hosts connect. Windows shares one per-user named-pipe
+     worker when multiple stdio hosts connect.
    - A queued async generation item needs a live worker host: the desktop app,
      MCP generate mode, or a waiting CLI worker.
    - If there is no live worker, async submission returns a machine-readable
