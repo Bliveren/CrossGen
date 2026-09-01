@@ -113,11 +113,11 @@
         "summary": "Pending exact v0.3.3 evidence for macos-notarized. Prior v0.3.2 evidence is archived separately and is not reused."
       }
     },
-    {
+  {
       "id": "windows-native-release",
       "title": "Native Windows release package validation",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Windows installer artifacts are built from the exact v0.3.2 release-candidate commit.",
         "The Windows verifier runs on a native Windows runner.",
@@ -126,20 +126,51 @@
         "Any Windows-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.3 evidence for windows-native-release. Prior v0.3.2 evidence is archived separately and is not reused."
+        "verifiedAt": "2026-09-01T08:30:56.402Z",
+        "commit": "fc255c26cedbd82a4f1b1947aff186b93f1eb9c9",
+        "environment": "Native Windows 11 x64 local release shell plus GitHub-hosted windows-latest CI. The exact 0.3.3 candidate installer was package-smoke verified in CI and full-install/silent-uninstall verified locally; no secrets or private paths were recorded.",
+        "commands": [
+          "pnpm package:win",
+          "IMAGE2TOOLS_WINDOWS_VERIFY_MODE=full-install IMAGE2TOOLS_WINDOWS_SMOKE_TIMEOUT_MS=2000 pnpm verify:release:windows",
+          "gh workflow run ci.yml --ref codex/v0.3.3-windows-linux-release",
+          "GitHub Actions run 33485729791, Windows package job 99785242134"
+        ],
+        "references": [
+          {
+            "label": "v0.3.3 Windows/Linux candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-windows-linux-release"
+          },
+          {
+            "label": "Cross-platform CI run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/33485729791"
+          },
+          {
+            "label": "Draft v0.3.3 RC 1",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-c51b7bb2e988dda7be9a"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-Setup.exe",
+            "public": false,
+            "description": "Windows x64 NSIS installer; 99139780 bytes; SHA256 5c8baa188db481ec63cb21be69e1143d7a82ab907329befad0148c18e367816b. Uploaded to the v0.3.3-rc.1 draft release."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-Setup.exe.blockmap",
+            "public": false,
+            "description": "Windows update blockmap; 104023 bytes; SHA256 77cc6cbf6d68268a014950e674cd46df4436f2cdf6dc25c43e502dc4ab60e281. Uploaded to the v0.3.3-rc.1 draft release."
+          }
+        ],
+        "summary": "Windows package validation passed on exact candidate commit fc255c26cedbd82a4f1b1947aff186b93f1eb9c9. Native windows-latest CI built the x64 NSIS package and passed packaged-app verification; local Windows full-install verification passed silent install, launch, and uninstall."
       }
-    },
-    {
+  },
+  {
       "id": "linux-native-release",
       "title": "Linux AppImage package validation",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Linux AppImage artifacts are built from the exact v0.3.2 release-candidate commit.",
         "Packaged CLI/MCP and agent integration smoke pass against the Linux package.",
@@ -148,15 +179,41 @@
         "Any Linux-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.3 evidence for linux-native-release. Prior v0.3.2 evidence is archived separately and is not reused."
+        "verifiedAt": "2026-09-01T08:30:56.402Z",
+        "commit": "fc255c26cedbd82a4f1b1947aff186b93f1eb9c9",
+        "environment": "WSL Ubuntu x86_64 local release shell plus GitHub-hosted ubuntu-latest CI. The exact 0.3.3 AppImage passed packaged CLI/MCP, Agent integration, ELF, unpacked launch, direct AppImage, and extracted AppImage verification; no secrets or private paths were recorded.",
+        "commands": [
+          "pnpm package",
+          "CROSSGEN_APP_EXECUTABLE=<linux-unpacked>/crossgen CROSSGEN_APP_EXTRA_ARGS=--no-sandbox xvfb-run -a node scripts/verify-cli-mcp-smoke.mjs",
+          "CROSSGEN_APP_EXECUTABLE=<linux-unpacked>/crossgen CROSSGEN_APP_EXTRA_ARGS=--no-sandbox xvfb-run -a node scripts/verify-agent-integration-smoke.mjs",
+          "pnpm verify:release:linux",
+          "GitHub Actions run 33485729791, Linux package job 99785241976"
+        ],
+        "references": [
+          {
+            "label": "v0.3.3 Windows/Linux candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-windows-linux-release"
+          },
+          {
+            "label": "Cross-platform CI run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/33485729791"
+          },
+          {
+            "label": "Draft v0.3.3 RC 1",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/untagged-c51b7bb2e988dda7be9a"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.3-linux-x86_64.AppImage",
+            "public": false,
+            "description": "Linux x86_64 AppImage; 120913725 bytes; SHA256 0e811670ce4775526714f0914aade8a85fb265826ff5b48741a152be4a7a5760. Uploaded to the v0.3.3-rc.1 draft release."
+          }
+        ],
+        "summary": "Linux AppImage validation passed on exact candidate commit fc255c26cedbd82a4f1b1947aff186b93f1eb9c9. Native ubuntu-latest CI passed packaging, CLI/MCP smoke, Agent integration smoke, and the Linux release verifier; local WSL verification independently passed all launch paths."
       }
-    },
+  },
     {
       "id": "update-manifest-assets",
       "title": "Formal update manifest distribution assets",
