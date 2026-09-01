@@ -394,6 +394,10 @@ export interface UiCopy {
   format: string;
   custom: string;
   customSize: string;
+  editCustomSize: string;
+  customWidth: string;
+  customHeight: string;
+  customSizeRules: string;
   compression: string;
   pngIgnoresCompression: string;
   background: string;
@@ -943,6 +947,10 @@ export const translations: Record<Language, UiCopy> = {
     format: "Format",
     custom: "custom",
     customSize: "Custom size",
+    editCustomSize: "Edit custom size",
+    customWidth: "Width",
+    customHeight: "Height",
+    customSizeRules: "Width and height must be multiples of 16. Maximum side: 3840px. Aspect ratio: up to 3:1. Total pixels: 655,360 to 8,294,400.",
     compression: "Compression",
     pngIgnoresCompression: "PNG ignores compression",
     background: "Background",
@@ -1556,6 +1564,10 @@ export const translations: Record<Language, UiCopy> = {
     format: "格式",
     custom: "自定义",
     customSize: "自定义尺寸",
+    editCustomSize: "编辑自定义尺寸",
+    customWidth: "宽度",
+    customHeight: "高度",
+    customSizeRules: "宽高均须为 16 的倍数；最长边不超过 3840px；长短边比例不超过 3:1；总像素为 655,360 至 8,294,400。",
     compression: "压缩",
     pngIgnoresCompression: "PNG 不使用压缩参数",
     background: "背景",

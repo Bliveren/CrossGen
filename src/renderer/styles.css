@@ -5815,6 +5815,19 @@
       min-height var(--motion-fast);
   }
 
+  /* Keep native select menus aligned with the active light/dark theme. */
+  .parameter-config-bar .parameter-quick-field select {
+    background-color: var(--surface-panel);
+    color: var(--text-primary);
+    color-scheme: inherit;
+  }
+
+  .parameter-config-bar .parameter-quick-field select option,
+  .parameter-config-bar .parameter-quick-field select optgroup {
+    background-color: var(--surface-panel);
+    color: var(--text-primary);
+  }
+
   .parameter-config-bar:hover .parameter-quick-field select,
   .parameter-config-bar:hover .parameter-quick-field input,
   .parameter-quick-field:focus-within select,
@@ -5826,6 +5839,27 @@
   .parameter-quick-field select:focus-visible,
   .parameter-quick-field input:focus-visible {
     outline: none;
+  }
+
+  .parameter-quick-size-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .parameter-quick-size-control select {
+    width: 100%;
+  }
+
+  .parameter-custom-size-edit {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
   }
 
   .parameter-route-field {
@@ -5908,6 +5942,82 @@
   .parameter-dialog .advanced-controls {
     align-content: start;
     min-height: 0;
+  }
+
+  .custom-size-editor {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    padding: 10px 0;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .custom-size-editor-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .custom-size-editor-heading strong {
+    color: var(--text-primary);
+    font-size: 12px;
+  }
+
+  .custom-size-editor-heading span {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .custom-size-inputs {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: end;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .advanced-controls .custom-size-inputs label {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .custom-size-inputs label > span {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .custom-size-inputs input[aria-invalid="true"] {
+    border-color: var(--danger);
+  }
+
+  .custom-size-separator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--control-height);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .custom-size-editor .inline-check,
+  .custom-size-rules {
+    margin: 0;
+  }
+
+  .custom-size-rules {
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.45;
   }
 
   .prompt-composer {
