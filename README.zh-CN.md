@@ -22,14 +22,19 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载 v0.3.2</b></a> ·
+  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载 v0.3.3</b></a> ·
+  <a href="#crossgen-artist-skill"><b>CrossGen Artist Skill</b></a> ·
   <a href="#agent-快速开始"><b>Agent 快速开始</b></a> ·
   <a href="./docs/cli-mcp.md"><b>CLI/MCP 文档</b></a> ·
   <a href="https://discord.gg/XphwmYtY">Discord</a>
 </p>
 
 <p align="center">
-  <a href="#为什么是-crossgen-032">0.3.2 介绍</a> ·
+  <b>如果你在用 Codex 或其他 Agent，优先从 <a href="#crossgen-artist-skill"><code>$crossgen-artist</code></a> 开始。</b>
+</p>
+
+<p align="center">
+  <a href="#为什么是-crossgen-033">0.3.3 介绍</a> ·
   <a href="#功能演示">功能演示</a> ·
   <a href="#核心工作流">核心工作流</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -37,9 +42,9 @@
   <a href="#技术说明">技术说明</a>
 </p>
 
-## 为什么是 CrossGen 0.3.2
+## 为什么是 CrossGen 0.3.3
 
-CrossGen 0.3.2 进一步提升真实生图工作的可靠性。桌面端、CLI 和 MCP 共用同一套队列、接口路径诊断、参考图处理、历史和图库流程，让不同服务商的路径差异、任务重试和素材复用都能在同一个工作流里完成。
+CrossGen 0.3.3 进一步提升真实生图工作的可靠性。桌面端、CLI 和 MCP 共用同一套队列、接口路径诊断、参考图处理、历史和图库流程，内置的 crossgen-artist skill 也围绕同一套契约工作，让不同服务商的路径差异、任务重试和素材复用都能在同一个工作流里完成。
 
 | 在桌面端完成可视化工作 | 让 Agent 调用同一本地运行时 |
 | --- | --- |
@@ -47,11 +52,11 @@ CrossGen 0.3.2 进一步提升真实生图工作的可靠性。桌面端、CLI �
 
 <img width="1440" height="940" alt="screenshot-20260724-003442" src="https://github.com/user-attachments/assets/aaaaf3d8-cf9b-4320-bdfb-a04ca9f92168" />
 
-桌面应用、CLI 和 MCP Server 共用 API 配置、持久化生图队列、历史记录与图库。CrossGen 只需安装一次；安装包中的 CLI/MCP 不要求用户额外安装 Node.js、npm、pnpm、全局包或本地 HTTP 服务。
+桌面应用、CLI 和 MCP Server 共用 API 配置、持久化生图队列、历史记录与图库，内置 skill 也会保持同一契约。CrossGen 只需安装一次；安装包中的 CLI/MCP 不要求用户额外安装 Node.js、npm、pnpm、全局包或本地 HTTP 服务。
 
 ### Agent 快速开始
 
-安装并打开[最新桌面版本](https://github.com/Bliveren/CrossGen/releases/latest)，然后在 **API access** 中添加 API 配置。安装包内的 `crossgen` launcher 可直接供脚本调用，应用可执行文件也可以作为本地 MCP stdio server 运行。
+安装并打开[最新桌面版本](https://github.com/Bliveren/CrossGen/releases/latest)，然后在 **API access** 中添加 API 配置。如果你在使用 Codex 或其他 Agent，请先安装内置的 CrossGen Artist Skill；这样模型发现、队列任务和结果导出都会和应用保持一致。安装包内的 `crossgen` launcher 可直接供脚本调用，应用可执行文件也可以作为本地 MCP stdio server 运行。
 
 ```bash
 crossgen doctor --agent --json
@@ -71,7 +76,7 @@ crossgen mcp config --client cursor --mode generate --json
 
 ### CrossGen Artist Skill
 
-CrossGen 仓库内置 Agent 工作流技能 [`skills/crossgen-artist`](./skills/crossgen-artist/)。它会指导 Codex 等兼容 Agent 自动发现模型能力，选择生成、编辑或局部重绘，提交带幂等键的队列任务，轮询完成状态，检查图库资产，并在不意外泄露 API Key 或本地路径的前提下导出结果。
+CrossGen 仓库内置一套首选的 Agent 工作流技能 [`skills/crossgen-artist`](./skills/crossgen-artist/)。它会指导 Codex 等兼容 Agent 自动发现模型能力，选择生成、编辑或局部重绘，提交带幂等键的队列任务，轮询完成状态，检查图库资产，并在不意外泄露 API Key 或本地路径的前提下导出结果。
 
 从 CrossGen 源码仓库为 Codex 安装：
 
@@ -191,7 +196,7 @@ CrossGen 的图片编辑区不再只是预览结果，而是串联图库和图�
 
 ## Agent Runtime
 
-CrossGen 0.3.2 通过结构化 JSON CLI 和 MCP stdio server 暴露本地生图运行时。桌面端、CLI 和 MCP 使用同一套队列、诊断与图库规则：
+CrossGen 0.3.3 通过结构化 JSON CLI 和 MCP stdio server 暴露本地生图运行时。桌面端、CLI 和 MCP 使用同一套队列、诊断与图库规则：
 
 - `crossgen doctor --agent --json` 返回应用路径、数据目录、provider 就绪状态、队列配置和 MCP 启动建议；
 - `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` 输出可直接粘贴的 MCP 配置；
