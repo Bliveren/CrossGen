@@ -28,7 +28,7 @@ if "%~1"=="--data-dir" (
 )
 
 if "%~1"=="--mcp" (
-  rem Windows keeps the direct Electron MCP path until a named-pipe proxy is shipped.
+  rem MCP uses the packaged Electron entry point; it owns the per-user named-pipe broker.
   "%CROSSGEN_APP_EXECUTABLE%" %*
 ) else (
   "%CROSSGEN_APP_EXECUTABLE%" --cli %*

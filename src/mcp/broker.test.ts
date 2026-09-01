@@ -15,6 +15,12 @@ function session(options: { input: Readable; output: Writable; mode: string }): 
 }
 
 describe("MCP broker", () => {
+  it("uses a Windows named pipe instead of a filesystem socket", () => {
+    const socketPath = socketPathForUserData("C:\\Users\\test\\AppData\\Roaming\\CrossGen", "win32");
+    expect(socketPath.startsWith("\\\\.\\pipe\\crossgen-mcp-")).toBe(true);
+    expect(socketPath).toMatch(/crossgen-mcp-[a-f0-9]{20}\.sock$/);
+  });
+
   it("shares one worker socket between two stdio sessions", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "crossgen-mcp-broker-"));
     const socketPath = socketPathForUserData(root);
