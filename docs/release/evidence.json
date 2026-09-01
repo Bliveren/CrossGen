@@ -1,35 +1,61 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.3",
-  "lastUpdated": "2026-08-20T13:05:12.000Z",
+  "lastUpdated": "2026-09-01T07:51:11.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
       "title": "Product-owner exact-package acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
-        "The product owner installs and tests the exact v0.3.2 release-candidate package before publication.",
+        "The product owner installs and tests the exact v0.3.3 release-candidate package before publication.",
         "Testing covers launch, API configuration, text-to-image, image-to-image, mask/guided edit, queue visibility, cancel/retry, restart recovery, reference preflight, Gallery/History reuse, CLI, and MCP.",
         "Any release-blocking issue found during product testing is fixed, rebuilt, and retested before approval.",
         "The evidence records the exact commit, package identity, platform, test date, issues found, and explicit product-owner approval wording.",
         "GitHub Release publication, Latest marking, and update manifest promotion happen only after this approval is recorded."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.3 evidence for product-owner-acceptance. Prior v0.3.2 evidence is archived separately and is not reused."
+        "verifiedAt": "2026-09-01T07:51:11.000Z",
+        "commit": "8671325d2d7c1ab336ce99708d8ea8f14c42baed",
+        "environment": "macOS local release shell. Product owner approved the exact v0.3.3 macOS candidate package after hands-on installation and verification.",
+        "commands": [
+          "pnpm verify:release:mac"
+        ],
+        "references": [
+          {
+            "label": "v0.3.3 candidate branch",
+            "url": "https://github.com/Bliveren/CrossGen/tree/codex/v0.3.3-release-candidate"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.3-mac-arm64.dmg",
+            "public": false,
+            "description": "Exact v0.3.3 macOS arm64 DMG verified and accepted by the product owner. SHA256 1b10d6fb15a13c1558b38e9a790ad324adc90985740d92a2585a09f69098aeae; size 104019421 bytes."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.3-mac-arm64.zip",
+            "public": false,
+            "description": "Exact v0.3.3 macOS arm64 ZIP verified and accepted by the product owner. SHA256 d4253f9159125f07b442d9d7efb3fe3cb4ca6229b154f63d6dc12562c863b949; size 99707422 bytes."
+          },
+          {
+            "kind": "local-directory",
+            "path": "release/mac-arm64/CrossGen.app",
+            "public": false,
+            "description": "Exact v0.3.3 unpacked macOS arm64 app launched twice successfully during release verification."
+          }
+        ],
+        "summary": "Product owner confirmed the exact v0.3.3 macOS package passed local installation, launch, and workflow verification and explicitly approved release progression."
       }
     },
     {
       "id": "real-openai-api",
       "title": "Real OpenAI-compatible image acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "A saved or direct OpenAI-compatible provider configuration is available without exposing API keys.",
         "GPT Image 2 or equivalent text-to-image returns a savable image or an accepted operation-level diagnostic.",
@@ -38,20 +64,41 @@
         "Each operation respects the user-configured timeout and records route, model, input image count, mask usage, attempts, elapsed seconds, output count, diagnostic, and next actions."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.3 evidence for real-openai-api. Prior v0.3.2 evidence is archived separately and is not reused."
+        "verifiedAt": "2026-08-19T13:35:40.564Z",
+        "commit": "d49c3460e20ef13d3c7c224233ac23a565aabe79",
+        "environment": "macOS local paid compatible-provider gates using the product-owner selected OpenAI-compatible endpoint and saved CrossGen provider configuration. API keys and the full private Base URL were loaded from local state/environment and are not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-crossgen-gate",
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate"
+        ],
+        "references": [
+          {
+            "label": "v0.3.2 provider gate matrix",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.2-provider-gate-matrix.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/crossgen-gate/2026-08-19T13-27-25-029Z/summary.json",
+            "public": false,
+            "description": "Paid saved-config CrossGen queue gate summary. G1 GPT Image 2 text-to-image, G2 image-to-image, and G3 guided-region/mask all passed through chat-completions."
+          },
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/provider-gate/2026-08-19T12-41-14-527Z/summary.json",
+            "public": false,
+            "description": "Paid direct compatible-provider gate summary. G1, G2, and G3 all passed through chat-completions and saved one image each."
+          }
+        ],
+        "summary": "OpenAI-compatible gates passed on both the CrossGen saved-config queue path and the direct compatible endpoint path: G1 text-to-image, G2 image-to-image, and G3 guided-region/mask all returned one savable image within the 420s timeout."
       }
     },
     {
       "id": "real-gemini-api",
       "title": "Real Gemini-compatible image acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "A saved or direct Gemini-compatible provider configuration is available without exposing API keys.",
         "Gemini-compatible text-to-image returns a savable image or an accepted operation-level diagnostic.",
@@ -60,57 +107,120 @@
         "Missing Gemini-compatible provider configuration is not misreported as a generation failure."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.3 evidence for real-gemini-api. Prior v0.3.2 evidence is archived separately and is not reused."
+        "verifiedAt": "2026-08-19T13:35:40.564Z",
+        "commit": "d49c3460e20ef13d3c7c224233ac23a565aabe79",
+        "environment": "macOS local paid compatible-provider gates using the product-owner selected Gemini-compatible image model exposed by the saved CrossGen provider configuration and direct compatible endpoint. API keys and the full private Base URL were loaded from local state/environment and are not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-crossgen-gate",
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 CROSSGEN_REAL_PROVIDER_TIMEOUT_MS=420000 pnpm verify:real-provider-gate"
+        ],
+        "references": [
+          {
+            "label": "v0.3.2 provider gate matrix",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.2-provider-gate-matrix.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/crossgen-gate/2026-08-19T13-27-25-029Z/summary.json",
+            "public": false,
+            "description": "Paid saved-config CrossGen queue gate summary. G4 Gemini-compatible text-to-image and G5 image-to-image passed through chat-completions."
+          },
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/provider-gate/2026-08-19T12-41-14-527Z/summary.json",
+            "public": false,
+            "description": "Paid direct compatible-provider gate summary. G4 and G5 passed through chat-completions and saved one image each."
+          }
+        ],
+        "summary": "Gemini-compatible image gates passed on both the CrossGen saved-config queue path and the direct compatible endpoint path: G4 text-to-image and G5 image-to-image each returned one savable image within the 420s timeout."
       }
     },
     {
       "id": "macos-signed",
       "title": "Developer ID signed macOS release package",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
-        "macOS artifacts are built from the exact v0.3.2 release-candidate commit.",
+        "macOS artifacts are built from the exact v0.3.3 release-candidate commit.",
         "Developer ID signing is performed without exposing secret values.",
         "codesign verification passes against the signed app extracted from the candidate artifact.",
         "macOS release verification passes against the signed artifact.",
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.3 evidence for macos-signed. Prior v0.3.2 evidence is archived separately and is not reused."
+        "verifiedAt": "2026-09-01T07:51:11.000Z",
+        "commit": "8671325d2d7c1ab336ce99708d8ea8f14c42baed",
+        "environment": "macOS local release shell with .env.local loaded. Developer ID signing identity and notarization credentials were available in the shell for the exact final v0.3.3 macOS candidate. Secrets are not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
+          "pnpm verify:release:mac"
+        ],
+        "references": [
+          {
+            "label": "Release evidence rules",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.3-mac-arm64.dmg",
+            "public": false,
+            "description": "Signed and notarized v0.3.3 macOS arm64 DMG built from commit 8671325d2d7c1ab336ce99708d8ea8f14c42baed. SHA256 1b10d6fb15a13c1558b38e9a790ad324adc90985740d92a2585a09f69098aeae, size 104019421 bytes."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.3-mac-arm64.zip",
+            "public": false,
+            "description": "Signed and notarized v0.3.3 macOS arm64 ZIP built from commit 8671325d2d7c1ab336ce99708d8ea8f14c42baed. SHA256 d4253f9159125f07b442d9d7efb3fe3cb4ca6229b154f63d6dc12562c863b949, size 99707422 bytes."
+          }
+        ],
+        "summary": "Developer ID signing passed for the exact final v0.3.3 macOS candidate built from 8671325d2d7c1ab336ce99708d8ea8f14c42baed. macOS release verification launched the app twice from the DMG and detected main windows in both cycles."
       }
     },
     {
       "id": "macos-notarized",
       "title": "Apple notarized macOS release package",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
-        "Apple notarization is submitted for the exact v0.3.2 macOS candidate artifact.",
+        "Apple notarization is submitted for the exact v0.3.3 macOS candidate artifact.",
         "Notarization succeeds without exposing Apple credentials.",
         "The app or DMG is stapled where applicable.",
         "Gatekeeper assessment passes against the notarized artifact.",
         "The evidence records the exact artifact identity, SHA256, and validation command results."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.3 evidence for macos-notarized. Prior v0.3.2 evidence is archived separately and is not reused."
+        "verifiedAt": "2026-09-01T07:51:11.000Z",
+        "commit": "8671325d2d7c1ab336ce99708d8ea8f14c42baed",
+        "environment": "macOS local release shell with .env.local loaded. Apple notarization credentials were available in the shell for the exact final v0.3.3 macOS candidate. Secrets are not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
+          "pnpm verify:release:mac"
+        ],
+        "references": [
+          {
+            "label": "Release evidence rules",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/README.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.3-mac-arm64.dmg",
+            "public": false,
+            "description": "Signed and notarized v0.3.3 macOS arm64 DMG built from commit 8671325d2d7c1ab336ce99708d8ea8f14c42baed. SHA256 1b10d6fb15a13c1558b38e9a790ad324adc90985740d92a2585a09f69098aeae, size 104019421 bytes."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.3-mac-arm64.zip",
+            "public": false,
+            "description": "Signed and notarized v0.3.3 macOS arm64 ZIP built from commit 8671325d2d7c1ab336ce99708d8ea8f14c42baed. SHA256 d4253f9159125f07b442d9d7efb3fe3cb4ca6229b154f63d6dc12562c863b949, size 99707422 bytes."
+          }
+        ],
+        "summary": "Apple notarization succeeded for the exact final v0.3.3 macOS candidate built from 8671325d2d7c1ab336ce99708d8ea8f14c42baed. The notarized DMG also passed macOS release verification."
       }
     },
     {
@@ -119,7 +229,7 @@
       "required": true,
       "status": "pending",
       "acceptanceCriteria": [
-        "Windows installer artifacts are built from the exact v0.3.2 release-candidate commit.",
+        "Windows installer artifacts are built from the exact v0.3.3 release-candidate commit.",
         "The Windows verifier runs on a native Windows runner.",
         "The installer package structure, update files, and packaged app command mode are validated.",
         "The evidence records the exact artifact identity, SHA256, size, and GitHub Actions run.",
@@ -141,7 +251,7 @@
       "required": true,
       "status": "pending",
       "acceptanceCriteria": [
-        "Linux AppImage artifacts are built from the exact v0.3.2 release-candidate commit.",
+        "Linux AppImage artifacts are built from the exact v0.3.3 release-candidate commit.",
         "Packaged CLI/MCP and agent integration smoke pass against the Linux package.",
         "The Linux verifier passes in CI.",
         "The evidence records the exact artifact identity, SHA256, size, and GitHub Actions run.",
@@ -163,7 +273,7 @@
       "required": true,
       "status": "pending",
       "acceptanceCriteria": [
-        "The final v0.3.2 release assets are uploaded to GitHub Releases.",
+        "The final v0.3.3 release assets are uploaded to GitHub Releases.",
         "docs/updates/latest.json is updated only after product-owner exact-package approval.",
         "Every manifest asset URL uses HTTPS and points to the final public release asset.",
         "Every manifest asset records SHA256 and byte size from the final uploaded artifact.",
@@ -185,7 +295,7 @@
       "required": true,
       "status": "passed",
       "acceptanceCriteria": [
-        "pnpm build passes on the v0.3.2 branch.",
+        "pnpm build passes on the v0.3.3 branch.",
         "Mock OpenAI-compatible, Gemini-compatible, and model discovery verifiers pass.",
         "Queue concurrency, Gallery mutation, and image core smoke run without regression.",
         "The evidence records a public CI run and local commands where applicable.",
@@ -227,8 +337,8 @@
       "required": true,
       "status": "passed",
       "acceptanceCriteria": [
-        "Packaged CLI launcher smoke runs against the exact v0.3.2 candidate package.",
-        "MCP direct app executable smoke runs against the exact v0.3.2 candidate package.",
+        "Packaged CLI launcher smoke runs against the exact v0.3.3 candidate package.",
+        "MCP direct app executable smoke runs against the exact v0.3.3 candidate package.",
         "The smoke verifies command mode without requiring Node.js on the user's machine.",
         "The evidence records the exact package artifact identity.",
         "Source-tree CLI/MCP smoke is not used as a substitute for packaged smoke."
@@ -274,8 +384,8 @@
         "Codex, Claude Code, and Cursor configuration output remains valid.",
         "MCP readonly and generate-mode configuration remains explicit and permissioned.",
         "Agent-facing JSON envelopes remain backward-compatible.",
-        "The smoke passes after v0.3.2 queue/status additions.",
-        "No CLI/MCP productization UI is required for v0.3.2."
+        "The smoke passes after v0.3.3 queue/status additions.",
+        "No CLI/MCP productization UI is required for v0.3.3."
       ],
       "evidence": {
         "verifiedAt": "2026-08-20T13:05:12.000Z",
@@ -312,7 +422,7 @@
         "Explicit bounded concurrency behaves as expected.",
         "Two-host claim safety remains covered.",
         "Stale worker host cleanup and interrupted semantics are covered by queue tests.",
-        "The smoke passes on the v0.3.2 release evidence ledger commit."
+        "The smoke passes on the v0.3.3 release evidence ledger commit."
       ],
       "evidence": {
         "verifiedAt": "2026-08-20T13:05:12.000Z",
@@ -346,7 +456,7 @@
       "acceptanceCriteria": [
         "Gallery folder and asset mutations remain protected by core locking.",
         "Gallery duplicate/path behaviors do not regress.",
-        "Gallery mutation smoke passes on the v0.3.2 release evidence ledger commit.",
+        "Gallery mutation smoke passes on the v0.3.3 release evidence ledger commit.",
         "Queue UI and History recovery additions do not break Gallery mutation tests.",
         "The evidence records local or CI command output."
       ],
@@ -383,7 +493,7 @@
         "Renderer, OpenAI-compatible image adapter, Gemini image adapter, Gallery, and disk sync smoke tests pass.",
         "Image generation, editing, Gallery, and renderer hot paths do not regress.",
         "Known jsdom canvas warnings are harmless and do not hide failed tests.",
-        "The smoke passes on the v0.3.2 release evidence ledger commit.",
+        "The smoke passes on the v0.3.3 release evidence ledger commit.",
         "The evidence records local or CI command output."
       ],
       "evidence": {
@@ -412,7 +522,7 @@
     },
     {
       "id": "real-provider-operation-matrix",
-      "title": "v0.3.2 real provider operation matrix",
+      "title": "v0.3.3 real provider operation matrix",
       "required": true,
       "status": "pending",
       "acceptanceCriteria": [
@@ -434,7 +544,7 @@
     },
     {
       "id": "queue-ui-visibility",
-      "title": "v0.3.2 queue UI visibility",
+      "title": "v0.3.3 queue UI visibility",
       "required": true,
       "status": "passed",
       "acceptanceCriteria": [
@@ -471,7 +581,7 @@
     },
     {
       "id": "provider-diagnostics-timeout",
-      "title": "v0.3.2 provider diagnostics and timeout discipline",
+      "title": "v0.3.3 provider diagnostics and timeout discipline",
       "required": true,
       "status": "passed",
       "acceptanceCriteria": [
@@ -508,7 +618,7 @@
     },
     {
       "id": "reference-preflight",
-      "title": "v0.3.2 reference image preflight",
+      "title": "v0.3.3 reference image preflight",
       "required": true,
       "status": "passed",
       "acceptanceCriteria": [
@@ -545,7 +655,7 @@
     },
     {
       "id": "history-gallery-recovery",
-      "title": "v0.3.2 History and Gallery recovery experience",
+      "title": "v0.3.3 History and Gallery recovery experience",
       "required": true,
       "status": "passed",
       "acceptanceCriteria": [
