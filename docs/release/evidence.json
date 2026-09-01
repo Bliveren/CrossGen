@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.3",
-  "lastUpdated": "2026-09-01T07:51:11.000Z",
+  "lastUpdated": "2026-09-01T14:15:16.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -328,7 +328,7 @@
       "id": "update-manifest-assets",
       "title": "Formal update manifest distribution assets",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The final v0.3.3 release assets are uploaded to GitHub Releases.",
         "docs/updates/latest.json is updated only after product-owner exact-package approval.",
@@ -337,13 +337,43 @@
         "The release evidence verifier passes with --require-complete before publication."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.3 evidence for update-manifest-assets. Prior v0.3.2 evidence is archived separately and is not reused."
+        "verifiedAt": "2026-09-01T14:15:16.000Z",
+        "commit": "055220c8c959417e05a1b65f9b019aceff3a9a8e",
+        "environment": "Local release shell. The final v0.3.3 GitHub Release assets were published from the exact approved candidate packages and docs/updates/latest.json now points at the public v0.3.3 downloads.",
+        "commands": [
+          "gh release upload v0.3.3-rc.1 release/CrossGen-0.3.3-mac-arm64.dmg release/CrossGen-0.3.3-mac-arm64.dmg.blockmap release/CrossGen-0.3.3-mac-arm64.zip release/CrossGen-0.3.3-mac-arm64.zip.blockmap --clobber",
+          "gh release view v0.3.3-rc.1 --json assets",
+          "git tag -a v0.3.3 055220c8c959417e05a1b65f9b019aceff3a9a8e -m \"v0.3.3\"",
+          "git push origin v0.3.3",
+          "gh release edit v0.3.3-rc.1 --tag v0.3.3 --title \"CrossGen v0.3.3\" --notes \"CrossGen 0.3.3 finalizes Agent Access, AIHub-backed real-provider validation, and refreshed macOS, Windows, and Linux release assets.\" --draft=false --prerelease=false --latest --verify-tag",
+          "gh release view v0.3.3 --json assets",
+          "pnpm verify:release-evidence:v0.3.3 -- --require-complete"
+        ],
+        "references": [
+          {
+            "label": "v0.3.3 GitHub Release",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.3"
+          },
+          {
+            "label": "Update manifest rules",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/updates/README.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "public-manifest",
+            "path": "docs/updates/latest.json",
+            "public": true,
+            "description": "Update manifest promoted to v0.3.3 with public GitHub Release URLs, SHA256 digests, and sizeBytes for darwin arm64 DMG, win32 x64 installer, and linux x64 AppImage."
+          },
+          {
+            "kind": "public-release",
+            "path": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.3",
+            "public": true,
+            "description": "Final v0.3.3 GitHub Release marked Latest and containing macOS, Windows, and Linux assets."
+          }
+        ],
+        "summary": "Final v0.3.3 GitHub Release assets were published and docs/updates/latest.json now points at the public v0.3.3 release downloads with their published SHA256 digests and byte sizes."
       }
     },
     {
@@ -581,7 +611,7 @@
       "id": "real-provider-operation-matrix",
       "title": "v0.3.3 real provider operation matrix",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "OpenAI-compatible text-to-image is recorded as pass, pass-with-diagnostic, or blocker by operation.",
         "OpenAI-compatible image-to-image is recorded separately from text-to-image.",
@@ -590,13 +620,27 @@
         "Every gate records route, model, timeout, elapsed seconds, input image count, output count, diagnostic category, and next actions without exposing secrets."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending exact v0.3.3 evidence for real-provider-operation-matrix. Prior v0.3.2 evidence is archived separately and is not reused."
+        "verifiedAt": "2026-09-01T13:39:00.568Z",
+        "commit": "055220c8c959417e05a1b65f9b019aceff3a9a8e",
+        "environment": "macOS local AIHub aggregation validation using the app-supported chat-completions streaming route. API keys were loaded from local .env.local and are not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1 pnpm verify:real-aihub-api"
+        ],
+        "references": [
+          {
+            "label": "AIHub real API gate",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.0-aihub-real-api-gate.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/aihub/2026-09-01T13-32-27-202Z/summary.json",
+            "public": false,
+            "description": "AIHub operation matrix summary. OpenAI-compatible gpt-image-2 text-to-image, reference edit, and guided-region edit all passed; Gemini-compatible gemini-3.1-flash-image text-to-image, reference edit, and guided-region edit all passed; every case used POST /chat/completions with stream=true and produced one savable image."
+          }
+        ],
+        "summary": "The v0.3.3 AIHub real provider operation matrix passed all six required operations. OpenAI-compatible GPT Image 2 and Gemini-compatible image operations all used the chat-completions streaming route, respected the 240s timeout, recorded route, model, input image count, mask usage, elapsed seconds, output count, and next actions, and each returned one savable image with no diagnostic-required results."
       }
     },
     {

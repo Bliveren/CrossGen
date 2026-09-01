@@ -103,13 +103,12 @@ describe("release evidence verifier", () => {
     expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
-  it("validates the current v0.3.3 candidate ledger without treating pending external gates as a local failure", async () => {
-    const result = await run(["--file", "docs/release/evidence.json", "--expected-version", "0.3.3"]);
+  it("validates the current v0.3.3 release ledger", async () => {
+    const result = await run(["--file", "docs/release/evidence.json", "--expected-version", "0.3.3", "--require-complete"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Release evidence validated: 20/22 required gate(s) passed.");
-    expect(result.stdout).toContain("Pending required gate(s):");
-    expect(result.stdout).toContain("real-provider-operation-matrix");
+    expect(result.stdout).toContain("Release evidence validated: 22/22 required gate(s) passed.");
+    expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
   it("rejects v0.3.1 evidence as default evidence after the package version advances", async () => {
