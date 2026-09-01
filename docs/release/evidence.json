@@ -119,7 +119,7 @@
       "required": true,
       "status": "passed",
       "acceptanceCriteria": [
-        "Windows installer artifacts are built from the exact v0.3.2 release-candidate commit.",
+        "Windows installer artifacts are built from the exact v0.3.3 release-candidate commit.",
         "The Windows verifier runs on a native Windows runner.",
         "The installer package structure, update files, and packaged app command mode are validated.",
         "The evidence records the exact artifact identity, SHA256, size, and GitHub Actions run.",
@@ -172,7 +172,7 @@
       "required": true,
       "status": "passed",
       "acceptanceCriteria": [
-        "Linux AppImage artifacts are built from the exact v0.3.2 release-candidate commit.",
+        "Linux AppImage artifacts are built from the exact v0.3.3 release-candidate commit.",
         "Packaged CLI/MCP and agent integration smoke pass against the Linux package.",
         "The Linux verifier passes in CI.",
         "The evidence records the exact artifact identity, SHA256, size, and GitHub Actions run.",
