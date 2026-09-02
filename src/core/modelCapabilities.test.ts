@@ -214,4 +214,14 @@ describe("model capability contracts", () => {
     ]);
     expect(new Set(nanoModels.map((summary) => summary.selectionKey)).size).toBe(nanoModels.length);
   });
+
+  it("does not trust a focused id when the gateway explicitly marks it text-only", () => {
+    const summary = capabilitySummaryForDiscoveredModel("provider-openai", {
+      id: "gpt-image-2",
+      providerKind: "openai",
+      raw: { id: "gpt-image-2", output_modalities: ["text"] }
+    });
+    expect(summary.source).toBe("unknown");
+    expect(summary.capabilities.generate).toBe(false);
+  });
 });
