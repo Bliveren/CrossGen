@@ -1,6 +1,6 @@
 # CrossGen Known Limitations
 
-Last updated: 2026-08-20 for v0.3.3 agent-access development.
+Last updated: 2026-09-02 for the v0.3.3 public release.
 
 This document tracks the current user-facing limits for the released app,
 release-candidate validation, and agent runtime surfaces.
