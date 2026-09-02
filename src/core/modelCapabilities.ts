@@ -192,6 +192,21 @@ function focusedDefinitionForModel(providerKind: ProviderKind, modelId: string):
 export function capabilitySummaryForDiscoveredModel(providerId: string | undefined, model: DiscoveredModel): ModelCapabilitySummary {
   const focusedDefinition = focusedDefinitionForModel(model.providerKind, model.id);
   if (focusedDefinition) {
+    const hints = discoveredModelCapabilityHints(model);
+    // A gateway may reuse a known model id for a text-only deployment. Honor
+    // an explicit modality declaration instead of treating the id as proof of
+    // access to CrossGen's focused image runtime.
+    if (hints.explicitMedia && !hints.image) {
+      return {
+        providerId,
+        providerKind: model.providerKind,
+        modelId: model.id,
+        displayName: model.displayName?.trim() || model.id,
+        selectionKey: selectionKeyForModel(undefined, model.providerKind, model.id),
+        source: "unknown",
+        capabilities: unknownCapabilities()
+      };
+    }
     return summaryForFocusedModel(providerId, focusedDefinition, model.id);
   }
 

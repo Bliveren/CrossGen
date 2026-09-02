@@ -985,25 +985,29 @@ function getDiscoveredLaunchModelOptions(config: ProviderConfig): LaunchModelOpt
   // Discovery reports the model family in providerKind. A custom or OpenAI-compatible
   // endpoint may legitimately return Gemini-family models, so the active API config
   // must not filter those models out by transport kind.
-  const models = config.discoveredModels.filter((model) => launchDefinitionForModel(model.id) || isDiscoveredImageModel(model));
+  const models = config.discoveredModels.filter((model) => {
+    const focused = launchDefinitionForModel(model.id);
+    if (focused) {
+      const hints = discoveredModelCapabilityHints(model);
+      return !hints.explicitMedia || hints.image;
+    }
+    return isDiscoveredImageModel(model);
+  });
   // Some gateways omit image models from `/models` even though the configured
   // model works on the image endpoint. Keep an explicitly selected model
   // visible so discovery cannot erase a valid user configuration.
-  const activeModelCandidate = config.activeModelId?.trim()
-    ? { id: config.activeModelId.trim(), providerKind: config.kind, displayName: config.activeModelId.trim() }
-    : undefined;
-  if (
-    config.apiKeySaved &&
-    config.lastModelDiscoveryAt &&
-    config.discoveredModels.length > 0 &&
-    activeModelCandidate &&
-    normalizeModelId(activeModelCandidate.id) !== GENERAL_MODEL_ID &&
-    !models.some((model) => normalizeModelId(model.id) === normalizeModelId(activeModelCandidate.id)) &&
-    (launchDefinitionForModel(activeModelCandidate.id) || isPotentialGeneralImageModel(activeModelCandidate))
-  ) {
-    models.push({
-      ...activeModelCandidate
-    });
+  if (config.apiKeySaved && config.lastModelDiscoveryAt && config.discoveredModels.length > 0) {
+    const configuredModelIds = [config.activeModelId, config.defaultModel]
+      .map((modelId) => modelId?.trim())
+      .filter((modelId): modelId is string => Boolean(modelId));
+    const configuredModel = configuredModelIds
+      .map((id) => ({ id, providerKind: config.kind, displayName: id }))
+      .find((model) =>
+        normalizeModelId(model.id) !== GENERAL_MODEL_ID &&
+        !models.some((candidate) => normalizeModelId(candidate.id) === normalizeModelId(model.id)) &&
+        (launchDefinitionForModel(model.id) || isPotentialGeneralImageModel(model))
+      );
+    if (configuredModel) models.push(configuredModel);
   }
   return models.flatMap((model) => {
     const key = `${model.providerKind}:${normalizeModelId(model.id)}`;
