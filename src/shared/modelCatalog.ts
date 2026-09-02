@@ -209,6 +209,11 @@ export function discoveredModelCapabilityHints(model: DiscoveredModel): Discover
     "supportedendpointtypes",
     "supported_generation_methods",
     "supportedgenerationmethods",
+    "architecture",
+    "modality",
+    "type",
+    "model_type",
+    "modeltype",
     "tasks",
     "endpoints"
   ]);
@@ -227,6 +232,12 @@ export function discoveredModelCapabilityHints(model: DiscoveredModel): Discover
     }
     if (typeof value === "string") {
       const token = normalizeToken(value);
+      if (
+        ["type", "model-type", "modeltype", "modality", "architecture"].includes(normalizeToken(keyHint)) &&
+        ["text", "image", "video", "audio", "text-to-image", "text-to-video"].some((candidate) => token.includes(candidate))
+      ) {
+        explicitMedia = true;
+      }
       if (imageTokens.some((candidate) => token.includes(candidate))) image = true;
       if (videoTokens.some((candidate) => token.includes(candidate))) video = true;
       return;
@@ -270,7 +281,7 @@ export function isDiscoveredImageModel(model: DiscoveredModel): boolean {
 
 export function getGeneralImageModelCandidate(discoveredModels: DiscoveredModel[], providerKind: ProviderKind): DiscoveredModel | undefined {
   if (!isGeneralFallbackProvider(providerKind)) return undefined;
-  return discoveredModels.find((model) => model.providerKind === providerKind && isPotentialGeneralImageModel(model));
+  return discoveredModels.find((model) => model.providerKind === providerKind && isDiscoveredImageModel(model));
 }
 
 export function normalizeModelId(value: string): string {
