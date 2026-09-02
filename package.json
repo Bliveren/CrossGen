@@ -56,7 +56,8 @@
     "verify:signing-ready": "node scripts/verify-signing-readiness.mjs",
     "update:manifest-asset": "node scripts/update-manifest-asset.mjs",
     "perf:fixture": "node scripts/create-large-gallery-fixture.mjs",
-    "perf:gallery": "node scripts/measure-gallery-performance.mjs"
+    "perf:gallery": "node scripts/measure-gallery-performance.mjs",
+    "metrics:growth": "node scripts/collect-growth-metrics.mjs"
   },
   "build": {
     "appId": "com.bliveren.crossgen",

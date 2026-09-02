@@ -13,8 +13,9 @@ release-candidate validation, and agent runtime surfaces.
      and usable API-key state visible to the current CrossGen process.
    - PATH repair is advisory: CrossGen provides a copyable command but never
      edits shell startup files or injects a system PATH entry.
-   - MCP hosts should call the current packaged CrossGen executable directly
-     with `--mcp`; they do not need a global `crossgen` link.
+   - Packaged MCP hosts should call the current bundled `resources/cli/crossgen`
+     launcher with `--mcp`; they do not need a global `crossgen` link. Direct
+     app-executable mode remains available for development and diagnostics.
 
 1. **Generation requires network access and a provider API key**
    - CrossGen does not ship an offline image model or local GPU runtime in

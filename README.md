@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/Bliveren/CrossGen/releases"><img alt="release" src="https://img.shields.io/github/v/release/Bliveren/CrossGen?include_prereleases&color=F37021" /></a>
+  <a href="https://github.com/Bliveren/CrossGen"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Bliveren/CrossGen?style=flat&color=F59E0B" /></a>
   <a href="https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-1f6f61" /></a>
   <img alt="platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-102f3f" />
@@ -56,7 +57,7 @@ The desktop app, CLI, and MCP server share the same API profiles, durable genera
 
 ### Agent Quickstart
 
-Install and open the [latest desktop release](https://github.com/Bliveren/CrossGen/releases/latest), then add an API profile in **API access**. If you are using Codex or another agent, install the bundled CrossGen Artist Skill first; it keeps model discovery, queue jobs, and export behavior aligned with the app. The packaged `crossgen` launcher is ready for scripts, and the app executable can run as a local MCP stdio server.
+Install and open the [latest desktop release](https://github.com/Bliveren/CrossGen/releases/latest), then add an API profile in **API access**. If you are using Codex or another agent, install the bundled CrossGen Artist Skill first; it keeps model discovery, queue jobs, and export behavior aligned with the app. The packaged `crossgen` launcher is ready for scripts and can start the local MCP stdio server with `--mcp`.
 
 ```bash
 crossgen doctor --agent --json
@@ -203,7 +204,7 @@ CrossGen 0.3.3 exposes the local image runtime through structured JSON CLI comma
 - `crossgen generate ... --yes --wait --json` and MCP `crossgen_generate_image` submit work through the durable queue.
 - `crossgen asset export <asset-id> --to <path> --yes --json` copies a managed image into a project without moving the Gallery source.
 
-CLI and MCP are separate entry points. Packaged MCP configuration uses the bundled CLI launcher with `--mcp`; on macOS and Linux it reuses one per-user worker for parallel agent sessions. The launcher does not require Node.js, npm, pnpm, or a global package. CLI and MCP default to read-only behavior. Write and generation modes are explicit, paid generation requires confirmation, and local path disclosure is opt-in.
+CLI and MCP are separate entry points. Packaged MCP configuration uses the bundled CLI launcher with `--mcp`; on macOS, Windows and Linux it reuses one per-user worker for parallel agent sessions. The launcher does not require Node.js, npm, pnpm, or a global package. CLI and MCP default to read-only behavior. Write and generation modes are explicit, paid generation requires confirmation, and local path disclosure is opt-in.
 
 ### Generate from a local agent or terminal
 

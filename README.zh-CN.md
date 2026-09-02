@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/Bliveren/CrossGen/releases"><img alt="release" src="https://img.shields.io/github/v/release/Bliveren/CrossGen?include_prereleases&color=F37021" /></a>
+  <a href="https://github.com/Bliveren/CrossGen"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Bliveren/CrossGen?style=flat&color=F59E0B" /></a>
   <a href="https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-1f6f61" /></a>
   <img alt="platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-102f3f" />
@@ -56,7 +57,7 @@ CrossGen 0.3.3 进一步提升真实生图工作的可靠性。桌面端、CLI �
 
 ### Agent 快速开始
 
-安装并打开[最新桌面版本](https://github.com/Bliveren/CrossGen/releases/latest)，然后在 **API access** 中添加 API 配置。如果你在使用 Codex 或其他 Agent，请先安装内置的 CrossGen Artist Skill；这样模型发现、队列任务和结果导出都会和应用保持一致。安装包内的 `crossgen` launcher 可直接供脚本调用，应用可执行文件也可以作为本地 MCP stdio server 运行。
+安装并打开[最新桌面版本](https://github.com/Bliveren/CrossGen/releases/latest)，然后在 **API access** 中添加 API 配置。如果你在使用 Codex 或其他 Agent，请先安装内置的 CrossGen Artist Skill；这样模型发现、队列任务和结果导出都会和应用保持一致。安装包内的 `crossgen` launcher 可直接供脚本调用，也可以通过 `--mcp` 启动本地 MCP stdio server。
 
 ```bash
 crossgen doctor --agent --json
