@@ -104,6 +104,7 @@ import type {
 import {
   FOCUSED_MODEL_CATALOG,
   GENERAL_LAUNCH_ID,
+  GENERAL_MODEL_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
@@ -111,6 +112,8 @@ import {
   generalFallbackSupportsReferenceImages,
   getFocusedModelDefinition,
   isGeneralFallbackProvider,
+  discoveredModelCapabilityHints,
+  isDiscoveredImageModel,
   isPotentialGeneralImageModel,
   normalizeModelId
 } from "../shared/modelCatalog";
@@ -982,7 +985,26 @@ function getDiscoveredLaunchModelOptions(config: ProviderConfig): LaunchModelOpt
   // Discovery reports the model family in providerKind. A custom or OpenAI-compatible
   // endpoint may legitimately return Gemini-family models, so the active API config
   // must not filter those models out by transport kind.
-  const models = config.discoveredModels.filter((model) => launchDefinitionForModel(model.id) || isPotentialGeneralImageModel(model));
+  const models = config.discoveredModels.filter((model) => launchDefinitionForModel(model.id) || isDiscoveredImageModel(model));
+  // Some gateways omit image models from `/models` even though the configured
+  // model works on the image endpoint. Keep an explicitly selected model
+  // visible so discovery cannot erase a valid user configuration.
+  const activeModelCandidate = config.activeModelId?.trim()
+    ? { id: config.activeModelId.trim(), providerKind: config.kind, displayName: config.activeModelId.trim() }
+    : undefined;
+  if (
+    config.apiKeySaved &&
+    config.lastModelDiscoveryAt &&
+    config.discoveredModels.length > 0 &&
+    activeModelCandidate &&
+    normalizeModelId(activeModelCandidate.id) !== GENERAL_MODEL_ID &&
+    !models.some((model) => normalizeModelId(model.id) === normalizeModelId(activeModelCandidate.id)) &&
+    (launchDefinitionForModel(activeModelCandidate.id) || isPotentialGeneralImageModel(activeModelCandidate))
+  ) {
+    models.push({
+      ...activeModelCandidate
+    });
+  }
   return models.flatMap((model) => {
     const key = `${model.providerKind}:${normalizeModelId(model.id)}`;
     if (seen.has(key)) return [];
@@ -1024,7 +1046,19 @@ function connectionStatusLabel(check: ConnectionCheck, copy: UiCopy): string {
 }
 
 function discoverySummary(config: ProviderConfig, copy: UiCopy): string {
-  return config.lastModelDiscoveryError ?? copy.discoveredModelsCount(config.discoveredModels.length);
+  if (config.lastModelDiscoveryError) return config.lastModelDiscoveryError;
+  const counts = config.discoveredModels.reduce(
+    (result, model) => {
+      const hints = discoveredModelCapabilityHints(model);
+      const imageCapable = isDiscoveredImageModel(model);
+      if (imageCapable) result.image += 1;
+      if (hints.video) result.video += 1;
+      if (!imageCapable && !hints.video) result.unknown += 1;
+      return result;
+    },
+    { image: 0, video: 0, unknown: 0 }
+  );
+  return `${copy.discoveredModelsCount(config.discoveredModels.length)} · ${copy.discoveredModelsSummary(counts.image, counts.video, counts.unknown)}`;
 }
 
 function discoveredModelLabel(model: ProviderConfig["discoveredModels"][number]): string {
