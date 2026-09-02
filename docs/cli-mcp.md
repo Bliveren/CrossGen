@@ -68,8 +68,10 @@ launcher without touching shell files. On Windows it uses a marked shim at
 the user's `PATH` for a new terminal command to resolve. Existing unmanaged
 files are never overwritten.
 
-MCP does not require this link. MCP client configuration should call the CrossGen
-app executable directly.
+MCP does not require this link. Packaged MCP client configuration should call the
+bundled `resources/cli/crossgen` launcher with `--mcp`; this keeps the launcher,
+broker, and app version aligned. Direct app-executable mode remains useful for
+development and explicit diagnostics.
 
 ## Agent Checks
 

@@ -8,11 +8,10 @@ const baseURL = (
   process.env.IMAGE2TOOLS_AIHUB_BASE_URL ??
   process.env.AIHUB_BASE_URL ??
   process.env.IMAGE2TOOLS_BASE_URL ??
-  process.env.OPENAI_BASE_URL ??
   ""
 ).replace(/\/+$/, "");
-const openAIKey = process.env.IMAGE2TOOLS_AIHUB_API_KEY ?? process.env.AIHUB_API_KEY ?? process.env.IMAGE2TOOLS_API_KEY ?? process.env.OPENAI_API_KEY ?? "";
-const geminiKey = process.env.IMAGE2TOOLS_AIHUB_GEMINI_API_KEY ?? process.env.IMAGE2TOOLS_GEMINI_API_KEY ?? process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? openAIKey;
+const openAIKey = process.env.IMAGE2TOOLS_AIHUB_API_KEY ?? process.env.AIHUB_API_KEY ?? process.env.IMAGE2TOOLS_API_KEY ?? "";
+const geminiKey = process.env.IMAGE2TOOLS_AIHUB_GEMINI_API_KEY ?? process.env.AIHUB_GEMINI_API_KEY ?? process.env.IMAGE2TOOLS_GEMINI_API_KEY ?? openAIKey;
 const openAIModel = process.env.IMAGE2TOOLS_AIHUB_OPENAI_MODEL ?? "gpt-image-2";
 const geminiModel = process.env.IMAGE2TOOLS_AIHUB_GEMINI_MODEL ?? process.env.IMAGE2TOOLS_GEMINI_MODEL ?? "gemini-3.1-flash-image";
 const acceptOpenAICost = process.env.IMAGE2TOOLS_REAL_API_ACCEPT_COST === "1" || process.env.IMAGE2TOOLS_REAL_AIHUB_ACCEPT_COST === "1";
@@ -21,9 +20,9 @@ const timeoutMs = Math.max(30000, Number(process.env.IMAGE2TOOLS_REAL_AIHUB_TIME
 const outputRoot = path.resolve("real-api-artifacts", "aihub");
 
 function requireAcceptance() {
-  if (!baseURL) throw new Error("Missing IMAGE2TOOLS_AIHUB_BASE_URL, AIHUB_BASE_URL, IMAGE2TOOLS_BASE_URL, or OPENAI_BASE_URL.");
-  if (!openAIKey) throw new Error("Missing IMAGE2TOOLS_AIHUB_API_KEY, AIHUB_API_KEY, IMAGE2TOOLS_API_KEY, or OPENAI_API_KEY.");
-  if (!geminiKey) throw new Error("Missing IMAGE2TOOLS_AIHUB_GEMINI_API_KEY, IMAGE2TOOLS_GEMINI_API_KEY, GEMINI_API_KEY, GOOGLE_API_KEY, or OpenAI-compatible AIHub key.");
+  if (!baseURL) throw new Error("Missing IMAGE2TOOLS_AIHUB_BASE_URL, AIHUB_BASE_URL, or IMAGE2TOOLS_BASE_URL.");
+  if (!openAIKey) throw new Error("Missing IMAGE2TOOLS_AIHUB_API_KEY, AIHUB_API_KEY, or IMAGE2TOOLS_API_KEY.");
+  if (!geminiKey) throw new Error("Missing IMAGE2TOOLS_AIHUB_GEMINI_API_KEY, AIHUB_GEMINI_API_KEY, or IMAGE2TOOLS_GEMINI_API_KEY, or an OpenAI-compatible AIHub key.");
   if (!acceptOpenAICost || !acceptGeminiCost) {
     throw new Error("Refusing to make paid AIHub image calls. Set IMAGE2TOOLS_REAL_API_ACCEPT_COST=1 and IMAGE2TOOLS_REAL_GEMINI_API_ACCEPT_COST=1, or IMAGE2TOOLS_REAL_AIHUB_ACCEPT_COST=1.");
   }
@@ -252,7 +251,7 @@ async function fetchImageRef(label, ref, apiKey) {
     return { buffer: Buffer.from(ref.trim().replace(/-/g, "+").replace(/_/g, "/"), "base64"), mimeType: "image/png" };
   }
 
-  const timeout = withTimeout(`${label} image URL download`, Math.min(timeoutMs, 30000));
+  const timeout = withTimeout(`${label} image URL download`, timeoutMs);
   try {
     const response = await fetch(ref, {
       signal: timeout.signal,
@@ -277,7 +276,7 @@ async function saveImage(label, image, outputDir) {
   return outputPath;
 }
 
-async function requestChatImage({ label, model, apiKey, prompt, images, outputDir }) {
+async function requestChatImage({ label, providerKind, operation, model, apiKey, prompt, images, outputDir }) {
   const startedAt = Date.now();
   console.log(`${label}: starting ${model} with ${images.length} input image(s).`);
   const timeout = withTimeout(label, timeoutMs);
@@ -360,11 +359,27 @@ async function requestChatImage({ label, model, apiKey, prompt, images, outputDi
           const outputPath = await saveImage(label, image, outputDir);
           console.log(`${label}: saved image after ${Date.now() - startedAt}ms.`);
           await reader.cancel().catch(() => undefined);
+          const elapsedMs = Date.now() - startedAt;
           return {
             label,
+            providerKind,
+            operation,
+            routeSelection: "chat-completions",
+            resolvedRoute: "POST /chat/completions",
+            stream: true,
             model,
             outputPath,
-            elapsedMs: Date.now() - startedAt,
+            timeoutMs,
+            timeoutSeconds: Math.round(timeoutMs / 1000),
+            attemptCount: 1,
+            inputImageCount: images.length,
+            mask: images.length > 1,
+            elapsedMs,
+            elapsedSeconds: Number((elapsedMs / 1000).toFixed(3)),
+            result: "pass",
+            outputCount: 1,
+            diagnosticCategory: null,
+            userVisibleNextActions: [],
             eventCount,
             mimeType: image.mimeType,
             bytes: image.buffer.length
@@ -398,6 +413,8 @@ async function main() {
   const results = [];
   results.push(await requestChatImage({
     label: "openai-generation",
+    providerKind: "openai-compatible",
+    operation: "text-to-image",
     model: openAIModel,
     apiKey: openAIKey,
     prompt: "Create a simple square app icon for an AI image workspace. Use a clean red circle centered on a neutral background. Return an image.",
@@ -406,6 +423,8 @@ async function main() {
   }));
   results.push(await requestChatImage({
     label: "openai-reference-edit",
+    providerKind: "openai-compatible",
+    operation: "image-to-image",
     model: openAIModel,
     apiKey: openAIKey,
     prompt: "Use the attached yellow square reference image. Create a more polished yellow square app icon while preserving the square composition. Return an image.",
@@ -414,6 +433,8 @@ async function main() {
   }));
   results.push(await requestChatImage({
     label: "openai-guided-region-edit",
+    providerKind: "openai-compatible",
+    operation: "guided-region-edit",
     model: openAIModel,
     apiKey: openAIKey,
     prompt: "Use the first image as the source and the second transparent-center image as guided-region mask. Change only the center guided region into a bright green circle, keeping the rest stable. Return an image.",
@@ -422,6 +443,8 @@ async function main() {
   }));
   results.push(await requestChatImage({
     label: "gemini-generation",
+    providerKind: "gemini-compatible",
+    operation: "text-to-image",
     model: geminiModel,
     apiKey: geminiKey,
     prompt: "Create a clean product-style icon for a desktop AI image management tool on a neutral background. Return an image.",
@@ -430,6 +453,8 @@ async function main() {
   }));
   results.push(await requestChatImage({
     label: "gemini-reference-edit",
+    providerKind: "gemini-compatible",
+    operation: "image-to-image",
     model: geminiModel,
     apiKey: geminiKey,
     prompt: "Edit the attached yellow square into a cleaner product shot while preserving the square composition. Return an image.",
@@ -438,6 +463,8 @@ async function main() {
   }));
   results.push(await requestChatImage({
     label: "gemini-guided-region-edit",
+    providerKind: "gemini-compatible",
+    operation: "guided-region-edit",
     model: geminiModel,
     apiKey: geminiKey,
     prompt: "Use the first image as source and the second transparent-center image as a guided region. Change only that region into a bright green circle and keep the rest stable. Return an image.",
@@ -448,7 +475,10 @@ async function main() {
   const summary = {
     acceptanceId: randomUUID(),
     verifiedAt: new Date().toISOString(),
+    providerKind: "aihub-aggregation",
     baseURL,
+    route: "POST /chat/completions",
+    stream: true,
     models: {
       openAI: openAIModel,
       gemini: geminiModel

@@ -1,5 +1,45 @@
 # CrossGen Release Notes
 
+## v0.3.3
+
+CrossGen 0.3.3 makes the local image workflow practical for coding agents while
+keeping the desktop generation experience unchanged.
+
+### User-Facing Highlights
+
+- **Agent Access panel**: inspect runtime readiness, launcher paths, queue worker
+  status, permissions, and client-specific MCP setup without exposing API keys.
+- **Packaged CLI**: use `crossgen` without installing Node.js, npm, pnpm, or a
+  global package. JSON output is designed for scripts and agents.
+- **MCP for local agents**: generate least-privilege Codex, Claude Code, and
+  Cursor configuration for `readonly`, `write`, or `generate` modes.
+- **Shared worker**: packaged MCP sessions reuse one per-user worker through the
+  platform broker, avoiding repeated Electron processes when agents reconnect.
+- **Cross-platform release**: refreshed macOS arm64, Windows x64, and Linux x64
+  packages. The macOS package is Developer ID signed and Apple-notarized;
+  Windows remains unsigned and may show SmartScreen on first launch.
+- **Bundled CrossGen Artist Skill**: a versioned workflow for model discovery,
+  image generation/editing, queue polling, Gallery inspection, and explicit
+  project export.
+
+### Safety And Compatibility
+
+- CLI and MCP remain read-only by default.
+- Paid generation, exports, queue control, state mutations, and absolute-path
+  disclosure require explicit confirmation.
+- The existing desktop image generation, editing, History, Gallery, queue, and
+  partial-preview workflows remain protected by the image-core regression gate.
+- v0.3.3 remains image-only; video and animated GIF generation are planned for
+  a later media release.
+
+### Validation
+
+- `pnpm build`
+- `pnpm verify:cli-mcp-smoke`
+- `pnpm verify:agent-integration-smoke`
+- `pnpm verify:image-core-regression-smoke`
+- macOS, Windows, and Linux package verification for the exact v0.3.3 assets
+
 ## v0.3.2
 
 CrossGen 0.3.2 is the reliability release for the full image workflow: desktop, CLI, MCP, provider routing, reference images, and queue visibility are validated as one package set.

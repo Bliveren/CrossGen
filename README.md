@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/Bliveren/CrossGen/releases"><img alt="release" src="https://img.shields.io/github/v/release/Bliveren/CrossGen?include_prereleases&color=F37021" /></a>
+  <a href="https://github.com/Bliveren/CrossGen"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Bliveren/CrossGen?style=flat&color=F59E0B" /></a>
   <a href="https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Bliveren/CrossGen/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-1f6f61" /></a>
   <img alt="platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-102f3f" />
@@ -22,14 +23,19 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>Download v0.3.2</b></a> ·
+  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>Download v0.3.3</b></a> ·
+  <a href="#crossgen-artist-skill"><b>CrossGen Artist Skill</b></a> ·
   <a href="#agent-quickstart"><b>Agent Quickstart</b></a> ·
   <a href="./docs/cli-mcp.md"><b>CLI/MCP Docs</b></a> ·
   <a href="https://discord.gg/XphwmYtY">Discord</a>
 </p>
 
 <p align="center">
-  <a href="#why-crossgen-032">Why 0.3.2</a> ·
+  <b>If you use Codex or another agent, start with <a href="#crossgen-artist-skill"><code>$crossgen-artist</code></a>.</b>
+</p>
+
+<p align="center">
+  <a href="#why-crossgen-033">Why 0.3.3</a> ·
   <a href="#visual-tour">Visual Tour</a> ·
   <a href="#core-workflows">Core Workflows</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -37,11 +43,11 @@
   <a href="#technical-notes">Technical Notes</a>
 </p>
 
-## Why CrossGen 0.3.2
+## Why CrossGen 0.3.3
 
-CrossGen 0.3.2 makes the desktop image workspace more reliable for real production work. The visual app, CLI, and MCP share the same queue, provider diagnostics, reference-image handling, History, and Gallery flows, so image generation remains usable even when a compatible provider needs a different route or a task needs retrying.
+CrossGen 0.3.3 makes the desktop image workspace more reliable for real production work. The visual app, CLI, and MCP share the same queue, provider diagnostics, reference-image handling, History, and Gallery flows, and the bundled crossgen-artist skill is built around that same contract so image generation remains usable even when a compatible provider needs a different route or a task needs retrying.
 
-The desktop app, CLI, and MCP server share the same API profiles, durable generation queue, History, and Gallery. Install CrossGen once; installed CLI and MCP use require no separate Node.js, npm, pnpm, global package, or local HTTP service.
+The desktop app, CLI, and MCP server share the same API profiles, durable generation queue, History, and Gallery. The bundled skill stays aligned with that contract. Install CrossGen once; installed CLI and MCP use require no separate Node.js, npm, pnpm, global package, or local HTTP service.
 
 | Use CrossGen visually | Call the same runtime from an agent |
 | --- | --- |
@@ -51,7 +57,7 @@ The desktop app, CLI, and MCP server share the same API profiles, durable genera
 
 ### Agent Quickstart
 
-Install and open the [latest desktop release](https://github.com/Bliveren/CrossGen/releases/latest), then add an API profile in **API access**. The packaged `crossgen` launcher is ready for scripts, and the app executable can run as a local MCP stdio server.
+Install and open the [latest desktop release](https://github.com/Bliveren/CrossGen/releases/latest), then add an API profile in **API access**. If you are using Codex or another agent, install the bundled CrossGen Artist Skill first; it keeps model discovery, queue jobs, and export behavior aligned with the app. The packaged `crossgen` launcher is ready for scripts and can start the local MCP stdio server with `--mcp`.
 
 ```bash
 crossgen doctor --agent --json
@@ -71,7 +77,7 @@ Start with `readonly`, then enable `write` or `generate` only when the agent nee
 
 ### CrossGen Artist Skill
 
-CrossGen ships an agent workflow skill at [`skills/crossgen-artist`](./skills/crossgen-artist/). It teaches Codex and other compatible agents how to discover model capabilities, choose generation/edit/inpaint operations, submit idempotent queue jobs, poll completion, inspect Gallery assets, and export results without exposing API keys or local paths by accident.
+CrossGen ships a first-class agent workflow skill at [`skills/crossgen-artist`](./skills/crossgen-artist/). It is the recommended entry point for Codex and other compatible agents that need to discover model capabilities, choose generation/edit/inpaint operations, submit idempotent queue jobs, poll completion, inspect Gallery assets, and export results without exposing API keys or local paths by accident.
 
 Install it for Codex from a CrossGen checkout:
 
@@ -191,14 +197,14 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 
 ## Agent Runtime
 
-CrossGen 0.3.2 exposes the local image runtime through structured JSON CLI commands and an MCP stdio server. The same queue, diagnostics, and Gallery rules protect desktop, CLI, and MCP workflows:
+CrossGen 0.3.3 exposes the local image runtime through structured JSON CLI commands and an MCP stdio server. The same queue, diagnostics, and Gallery rules protect desktop, CLI, and MCP workflows:
 
 - `crossgen doctor --agent --json` reports the app path, data directory, provider readiness, queue configuration, and MCP launch hints.
 - `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` prints client-ready MCP configuration.
 - `crossgen generate ... --yes --wait --json` and MCP `crossgen_generate_image` submit work through the durable queue.
 - `crossgen asset export <asset-id> --to <path> --yes --json` copies a managed image into a project without moving the Gallery source.
 
-CLI and MCP are separate entry points. Packaged MCP configuration uses the bundled CLI launcher with `--mcp`; on macOS and Linux it reuses one per-user worker for parallel agent sessions. The launcher does not require Node.js, npm, pnpm, or a global package. CLI and MCP default to read-only behavior. Write and generation modes are explicit, paid generation requires confirmation, and local path disclosure is opt-in.
+CLI and MCP are separate entry points. Packaged MCP configuration uses the bundled CLI launcher with `--mcp`; on macOS, Windows and Linux it reuses one per-user worker for parallel agent sessions. The launcher does not require Node.js, npm, pnpm, or a global package. CLI and MCP default to read-only behavior. Write and generation modes are explicit, paid generation requires confirmation, and local path disclosure is opt-in.
 
 ### Generate from a local agent or terminal
 

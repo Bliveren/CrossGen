@@ -1,6 +1,6 @@
 # CrossGen Known Limitations
 
-Last updated: 2026-08-20 for v0.3.3 agent-access development.
+Last updated: 2026-09-02 for the v0.3.3 public release.
 
 This document tracks the current user-facing limits for the released app,
 release-candidate validation, and agent runtime surfaces.
@@ -13,8 +13,9 @@ release-candidate validation, and agent runtime surfaces.
      and usable API-key state visible to the current CrossGen process.
    - PATH repair is advisory: CrossGen provides a copyable command but never
      edits shell startup files or injects a system PATH entry.
-   - MCP hosts should call the current packaged CrossGen executable directly
-     with `--mcp`; they do not need a global `crossgen` link.
+   - Packaged MCP hosts should call the current bundled `resources/cli/crossgen`
+     launcher with `--mcp`; they do not need a global `crossgen` link. Direct
+     app-executable mode remains available for development and diagnostics.
 
 1. **Generation requires network access and a provider API key**
    - CrossGen does not ship an offline image model or local GPU runtime in
@@ -46,9 +47,9 @@ release-candidate validation, and agent runtime surfaces.
    - Windows SmartScreen may warn on first launch.
    - macOS arm64 release assets are Developer ID signed and notarized.
 
-5. **Image-only runtime through v0.3.2**
+5. **Image-only runtime through v0.3.3**
    - Capability metadata contains forward-compatible media fields, but video
-     and animated GIF generation are not callable in v0.3.2.
+     and animated GIF generation are not callable in v0.3.3.
    - Verified model capabilities report image output only.
    - Video, GIF, ffmpeg, and media-aware asset migration remain planned for
      later versions.
@@ -69,14 +70,14 @@ release-candidate validation, and agent runtime surfaces.
      Gemini-compatible image model for image-to-image workflows.
 
 7. **Real provider gates are operation-specific**
-   - v0.3.2 release candidates must be checked by provider kind, model,
+   - v0.3.3 release candidates must be checked by provider kind, model,
      operation, route, timeout, input image count, mask usage, and output.
    - A provider-limited operation may be accepted only when the product surface
      shows a clear diagnostic and a usable next action.
    - A text-to-image success alone is not enough evidence for release approval.
 
 8. **Reference-image preflight is non-destructive**
-   - v0.3.2 can create smaller temporary request copies for oversized
+   - v0.3.3 can create smaller temporary request copies for oversized
      reference images. These copies are used only for provider requests and do
      not replace the user's original Gallery, History, or local files.
    - Queue and History diagnostics may show original/request dimensions, bytes,
