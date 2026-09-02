@@ -229,6 +229,7 @@ export interface UiCopy {
   discoverModels: string;
   discoveringModels: string;
   discoveredModelsCount: (count: number) => string;
+  discoveredModelsSummary: (image: number, video: number, unknown: number) => string;
   connectionIdle: string;
   connectionChecking: string;
   connectionOk: string;
@@ -683,7 +684,7 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessDraftStatus: "Configuring",
     apiAccessTestedStatus: "Tested",
     apiAccessDiscoveredStatus: "Discovered",
-    apiAccessModels: "Supported models",
+    apiAccessModels: "Discovered models",
     apiAccessNoModels: "No models discovered yet.",
     apiAccessSaved: "Saved",
     addApiAccess: "Add API config",
@@ -777,6 +778,8 @@ export const translations: Record<Language, UiCopy> = {
     discoverModels: "Discover models",
     discoveringModels: "Discovering",
     discoveredModelsCount: (count: number) => `${count} model${count === 1 ? "" : "s"} discovered`,
+    discoveredModelsSummary: (image: number, video: number, unknown: number) =>
+      `image ${image} · video ${video} · capability unknown ${unknown}`,
     connectionIdle: "Not tested",
     connectionChecking: "Checking",
     connectionOk: "Connected",
@@ -784,11 +787,11 @@ export const translations: Record<Language, UiCopy> = {
     connectionErrorDetail: (message: string) => `Connection issue: ${message}. Check the API key, base URL, API protocol, or network.`,
     launchModels: "Launch",
     selectModel: "Select model",
-    modelSupportHint: "Select an image model supported by the connected API.",
+    modelSupportHint: "Only models declaring image generation are shown; a model list does not prove API key access.",
     launchAvailable: "Available",
     launchUnavailableNoKey: "Save an API key first.",
     launchUnavailableNoDiscovery: "Run model discovery first.",
-    launchUnavailableNoImageModels: "No image models discovered.",
+    launchUnavailableNoImageModels: "Models were discovered, but none declares image generation; a model list does not prove API key access.",
     launchUnavailableProvider: (provider: string) => `Switch to ${provider}.`,
     launchUnavailableModel: (model: string) => `${model} was not discovered.`,
     launchRuntimeUnavailable: (model: string) => `${model} runtime is not connected yet.`,
@@ -1296,7 +1299,7 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessDraftStatus: "正在配置",
     apiAccessTestedStatus: "已测试",
     apiAccessDiscoveredStatus: "已探测",
-    apiAccessModels: "支持的模型",
+    apiAccessModels: "已发现模型",
     apiAccessNoModels: "暂未探测到模型。",
     apiAccessSaved: "已保存",
     addApiAccess: "添加 API 配置",
@@ -1390,6 +1393,8 @@ export const translations: Record<Language, UiCopy> = {
     discoverModels: "探测模型",
     discoveringModels: "探测中",
     discoveredModelsCount: (count: number) => `探测到【${count}】个模型`,
+    discoveredModelsSummary: (image: number, video: number, unknown: number) =>
+      `图片 ${image} · 视频 ${video} · 能力未知 ${unknown}`,
     connectionIdle: "未测试",
     connectionChecking: "检测中",
     connectionOk: "连接成功",
@@ -1397,11 +1402,11 @@ export const translations: Record<Language, UiCopy> = {
     connectionErrorDetail: (message: string) => `连接异常：${message}。请检查 API Key、Base URL、服务商协议或网络。`,
     launchModels: "启动模型",
     selectModel: "选择模型",
-    modelSupportHint: "可选择当前接入 API 支持的生图模型。",
+    modelSupportHint: "仅展示已声明图片生成能力的模型；模型列表不等于 API Key 权限。",
     launchAvailable: "可用",
     launchUnavailableNoKey: "请先保存 API Key。",
     launchUnavailableNoDiscovery: "请先探测模型。",
-    launchUnavailableNoImageModels: "未探测到图片模型。",
+    launchUnavailableNoImageModels: "已发现模型，但没有模型声明图片生成能力；模型列表不等于 API Key 权限。",
     launchUnavailableProvider: (provider: string) => `切换到 ${provider}。`,
     launchUnavailableModel: (model: string) => `未探测到 ${model}。`,
     launchRuntimeUnavailable: (model: string) => `${model} 运行时尚未接入。`,
