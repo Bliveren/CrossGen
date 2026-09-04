@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-04T18:36:28.815Z",
+  "lastUpdated": "2026-09-04T18:58:39.185Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -172,8 +172,8 @@
         "The evidence records the exact artifact identity, SHA256, and validation command results."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T18:36:28.815Z",
-        "commit": "d6f234683244f56a198c3dc22efbc51b84a5dbb3",
+        "verifiedAt": "2026-09-04T18:58:39.185Z",
+        "commit": "67d8616286ec405d409f25f60d1fcba8a4705aed",
         "environment": "macOS 25.5.0 arm64 local release shell. The exact v0.3.4 app bundle was signed with Developer ID Application identity hash C5A5172145291B971D3ACB7FB51FE5D4321D6691 and submitted to Apple without recording credentials.",
         "commands": [
           "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
@@ -197,31 +197,31 @@
             "kind": "macOS arm64 notarized app in DMG",
             "path": "release/CrossGen-0.3.4-mac-arm64.dmg",
             "public": false,
-            "description": "DMG size 104018747 bytes; SHA256 e4ec0bdae3d4f28f164501d9720e41379f9b52e20854b691edbb8f0ed9fb6738. Mounted app passed codesign verification, stapler validation, and spctl with source=Notarized Developer ID."
+            "description": "DMG size 104018690 bytes; SHA256 30d42c202729b78e4dbea55115bb56b2a8c5c72a4fdef0b4fcb0e37fd603e9fc. Mounted app passed codesign verification, stapler validation, and spctl with source=Notarized Developer ID."
           },
           {
             "kind": "macOS arm64 notarized app ZIP",
             "path": "release/CrossGen-0.3.4-mac-arm64.zip",
             "public": false,
-            "description": "ZIP size 99725621 bytes; SHA256 7d22fab5761b64daad8fcaea96147c45745bd81324f1f823ab10fa87eb9dd86a. Generated from the same notarized app bundle."
+            "description": "ZIP size 99725636 bytes; SHA256 17146aa5fe0df6917a72413c9f79a57568d94597c24da6bd5b944bdf2208416e. Generated from the same notarized app bundle."
           },
           {
             "kind": "Apple notarization submission",
             "path": "notarytool history",
             "public": false,
-            "description": "Submission a6887453-4b6a-4339-81ea-6ecc7f77e12e reported status Accepted at 2026-09-04T18:36:28.815Z."
+            "description": "Submission 9e79c132-f82e-465f-a570-92615c9c1741 reported status Accepted at 2026-09-04T18:58:39.185Z."
           },
           {
             "kind": "macOS DMG blockmap",
             "path": "release/CrossGen-0.3.4-mac-arm64.dmg.blockmap",
             "public": false,
-            "description": "Size 109594 bytes; SHA256 ba2320dd065cd57dca9dd2192b91a3bd0c8cb4f366f013b35be4a53bc59c9c20."
+            "description": "Size 109725 bytes; SHA256 a152e4a0a1b6d5b30523b9cb9f2ab36f9aa41edb85ab70ddcc3b20c6438c7151."
           },
           {
             "kind": "macOS ZIP blockmap",
             "path": "release/CrossGen-0.3.4-mac-arm64.zip.blockmap",
             "public": false,
-            "description": "Size 105089 bytes; SHA256 697d23d98636aef656b869b67f630dd40ae14f8b06c8e59670856496eb5906e8."
+            "description": "Size 105071 bytes; SHA256 57afe0c2e014cd809e636d2ffe2441eeb4ab48c410fd9e345f330d0cf44e5497."
           }
         ],
         "summary": "Apple accepted the exact v0.3.4 macOS notarization submission. The app bundle was stapled, validated with stapler, accepted by Gatekeeper as Notarized Developer ID both from the build directory and after mounting the DMG, and launched successfully in the two-cycle release smoke."
