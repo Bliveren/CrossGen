@@ -122,4 +122,33 @@ describe("mediaStorage", () => {
       await rm(parent, { recursive: true, force: true });
     }
   });
+
+  it("keeps the target untouched when the backup rename fails before the swap", async () => {
+    const parent = await mkdtemp(path.join(os.tmpdir(), "crossgen-media-backup-failure-"));
+    const source = path.join(parent, "source");
+    const target = path.join(parent, "target");
+    try {
+      const sourceLayout = await ensureManagedMediaDirectories(source);
+      await writeFile(path.join(sourceLayout.originalsDir, "source.png"), "source");
+      await mkdir(path.join(target, "previews"), { recursive: true });
+      await writeFile(path.join(target, "previews", "existing.png"), "existing");
+
+      const injectedRename = async () => {
+        throw new Error("injected backup rename failure");
+      };
+
+      await expect(migrateManagedMediaRoot(source, target, {
+        idFactory: () => "backup-failure",
+        rename: injectedRename
+      })).rejects.toThrow("injected backup rename failure");
+
+      await expect(readFile(path.join(target, "previews", "existing.png"), "utf8")).resolves.toBe("existing");
+      await expect(readFile(path.join(target, "originals", "source.png"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readFile(path.join(sourceLayout.originalsDir, "source.png"), "utf8")).resolves.toBe("source");
+      const entries = await (await import("node:fs/promises")).readdir(parent);
+      expect(entries.filter((entry) => entry.startsWith(".crossgen-media-"))).toEqual([]);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
 });

@@ -2,6 +2,50 @@ import { describe, expect, it } from "vitest";
 import { extractCrossGenAppLinks, parseAppLink } from "./appLink";
 
 describe("CrossGen AppLink", () => {
+  const aggregatorFixtures = [
+    {
+      label: "AIHub-style custom gateway",
+      link: "crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Faihub.example%2Fv1&api_key=sk-aihub-fixture-key&model=flux-pro",
+      expected: {
+        displayName: "AIHub",
+        kind: "custom",
+        baseURL: "https://aihub.example/v1",
+        defaultModel: "flux-pro",
+        activeLaunchId: "general"
+      }
+    },
+    {
+      label: "OpenAI-compatible aggregator aliases",
+      link: "crossgen://config/import?label=Gateway&provider=openai&endpoint=https%3A%2F%2Fgateway.example%2Fv1&key=sk-gateway-fixture-key&default_model=gpt-image-2",
+      expected: {
+        displayName: "Gateway",
+        kind: "openai",
+        baseURL: "https://gateway.example/v1",
+        defaultModel: "gpt-image-2",
+        activeLaunchId: "gpt-image-2"
+      }
+    },
+    {
+      label: "Gemini-compatible aggregator aliases",
+      link: "crossgen://api-config?title=Gemini%20Gateway&kind=gemini&baseURL=https%3A%2F%2Fgemini-gateway.example%2Fv1beta&apiKey=gemini-fixture-key-long&model=gemini-3.1-flash-image",
+      expected: {
+        displayName: "Gemini Gateway",
+        kind: "gemini",
+        baseURL: "https://gemini-gateway.example/v1beta",
+        defaultModel: "gemini-3.1-flash-image",
+        activeLaunchId: "nano-banana-3"
+      }
+    }
+  ] as const;
+
+  it.each(aggregatorFixtures)("accepts the $label fixture", ({ link, expected }) => {
+    const result = parseAppLink(link);
+    expect(result).toMatchObject(expected);
+    expect(result.apiKey).toBeDefined();
+    expect(result.apiKeyPreview).not.toContain("fixture-key");
+    expect(result.apiKeyPreview).toContain("*");
+  });
+
   it("parses the canonical provider import link", () => {
     const result = parseAppLink(
       "crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-test-key-that-is-long-enough&model=flux-pro"
