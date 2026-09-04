@@ -8,6 +8,24 @@ data/state paths, active provider, live queue workers, copyable diagnostics, and
 client-specific MCP configuration snippets. It never edits shell startup files
 or the system `PATH` automatically.
 
+## AppLink provider import
+
+Desktop packages register the `crossgen://` URL scheme so API aggregators can
+open CrossGen with a provider configuration. Use the canonical form below:
+
+```text
+crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
+```
+
+CrossGen validates the scheme, target, Base URL, API Key, timeout, and focused
+launch before showing a confirmation dialog. Confirming adds a new provider and
+starts model discovery. After the link is received, the API Key stays in the
+Electron main process until it is encrypted and persisted; the confirmation
+dialog only shows a masked preview. `crossgen://api-config` and
+`crossgen://config/import` are
+accepted compatibility targets, and common camelCase/snake_case parameter
+aliases are supported.
+
 ## Runtime
 
 Desktop use does not require CLI or MCP setup. Open the CrossGen app, configure

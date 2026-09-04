@@ -8,7 +8,9 @@ import {
   protocol,
   safeStorage,
   shell,
-  type IpcMainInvokeEvent
+  type IpcMainInvokeEvent,
+  type MessageBoxOptions,
+  type MessageBoxReturnValue
 } from "electron";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
@@ -179,6 +181,12 @@ import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
 import { verifyUpdateAssetBytes } from "./services/updateInstallerVerification.js";
 import { launchWindowsInstaller } from "./services/windowsUpdateLauncher.js";
+import {
+  APP_LINK_SCHEME,
+  extractCrossGenAppLinks,
+  parseAppLink,
+  type AppLinkProviderConfig
+} from "../shared/appLink.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAX_HISTORY = 100;
@@ -219,6 +227,7 @@ interface GalleryAssetCreateResult {
   replacedAssetId?: string;
 }
 const ASSET_PROTOCOL = "image2tools-asset";
+const GUI_SINGLE_INSTANCE_ENABLED = !process.argv.includes("--cli") && !process.argv.includes("--mcp");
 const UPDATE_CHECK_TIMEOUT_MS = 30000;
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 600000; // 10 minutes for large installer downloads
 const BRAND_NAME = "CrossGen";
@@ -227,6 +236,10 @@ const DATA_DIR_ENV = "CROSSGEN_DATA_DIR";
 const USER_DATA_DIR_ENV = "CROSSGEN_USER_DATA_DIR";
 const LEGACY_USER_DATA_DIR_ENV = "IMAGE2TOOLS_USER_DATA_DIR";
 let mainWindow: BrowserWindow | null = null;
+const hasGuiInstanceLock = GUI_SINGLE_INSTANCE_ENABLED ? app.requestSingleInstanceLock() : true;
+const pendingAppLinks: string[] = [];
+let appLinkProcessingPromise: Promise<void> = Promise.resolve();
+let appLinksReady = false;
 const PERF_RESULT_PATH_ENV = "CROSSGEN_PERF_RESULT_PATH";
 const RENDERER_PERF_RESULT_PATH_ENV = "CROSSGEN_RENDERER_PERF_RESULT_PATH";
 const THEME_SOURCE_ENV = "CROSSGEN_THEME_SOURCE";
@@ -395,6 +408,123 @@ function createWindow(): BrowserWindow {
     void window.loadFile(path.join(__dirname, "../../dist-renderer/index.html"), process.env[RENDERER_PERF_RESULT_PATH_ENV] ? { query: { crossgenPerf: "1" } } : undefined);
   }
   return window;
+}
+
+function focusMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function ensureMainWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) return;
+  mainWindow = createWindow();
+}
+
+function broadcastSnapshotPayload(snapshot: AppSnapshot): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("app:snapshot", snapshot);
+  }
+}
+
+function enqueueAppLinks(args: readonly string[]): void {
+  for (const link of extractCrossGenAppLinks(args)) {
+    if (!pendingAppLinks.includes(link)) pendingAppLinks.push(link);
+  }
+}
+
+function registerAppLinkProtocol(): void {
+  try {
+    if (app.isPackaged) {
+      app.setAsDefaultProtocolClient(APP_LINK_SCHEME);
+    } else {
+      app.setAsDefaultProtocolClient(APP_LINK_SCHEME, process.execPath, [app.getAppPath()]);
+    }
+  } catch (error) {
+    console.warn("[CrossGen] Failed to register AppLink protocol.", sanitizeError(error));
+  }
+}
+
+function showAppLinkMessageBox(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return dialog.showMessageBox(mainWindow, options);
+  }
+  return dialog.showMessageBox(options);
+}
+
+async function importAppLinkConfig(parsed: AppLinkProviderConfig): Promise<void> {
+  const {
+    source: _source,
+    displayName: _displayName,
+    apiKeyPreview: _apiKeyPreview,
+    ...input
+  } = parsed;
+  const snapshot = await addProviderConfig(input);
+  broadcastSnapshotPayload(snapshot);
+}
+
+function processPendingAppLinks(): void {
+  if (!appLinksReady) return;
+  appLinkProcessingPromise = appLinkProcessingPromise.then(async () => {
+    while (pendingAppLinks.length > 0) {
+      const link = pendingAppLinks.shift();
+      if (!link) continue;
+
+      let parsed: AppLinkProviderConfig;
+      try {
+        parsed = parseAppLink(link);
+      } catch (error) {
+        await showAppLinkMessageBox({
+          type: "error",
+          title: "无法导入 API 配置",
+          message: "这个 AppLink 无法导入。",
+          detail: normalizeError(error)
+        });
+        continue;
+      }
+
+      ensureMainWindow();
+      focusMainWindow();
+      const confirmation = await showAppLinkMessageBox({
+        type: "question",
+        title: "导入 API 配置",
+        message: `确认导入「${parsed.name}」的 API 配置？`,
+        detail: [
+          `类型：${parsed.kind}`,
+          `Base URL：${parsed.baseURL}`,
+          `模型：${parsed.activeModelId || parsed.defaultModel || "未指定"}`,
+          `API Key：${parsed.apiKeyPreview}`,
+          "",
+          "确认后会新增一个 API 配置，并自动开始模型发现。"
+        ].join("\n"),
+        buttons: ["导入配置", "取消"],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true
+      });
+      if (confirmation.response !== 0) continue;
+
+      try {
+        await importAppLinkConfig(parsed);
+        await showAppLinkMessageBox({
+          type: "info",
+          title: "API 配置已导入",
+          message: `已添加「${parsed.name}」。`,
+          detail: "模型发现已在后台启动，完成后可在启动模型中选择可用模型。"
+        });
+      } catch (error) {
+        await showAppLinkMessageBox({
+          type: "error",
+          title: "API 配置导入失败",
+          message: "CrossGen 没有保存这条 API 配置。",
+          detail: normalizeError(error)
+        });
+      }
+    }
+  }).catch((error) => {
+    console.warn("[CrossGen] AppLink processing failed.", sanitizeError(error));
+  });
 }
 
 function preserveLegacyUserDataPath(): void {
@@ -1688,7 +1818,7 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
   return toPublicConfig(nextConfig);
 }
 
-async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConfigInput): Promise<AppSnapshot> {
+async function addProviderConfig(input: ProviderConfigInput): Promise<AppSnapshot> {
   const state = await readState();
   const configValidation = validateProviderConfigInput(input);
   if (!configValidation.ok) {
@@ -1734,6 +1864,10 @@ async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConf
   }
 
   return snapshotFromState(nextState);
+}
+
+async function handleAddProvider(_event: IpcMainInvokeEvent, input: ProviderConfigInput): Promise<AppSnapshot> {
+  return addProviderConfig(input);
 }
 
 async function handleSwitchProvider(_event: IpcMainInvokeEvent, providerId: string): Promise<AppSnapshot> {
@@ -6069,6 +6203,10 @@ function registerIpcHandlers(): void {
 }
 
 app.whenReady().then(async () => {
+  if (!hasGuiInstanceLock) {
+    app.quit();
+    return;
+  }
   const themeSource = process.env[THEME_SOURCE_ENV];
   if (themeSource === "light" || themeSource === "dark" || themeSource === "system") {
     nativeTheme.themeSource = themeSource;
@@ -6090,6 +6228,7 @@ app.whenReady().then(async () => {
   }
   registerIpcHandlers();
   registerAssetProtocol();
+  registerAppLinkProtocol();
   const performanceResultPath = process.env[PERF_RESULT_PATH_ENV];
   if (performanceResultPath) {
     await runMainPerformanceCapture(performanceResultPath);
@@ -6097,6 +6236,8 @@ app.whenReady().then(async () => {
     return;
   }
   mainWindow = createWindow();
+  appLinksReady = true;
+  processPendingAppLinks();
   const rendererPerformanceResultPath = process.env[RENDERER_PERF_RESULT_PATH_ENV];
   if (rendererPerformanceResultPath) {
     void runRendererPerformanceCapture(mainWindow, rendererPerformanceResultPath).finally(() => app.quit());
@@ -6112,6 +6253,20 @@ app.whenReady().then(async () => {
     }
   });
 });
+
+if (GUI_SINGLE_INSTANCE_ENABLED) {
+  enqueueAppLinks(process.argv);
+  app.on("second-instance", (_event, commandLine) => {
+    enqueueAppLinks(commandLine);
+    focusMainWindow();
+    processPendingAppLinks();
+  });
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    enqueueAppLinks([url]);
+    processPendingAppLinks();
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

@@ -1,6 +1,6 @@
 {
   "name": "crossgen",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "One-stop AI image generation manager for API access, model discovery, Gallery/history reuse, and lightweight image editing.",
   "author": "Nowo, Corgnitor, and CrossGen contributors",
   "license": "MIT",
@@ -62,6 +62,14 @@
   "build": {
     "appId": "com.bliveren.crossgen",
     "productName": "CrossGen",
+    "protocols": [
+      {
+        "name": "CrossGen AppLink",
+        "schemes": [
+          "crossgen"
+        ]
+      }
+    ],
     "copyright": "Copyright (c) 2026 Nowo, Corgnitor, and CrossGen contributors",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": {

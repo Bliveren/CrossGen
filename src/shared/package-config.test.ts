@@ -5,15 +5,21 @@ import packageJson from "../../package.json";
 import updateManifest from "../../docs/updates/latest.json";
 
 describe("package release configuration", () => {
-  it("stages the v0.3.3 release metadata", () => {
+  it("stages the v0.3.4 release metadata", () => {
     expect(packageJson.name).toBe("crossgen");
-    expect(packageJson.version).toBe("0.3.3");
+    expect(packageJson.version).toBe("0.3.4");
     expect(packageJson.description).toContain("One-stop AI image generation manager");
     expect(packageJson.description).toContain("API access");
     expect(packageJson.description).toContain("Gallery/history reuse");
     expect(packageJson.bin?.crossgen).toBe("dist/cli/crossgen.js");
     expect(packageJson.build.appId).toBe("com.bliveren.crossgen");
     expect(packageJson.build.productName).toBe("CrossGen");
+    expect(packageJson.build.protocols).toEqual([
+      {
+        name: "CrossGen AppLink",
+        schemes: ["crossgen"]
+      }
+    ]);
     expect(packageJson.build.copyright).toContain("Nowo");
     expect(packageJson.build.copyright).toContain("Corgnitor");
     expect(packageJson.build.copyright).toContain("CrossGen");

@@ -24,6 +24,7 @@
 
 <p align="center">
   <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载 v0.3.3</b></a> ·
+  <a href="#applink-api-配置"><b>AppLink</b></a> ·
   <a href="#crossgen-artist-skill"><b>CrossGen Artist Skill</b></a> ·
   <a href="#agent-快速开始"><b>Agent 快速开始</b></a> ·
   <a href="./docs/cli-mcp.md"><b>CLI/MCP 文档</b></a> ·
@@ -89,6 +90,18 @@ ln -sfn "$(pwd)/skills/crossgen-artist" "$HOME/.codex/skills/crossgen-artist"
 之后可以使用 `$crossgen-artist` 调用。该 skill 与 CrossGen 一起版本管理，确保说明始终匹配内置 CLI/MCP 契约。使用打包应用时，应使用对应版本源码或 release archive 中的 skill 文件；后续会在 Agent access 中补充一键安装入口。
 
 桌面端 **Agent access** 面板是 MCP 配置的唯一来源。可在面板中复制对应客户端的配置片段：模型发现先使用 `readonly`，只有确实需要时再切换到 `write` 或 `generate`。CrossGen 不会静默修改 Codex 配置，也不会自动开启付费生图。
+
+### AppLink API 配置
+
+CrossGen 0.3.4 增加 `crossgen://` AppLink，供 API 聚合平台把 API 名称、Base URL、API Key 和可选模型一键交给 CrossGen。CrossGen 会先弹出确认框，确认后才新增 API 配置；收到链接后，Key 会使用现有本地加密保护保存，不会写入日志或完整显示。
+
+标准格式：
+
+```text
+crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
+```
+
+同时兼容 `apiKey`/`api_key`、`baseURL`/`base_url`、`defaultModel`/`default_model`、`provider`/`kind` 等常见别名。支持的启动模型为 `gpt-image-2`、`nano-banana-3` 和 `general`；未提供时会根据 provider 类型和模型名自动推断。macOS、Windows、Linux 打包版本都会注册 `crossgen` scheme。
 
 > 已经在桌面、CLI 或 Agent 工作流中使用 CrossGen？可以 [Star 仓库](https://github.com/Bliveren/CrossGen)，帮助更多需要本地优先图像工具的用户发现它，也欢迎在 [Discord](https://discord.gg/XphwmYtY) 分享你的真实工作流。
 

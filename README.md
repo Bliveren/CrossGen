@@ -24,6 +24,7 @@
 
 <p align="center">
   <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>Download v0.3.3</b></a> ·
+  <a href="#applink-api-configuration"><b>AppLink</b></a> ·
   <a href="#crossgen-artist-skill"><b>CrossGen Artist Skill</b></a> ·
   <a href="#agent-quickstart"><b>Agent Quickstart</b></a> ·
   <a href="./docs/cli-mcp.md"><b>CLI/MCP Docs</b></a> ·
@@ -89,6 +90,18 @@ ln -sfn "$(pwd)/skills/crossgen-artist" "$HOME/.codex/skills/crossgen-artist"
 Then invoke it as `$crossgen-artist`. The skill is versioned with CrossGen so its instructions stay aligned with the bundled CLI/MCP contract. When CrossGen is installed as a packaged app, use the skill files from the matching source/release archive; a future installer will make this one click from Agent access.
 
 The desktop **Agent access** panel remains the source of truth for MCP setup. Copy a client-specific snippet there, choose `readonly` for discovery, and switch to `write` or `generate` only for workflows that need those permissions. CrossGen does not silently edit Codex configuration or enable paid generation.
+
+### AppLink API Configuration
+
+CrossGen 0.3.4 adds a `crossgen://` AppLink for API aggregation platforms. An aggregator can open a provider import link and hand CrossGen its API name, Base URL, API Key, and optional model in one step. CrossGen shows a confirmation dialog before saving anything; after receiving the link, it stores the key with the existing local key protection and does not write it to logs or render it in full.
+
+Canonical form:
+
+```text
+crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
+```
+
+Accepted aliases include `apiKey`/`api_key`, `baseURL`/`base_url`, `defaultModel`/`default_model`, and `provider`/`kind`. Supported launch targets are `gpt-image-2`, `nano-banana-3`, and `general`; when omitted, CrossGen infers the focused launch from provider kind and model name. Packaged builds register the `crossgen` scheme on macOS, Windows, and Linux.
 
 > Using CrossGen in a real desktop, CLI, or agent workflow? [Star the repository](https://github.com/Bliveren/CrossGen) so other local-first image-tool users can find it, and share the workflow in [Discord](https://discord.gg/XphwmYtY).
 
