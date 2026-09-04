@@ -289,9 +289,9 @@
         "Known harmless warnings are documented and do not hide failed tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T16:50:26.000Z",
-        "commit": "b11c19a4f733c50af21c95c4890684f849bb71d7",
-        "environment": "GitHub Actions workflow_dispatch run 33897036280 on ubuntu-latest, macos-latest, windows-latest, and ubuntu-latest; supplemented by macOS local candidate verification.",
+        "verifiedAt": "2026-09-04T17:03:15.000Z",
+        "commit": "0c96763334b5fc1556428836cbaffc7770c95cad",
+        "environment": "GitHub Actions workflow_dispatch run 33898279054 on ubuntu-latest; exact 0c967633 candidate build, mock API/model discovery, queue, Gallery, and image-core jobs passed. The exact candidate was also rebuilt locally in a detached worktree.",
         "commands": [
           "pnpm build",
           "pnpm verify:mock-api",
@@ -302,16 +302,16 @@
           "pnpm verify:image-core-regression-smoke",
           "pnpm verify:cli-mcp-smoke",
           "pnpm verify:agent-integration-smoke",
-          "gh run view 33897036280 --repo Bliveren/CrossGen"
+          "gh run view 33898279054 --repo Bliveren/CrossGen"
         ],
         "references": [
           {
-            "label": "GitHub Actions CI run",
-            "url": "https://github.com/Bliveren/CrossGen/actions/runs/33897036280"
+            "label": "GitHub Actions exact-candidate CI run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/33898279054"
           }
         ],
         "artifacts": [],
-        "summary": "The exact b11c19a candidate passed the public CI build/mock verifier and native macOS, Windows, and Linux package jobs. Known canvas and GitHub Actions Node.js deprecation warnings were non-blocking."
+        "summary": "The exact 0c967633 candidate passed the public CI build/mock verifier and the local exact-candidate build. Known canvas, React act, and GitHub Actions Node.js deprecation warnings were non-blocking."
       }
     },
     {
@@ -327,23 +327,34 @@
         "Source-tree CLI/MCP smoke is not used as a substitute for packaged smoke."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T16:30:55.101Z",
-        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
-        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "verifiedAt": "2026-09-04T18:03:51.000Z",
+        "commit": "0c96763334b5fc1556428836cbaffc7770c95cad",
+        "environment": "GitHub Actions workflow_dispatch run 33898279054 Linux package job 101106041907 built the exact candidate and passed packaged CLI/MCP smoke; the retained Linux AppImage artifact is 9946685561. The same CLI/MCP smoke was rerun in a detached exact-candidate worktree.",
         "commands": [
-          "pnpm exec node scripts/electron-builder-pnpm.mjs --dir -c.mac.identity=null -c.mac.notarize=false -c.mac.timestamp=null",
-          "CROSSGEN_APP_EXECUTABLE=release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen pnpm exec node scripts/verify-cli-mcp-smoke.mjs"
+          "pnpm package",
+          "CROSSGEN_APP_EXECUTABLE=<linux-unpacked>/crossgen CROSSGEN_APP_EXTRA_ARGS=--no-sandbox xvfb-run -a node scripts/verify-cli-mcp-smoke.mjs",
+          "pnpm verify:cli-mcp-smoke",
+          "gh run view --job 101106041907 --repo Bliveren/CrossGen --log"
         ],
-        "references": [],
-        "artifacts": [
+        "references": [
           {
-            "kind": "unpacked macOS arm64 candidate",
-            "path": "release/mac-arm64/CrossGen.app",
-            "public": false,
-            "description": "Generated from fd1ed7e788fed8488e0907fea388e6fdf16eeeb0; aggregate file-tree SHA256 2861e558da319848fd4c98829370fa99ad6929f0d0dd8f4e91d091314500f53b; size 253004 KB."
+            "label": "GitHub Actions exact-candidate packaged smoke",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/33898279054"
+          },
+          {
+            "label": "Retained Linux exact-candidate artifact",
+            "url": "https://api.github.com/repos/Bliveren/CrossGen/actions/artifacts/9946685561"
           }
         ],
-        "summary": "The unsigned unpacked macOS arm64 candidate passed packaged CLI/MCP smoke without requiring a global Node.js installation."
+        "artifacts": [
+          {
+            "kind": "Retained Linux exact-candidate AppImage artifact",
+            "url": "https://api.github.com/repos/Bliveren/CrossGen/actions/artifacts/9946685561",
+            "public": false,
+            "description": "Artifact 9946685561 contains the exact-candidate Linux package used by the packaged smoke job; inner AppImage SHA256 44f4e02dc911d9e3ba437ab18f83b6db96d9f9748f55e5626972fd8bd7ddcf42, size 120938555 bytes."
+          }
+        ],
+        "summary": "Packaged CLI/MCP smoke passed against the exact 0c967633 candidate on the Linux package runner, and the detached exact-candidate smoke also passed without relying on a global Node.js installation."
       }
     },
     {
@@ -359,22 +370,34 @@
         "No CLI/MCP productization UI is required for v0.3.4."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T16:30:55.101Z",
-        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
-        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "verifiedAt": "2026-09-04T18:03:51.000Z",
+        "commit": "0c96763334b5fc1556428836cbaffc7770c95cad",
+        "environment": "GitHub Actions workflow_dispatch run 33898279054 Linux package job 101106041907 built the exact candidate and passed Agent integration smoke; the same smoke was rerun in a detached exact-candidate worktree.",
         "commands": [
-          "CROSSGEN_APP_EXECUTABLE=release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen pnpm exec node scripts/verify-agent-integration-smoke.mjs"
+          "pnpm package",
+          "CROSSGEN_APP_EXECUTABLE=<linux-unpacked>/crossgen CROSSGEN_APP_EXTRA_ARGS=--no-sandbox xvfb-run -a node scripts/verify-agent-integration-smoke.mjs",
+          "pnpm verify:agent-integration-smoke",
+          "gh run view --job 101106041907 --repo Bliveren/CrossGen --log"
         ],
-        "references": [],
-        "artifacts": [
+        "references": [
           {
-            "kind": "unpacked macOS arm64 candidate",
-            "path": "release/mac-arm64/CrossGen.app",
-            "public": false,
-            "description": "Generated from fd1ed7e788fed8488e0907fea388e6fdf16eeeb0; aggregate file-tree SHA256 2861e558da319848fd4c98829370fa99ad6929f0d0dd8f4e91d091314500f53b; size 253004 KB."
+            "label": "GitHub Actions exact-candidate Agent smoke",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/33898279054"
+          },
+          {
+            "label": "Retained Linux exact-candidate artifact",
+            "url": "https://api.github.com/repos/Bliveren/CrossGen/actions/artifacts/9946685561"
           }
         ],
-        "summary": "Packaged candidate Agent integration smoke passed for Codex, Claude Code, and Cursor configuration output."
+        "artifacts": [
+          {
+            "kind": "Retained Linux exact-candidate AppImage artifact",
+            "url": "https://api.github.com/repos/Bliveren/CrossGen/actions/artifacts/9946685561",
+            "public": false,
+            "description": "Artifact 9946685561 contains the exact-candidate Linux package used by the packaged smoke job; inner AppImage SHA256 44f4e02dc911d9e3ba437ab18f83b6db96d9f9748f55e5626972fd8bd7ddcf42, size 120938555 bytes."
+          }
+        ],
+        "summary": "Agent integration smoke passed for Codex, Claude Code, and Cursor configuration output against the exact 0c967633 candidate package on the Linux runner."
       }
     },
     {
@@ -390,9 +413,9 @@
         "The smoke passes on the v0.3.4 release evidence ledger commit."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T16:30:55.101Z",
-        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
-        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "verifiedAt": "2026-09-04T18:03:51.000Z",
+        "commit": "0c96763334b5fc1556428836cbaffc7770c95cad",
+        "environment": "macOS detached exact-candidate worktree 0c96763334b5fc1556428836cbaffc7770c95cad.",
         "commands": [
           "pnpm verify:queue-concurrency-smoke"
         ],
@@ -414,9 +437,9 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T16:30:55.101Z",
-        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
-        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "verifiedAt": "2026-09-04T18:03:51.000Z",
+        "commit": "0c96763334b5fc1556428836cbaffc7770c95cad",
+        "environment": "macOS detached exact-candidate worktree 0c96763334b5fc1556428836cbaffc7770c95cad.",
         "commands": [
           "pnpm verify:gallery-mutation-smoke"
         ],
@@ -438,9 +461,9 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T16:30:55.101Z",
-        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
-        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "verifiedAt": "2026-09-04T18:03:51.000Z",
+        "commit": "0c96763334b5fc1556428836cbaffc7770c95cad",
+        "environment": "macOS detached exact-candidate worktree 0c96763334b5fc1556428836cbaffc7770c95cad.",
         "commands": [
           "pnpm verify:image-core-regression-smoke"
         ],
