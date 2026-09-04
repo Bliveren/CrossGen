@@ -235,7 +235,7 @@ launcher; it never assumes `/Applications/CrossGen.app`.
 
 ## CrossGen Artist Skill
 
-The repository includes [`skills/crossgen-artist`](../skills/crossgen-artist/), a Codex-compatible skill for model discovery, prompt-to-image generation, reference-image editing, inpainting, durable job polling, Gallery inspection, and explicit asset export. It is intentionally versioned with CrossGen because it depends on the CrossGen CLI/MCP tool names and permission contract.
+The repository includes [`skills/crossgen-artist`](../skills/crossgen-artist/), a media-aware Codex-compatible skill for model discovery, prompt-to-image generation, reference-image editing, inpainting, durable job polling, Gallery inspection, media metadata reads, and explicit asset export. It is intentionally versioned with CrossGen because it depends on the CrossGen CLI/MCP tool names and permission contract.
 
 Install it for the current user from a CrossGen checkout:
 
@@ -252,6 +252,11 @@ When CrossGen is running from the source tree, the generated `args` also include
 the repository app path before `--mcp`; this keeps copied MCP configuration
 usable with the Electron development runtime. Packaged installs use the
 launcher form: `<resources>/cli/crossgen --mcp`.
+
+In v0.3.4, read-only history/Gallery results may report `kind`, dimensions,
+size, duration, fps, frame count, and poster availability without returning
+local absolute paths. GIF/video assets remain read/preview/export subjects, not
+image editing or generation inputs.
 
 Modes:
 

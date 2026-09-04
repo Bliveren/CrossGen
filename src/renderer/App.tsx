@@ -99,6 +99,7 @@ import type {
   WorkMode,
   UpdateCheckResult,
   HistoryJobPatch,
+  OutputAsset,
   WorkspaceDraft
 } from "../shared/types";
 import {
@@ -117,6 +118,7 @@ import {
   isPotentialGeneralImageModel,
   normalizeModelId
 } from "../shared/modelCatalog";
+import { isImageAsset, mediaKindForFileName, mediaKindForMimeType } from "../core/mediaTypes";
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { DialogShell } from "./DialogShell";
@@ -460,7 +462,8 @@ const fallbackSnapshot: AppSnapshot = {
   galleryAssets: [],
   storage: {
     historyDir: "",
-    galleryDir: ""
+    galleryDir: "",
+    mediaRoot: ""
   }
 };
 
@@ -507,7 +510,7 @@ function getBridge() {
   return window.crossgen ?? window.image2tools;
 }
 
-function assetSource(asset?: ImageAsset | InputAsset | null): string | undefined {
+function assetSource(asset?: OutputAsset | InputAsset | null): string | undefined {
   if (!asset) return undefined;
   if ("transientPreview" in asset && asset.transientPreview?.dataUrl) return asset.transientPreview.dataUrl;
   if ("previewUrl" in asset && asset.previewUrl) return asset.previewUrl;
@@ -524,19 +527,34 @@ function assetForDraft(asset: InputAsset): InputAsset {
   return metadata;
 }
 
-function getResultAssets(job?: GenerationJob | null): ImageAsset[] {
+function galleryAssetMediaKind(asset: GalleryAsset): "image" | "animated-gif" | "video" {
+  if (asset.kind) return asset.kind;
+  if (asset.mimeType === "application/octet-stream") return mediaKindForFileName(asset.originalName);
+  return mediaKindForMimeType(asset.mimeType);
+}
+
+function getResultAssets(job?: GenerationJob | null): OutputAsset[] {
   return job?.outputs.filter((asset) => asset.sourceType === "result") ?? [];
 }
 
 function getBestResult(job?: GenerationJob | null): ImageAsset | undefined {
+  const results = getResultAssets(job).filter((asset): asset is ImageAsset => isImageAsset(asset));
+  return results[results.length - 1];
+}
+
+function getBestMediaResult(job?: GenerationJob | null): OutputAsset | undefined {
   const results = getResultAssets(job);
-  return results[results.length - 1] ?? job?.outputs[job.outputs.length - 1];
+  return results[results.length - 1];
+}
+
+function getBestHistoryResult(job?: GenerationJob | null): OutputAsset | undefined {
+  return job?.outputs.find((asset) => asset.sourceType === "result") ?? job?.outputs[job.outputs.length - 1];
 }
 
 function historyDisplayName(job: GenerationJob): string {
   const name = job.name?.trim();
   if (name) return name;
-  const result = getBestResult(job);
+  const result = getBestHistoryResult(job);
   return result?.fileName ?? `${job.modelDisplayName || job.modelId || "image"}-${job.id.slice(-8)}.png`;
 }
 
@@ -1464,20 +1482,22 @@ export function App() {
   const activeResults = getResultAssets(activeJob);
   const selectedResult = activeResults.find((asset) => asset.id === selectedResultId);
   const activeGalleryAsset = activeGalleryAssetId ? snapshot.galleryAssets.find((asset) => asset.id === activeGalleryAssetId) : undefined;
-  const activeGalleryPreviewImage: ImageAsset | undefined = activeGalleryAsset ? {
+  const activeGalleryPreviewMedia: OutputAsset | undefined = activeGalleryAsset ? {
     id: `gallery_preview_${activeGalleryAsset.id}_${activeGalleryAsset.updatedAt}`,
     jobId: `gallery:${activeGalleryAsset.id}`,
     path: galleryAssetAbsolutePath(activeGalleryAsset),
     fileName: activeGalleryAsset.originalName,
     mimeType: activeGalleryAsset.mimeType,
+    kind: activeGalleryAsset.kind ?? mediaKindForMimeType(activeGalleryAsset.mimeType),
     width: activeGalleryAsset.width,
     height: activeGalleryAsset.height,
     sourceType: "result",
     createdAt: activeGalleryAsset.createdAt
   } : undefined;
-  const activeImage = activeGalleryPreviewImage ?? selectedResult ?? getBestResult(activeJob) ?? partialImages[partialImages.length - 1];
-  const activeImageSource = activeGalleryAsset ? galleryAssetPath(activeGalleryAsset) : assetSource(activeImage);
-  const activePreviewSource = editedImageDataUrl ?? activeImageSource;
+  const activeMedia = activeGalleryPreviewMedia ?? selectedResult ?? getBestMediaResult(activeJob) ?? partialImages[partialImages.length - 1];
+  const activeImage = activeMedia && isImageAsset(activeMedia) ? activeMedia : undefined;
+  const activeMediaSource = activeGalleryAsset ? galleryAssetPath(activeGalleryAsset) : assetSource(activeMedia);
+  const activePreviewSource = activeImage && editedImageDataUrl ? editedImageDataUrl : activeMediaSource;
   const activeJobError = getJobError(activeJob);
   const openAIParams = isOpenAIImageParams(params) ? params : null;
   const geminiParams = isGeminiImageParams(params) ? params : null;
@@ -1766,7 +1786,7 @@ export function App() {
     return mergeTags(job.tags, [historySystemTagLabel(job.mode, language)]);
   }
 
-  function historyResultIsInGallery(result?: ImageAsset): boolean {
+  function historyResultIsInGallery(result?: OutputAsset): boolean {
     if (!result) return false;
     return snapshot.galleryAssets.some((asset) =>
       asset.source === "result" &&
@@ -2804,10 +2824,23 @@ export function App() {
     }
   }
 
-  async function openStorageFolder(kind: "history" | "gallery", folderId?: string | null) {
+  async function openStorageFolder(kind: StorageKind, folderId?: string | null) {
     if (!bridge) return;
     try {
       await bridge.openStorageFolder(kind, folderId);
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
+  async function openCurrentMediaFolder() {
+    if (!bridge || !activeMedia) return;
+    try {
+      if (activeGalleryAsset) {
+        await openStorageFolder("gallery", activeGalleryAsset.folderId ?? null);
+      } else {
+        await bridge.openAssetFolder(activeMedia.path);
+      }
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -2824,7 +2857,16 @@ export function App() {
       const next = await bridge.chooseStorageFolder(kind, { syncBoth });
       applySnapshot(next);
       setStorageDialogKind(null);
-      setNotice({ kind: "success", text: syncBoth ? copy.storageFoldersUpdated : kind === "history" ? copy.historyStorageUpdated : copy.galleryStorageUpdated });
+      setNotice({
+        kind: "success",
+        text: syncBoth
+          ? copy.storageFoldersUpdated
+          : kind === "history"
+            ? copy.historyStorageUpdated
+            : kind === "gallery"
+              ? copy.galleryStorageUpdated
+              : copy.mediaRootStorageUpdated
+      });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
     }
@@ -2848,7 +2890,7 @@ export function App() {
     if (!bridge) return false;
     const paths = bridge
       .getDroppedFilePaths(files)
-      .filter((value): value is string => typeof value === "string" && /\.(png|jpe?g|webp)$/i.test(value));
+      .filter((value): value is string => typeof value === "string" && /\.(png|jpe?g|webp|gif|mp4|webm|mov|m4v)$/i.test(value));
     if (paths.length === 0) return false;
     const assets = await bridge.importToGallery(paths, folderId);
     if (assets.length > 0) {
@@ -2874,7 +2916,7 @@ export function App() {
     });
   }
 
-  async function addHistoryAssetToGallery(asset?: ImageAsset, folderId: string | null = historyGalleryTargetFolderId, job?: GenerationJob) {
+  async function addHistoryAssetToGallery(asset?: OutputAsset, folderId: string | null = historyGalleryTargetFolderId, job?: GenerationJob) {
     if (!bridge || !asset) return;
     try {
       const galleryAsset = await bridge.addHistoryAssetToGallery(asset.path, folderId, job ? historyGalleryTags(job) : []);
@@ -2899,6 +2941,10 @@ export function App() {
 
   async function pickGalleryAsset(asset: GalleryAsset) {
     if (!bridge) return;
+    if (galleryAssetMediaKind(asset) !== "image") {
+      setNotice({ kind: "error", text: copy.mediaReferenceImagesOnly });
+      return;
+    }
     try {
       const inputAsset = await bridge.pickGalleryAsset(asset.id);
       addInputAssets([inputAsset]);
@@ -2919,6 +2965,10 @@ export function App() {
 
   async function addGalleryPromptToken(asset: GalleryAsset) {
     if (!bridge) return;
+    if (galleryAssetMediaKind(asset) !== "image") {
+      setNotice({ kind: "error", text: copy.mediaReferenceImagesOnly });
+      return;
+    }
     try {
       const inputAsset = await bridge.pickGalleryAsset(asset.id);
       setPromptTokenAssets((current) => ({ ...current, [asset.id]: inputAsset }));
@@ -3896,15 +3946,17 @@ export function App() {
     const galleryId = event.dataTransfer.getData("application/x-image2tools-gallery-id");
     if (galleryId) {
       const asset = snapshot.galleryAssets.find((item) => item.id === galleryId);
-      if (asset) {
+      if (asset && galleryAssetMediaKind(asset) === "image") {
         await pickGalleryAsset(asset);
+      } else if (asset) {
+        setNotice({ kind: "error", text: copy.mediaReferenceImagesOnly });
       }
       return;
     }
     const files = Array.from(event.dataTransfer.files ?? []);
     const paths = bridge
       .getDroppedFilePaths(files)
-      .filter((value): value is string => typeof value === "string" && /\.(png|jpe?g|webp)$/i.test(value));
+      .filter((value): value is string => typeof value === "string" && /\.(png|jpe?g|webp|gif|mp4|webm|mov|m4v)$/i.test(value));
     if (paths.length === 0) {
       const history = event.dataTransfer.getData("application/x-image2tools-asset");
       if (history && /\.(png|jpe?g|webp)$/i.test(history)) {
@@ -4081,7 +4133,7 @@ export function App() {
     }
   }
 
-  async function downloadAsset(asset?: ImageAsset) {
+  async function downloadAsset(asset?: OutputAsset) {
     if (!bridge || !asset) return;
     try {
       flashButton(`download:${asset.id}`);
@@ -5010,7 +5062,7 @@ export function App() {
       await downloadEditedPreview();
       return;
     }
-    await downloadAsset(activeImage);
+    await downloadAsset(activeMedia);
   }
 
   async function downloadCanvasAsImage(output: HTMLCanvasElement, suffix: string) {
@@ -5281,7 +5333,7 @@ export function App() {
     setHasAnnotationMarks(false);
     setIsAnnotationColorPickerOpen(false);
     annotationOrderRef.current = 0;
-  }, [activeImage?.id, activeImageSource]);
+  }, [activeMedia?.id, activeMediaSource]);
 
   useEffect(() => {
     if (!isPreviewCanvasInteractive && !hasEditorOverlay) return;
@@ -6076,7 +6128,7 @@ export function App() {
     );
   }
 
-  function renderHistoryGalleryTargetMenu(result: ImageAsset | undefined, job: GenerationJob) {
+  function renderHistoryGalleryTargetMenu(result: OutputAsset | undefined, job: GenerationJob) {
     if (!result || historyGalleryMenuJobId !== job.id) return null;
     return (
       <div className="history-gallery-target-menu" role="menu" aria-label={copy.galleryAddTargetFolder}>
@@ -6493,6 +6545,7 @@ export function App() {
             generationAttemptIndex={displayedGenerationAttemptIndex}
             generationAttemptLabel={displayedGenerationAttemptLabel}
             activeImage={activeImage}
+            activeMedia={activeMedia}
             activeResults={activeResults}
             partialImages={partialImages}
             previewZoom={previewZoom}
@@ -6520,6 +6573,7 @@ export function App() {
             editorUndoStackLength={editorUndoStack.length}
             cropShape={cropShape}
             assetSource={assetSource}
+            onOpenMediaFolder={() => void openCurrentMediaFolder()}
             buttonFeedbackClass={buttonFeedbackClass}
             annotationLayerStyle={annotationLayerStyle}
             cssRectForCanvasRect={cssRectForCanvasRect}
@@ -6931,7 +6985,7 @@ export function App() {
               ) : null}
             >
               {visibleHistory.map((job) => {
-                    const result = getBestResult(job);
+                    const result = getBestHistoryResult(job);
                     const recoverable = isRecoverableHistoryJob(job);
                     const jobError = recoverable ? historyFailureSummary(job, copy) : getJobError(job);
                     const modelDetails = getHistoryModelDetails(job);
@@ -6980,7 +7034,13 @@ export function App() {
                           setActiveGalleryAssetId(null);
                           setActiveJob(job);
                         }}
-                        onImageContextMenu={(event) => handleImageContextMenu(event, result, job.prompt)}
+                        onImageContextMenu={(event) => {
+                          if (result && isImageAsset(result)) {
+                            handleImageContextMenu(event, result, job.prompt);
+                          } else {
+                            event.preventDefault();
+                          }
+                        }}
                         onStartEditName={() => beginEditHistoryName(job)}
                         onNameDraftChange={setHistoryNameDraft}
                         onSaveName={() => void saveHistoryName(job)}
@@ -7341,6 +7401,18 @@ export function App() {
                   </div>
                 </>
               )}
+              <div className="storage-path-row media-root-path-row">
+                <span>{copy.mediaRoot}</span>
+                <strong className="storage-path-value tooltip-target" title={snapshot.storage.mediaRoot} data-tooltip={snapshot.storage.mediaRoot}>{snapshot.storage.mediaRoot}</strong>
+                <button type="button" className="secondary" onClick={() => void openStorageFolder("media")}>
+                  <FolderOpen size={15} />
+                  {copy.openFolder}
+                </button>
+                <button type="button" className="secondary" onClick={() => void chooseStorageFolder("media", false)}>
+                  <FolderCog size={15} />
+                  {copy.chooseStorageFolder}
+                </button>
+              </div>
             </div>
             <label className="checkbox-row storage-sync-row">
               <input type="checkbox" checked={syncStorageFolders} onChange={(event) => setSyncStorageFolders(event.target.checked)} />

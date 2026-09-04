@@ -36,7 +36,7 @@
 </p>
 
 <p align="center">
-  <a href="#why-crossgen-033">Why 0.3.3</a> ·
+  <a href="#why-crossgen-034">Why 0.3.4</a> ·
   <a href="#visual-tour">Visual Tour</a> ·
   <a href="#core-workflows">Core Workflows</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -44,15 +44,15 @@
   <a href="#technical-notes">Technical Notes</a>
 </p>
 
-## Why CrossGen 0.3.3
+## Why CrossGen 0.3.4
 
-CrossGen 0.3.3 makes the desktop image workspace more reliable for real production work. The visual app, CLI, and MCP share the same queue, provider diagnostics, reference-image handling, History, and Gallery flows, and the bundled crossgen-artist skill is built around that same contract so image generation remains usable even when a compatible provider needs a different route or a task needs retrying.
+CrossGen 0.3.4 adds a media-aware foundation and a confirmed AppLink import flow on top of the reliable 0.3.3 image workspace. The visual app, CLI, and MCP share the same queue, provider diagnostics, reference-image handling, History, Gallery, and media metadata contracts, while the bundled crossgen-artist skill keeps Codex and other agents on the same path.
 
 The desktop app, CLI, and MCP server share the same API profiles, durable generation queue, History, and Gallery. The bundled skill stays aligned with that contract. Install CrossGen once; installed CLI and MCP use require no separate Node.js, npm, pnpm, global package, or local HTTP service.
 
 | Use CrossGen visually | Call the same runtime from an agent |
 | --- | --- |
-| Configure providers, generate and edit images, review History, and organize reusable Gallery assets. | Discover models, submit queue-backed generation or edits, monitor jobs, inspect Gallery assets, and export a selected result into the current project. |
+| Configure providers, generate and edit images, review History, and organize reusable Gallery assets. GIF/video assets can be imported and previewed within the supported desktop boundary. | Discover models, submit queue-backed generation or edits, monitor jobs, inspect image/GIF/video metadata, and export a selected result into the current project. |
 
 <img width="1440" height="940" alt="screenshot-20260724-003442" src="https://github.com/user-attachments/assets/53a63a11-7430-4b80-a749-2b67d29e5962" />
 
@@ -78,7 +78,7 @@ Start with `readonly`, then enable `write` or `generate` only when the agent nee
 
 ### CrossGen Artist Skill
 
-CrossGen ships a first-class agent workflow skill at [`skills/crossgen-artist`](./skills/crossgen-artist/). It is the recommended entry point for Codex and other compatible agents that need to discover model capabilities, choose generation/edit/inpaint operations, submit idempotent queue jobs, poll completion, inspect Gallery assets, and export results without exposing API keys or local paths by accident.
+CrossGen ships a first-class, media-aware agent workflow skill at [`skills/crossgen-artist`](./skills/crossgen-artist/). It is the recommended entry point for Codex and other compatible agents that need to discover model capabilities, choose generation/edit/inpaint operations, submit idempotent queue jobs, poll completion, inspect image/GIF/video metadata, and export results without exposing API keys or local paths by accident. v0.3.4 still does not expose real video generation or video editing.
 
 Install it for Codex from a CrossGen checkout:
 

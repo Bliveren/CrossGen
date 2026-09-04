@@ -41,6 +41,7 @@ import type {
   GenerationQueueWorkerHost,
   HistoryJobPatch,
   ImageAsset,
+  OutputAsset,
   InputAsset,
   ImageParams,
   ImageQuality,
@@ -96,6 +97,8 @@ import {
 } from "../shared/modelCatalog.js";
 import { compareVersions, isAllowedUpdateUrl, parseUpdateManifest, safeUpdateFileName, selectUpdateAsset } from "../shared/updateManifest.js";
 import { resolveDataDirs, resolveUserDataDir } from "../core/dataDirs.js";
+import { cleanupManagedMediaTemp, ensureManagedMediaDirectories, migrateManagedMediaRoot } from "../core/mediaStorage.js";
+import { mediaKindForFileName } from "../core/mediaTypes.js";
 import { createGenerationQueueItem } from "../core/generation.js";
 import {
   createGalleryFolder as createCoreGalleryFolder,
@@ -176,6 +179,7 @@ import {
   startGalleryDiskWatchers,
   type GalleryWatchHandle
 } from "./services/galleryDiskSync.js";
+import { storagePathForKind } from "./services/storagePaths.js";
 import { DEFAULT_GALLERY_THUMBNAIL_SIZE, galleryThumbnailCachePath } from "./services/galleryThumbnailCache.js";
 import { recoverInterruptedJobs } from "./services/stateRecovery.js";
 import { type AppStateFile, type StoredProviderConfig, STATE_VERSION, getDefaultState, normalizeImageParams, normalizeState } from "./services/stateMigration.js";
@@ -193,6 +197,7 @@ const MAX_HISTORY = 100;
 const FALLBACK_KEY_PREFIX = "plain:";
 const API_KEY_DECRYPTION_MESSAGE = "已保存的 API Key 无法解密，可能来自旧版本安装、系统钥匙串变更或本地状态损坏。请在 API 配置中重新粘贴并保存 API Key。";
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+const MEDIA_EXTENSIONS = new Set([...IMAGE_EXTENSIONS, ".gif", ".mp4", ".webm", ".mov", ".m4v"]);
 const MAX_GALLERY_FOLDER_NAME_BYTES = 120;
 const MAX_GALLERY_FILE_NAME_BYTES = 180;
 const WINDOWS_RESERVED_FILE_NAMES = new Set([
@@ -622,10 +627,15 @@ function getDefaultGalleryDir(): string {
   return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).galleryDir;
 }
 
+function getDefaultMediaRoot(): string {
+  return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).mediaRoot;
+}
+
 function getStorageSettings(state?: AppStateFile | null): StorageSettings {
   return {
     historyDir: state?.storage?.historyDir || getDefaultImagesDir(),
-    galleryDir: state?.storage?.galleryDir || getDefaultGalleryDir()
+    galleryDir: state?.storage?.galleryDir || getDefaultGalleryDir(),
+    mediaRoot: state?.storage?.mediaRoot || getDefaultMediaRoot()
   };
 }
 
@@ -645,6 +655,7 @@ function getHistoryImageRoots(state?: AppStateFile | null): string[] {
   const dirs = resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") });
   const roots = [
     getImagesDir(state),
+    getStorageSettings(state).mediaRoot ?? getDefaultMediaRoot(),
     ...dirs.legacyImageRoots
   ];
   return [...new Set(roots.map((root) => path.resolve(root)))];
@@ -677,6 +688,9 @@ function assertKnownHistoryAssetPath(state: AppStateFile, assetPath: string): st
   for (const job of state.history) {
     for (const asset of job.outputs) {
       knownPaths.add(path.resolve(asset.path));
+      if ("posterPath" in asset && asset.posterPath) {
+        knownPaths.add(path.resolve(asset.posterPath));
+      }
     }
     if (job.maskAsset) {
       knownPaths.add(path.resolve(job.maskAsset.path));
@@ -685,8 +699,8 @@ function assertKnownHistoryAssetPath(state: AppStateFile, assetPath: string): st
   if (!knownPaths.has(resolved)) {
     throw new Error("无法操作：资源不属于当前历史。");
   }
-  if (!isImagePath(resolved)) {
-    throw new Error("无法操作：资源不是图片。");
+  if (!isSupportedMediaPath(resolved)) {
+    throw new Error("无法操作：资源不是受支持的媒体文件。");
   }
   return resolved;
 }
@@ -964,11 +978,19 @@ function mimeTypeForFile(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
   if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".mp4" || ext === ".m4v") return "video/mp4";
+  if (ext === ".webm") return "video/webm";
+  if (ext === ".mov") return "video/quicktime";
   return "image/png";
 }
 
 function isImagePath(filePath: string): boolean {
   return IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
+
+function isSupportedMediaPath(filePath: string): boolean {
+  return MEDIA_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -1181,7 +1203,7 @@ function galleryFolderDuplicateDisplayName(state: AppStateFile, folderId: string
   return folder ? folder.name : "未分类";
 }
 
-function findHistorySourceForPath(state: AppStateFile, sourcePath: string): { job: GenerationJob; asset: ImageAsset } | undefined {
+function findHistorySourceForPath(state: AppStateFile, sourcePath: string): { job: GenerationJob; asset: OutputAsset } | undefined {
   const normalizedSourcePath = path.resolve(sourcePath);
   for (const job of state.history) {
     for (const asset of job.outputs) {
@@ -1203,18 +1225,18 @@ function historySourceMetadata(state: AppStateFile, sourcePath: string, extraTag
 
 function normalizeGalleryAssetNameInput(value: unknown, currentName: string): string {
   const rawName = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
-  if (!rawName) throw new Error("Gallery 图片名称不能为空。");
-  if (rawName.includes("/") || rawName.includes("\\")) throw new Error("Gallery 图片名称不能包含路径分隔符。");
-  if (/[<>:"|?*\x00-\x1F]/.test(rawName)) throw new Error("Gallery 图片名称包含非法字符。");
-  if (rawName.endsWith(".") || rawName.endsWith(" ")) throw new Error("Gallery 图片名称不能以空格或句点结尾。");
+  if (!rawName) throw new Error("Gallery 资源名称不能为空。");
+  if (rawName.includes("/") || rawName.includes("\\")) throw new Error("Gallery 资源名称不能包含路径分隔符。");
+  if (/[<>:"|?*\x00-\x1F]/.test(rawName)) throw new Error("Gallery 资源名称包含非法字符。");
+  if (rawName.endsWith(".") || rawName.endsWith(" ")) throw new Error("Gallery 资源名称不能以空格或句点结尾。");
 
   const currentExt = path.posix.extname(currentName).toLowerCase();
   const inputExt = path.posix.extname(rawName).toLowerCase();
   const nextName = inputExt ? rawName : `${rawName}${currentExt || ".png"}`;
   const nextExt = path.posix.extname(nextName).toLowerCase();
-  if (!IMAGE_EXTENSIONS.has(nextExt)) throw new Error("Gallery 图片名称必须使用 png、jpg、jpeg 或 webp 扩展名。");
-  if (isIgnoredGalleryEntryName(nextName) || isReservedWindowsFileName(nextName)) throw new Error("Gallery 图片名称不可用于托管目录。");
-  if (Buffer.byteLength(nextName, "utf8") > MAX_GALLERY_FILE_NAME_BYTES) throw new Error("Gallery 图片名称过长。");
+  if (!MEDIA_EXTENSIONS.has(nextExt)) throw new Error("Gallery 资源名称必须使用 png、jpg、jpeg、webp、gif、mp4、webm、mov 或 m4v 扩展名。");
+  if (isIgnoredGalleryEntryName(nextName) || isReservedWindowsFileName(nextName)) throw new Error("Gallery 资源名称不可用于托管目录。");
+  if (Buffer.byteLength(nextName, "utf8") > MAX_GALLERY_FILE_NAME_BYTES) throw new Error("Gallery 资源名称过长。");
   normalizeGalleryRelativePath(nextName);
   return nextName;
 }
@@ -1591,8 +1613,8 @@ function defaultHistoryJobName(job: GenerationJob): string {
   return result?.fileName ? path.basename(result.fileName) : job.name.trim() || `${job.modelDisplayName || job.modelId || "image"}-${job.id.slice(-8)}.png`;
 }
 
-function mergeImageAssets(...groups: ImageAsset[][]): ImageAsset[] {
-  const byId = new Map<string, ImageAsset>();
+function mergeImageAssets(...groups: OutputAsset[][]): OutputAsset[] {
+  const byId = new Map<string, OutputAsset>();
   for (const asset of groups.flat()) {
     byId.set(asset.id, asset);
   }
@@ -2125,7 +2147,7 @@ async function createGalleryAssetFromFile(
   const galleryDir = getGalleryDir(state);
   await ensureGalleryFolderDirs(state);
   const stat = await fs.stat(sourcePath);
-  if (!stat.isFile()) throw new Error("Gallery 只能导入图片文件。");
+  if (!stat.isFile()) throw new Error("Gallery 只能导入受支持的媒体文件。");
   const originalName = path.basename(sourcePath);
   const contentHash = metadata.contentHash ?? await fileContentHash(sourcePath);
   const sourcePathHash = metadata.sourcePathHash ?? filePathHash(sourcePath);
@@ -2144,6 +2166,7 @@ async function createGalleryAssetFromFile(
           ...duplicate,
           originalName,
           mimeType: mimeTypeForFile(sourcePath),
+          kind: mediaKindForFileName(sourcePath),
           sizeBytes: nextStat.size,
           tags: mergeStoredTags(duplicate.tags, metadata.tags ?? []),
           source,
@@ -2167,6 +2190,7 @@ async function createGalleryAssetFromFile(
       fileName,
       originalName,
       mimeType: mimeTypeForFile(sourcePath),
+      kind: mediaKindForFileName(sourcePath),
       sizeBytes: stat.size,
       folderId,
       tags: normalizeTemplateTags(metadata.tags ?? []),
@@ -2213,6 +2237,7 @@ async function createGalleryAssetFromDataUrl(state: AppStateFile, input: EditedG
           ...duplicate,
           originalName,
           mimeType,
+          kind: "image",
           sizeBytes: stat.size,
           tags: mergeStoredTags(duplicate.tags, input.tags),
           source,
@@ -2241,6 +2266,7 @@ async function createGalleryAssetFromDataUrl(state: AppStateFile, input: EditedG
       fileName,
       originalName: path.posix.basename(fileName),
       mimeType,
+      kind: "image",
       sizeBytes: stat.size,
       folderId,
       tags: normalizeTemplateTags(input.tags),
@@ -2596,7 +2622,7 @@ async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[
     const result = await dialog.showOpenDialog({
       title: "导入参考图到 Gallery",
       properties: ["openFile", "multiSelections"],
-      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }]
+      filters: [{ name: "Media", extensions: ["png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mov", "m4v"] }]
     });
     if (result.canceled) return [];
     sourcePaths = result.filePaths;
@@ -2608,7 +2634,7 @@ async function handleImportToGallery(_event: IpcMainInvokeEvent, paths?: string[
     let nextState = state;
     for (const sourcePath of sourcePaths) {
       if (typeof sourcePath !== "string") continue;
-      if (!IMAGE_EXTENSIONS.has(path.extname(sourcePath).toLowerCase())) continue;
+      if (!MEDIA_EXTENSIONS.has(path.extname(sourcePath).toLowerCase())) continue;
       const result = await createGalleryAssetFromFile(nextState, sourcePath, "import", now, targetFolderId);
       if (!result.asset) continue;
       imported.push(result.asset);
@@ -2651,6 +2677,9 @@ async function handleReplaceGalleryAssetImage(_event: IpcMainInvokeEvent, id: st
   return mutateDesktopGalleryState(async (state) => {
     const asset = state.galleryAssets.find((item) => item.id === id);
     if (!asset) throw new Error("Gallery 资源不存在。");
+    if ((asset.kind ?? mediaKindForFileName(asset.fileName)) !== "image") {
+      throw new Error("只有图片资源可以被编辑后替换。");
+    }
     const galleryDir = getGalleryDir(state);
     const targetPath = await assertManagedRegularFile(galleryDir, resolveManagedFileName(galleryDir, asset.fileName));
     await fs.writeFile(targetPath, buffer);
@@ -2658,6 +2687,7 @@ async function handleReplaceGalleryAssetImage(_event: IpcMainInvokeEvent, id: st
     const updated: GalleryAsset = {
       ...asset,
       mimeType: mimeMatch[1],
+      kind: "image",
       sizeBytes: stat.size,
       tags: input.tags ? normalizeTemplateTags(input.tags) : asset.tags,
       source: "result",
@@ -2718,6 +2748,9 @@ async function handlePickGalleryAsset(_event: IpcMainInvokeEvent, id: string): P
   const state = await syncGalleryForRead(await readState());
   const asset = state.galleryAssets.find((item) => item.id === id);
   if (!asset) throw new Error("Gallery 资源不存在。");
+  if ((asset.kind ?? mediaKindForFileName(asset.fileName)) !== "image") {
+    throw new Error("只有图片资源可以作为参考图使用。");
+  }
   const galleryDir = getGalleryDir(state);
   const filePath = await assertManagedRegularFile(galleryDir, resolveManagedFileName(galleryDir, asset.fileName));
   return {
@@ -3849,7 +3882,7 @@ async function handleOpenAssetFolder(_event: IpcMainInvokeEvent, assetPath: stri
 }
 
 function normalizeStorageKind(kind: unknown): StorageKind {
-  if (kind === "history" || kind === "gallery") return kind;
+  if (kind === "history" || kind === "gallery" || kind === "media") return kind;
   throw new Error("存储目录类型无效。");
 }
 
@@ -3936,7 +3969,7 @@ async function handleOpenStorageFolder(_event: IpcMainInvokeEvent, kindInput: un
   const kind = normalizeStorageKind(kindInput);
   const state = kind === "gallery" ? await syncGalleryWithDisk(await readState()) : await readState();
   const storage = getStorageSettings(state);
-  let targetPath = kind === "history" ? storage.historyDir : storage.galleryDir;
+  let targetPath = storagePathForKind(storage, kind, getDefaultMediaRoot());
 
   if (kind === "gallery" && folderId) {
     const folder = state.galleryFolders.find((item) => item.id === folderId);
@@ -3954,9 +3987,19 @@ async function handleChooseStorageFolder(_event: IpcMainInvokeEvent, kindInput: 
   const options = normalizeStorageFolderOptions(optionsInput);
   const currentState = kind === "gallery" ? await syncGalleryWithDisk(await readState()) : await readState();
   const storage = getStorageSettings(currentState);
-  const currentDir = kind === "history" ? storage.historyDir : storage.galleryDir;
+  const currentDir = kind === "history"
+    ? storage.historyDir
+    : kind === "gallery"
+      ? storage.galleryDir
+      : storage.mediaRoot ?? getDefaultMediaRoot();
   const result = await dialog.showOpenDialog({
-    title: options.syncBoth ? "选择历史与图库默认存储目录" : kind === "history" ? "选择历史图片默认存储目录" : "选择图库默认存储目录",
+    title: options.syncBoth
+      ? "选择历史与图库默认存储目录"
+      : kind === "history"
+        ? "选择历史图片默认存储目录"
+        : kind === "gallery"
+          ? "选择图库默认存储目录"
+          : "选择媒体资源根目录",
     defaultPath: currentDir,
     properties: ["openDirectory", "createDirectory"]
   });
@@ -3964,6 +4007,30 @@ async function handleChooseStorageFolder(_event: IpcMainInvokeEvent, kindInput: 
   if (result.canceled || !result.filePaths[0]) return snapshotFromState(currentState);
 
   const nextDir = result.filePaths[0];
+  if (kind === "media") {
+    const confirmation = await dialog.showMessageBox({
+      type: "question",
+      buttons: ["取消", "迁移媒体"],
+      defaultId: 1,
+      cancelId: 0,
+      title: "确认迁移媒体资源",
+      message: "将媒体资源复制到新的根目录？",
+      detail: `原目录会保留，迁移完成后 CrossGen 将使用：${path.resolve(nextDir)}`
+    });
+    if (confirmation.response !== 1) return snapshotFromState(currentState);
+
+    await migrateManagedMediaRoot(currentDir, nextDir);
+    const resolvedNextDir = path.resolve(nextDir);
+    const nextState = await getAppStateStore().mutate(async (state) => persistentStatePayload({
+      ...state,
+      storage: { ...getStorageSettings(state), mediaRoot: resolvedNextDir }
+    }));
+    stateWriteCount += 1;
+    lastSelfWriteAt = Date.now();
+    stateCache = nextState;
+    return snapshotFromState(nextState);
+  }
+
   const baseGallerySnapshot = kind === "gallery" || options.syncBoth
     ? await scanGalleryDiskForState(currentState)
     : null;
@@ -6214,6 +6281,16 @@ app.whenReady().then(async () => {
   await cleanupStaleReferencePreflightTempDirs().catch((error) => {
     console.warn("[CrossGen] Failed to clean stale reference preflight temp files.", sanitizeError(error));
   });
+  // Keep media lifecycle work outside provider adapters so startup recovery and
+  // command-mode clients share the same managed directories and cleanup policy.
+  try {
+    const startupState = await readState();
+    const mediaRoot = getStorageSettings(startupState).mediaRoot ?? getDefaultMediaRoot();
+    await ensureManagedMediaDirectories(mediaRoot);
+    await cleanupManagedMediaTemp(mediaRoot);
+  } catch (error) {
+    console.warn("[CrossGen] Failed to initialize managed media storage.", sanitizeError(error));
+  }
   const cliCommandArgs = getCliCommandArgs();
   if (cliCommandArgs) {
     const exitCode = await runCliCommandMode(cliCommandArgs);

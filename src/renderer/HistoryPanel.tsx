@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, ArrowDownUp, CheckCircle2, ChevronUp, Copy, Download, FolderInput, Info, RotateCcw, RefreshCw, Save, Search, X } from "lucide-react";
-import type { GenerationJob, ImageAsset } from "../shared/types";
+import { AlertTriangle, ArrowDownUp, CheckCircle2, ChevronUp, Copy, Download, FolderInput, Info, RotateCcw, RefreshCw, Save, Search, Video, X } from "lucide-react";
+import type { GenerationJob, OutputAsset } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
 type HistoryViewMode = "grid" | "list";
@@ -62,7 +62,7 @@ interface HistoryFilterToolbarProps {
 interface HistoryItemCardProps {
   copy: UiCopy;
   job: GenerationJob;
-  result?: ImageAsset;
+  result?: OutputAsset;
   resultSrc?: string;
   jobError: string | null;
   statusLabel: string;
@@ -485,7 +485,12 @@ export function HistoryItemCard({
         title={jobError ?? job.status}
         aria-label={jobError ? `${copy.jobFailed}: ${jobError}` : `${copy.openJob}: ${job.status}`}
       >
-        {result && resultSrc ? (
+        {result?.kind === "video" ? (
+          <span className="media-preview-placeholder" aria-label="Video">
+            <Video size={22} />
+            <small>VIDEO</small>
+          </span>
+        ) : result && resultSrc ? (
           <img
             src={resultSrc}
             alt={copy.historyResult}

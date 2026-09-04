@@ -36,7 +36,7 @@
 </p>
 
 <p align="center">
-  <a href="#为什么是-crossgen-033">0.3.3 介绍</a> ·
+  <a href="#为什么是-crossgen-034">0.3.4 介绍</a> ·
   <a href="#功能演示">功能演示</a> ·
   <a href="#核心工作流">核心工作流</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -44,13 +44,13 @@
   <a href="#技术说明">技术说明</a>
 </p>
 
-## 为什么是 CrossGen 0.3.3
+## 为什么是 CrossGen 0.3.4
 
-CrossGen 0.3.3 进一步提升真实生图工作的可靠性。桌面端、CLI 和 MCP 共用同一套队列、接口路径诊断、参考图处理、历史和图库流程，内置的 crossgen-artist skill 也围绕同一套契约工作，让不同服务商的路径差异、任务重试和素材复用都能在同一个工作流里完成。
+CrossGen 0.3.4 在可靠的 0.3.3 图片工作区之上增加媒体感知基础层和需要确认的 AppLink 导入流程。桌面端、CLI 和 MCP 共用同一套队列、接口路径诊断、参考图处理、历史、图库和媒体元数据契约，内置的 crossgen-artist skill 也围绕同一套契约工作。
 
 | 在桌面端完成可视化工作 | 让 Agent 调用同一本地运行时 |
 | --- | --- |
-| 配置 Provider、生图和编辑、查看历史，并将可复用图片整理进图库。 | 发现模型、提交队列生图或编辑任务、查询任务、检查图库资产，并将选中结果导出到当前项目。 |
+| 配置 Provider、生图和编辑、查看历史，并将可复用图片整理进图库；支持在明确边界内导入和预览 GIF/视频资产。 | 发现模型、提交队列生图或编辑任务、查询任务、检查图片/GIF/视频元数据，并将选中结果导出到当前项目。 |
 
 <img width="1440" height="940" alt="screenshot-20260724-003442" src="https://github.com/user-attachments/assets/aaaaf3d8-cf9b-4320-bdfb-a04ca9f92168" />
 
@@ -78,7 +78,7 @@ crossgen mcp config --client cursor --mode generate --json
 
 ### CrossGen Artist Skill
 
-CrossGen 仓库内置一套首选的 Agent 工作流技能 [`skills/crossgen-artist`](./skills/crossgen-artist/)。它会指导 Codex 等兼容 Agent 自动发现模型能力，选择生成、编辑或局部重绘，提交带幂等键的队列任务，轮询完成状态，检查图库资产，并在不意外泄露 API Key 或本地路径的前提下导出结果。
+CrossGen 仓库内置一套媒体感知的首选 Agent 工作流技能 [`skills/crossgen-artist`](./skills/crossgen-artist/)。它会指导 Codex 等兼容 Agent 自动发现模型能力，选择生成、编辑或局部重绘，提交带幂等键的队列任务，轮询完成状态，读取图片/GIF/视频元数据，检查图库资产，并在不意外泄露 API Key 或本地路径的前提下导出结果。0.3.4 仍不开放真实视频生成和视频编辑。
 
 从 CrossGen 源码仓库为 Codex 安装：
 

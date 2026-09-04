@@ -6,6 +6,7 @@ import type {
   GenerationJob,
   ImageParams,
   ImageQuality,
+  OutputAsset,
   OpenAIImageRouting,
   OpenAIImageParams,
   PromptTemplate,
@@ -15,6 +16,7 @@ import type {
   StorageSettings,
   WorkspaceDraft
 } from "../../shared/types.js";
+import { mediaKindForFileName, normalizeOutputAssetValue } from "../../core/mediaTypes.js";
 import { DEFAULT_QUEUE_RUNTIME_CONFIG, normalizeQueueRuntimeConfig } from "../../core/queueConfig.js";
 import { normalizeTaskDiagnosticValue } from "../../core/providerDiagnostics.js";
 import { normalizeReferencePreflightValue } from "../../core/referencePreflight.js";
@@ -41,7 +43,7 @@ import {
   getModelDisplayName
 } from "../../shared/modelCatalog.js";
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 export const DEFAULT_OPENAI_PROVIDER_ID = "default";
 
 export interface StoredProviderConfig {
@@ -330,10 +332,12 @@ function normalizeStorageSettings(value: unknown): StorageSettings | undefined {
   if (!isRecord(value)) return undefined;
   const historyDir = optionalString(value.historyDir);
   const galleryDir = optionalString(value.galleryDir);
-  if (!historyDir && !galleryDir) return undefined;
+  const mediaRoot = optionalString(value.mediaRoot);
+  if (!historyDir && !galleryDir && !mediaRoot) return undefined;
   return {
     historyDir: historyDir ?? "",
-    galleryDir: galleryDir ?? ""
+    galleryDir: galleryDir ?? "",
+    ...(mediaRoot ? { mediaRoot } : {})
   };
 }
 
@@ -348,6 +352,10 @@ function normalizeGalleryAssets(value: unknown, folders: GalleryFolder[]): Galle
     const safeFileName = pathSafeFileName(fileName);
     const originalName = nonEmptyString(item.originalName, fileName);
     const mimeType = nonEmptyString(item.mimeType, "");
+    const explicitKind = item.kind === "video" || item.kind === "animated-gif" || item.kind === "image"
+      ? item.kind
+      : undefined;
+    const derivedKind = explicitKind ?? mediaKindForFileName(safeFileName);
     const sizeBytes = typeof item.sizeBytes === "number" && Number.isFinite(item.sizeBytes) && item.sizeBytes >= 0 ? item.sizeBytes : -1;
     if (!id || !fileName || safeFileName !== fileName || !mimeType || sizeBytes < 0 || seen.has(id)) return [];
     seen.add(id);
@@ -361,8 +369,9 @@ function normalizeGalleryAssets(value: unknown, folders: GalleryFolder[]): Galle
         originalName,
         mimeType,
         sizeBytes,
-        width: boundedOptionalInteger(item.width),
-        height: boundedOptionalInteger(item.height),
+        ...(derivedKind !== "image" || explicitKind ? { kind: derivedKind } : {}),
+        ...(boundedOptionalInteger(item.width) ? { width: boundedOptionalInteger(item.width) } : {}),
+        ...(boundedOptionalInteger(item.height) ? { height: boundedOptionalInteger(item.height) } : {}),
         folderId: folderId && folderIds.has(folderId) ? folderId : null,
         tags: normalizeStringList(item.tags),
         source: item.source === "result" ? "result" : "import",
@@ -416,6 +425,11 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
   const firstOutput = outputs.find((item) => isRecord(item) && nonEmptyString(item.sourceType, "") === "result") ?? outputs[outputs.length - 1];
   const outputFileName = isRecord(firstOutput) ? path.basename(nonEmptyString(firstOutput.fileName, "")) : "";
   const fallbackName = outputFileName || `${getModelDisplayName(launchId, modelId)}-${nonEmptyString(input.id, "image").slice(-8)}.png`;
+  const fallbackCreatedAt = nonEmptyString(input.createdAt, new Date(0).toISOString());
+  const normalizedOutputs = outputs.flatMap((item): OutputAsset[] => {
+    const output = normalizeOutputAssetValue(item, nonEmptyString(input.id, "legacy-job"), fallbackCreatedAt);
+    return output ? [output] : [];
+  });
 
   return {
     ...(input as unknown as GenerationJob),
@@ -428,6 +442,7 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
     modelId,
     modelDisplayName: nonEmptyString(input.modelDisplayName, getModelDisplayName(launchId, modelId)),
     params,
+    outputs: normalizedOutputs,
     diagnostic: normalizeTaskDiagnosticValue(input.diagnostic),
     referencePreflight: normalizeReferencePreflightValue(input.referencePreflight)
   };

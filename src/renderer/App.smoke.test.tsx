@@ -2496,12 +2496,12 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Use the same path for History and Gallery");
     expect(document.body.textContent).toContain("History");
     expect(document.body.textContent).toContain("Gallery");
-    const pathValues = document.querySelectorAll<HTMLElement>(".storage-path-value");
+    const pathValues = document.querySelectorAll<HTMLElement>(".storage-path-row:not(.media-root-path-row) .storage-path-value");
     expect(pathValues[0]?.dataset.tooltip).toBe("/tmp/crossgen/history");
     expect(pathValues[1]?.dataset.tooltip).toBe("/tmp/crossgen/gallery");
 
     await click(inputByLabel("Use the same path for History and Gallery"));
-    expect(document.querySelectorAll<HTMLElement>(".storage-path-value")).toHaveLength(1);
+    expect(document.querySelectorAll<HTMLElement>(".storage-path-row:not(.media-root-path-row) .storage-path-value")).toHaveLength(1);
     await click(buttonByText("Choose folder", ".storage-dialog button"));
 
     expect(bridge.chooseStorageFolder).toHaveBeenCalledWith("history", { syncBoth: true });
@@ -2525,6 +2525,40 @@ describe("renderer multi-model smoke", () => {
       assetPath: "/tmp/image2tools/result_gemini.png",
       suggestedName: "result_gemini.png"
     });
+  });
+
+  it("keeps video results read-only and exposes playback recovery actions", async () => {
+    const result = {
+      ...imageAsset("result_gemini.mp4"),
+      kind: "video" as const,
+      mimeType: "video/mp4",
+      sizeBytes: 16_384,
+      dimensions: { width: 1920, height: 1080 },
+      durationMs: 2500,
+      fps: 24,
+      frameCount: 60
+    };
+    const job = geminiJob(0, { outputs: [result] });
+    const bridge = await renderApp(snapshot({ history: [job] }));
+
+    await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
+
+    expect(document.querySelector(".preview-media-video")).not.toBeNull();
+    const editButton = document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Edit"]');
+    const cropButton = document.querySelector<HTMLButtonElement>('.preview-control-strip button[aria-label="Crop"]');
+    expect(editButton?.disabled).toBe(true);
+    expect(cropButton?.disabled).toBe(true);
+
+    const video = document.querySelector<HTMLVideoElement>(".preview-media-video")!;
+    await act(async () => {
+      video.dispatchEvent(new Event("error"));
+    });
+    expect(document.body.textContent).toContain("This media cannot be played in the current preview.");
+
+    const fallbackButtons = document.querySelectorAll<HTMLButtonElement>(".media-preview-fallback-actions button");
+    expect(fallbackButtons).toHaveLength(2);
+    await click(fallbackButtons[1]!);
+    expect(bridge.openAssetFolder).toHaveBeenCalledWith(result.path);
   });
 
   it("switches preview edit and crop controls with active toggle buttons", async () => {

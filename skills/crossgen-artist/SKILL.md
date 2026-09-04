@@ -1,6 +1,6 @@
 ---
 name: crossgen-artist
-description: Use CrossGen to plan and execute image generation, editing, inpainting, model selection, job monitoring, Gallery inspection, and asset export through MCP or its JSON CLI.
+description: Use CrossGen to plan and execute image generation, editing, inpainting, model selection, media-aware job monitoring, Gallery inspection, and asset export through MCP or its JSON CLI.
 ---
 
 # CrossGen Artist
@@ -30,6 +30,26 @@ Use this skill when an agent needs to create or modify images through a local Cr
 - Keep provider-specific options namespaced to their adapter: OpenAI commonly uses `size` and `quality`; Gemini commonly uses `aspectRatio` and `resolution`. Omit unsupported fields rather than guessing.
 - When the user asks for multiple concepts, prefer one durable request per concept with distinct idempotency keys unless the selected model explicitly supports batching.
 - For edits, verify that every input path exists and is readable before submitting. Keep the original reference unchanged and describe the requested transformation separately from preservation constraints.
+
+## Media-aware behavior in v0.3.4
+
+- Treat `crossgen_job_status`, `crossgen_gallery_list`, and
+  `crossgen_asset_inspect` as media-aware contracts. Read `kind`,
+  `dimensions`, `sizeBytes`, `durationMs`, `fps`, `frameCount`, and
+  `hasPoster` when present instead of inferring type from a filename alone.
+- Default CLI/MCP output intentionally omits local `path`, `posterPath`, and
+  preview URLs. `hasPoster: true` means a poster reference exists in the local
+  app; it is not visual proof that the poster is readable.
+- v0.3.4 can import and inspect GIF/video assets and the desktop viewer can
+  preview them within the host's codec support. GIFs are read-only previews;
+  video and GIF assets are not valid reference-image, mask, Canvas-editing, or
+  inpaint inputs.
+- v0.3.4 does not expose real video generation, video editing, poster
+  extraction, ffmpeg conversion, or video MCP tools. Do not present those as
+  available capabilities; route that work to the v0.3.5 preview plan.
+- Exporting a media asset still requires an explicit destination and
+  confirmation. Use metadata to choose the next action, then ask for visual
+  QA when fidelity matters.
 
 ## Safety and recovery
 

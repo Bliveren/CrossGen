@@ -3,6 +3,7 @@ import path from "node:path";
 export const DEFAULT_STATE_FILE_NAME = "image2tools-state.v1.json";
 export const DEFAULT_LEGACY_USER_DATA_NAME = "Image2Tools";
 export const DEFAULT_QUEUE_FILE_NAME = "crossgen-queue.v1.json";
+export const DEFAULT_MEDIA_ROOT_NAME = "media";
 
 export interface DataDirResolutionInput {
   appDataDir: string;
@@ -20,6 +21,11 @@ export interface ResolvedDataDirs {
   queueLockPath: string;
   imagesDir: string;
   galleryDir: string;
+  mediaRoot: string;
+  mediaOriginalsDir: string;
+  mediaPreviewsDir: string;
+  mediaPostersDir: string;
+  mediaTempDir: string;
   galleryThumbnailCacheDir: string;
   legacyImageRoots: string[];
 }
@@ -46,6 +52,11 @@ export function resolveDataDirs(input: DataDirResolutionInput): ResolvedDataDirs
     queueLockPath: lockPath,
     imagesDir: path.join(userDataDir, "images"),
     galleryDir: path.join(userDataDir, "gallery"),
+    mediaRoot: path.join(userDataDir, DEFAULT_MEDIA_ROOT_NAME),
+    mediaOriginalsDir: path.join(userDataDir, DEFAULT_MEDIA_ROOT_NAME, "originals"),
+    mediaPreviewsDir: path.join(userDataDir, DEFAULT_MEDIA_ROOT_NAME, "previews"),
+    mediaPostersDir: path.join(userDataDir, DEFAULT_MEDIA_ROOT_NAME, "posters"),
+    mediaTempDir: path.join(userDataDir, DEFAULT_MEDIA_ROOT_NAME, "tmp"),
     galleryThumbnailCacheDir: path.join(userDataDir, "gallery-thumbnails"),
     legacyImageRoots: [
       path.join(userDataDir, "images"),

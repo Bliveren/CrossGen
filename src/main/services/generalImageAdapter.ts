@@ -255,6 +255,7 @@ async function saveOpenAICompatibleGeneralImage(
     path: filePath,
     fileName,
     mimeType: normalizedMimeType,
+    sizeBytes: buffer.byteLength,
     sourceType: "result",
     createdAt: new Date().toISOString(),
     transientPreview: {

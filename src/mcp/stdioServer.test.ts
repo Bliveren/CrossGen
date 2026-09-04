@@ -47,6 +47,67 @@ function readers(): ReadonlyMcpReaders {
   };
 }
 
+function mediaReaders(): ReadonlyMcpReaders {
+  return {
+    ...readers(),
+    jobStatus: async (jobId) =>
+      jobId === "history-media"
+        ? {
+            lookupId: jobId,
+            source: "history",
+            terminal: true,
+            historyJob: {
+              id: jobId,
+              modelId: "gpt-image-2",
+              outputs: [
+                {
+                  id: "gif-output",
+                  fileName: "animation.gif",
+                  mimeType: "image/gif",
+                  kind: "animated-gif",
+                  dimensions: { width: 640, height: 480 },
+                  sizeBytes: 8192,
+                  durationMs: 1500,
+                  fps: 12,
+                  frameCount: 18,
+                  hasPoster: true
+                },
+                {
+                  id: "video-output",
+                  fileName: "clip.mp4",
+                  mimeType: "video/mp4",
+                  kind: "video",
+                  dimensions: { width: 1920, height: 1080 },
+                  sizeBytes: 16384,
+                  durationMs: 2500,
+                  fps: 24,
+                  frameCount: 60,
+                  hasPoster: true
+                }
+              ]
+            }
+          }
+        : null,
+    galleryList: async () => ({
+      filters: { folderId: null, tags: [], query: null },
+      assets: [
+        {
+          id: "gallery-video",
+          originalName: "clip.mp4",
+          mimeType: "video/mp4",
+          kind: "video",
+          sizeBytes: 2048,
+          width: 1920,
+          height: 1080,
+          folderId: null,
+          tags: [],
+          source: "import"
+        }
+      ]
+    })
+  };
+}
+
 function writers(): GalleryMcpWriters {
   return {
     folderCreate: async ({ name }) => ({ folder: { id: "folder-1", name } }),
@@ -109,14 +170,20 @@ function queueControllers(): QueueMcpControllers {
 
 async function runServer(
   inputText: string,
-  options: { mode?: ReadonlyMcpMode; withWriters?: boolean; withControllers?: boolean; writers?: GalleryMcpWriters } = {}
+  options: {
+    mode?: ReadonlyMcpMode;
+    withWriters?: boolean;
+    withControllers?: boolean;
+    writers?: GalleryMcpWriters;
+    readers?: ReadonlyMcpReaders;
+  } = {}
 ) {
   const input = new PassThrough();
   const captured = captureOutput();
   const run = runReadonlyMcpStdioServer({
     mode: options.mode ?? "readonly",
     serverVersion: "0.3.0-test",
-    readers: readers(),
+    readers: options.readers ?? readers(),
     writers: options.writers ?? (options.withWriters ? writers() : undefined),
     queueControllers: options.withWriters ? queueControllers() : undefined,
     jobControllers: options.withControllers ? controllers() : undefined,
@@ -321,6 +388,60 @@ describe("readonly MCP stdio server", () => {
         }
       }
     });
+  });
+
+  it("preserves media metadata in structured content without local paths", async () => {
+    const { output } = await runServer(
+      [
+        JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "crossgen_job_status", arguments: { jobId: "history-media" } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "crossgen_gallery_list", arguments: {} } })
+      ].join("\n"),
+      { readers: mediaReaders() }
+    );
+
+    const responses = lineResponses(output);
+    expect(responses[0]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: {
+            job: {
+              historyJob: {
+                outputs: [
+                  {
+                    kind: "animated-gif",
+                    dimensions: { width: 640, height: 480 },
+                    durationMs: 1500,
+                    fps: 12,
+                    frameCount: 18,
+                    hasPoster: true
+                  },
+                  {
+                    kind: "video",
+                    dimensions: { width: 1920, height: 1080 },
+                    durationMs: 2500,
+                    fps: 24,
+                    frameCount: 60,
+                    hasPoster: true
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    });
+    expect(responses[1]).toMatchObject({
+      result: {
+        structuredContent: {
+          data: {
+            assets: [{ id: "gallery-video", kind: "video", sizeBytes: 2048 }]
+          }
+        }
+      }
+    });
+    const serialized = JSON.stringify(responses);
+    expect(serialized).not.toContain("posterPath");
+    expect(serialized).not.toContain("/private/");
   });
 
   it("registers Gallery write tools only in write mode", async () => {

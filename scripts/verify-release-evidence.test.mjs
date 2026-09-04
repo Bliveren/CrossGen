@@ -104,11 +104,20 @@ describe("release evidence verifier", () => {
   });
 
   it("validates the current v0.3.3 release ledger", async () => {
-    const result = await run(["--file", "docs/release/evidence.json", "--expected-version", "0.3.3", "--require-complete"]);
+    const result = await run(["--file", "docs/release/v0.3.3-evidence.json", "--expected-version", "0.3.3", "--require-complete"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Release evidence validated: 22/22 required gate(s) passed.");
     expect(result.stdout).not.toContain("Pending required gate(s):");
+  });
+
+  it("validates the v0.3.4 candidate ledger and reports pending gates", async () => {
+    const result = await run(["--file", "docs/release/evidence.json", "--expected-version", "0.3.4"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Release evidence validated: 0/27 required gate(s) passed.");
+    expect(result.stdout).toContain("applink-provider-import");
+    expect(result.stdout).toContain("media-foundation-contract");
   });
 
   it("rejects v0.3.1 evidence as default evidence after the package version advances", async () => {

@@ -3,7 +3,8 @@
 `evidence.json` records the external gates that cannot be completed from a
 normal local development shell: real provider API acceptance, macOS Developer ID
 signing, Apple notarization status, native Windows and Linux validation, and
-formal update manifest assets.
+formal update manifest assets. For v0.3.4 it also records AppLink and the
+media-foundation contract gates.
 
 Validate the ledger after every evidence update:
 
@@ -18,6 +19,7 @@ bumped:
 pnpm verify:release-evidence:v0.3.1
 pnpm verify:release-evidence:v0.3.2
 pnpm verify:release-evidence:v0.3.3
+pnpm verify:release-evidence:v0.3.4
 ```
 
 The verifier also checks guarded checklist and TODO items. External acceptance
@@ -80,8 +82,10 @@ External gate trackers:
 
 Release-specific preparation:
 
+- `v0.3.4`: [v0.3.4-preflight.md](./v0.3.4-preflight.md)
+- `v0.3.4`: [evidence.json](./evidence.json)
 - `v0.3.3`: [v0.3.3-preflight.md](./v0.3.3-preflight.md)
-- `v0.3.3`: [evidence.json](./evidence.json)
+- `v0.3.3`: [v0.3.3-evidence.json](./v0.3.3-evidence.json)
 - `v0.3.2`: [v0.3.2-evidence.json](./v0.3.2-evidence.json)
 - `v0.3.2`: [v0.3.2-pre-rc-evidence.md](./v0.3.2-pre-rc-evidence.md)
 - `v0.3.2`: [v0.3.2-provider-gate-matrix.md](./v0.3.2-provider-gate-matrix.md)
@@ -105,5 +109,5 @@ Rules for updating evidence:
   evidence gate is marked `passed` and the validator succeeds.
 - `docs/release/evidence.json` tracks the current package-version release
   candidate. Version-specific evidence files such as
-  `docs/release/v0.3.1-evidence.json` remain immutable archives for approved
+  `docs/release/v0.3.3-evidence.json` remain immutable archives for approved
   releases and compatibility checks.

@@ -48,6 +48,7 @@
     "verify:release-evidence:v0.3.1": "node scripts/verify-release-evidence.mjs --file docs/release/v0.3.1-evidence.json --expected-version 0.3.1",
     "verify:release-evidence:v0.3.2": "node scripts/verify-release-evidence.mjs --file docs/release/v0.3.2-evidence.json --expected-version 0.3.2",
     "verify:release-evidence:v0.3.3": "node scripts/verify-release-evidence.mjs --file docs/release/evidence.json --expected-version 0.3.3",
+    "verify:release-evidence:v0.3.4": "node scripts/verify-release-evidence.mjs --file docs/release/evidence.json --expected-version 0.3.4",
     "verify:real-crossgen-gate": "node scripts/verify-real-crossgen-gate.mjs",
     "verify:real-provider-gate": "node scripts/verify-real-provider-gate.mjs",
     "verify:real-aihub-api": "node scripts/verify-real-aihub-api.mjs",

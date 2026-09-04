@@ -23,6 +23,7 @@ import {
   validateOpenAIRunJobRequest
 } from "../../shared/validation.js";
 import type { ImageJobRuntime, ImageProviderAdapter, ImageProviderRuntime } from "./imageProviderAdapter.js";
+import { isImageAsset } from "../../core/mediaTypes.js";
 import { firstString, isRecord, readProviderApiError, readProviderJsonResponse, redactLikelySecrets } from "./providerHttp.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 
@@ -1206,7 +1207,7 @@ async function handleJsonGenerationImagesWithFallback(
         const streamResponse = await fetchStreamFallback(streamJob);
         const streamResult = await handleImagesResponse(streamResponse, streamJob, "image_generation", runtime, firstIndex);
         const finalCountBefore = countFinalOutputs(outputs);
-        outputs.push(...streamResult.outputs);
+        outputs.push(...streamResult.outputs.filter(isImageAsset));
         usage = mergeUsageDetails(usage, streamResult.usage);
         if (countFinalOutputs(outputs) <= finalCountBefore) break;
       }
@@ -2220,7 +2221,8 @@ async function saveBase64Image(
   const mimeType = mimeTypeForFormat(params.outputFormat);
   const fileName = `${jobId}-${sourceType}-${index}.${ext}`;
   const filePath = path.join(runtime.imagesDir, fileName);
-  await fs.writeFile(filePath, Buffer.from(b64Json, "base64"));
+  const bytes = Buffer.from(b64Json, "base64");
+  await fs.writeFile(filePath, bytes);
 
   return {
     id: `img_${randomUUID()}`,
@@ -2228,6 +2230,7 @@ async function saveBase64Image(
     path: filePath,
     fileName,
     mimeType,
+    sizeBytes: bytes.byteLength,
     sourceType,
     createdAt: new Date().toISOString(),
     transientPreview: {
