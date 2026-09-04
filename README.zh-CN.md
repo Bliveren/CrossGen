@@ -24,6 +24,7 @@
 
 <p align="center">
   <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载 v0.3.3</b></a> ·
+  <a href="#applink-api-配置"><b>AppLink</b></a> ·
   <a href="#crossgen-artist-skill"><b>CrossGen Artist Skill</b></a> ·
   <a href="#agent-快速开始"><b>Agent 快速开始</b></a> ·
   <a href="./docs/cli-mcp.md"><b>CLI/MCP 文档</b></a> ·
@@ -35,7 +36,7 @@
 </p>
 
 <p align="center">
-  <a href="#为什么是-crossgen-033">0.3.3 介绍</a> ·
+  <a href="#为什么是-crossgen-034">0.3.4 介绍</a> ·
   <a href="#功能演示">功能演示</a> ·
   <a href="#核心工作流">核心工作流</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -43,13 +44,13 @@
   <a href="#技术说明">技术说明</a>
 </p>
 
-## 为什么是 CrossGen 0.3.3
+## 为什么是 CrossGen 0.3.4
 
-CrossGen 0.3.3 进一步提升真实生图工作的可靠性。桌面端、CLI 和 MCP 共用同一套队列、接口路径诊断、参考图处理、历史和图库流程，内置的 crossgen-artist skill 也围绕同一套契约工作，让不同服务商的路径差异、任务重试和素材复用都能在同一个工作流里完成。
+CrossGen 0.3.4 在可靠的 0.3.3 图片工作区之上增加媒体感知基础层和需要确认的 AppLink 导入流程。桌面端、CLI 和 MCP 共用同一套队列、接口路径诊断、参考图处理、历史、图库和媒体元数据契约，内置的 crossgen-artist skill 也围绕同一套契约工作。
 
 | 在桌面端完成可视化工作 | 让 Agent 调用同一本地运行时 |
 | --- | --- |
-| 配置 Provider、生图和编辑、查看历史，并将可复用图片整理进图库。 | 发现模型、提交队列生图或编辑任务、查询任务、检查图库资产，并将选中结果导出到当前项目。 |
+| 配置 Provider、生图和编辑、查看历史，并将可复用图片整理进图库；支持在明确边界内导入和预览 GIF/视频资产。 | 发现模型、提交队列生图或编辑任务、查询任务、检查图片/GIF/视频元数据，并将选中结果导出到当前项目。 |
 
 <img width="1440" height="940" alt="screenshot-20260724-003442" src="https://github.com/user-attachments/assets/aaaaf3d8-cf9b-4320-bdfb-a04ca9f92168" />
 
@@ -77,7 +78,7 @@ crossgen mcp config --client cursor --mode generate --json
 
 ### CrossGen Artist Skill
 
-CrossGen 仓库内置一套首选的 Agent 工作流技能 [`skills/crossgen-artist`](./skills/crossgen-artist/)。它会指导 Codex 等兼容 Agent 自动发现模型能力，选择生成、编辑或局部重绘，提交带幂等键的队列任务，轮询完成状态，检查图库资产，并在不意外泄露 API Key 或本地路径的前提下导出结果。
+CrossGen 仓库内置一套媒体感知的首选 Agent 工作流技能 [`skills/crossgen-artist`](./skills/crossgen-artist/)。它会指导 Codex 等兼容 Agent 自动发现模型能力，选择生成、编辑或局部重绘，提交带幂等键的队列任务，轮询完成状态，读取图片/GIF/视频元数据，检查图库资产，并在不意外泄露 API Key 或本地路径的前提下导出结果。0.3.4 仍不开放真实视频生成和视频编辑。
 
 从 CrossGen 源码仓库为 Codex 安装：
 
@@ -89,6 +90,18 @@ ln -sfn "$(pwd)/skills/crossgen-artist" "$HOME/.codex/skills/crossgen-artist"
 之后可以使用 `$crossgen-artist` 调用。该 skill 与 CrossGen 一起版本管理，确保说明始终匹配内置 CLI/MCP 契约。使用打包应用时，应使用对应版本源码或 release archive 中的 skill 文件；后续会在 Agent access 中补充一键安装入口。
 
 桌面端 **Agent access** 面板是 MCP 配置的唯一来源。可在面板中复制对应客户端的配置片段：模型发现先使用 `readonly`，只有确实需要时再切换到 `write` 或 `generate`。CrossGen 不会静默修改 Codex 配置，也不会自动开启付费生图。
+
+### AppLink API 配置
+
+CrossGen 0.3.4 增加 `crossgen://` AppLink，供 API 聚合平台把 API 名称、Base URL、API Key 和可选模型一键交给 CrossGen。CrossGen 会先弹出确认框，确认后才新增 API 配置；收到链接后，Key 会使用现有本地加密保护保存，不会写入日志或完整显示。
+
+标准格式：
+
+```text
+crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
+```
+
+同时兼容 `apiKey`/`api_key`、`baseURL`/`base_url`、`defaultModel`/`default_model`、`provider`/`kind` 等常见别名。支持的启动模型为 `gpt-image-2`、`nano-banana-3` 和 `general`；未提供时会根据 provider 类型和模型名自动推断。macOS、Windows、Linux 打包版本都会注册 `crossgen` scheme。
 
 > 已经在桌面、CLI 或 Agent 工作流中使用 CrossGen？可以 [Star 仓库](https://github.com/Bliveren/CrossGen)，帮助更多需要本地优先图像工具的用户发现它，也欢迎在 [Discord](https://discord.gg/XphwmYtY) 分享你的真实工作流。
 

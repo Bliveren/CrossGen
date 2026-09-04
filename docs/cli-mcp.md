@@ -8,6 +8,24 @@ data/state paths, active provider, live queue workers, copyable diagnostics, and
 client-specific MCP configuration snippets. It never edits shell startup files
 or the system `PATH` automatically.
 
+## AppLink provider import
+
+Desktop packages register the `crossgen://` URL scheme so API aggregators can
+open CrossGen with a provider configuration. Use the canonical form below:
+
+```text
+crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
+```
+
+CrossGen validates the scheme, target, Base URL, API Key, timeout, and focused
+launch before showing a confirmation dialog. Confirming adds a new provider and
+starts model discovery. After the link is received, the API Key stays in the
+Electron main process until it is encrypted and persisted; the confirmation
+dialog only shows a masked preview. `crossgen://api-config` and
+`crossgen://config/import` are
+accepted compatibility targets, and common camelCase/snake_case parameter
+aliases are supported.
+
 ## Runtime
 
 Desktop use does not require CLI or MCP setup. Open the CrossGen app, configure
@@ -217,7 +235,7 @@ launcher; it never assumes `/Applications/CrossGen.app`.
 
 ## CrossGen Artist Skill
 
-The repository includes [`skills/crossgen-artist`](../skills/crossgen-artist/), a Codex-compatible skill for model discovery, prompt-to-image generation, reference-image editing, inpainting, durable job polling, Gallery inspection, and explicit asset export. It is intentionally versioned with CrossGen because it depends on the CrossGen CLI/MCP tool names and permission contract.
+The repository includes [`skills/crossgen-artist`](../skills/crossgen-artist/), a media-aware Codex-compatible skill for model discovery, prompt-to-image generation, reference-image editing, inpainting, durable job polling, Gallery inspection, media metadata reads, and explicit asset export. It is intentionally versioned with CrossGen because it depends on the CrossGen CLI/MCP tool names and permission contract.
 
 Install it for the current user from a CrossGen checkout:
 
@@ -234,6 +252,11 @@ When CrossGen is running from the source tree, the generated `args` also include
 the repository app path before `--mcp`; this keeps copied MCP configuration
 usable with the Electron development runtime. Packaged installs use the
 launcher form: `<resources>/cli/crossgen --mcp`.
+
+In v0.3.4, read-only history/Gallery results may report `kind`, dimensions,
+size, duration, fps, frame count, and poster availability without returning
+local absolute paths. GIF/video assets remain read/preview/export subjects, not
+image editing or generation inputs.
 
 Modes:
 

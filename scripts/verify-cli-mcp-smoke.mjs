@@ -337,6 +337,12 @@ async function verifyCliFlow(baseURL) {
   assertCliOk(jobStatus, "CLI job status");
   assert(jobStatus.data.job?.terminal === true, "CLI job status did not report terminal state.");
   assert(jobStatus.data.job?.historyJob?.source === "cli", "CLI-generated History job did not record source=cli.");
+  const cliOutputs = jobStatus.data.job?.historyJob?.outputs ?? [];
+  assert(cliOutputs.length >= 1, "CLI job status did not expose generated output metadata.");
+  assert(cliOutputs.every((output) => output.kind === "image"), "CLI mock image output reported a non-image media kind.");
+  assert(cliOutputs.every((output) => typeof output.fileName === "string" && !output.path), "CLI output metadata exposed a local path.");
+  assert(cliOutputs.every((output) => !("posterPath" in output)), "CLI output metadata exposed a poster path.");
+  assert(cliOutputs.every((output) => typeof output.sizeBytes === "number" && output.sizeBytes > 0), "CLI output metadata missed sizeBytes.");
 
   const gallery = await runCli(dataDir, ["gallery", "list", "--json"]);
   assertCliOk(gallery, "CLI gallery list");
@@ -430,9 +436,18 @@ async function verifyMcpFlow(baseURL) {
   assert(mcpEdited.execution?.terminal === true, "MCP edit_image did not reach terminal state.");
   assert(mcpEdited.execution?.status === "succeeded", "MCP edit_image did not succeed.");
   assert(mcpEdited.execution?.job?.historyJob?.source === "mcp", "MCP-edited History job did not record source=mcp.");
+  for (const execution of [mcpGenerated.execution, mcpEdited.execution]) {
+    const outputs = execution?.job?.historyJob?.outputs ?? [];
+    assert(outputs.length >= 1, "MCP generation response did not expose output metadata.");
+    assert(outputs.every((output) => output.kind === "image"), "MCP mock image output reported a non-image media kind.");
+    assert(outputs.every((output) => !output.path), "MCP generation response exposed a local output path.");
+    assert(outputs.every((output) => !("posterPath" in output)), "MCP generation response exposed a poster path.");
+    assert(outputs.every((output) => typeof output.sizeBytes === "number" && output.sizeBytes > 0), "MCP output metadata missed sizeBytes.");
+  }
 
   const mcpGallery = mcpStructuredData(mcpById(generateResponses, 5), "MCP gallery_list");
   assert((mcpGallery.assets?.length ?? 0) >= 2, "MCP Gallery did not include generated and edited assets.");
+  assert(mcpGallery.assets.every((asset) => !asset.path && !asset.previewUrl), "MCP Gallery metadata exposed a local asset path.");
   const assetId = mcpGallery.assets[0].id;
   const exportPath = path.join(smokeRoot, "exports", "mcp-asset.png");
   const exportResponses = await runMcp(dataDir, "write", [

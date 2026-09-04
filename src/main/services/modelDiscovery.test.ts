@@ -35,6 +35,24 @@ describe("model discovery", () => {
     ]);
   });
 
+  it("preserves capability metadata from OpenAI-compatible gateways", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        data: [
+          { id: "paint-model", capabilities: { image_generation: true } },
+          { id: "veo-3", capabilities: { video_generation: true } }
+        ]
+      })
+    );
+
+    const result = await discoverModels("custom", "https://gateway.example.com/v1", "gateway-key", 30000, {
+      fetch: fetchImpl
+    });
+
+    expect(result.models[0]?.raw).toEqual(expect.objectContaining({ capabilities: { image_generation: true } }));
+    expect(result.models[1]?.raw).toEqual(expect.objectContaining({ capabilities: { video_generation: true } }));
+  });
+
   it("classifies focused model ids discovered from an OpenAI-compatible model list", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({

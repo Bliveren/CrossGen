@@ -119,6 +119,56 @@ describe("model capability contracts", () => {
     });
   });
 
+  it("uses provider capability metadata for image and video discovery", () => {
+    const image = capabilitySummaryForDiscoveredModel("custom-provider", {
+      id: "paint-model",
+      providerKind: "custom",
+      raw: { id: "paint-model", capabilities: { image_generation: true } }
+    });
+    expect(image.source).toBe("discovered");
+    expect(image.capabilities).toMatchObject({
+      generate: true,
+      mediaKinds: ["image"],
+      confidence: "discovered"
+    });
+
+    const video = capabilitySummaryForDiscoveredModel("custom-provider", {
+      id: "veo-3",
+      providerKind: "custom",
+      raw: { id: "veo-3", supportedGenerationMethods: ["generateVideos"] }
+    });
+    expect(video.source).toBe("discovered");
+    expect(video.capabilities).toMatchObject({
+      generate: false,
+      video: true,
+      mediaKinds: ["video"],
+      videoRouteStrategy: "openai-compatible-video-generations",
+      confidence: "discovered"
+    });
+  });
+
+  it("does not infer image support from a text-only model description", () => {
+    const textOnly = capabilitySummaryForDiscoveredModel("custom-provider", {
+      id: "chat-model",
+      providerKind: "custom",
+      displayName: "Image-aware chat model",
+      description: "This model can discuss image prompts.",
+      raw: { id: "chat-model", modalities: ["text"] }
+    });
+    expect(textOnly.capabilities.generate).toBe(false);
+    expect(textOnly.capabilities.confidence).toBe("unknown");
+  });
+
+  it("keeps Gemini image-name fallback when only generateContent is advertised", () => {
+    const discovered = capabilitySummaryForDiscoveredModel("gemini-provider", {
+      id: "vendor-image-pro",
+      providerKind: "gemini",
+      raw: { name: "models/vendor-image-pro", supportedGenerationMethods: ["generateContent"] }
+    });
+    expect(discovered.capabilities.generate).toBe(true);
+    expect(discovered.capabilities.mediaKinds).toEqual(["image"]);
+  });
+
   it("lists provider focused, active general, and discovered capabilities without duplicates", () => {
     const summaries = listProviderModelCapabilitySummaries(
       provider({
@@ -163,5 +213,15 @@ describe("model capability contracts", () => {
       `${NANO_BANANA_3_LAUNCH_ID}:${GEMINI_3_PRO_IMAGE_MODEL_ID}`
     ]);
     expect(new Set(nanoModels.map((summary) => summary.selectionKey)).size).toBe(nanoModels.length);
+  });
+
+  it("does not trust a focused id when the gateway explicitly marks it text-only", () => {
+    const summary = capabilitySummaryForDiscoveredModel("provider-openai", {
+      id: "gpt-image-2",
+      providerKind: "openai",
+      raw: { id: "gpt-image-2", output_modalities: ["text"] }
+    });
+    expect(summary.source).toBe("unknown");
+    expect(summary.capabilities.generate).toBe(false);
   });
 });

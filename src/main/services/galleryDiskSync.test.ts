@@ -105,6 +105,8 @@ describe("gallery disk sync reconciliation", () => {
     await mkdir(path.join(galleryDir, "Products", "Hero"), { recursive: true });
     await mkdir(path.join(galleryDir, ".hidden-folder"), { recursive: true });
     await writeFile(path.join(galleryDir, "Products", "Hero", "shot.png"), "png");
+    await writeFile(path.join(galleryDir, "Products", "Hero", "motion.mp4"), "mp4");
+    await writeFile(path.join(galleryDir, "Products", "Hero", "loop.gif"), "gif");
     await writeFile(path.join(galleryDir, "Products", "Hero", "draft.tmp"), "tmp");
     await writeFile(path.join(galleryDir, "Products", "Hero", ".hidden.png"), "hidden");
     await writeFile(path.join(galleryDir, "Products", "Hero", "notes.txt"), "text");
@@ -118,10 +120,28 @@ describe("gallery disk sync reconciliation", () => {
       { relPath: "Products", parentRelPath: null, name: "Products" },
       { relPath: "Products/Hero", parentRelPath: "Products", name: "Hero" }
     ]);
-    expect(result.assets.map((asset) => asset.relPath)).toEqual(["Products/Hero/shot.png", "root.webp"]);
+    expect(result.assets.map((asset) => asset.relPath)).toEqual([
+      "Products/Hero/loop.gif",
+      "Products/Hero/motion.mp4",
+      "Products/Hero/shot.png",
+      "root.webp"
+    ]);
     expect(result.assets.find((asset) => asset.relPath === "Products/Hero/shot.png")).toEqual(expect.objectContaining({
       folderRelPath: "Products/Hero",
       mimeType: "image/png",
+      kind: "image",
+      sizeBytes: 3
+    }));
+    expect(result.assets.find((asset) => asset.relPath === "Products/Hero/motion.mp4")).toEqual(expect.objectContaining({
+      folderRelPath: "Products/Hero",
+      mimeType: "video/mp4",
+      kind: "video",
+      sizeBytes: 3
+    }));
+    expect(result.assets.find((asset) => asset.relPath === "Products/Hero/loop.gif")).toEqual(expect.objectContaining({
+      folderRelPath: "Products/Hero",
+      mimeType: "image/gif",
+      kind: "animated-gif",
       sizeBytes: 3
     }));
     expect(result.assets.find((asset) => asset.relPath === "root.webp")).toEqual(expect.objectContaining({

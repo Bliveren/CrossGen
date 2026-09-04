@@ -15,6 +15,7 @@ import type {
   ProviderKind,
   ReferenceImageMode
 } from "./types.js";
+import { isImageAsset } from "../core/mediaTypes.js";
 import {
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
@@ -743,10 +744,10 @@ export function stripTransientPreviewFromImageAsset(asset: ImageAsset): ImageAss
 }
 
 export function stripTransientPreviewsFromJob(job: GenerationJob): GenerationJob {
-  if (!job.outputs.some((asset) => asset.transientPreview)) return job;
+  if (!job.outputs.some((asset) => isImageAsset(asset) && asset.transientPreview)) return job;
   return {
     ...job,
-    outputs: job.outputs.map(stripTransientPreviewFromImageAsset)
+    outputs: job.outputs.map((asset) => isImageAsset(asset) ? stripTransientPreviewFromImageAsset(asset) : asset)
   };
 }
 

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type React from "react";
 import {
   AlertTriangle,
@@ -19,11 +20,13 @@ import {
   Save,
   Sparkles,
   Type,
+  Video,
   X,
   ZoomIn,
   ZoomOut
 } from "lucide-react";
-import type { ImageAsset } from "../shared/types";
+import type { ImageAsset, OutputAsset } from "../shared/types";
+import { isAnimationAsset, isImageAsset, isVideoAsset } from "../core/mediaTypes";
 import type { Language, UiCopy } from "./i18n";
 import { ANNOTATION_COLOR_SWATCHES, type AnnotationDrawingLayer, type AnnotationTextBox, type AnnotationTool, type CanvasRect, type CropSelection, type CropShape } from "./imageEditorTypes";
 
@@ -50,8 +53,9 @@ interface ImageEditorProps {
   generationAttemptLabel?: string;
   generationStageLabel?: string;
   isGenerationCancelEnabled: boolean;
+  activeMedia?: OutputAsset;
   activeImage?: ImageAsset;
-  activeResults: ImageAsset[];
+  activeResults: OutputAsset[];
   partialImages: ImageAsset[];
   previewZoom: number;
   previewPan: { x: number; y: number };
@@ -78,7 +82,8 @@ interface ImageEditorProps {
   isAnnotationColorPickerOpen: boolean;
   editorUndoStackLength: number;
   cropShape: CropShape;
-  assetSource: (asset?: ImageAsset | null) => string | undefined;
+  assetSource: (asset?: OutputAsset | ImageAsset | null) => string | undefined;
+  onOpenMediaFolder: () => void;
   buttonFeedbackClass: (id: string, base?: string) => string;
   annotationLayerStyle: (order: number) => React.CSSProperties;
   cssRectForCanvasRect: (rect: CanvasRect) => React.CSSProperties;
@@ -140,6 +145,7 @@ export function ImageEditor({
   generationAttemptLabel,
   generationStageLabel,
   isGenerationCancelEnabled,
+  activeMedia,
   activeImage,
   activeResults,
   partialImages,
@@ -169,6 +175,7 @@ export function ImageEditor({
   editorUndoStackLength,
   cropShape,
   assetSource,
+  onOpenMediaFolder,
   buttonFeedbackClass,
   annotationLayerStyle,
   cssRectForCanvasRect,
@@ -213,6 +220,23 @@ export function ImageEditor({
   onActivatePartialImage,
   onCancelGeneration
 }: ImageEditorProps) {
+  const [videoPlaybackError, setVideoPlaybackError] = useState(false);
+  const isImagePreview = !activeMedia || isImageAsset(activeMedia);
+  const isVideoPreview = isVideoAsset(activeMedia);
+  const isAnimationPreview = isAnimationAsset(activeMedia);
+  const canUseImageEditor = Boolean(activeImage && isImagePreview);
+  const showEditTools = isImagePreview && isEditingPreview;
+  const showCropTools = isImagePreview && isCroppingPreview;
+  const mediaPathSource = (mediaPath?: string): string | undefined => {
+    if (!mediaPath) return undefined;
+    return `image2tools-asset://image?path=${encodeURIComponent(mediaPath)}`;
+  };
+  const posterSource = activeMedia && "posterPath" in activeMedia ? mediaPathSource(activeMedia.posterPath) : undefined;
+
+  useEffect(() => {
+    setVideoPlaybackError(false);
+  }, [activeMedia?.id, activePreviewSource]);
+
   return (
     <section className="result-stage">
       <div className="result-canvas" ref={resultCanvasRef}>
@@ -229,27 +253,40 @@ export function ImageEditor({
             >
               <div
                 ref={annotationFrameRef}
-                className="preview-image-frame"
+                className={isVideoPreview ? "preview-image-frame media-video-frame" : isAnimationPreview ? "preview-image-frame media-animation-frame" : "preview-image-frame"}
                 style={{ width: `${previewZoom * 100}%`, transform: `translate(${previewPan.x}px, ${previewPan.y}px)` }}
               >
-                <img
-                  ref={annotationImageRef}
-                  src={activePreviewSource}
-                  alt={copy.generatedResult}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={copy.resultViewer}
-                  crossOrigin={/^(?:https?:|image2tools-asset:)/i.test(activePreviewSource) ? "anonymous" : undefined}
-                  draggable={false}
-                  onLoad={() => onResizeAnnotationCanvas(true)}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" && event.key !== " ") return;
-                    event.preventDefault();
-                    onOpenPreview();
-                  }}
-                  onContextMenu={onImageContextMenu}
-                />
-                {annotationDrawingLayers.map((layer) => (
+                {isVideoPreview ? (
+                  <video
+                    className="preview-media-video"
+                    src={activePreviewSource}
+                    poster={posterSource}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    onError={() => setVideoPlaybackError(true)}
+                    aria-label={copy.generatedResult}
+                  />
+                ) : (
+                  <img
+                    ref={isImagePreview ? annotationImageRef : undefined}
+                    src={activePreviewSource}
+                    alt={copy.generatedResult}
+                    role={isImagePreview ? "button" : undefined}
+                    tabIndex={isImagePreview ? 0 : undefined}
+                    aria-label={isImagePreview ? copy.resultViewer : copy.generatedResult}
+                    crossOrigin={/^(?:https?:|image2tools-asset:)/i.test(activePreviewSource) ? "anonymous" : undefined}
+                    draggable={false}
+                    onLoad={isImagePreview ? () => onResizeAnnotationCanvas(true) : undefined}
+                    onKeyDown={isImagePreview ? (event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      onOpenPreview();
+                    } : undefined}
+                    onContextMenu={isImagePreview ? onImageContextMenu : undefined}
+                  />
+                )}
+                {isImagePreview && annotationDrawingLayers.map((layer) => (
                   <img
                     key={layer.id}
                     className="annotation-drawing-layer"
@@ -259,32 +296,34 @@ export function ImageEditor({
                     style={annotationLayerStyle(layer.order)}
                   />
                 ))}
-                <canvas
-                  ref={annotationCanvasRef}
-                  className={[
-                    "annotation-canvas",
-                    isPreviewCanvasInteractive ? "active" : hasEditorOverlay ? "visible" : "",
-                    isAnnotationColorSampling ? "eyedropper-mode" : isCroppingPreview ? "crop-mode" : annotationTool === "text" ? "text-mode" : ""
-                  ].filter(Boolean).join(" ")}
-                  style={{
-                    zIndex: isCroppingPreview || (isEditingPreview && (annotationTool === "draw" || isAnnotationColorSampling)) ? 1000 : 10
-                  }}
-                  onPointerDown={onStartAnnotation}
-                  onPointerMove={onContinueAnnotation}
-                  onPointerUp={onFinishAnnotation}
-                  onPointerCancel={onFinishAnnotation}
-                />
-                {draftTextRect && isEditingPreview && (
+                {isImagePreview && (
+                  <canvas
+                    ref={annotationCanvasRef}
+                    className={[
+                      "annotation-canvas",
+                      isPreviewCanvasInteractive && isImagePreview ? "active" : hasEditorOverlay && isImagePreview ? "visible" : "",
+                      isAnnotationColorSampling && isImagePreview ? "eyedropper-mode" : showCropTools ? "crop-mode" : annotationTool === "text" && isImagePreview ? "text-mode" : ""
+                    ].filter(Boolean).join(" ")}
+                    style={{
+                      zIndex: showCropTools || (showEditTools && (annotationTool === "draw" || isAnnotationColorSampling)) ? 1000 : 10
+                    }}
+                    onPointerDown={onStartAnnotation}
+                    onPointerMove={onContinueAnnotation}
+                    onPointerUp={onFinishAnnotation}
+                    onPointerCancel={onFinishAnnotation}
+                  />
+                )}
+                {isImagePreview && draftTextRect && showEditTools && (
                   <div className="annotation-text-draft" style={cssRectForCanvasRect(draftTextRect)} />
                 )}
-                {cropSelection && isCroppingPreview && (
+                {isImagePreview && cropSelection && showCropTools && (
                   <div
                     className={`crop-selection ${cropSelection.shape}`}
                     style={cssRectForCanvasRect(cropSelection)}
                   />
                 )}
-                {annotationTextBoxes.map((box) => (
-                  isEditingPreview ? (
+                {isImagePreview && annotationTextBoxes.map((box) => (
+                  showEditTools ? (
                     <div
                       key={box.id}
                       className={activeAnnotationTextBoxId === box.id ? "annotation-text-box-wrap active" : "annotation-text-box-wrap"}
@@ -337,6 +376,22 @@ export function ImageEditor({
                 ))}
               </div>
             </div>
+            {videoPlaybackError && (
+              <div className="media-preview-fallback" role="alert">
+                <AlertTriangle size={18} />
+                <span>{copy.mediaPreviewUnavailable}</span>
+                <div className="media-preview-fallback-actions">
+                  <button type="button" className="secondary" onClick={onDownloadCurrentPreview}>
+                    <Download size={14} />
+                    {copy.download}
+                  </button>
+                  <button type="button" className="secondary" onClick={onOpenMediaFolder}>
+                    <FolderInput size={14} />
+                    {copy.openFolder}
+                  </button>
+                </div>
+              </div>
+            )}
             <div
               className="preview-control-strip"
               onMouseMove={onMoveToolbarTowardPointer}
@@ -346,7 +401,7 @@ export function ImageEditor({
                 <button
                   type="button"
                   className={isEditingPreview ? "icon-button active" : "icon-button"}
-                  disabled={!activePreviewSource}
+                  disabled={!canUseImageEditor}
                   onClick={onToggleEditMode}
                   aria-label={copy.editImage}
                   data-tooltip={copy.editImage}
@@ -358,7 +413,7 @@ export function ImageEditor({
                 <button
                   type="button"
                   className={isCroppingPreview ? "icon-button active" : "icon-button"}
-                  disabled={!activePreviewSource}
+                  disabled={!canUseImageEditor}
                   onClick={onToggleCropMode}
                   aria-label={copy.cropImage}
                   data-tooltip={copy.cropImage}
@@ -370,7 +425,7 @@ export function ImageEditor({
                 <button
                   type="button"
                   className={hasEditedPreviewChanges || cropSelection ? buttonFeedbackClass("download:edited") : activeImage ? buttonFeedbackClass(`download:${activeImage.id}`) : "icon-button"}
-                  disabled={!activeImage}
+                  disabled={!activeMedia && !activeImage}
                   onClick={onDownloadCurrentPreview}
                   aria-label={hasEditedPreviewChanges || cropSelection ? copy.downloadEditedImage : copy.download}
                   data-tooltip={hasEditedPreviewChanges || cropSelection ? copy.downloadEditedImage : copy.download}
@@ -388,7 +443,7 @@ export function ImageEditor({
                   <Save size={16} />
                 </button>
               </div>
-              {isEditingPreview && (
+              {showEditTools && (
                 <div className="annotation-tools preview-secondary-actions" data-drift="subtle">
                   <button type="button" className={annotationTool === "draw" ? "icon-button active" : "icon-button"} onClick={onSelectDrawTool} aria-label={copy.drawTool} data-tooltip={copy.drawTool}>
                     <Brush size={15} />
@@ -487,7 +542,7 @@ export function ImageEditor({
                   </button>
                 </div>
               )}
-              {isCroppingPreview && (
+              {showCropTools && (
                 <div className="annotation-tools crop-tools preview-secondary-actions" data-drift="subtle">
                   <button type="button" className={cropShape === "rect" ? "icon-button active" : "icon-button"} onClick={() => onCropShapeChange("rect")} aria-label={copy.cropRectangle} data-tooltip={copy.cropRectangle}>
                     <RectangleHorizontal size={15} />
@@ -571,11 +626,18 @@ export function ImageEditor({
             <button
               key={asset.id}
               type="button"
-              className={asset.id === activeImage?.id ? "active" : undefined}
+              className={asset.id === activeMedia?.id ? "active" : undefined}
               onClick={() => onSelectResult(asset.id)}
               title={`${copy.generatedResult} ${index + 1}`}
             >
-              <img src={assetSource(asset)} alt={`${copy.generatedResult} ${index + 1}`} />
+              {isVideoAsset(asset) ? (
+                <span className="media-preview-placeholder" aria-label="Video">
+                  <Video size={18} />
+                  <small>VIDEO</small>
+                </span>
+              ) : (
+                <img src={assetSource(asset)} alt={`${copy.generatedResult} ${index + 1}`} />
+              )}
               <span>{index + 1}</span>
             </button>
           ))}

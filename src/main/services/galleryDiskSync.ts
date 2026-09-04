@@ -2,10 +2,12 @@ import path from "node:path";
 import { watch, type FSWatcher } from "node:fs";
 import { promises as fs } from "node:fs";
 import type { GalleryAsset, GalleryFolder } from "../../shared/types.js";
+import { mediaKindForFileName } from "../../core/mediaTypes.js";
 import { resolveManagedFileName } from "./assetOwnership.js";
 import type { AppStateFile } from "./stateMigration.js";
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+const MEDIA_EXTENSIONS = new Set([...IMAGE_EXTENSIONS, ".gif", ".mp4", ".webm", ".mov", ".m4v"]);
 const IGNORED_GALLERY_ENTRY_NAMES = new Set([".ds_store", "thumbs.db", "desktop.ini"]);
 const MAX_GALLERY_FOLDER_DEPTH = 16;
 
@@ -20,6 +22,7 @@ export interface DiskGalleryAsset {
   folderRelPath: string | null;
   originalName: string;
   mimeType: string;
+  kind?: GalleryAsset["kind"];
   sizeBytes: number;
   modifiedAt: string;
 }
@@ -62,6 +65,10 @@ function mimeTypeForFile(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
   if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".mp4" || ext === ".m4v") return "video/mp4";
+  if (ext === ".webm") return "video/webm";
+  if (ext === ".mov") return "video/quicktime";
   return "image/png";
 }
 
@@ -143,7 +150,7 @@ export async function scanGalleryDisk(galleryDir: string, options: ScanGalleryDi
     const normalizedRelPath = normalizeGalleryRelativePath(fileRelPath);
     if (seenAssets.has(normalizedRelPath.toLowerCase())) return;
     const fileName = path.posix.basename(normalizedRelPath);
-    if (isIgnoredGalleryEntryName(fileName) || !IMAGE_EXTENSIONS.has(path.extname(fileName).toLowerCase())) return;
+    if (isIgnoredGalleryEntryName(fileName) || !MEDIA_EXTENSIONS.has(path.extname(fileName).toLowerCase())) return;
     const filePath = resolveManagedFileName(galleryDir, normalizedRelPath);
     let stat;
     try {
@@ -160,6 +167,7 @@ export async function scanGalleryDisk(galleryDir: string, options: ScanGalleryDi
       folderRelPath: parentRelPath,
       originalName: fileName,
       mimeType: mimeTypeForFile(filePath),
+      kind: mediaKindForFileName(filePath),
       sizeBytes: stat.size,
       modifiedAt: stat.mtime.toISOString()
     });
@@ -305,6 +313,7 @@ export function reconcileGalleryDiskState(
       fileName: diskAsset.relPath,
       originalName: existing?.originalName ?? diskAsset.originalName,
       mimeType: diskAsset.mimeType,
+      kind: diskAsset.kind ?? mediaKindForFileName(diskAsset.relPath),
       sizeBytes: diskAsset.sizeBytes,
       width: existing?.width,
       height: existing?.height,
@@ -374,6 +383,7 @@ function galleryAssetsEqual(a: GalleryAsset, b: GalleryAsset): boolean {
     a.fileName === b.fileName &&
     a.originalName === b.originalName &&
     a.mimeType === b.mimeType &&
+    (a.kind ?? mediaKindForFileName(a.fileName)) === (b.kind ?? mediaKindForFileName(b.fileName)) &&
     a.sizeBytes === b.sizeBytes &&
     a.width === b.width &&
     a.height === b.height &&
@@ -451,7 +461,6 @@ export function reconcileGalleryDiskChanges(
   }
 
   const diskFolderRelPaths = new Set(disk.folders.map((folder) => folder.relPath.toLowerCase()));
-  const diskAssetRelPaths = new Set(disk.assets.map((asset) => asset.relPath.toLowerCase()));
   const folderRoots = roots.filter((root) => {
     const lower = root.toLowerCase();
     return (
@@ -470,7 +479,7 @@ export function reconcileGalleryDiskChanges(
           return false;
         }
       }) ||
-      !IMAGE_EXTENSIONS.has(path.extname(root).toLowerCase())
+      !MEDIA_EXTENSIONS.has(path.extname(root).toLowerCase())
     );
   });
   const assetRoots = roots.filter((root) => !folderRoots.includes(root));
@@ -530,6 +539,7 @@ export function reconcileGalleryDiskChanges(
       fileName: diskAsset.relPath,
       originalName: existing?.originalName ?? diskAsset.originalName,
       mimeType: diskAsset.mimeType,
+      kind: diskAsset.kind ?? mediaKindForFileName(diskAsset.relPath),
       sizeBytes: diskAsset.sizeBytes,
       width: existing?.width,
       height: existing?.height,

@@ -27,6 +27,12 @@ Use the names exposed by `tools/list`; this table documents the stable CrossGen 
 
 Generation/edit calls may return an enqueue result before the provider finishes. Read the returned `queueId` or `historyJobId`, then poll `crossgen_job_status`. A successful terminal job identifies output asset ids; use Gallery inspection before export. MCP responses intentionally redact local absolute paths by default.
 
+For v0.3.4 media-aware reads, history outputs and Gallery assets may include
+`kind`, `dimensions`, `sizeBytes`, `durationMs`, `fps`, `frameCount`, and
+`hasPoster`. They do not include `path`, `posterPath`, or preview URLs by
+default. GIF/video assets are inspectable and exportable, but cannot be passed
+as image editing or mask inputs; real video generation remains out of scope.
+
 ## Permissions
 
 CrossGen must run with `CROSSGEN_MCP_MODE=readonly`, `write`, or `generate`. Only `generate` exposes image submission and queue execution. Every paid or destructive operation must carry `confirm: true`; treat confirmation errors as a hard stop, not as a reason to retry with weaker validation.

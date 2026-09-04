@@ -18,6 +18,13 @@ export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancell
 
 export type MediaKind = "image" | "animated-gif" | "video";
 
+export type MediaAssetSourceType = "result" | "partial" | "input" | "mask" | "poster" | "preview";
+
+export interface MediaDimensions {
+  width: number;
+  height: number;
+}
+
 export type QueueSource = "desktop" | "cli" | "mcp";
 
 export type QueueExecutionKind = "sync-provider" | "remote-poll" | "local-cpu";
@@ -404,15 +411,64 @@ export interface ImageAsset {
   path: string;
   fileName: string;
   mimeType: string;
-  kind?: MediaKind;
+  kind?: "image";
   width?: number;
   height?: number;
-  sourceType: "result" | "partial" | "input" | "mask";
+  dimensions?: MediaDimensions;
+  sizeBytes?: number;
+  contentHash?: string;
+  sourceTask?: string;
+  sourceType: MediaAssetSourceType;
   createdAt: string;
   transientPreview?: {
     dataUrl: string;
   };
 }
+
+export interface VideoAsset {
+  id: string;
+  jobId: string;
+  path: string;
+  fileName: string;
+  mimeType: string;
+  kind: "video";
+  width?: number;
+  height?: number;
+  dimensions?: MediaDimensions;
+  sizeBytes?: number;
+  contentHash?: string;
+  sourceTask?: string;
+  sourceType: MediaAssetSourceType;
+  createdAt: string;
+  durationMs?: number;
+  fps?: number;
+  frameCount?: number;
+  codec?: string;
+  posterPath?: string;
+}
+
+export interface AnimationAsset {
+  id: string;
+  jobId: string;
+  path: string;
+  fileName: string;
+  mimeType: string;
+  kind: "animated-gif";
+  width?: number;
+  height?: number;
+  dimensions?: MediaDimensions;
+  sizeBytes?: number;
+  contentHash?: string;
+  sourceTask?: string;
+  sourceType: MediaAssetSourceType;
+  createdAt: string;
+  durationMs?: number;
+  fps?: number;
+  frameCount?: number;
+  posterPath?: string;
+}
+
+export type OutputAsset = ImageAsset | VideoAsset | AnimationAsset;
 
 export interface GalleryAsset {
   id: string;
@@ -485,11 +541,12 @@ export interface GallerySyncEvent {
   reason: "disk" | "mutation";
 }
 
-export type StorageKind = "history" | "gallery";
+export type StorageKind = "history" | "gallery" | "media";
 
 export interface StorageSettings {
   historyDir: string;
   galleryDir: string;
+  mediaRoot?: string;
 }
 
 export interface StorageFolderOptions {
@@ -526,7 +583,7 @@ export interface GenerationJob {
   error?: string;
   createdAt: string;
   updatedAt: string;
-  outputs: ImageAsset[];
+  outputs: OutputAsset[];
   usage?: UsageDetails;
   providerMetadata?: Record<string, unknown>;
   diagnostic?: TaskDiagnostic;

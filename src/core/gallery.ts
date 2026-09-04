@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { GalleryAsset, GalleryAssetPatch, GalleryFolder, GalleryFolderDeleteResult, GalleryFolderInput } from "../shared/types.js";
+import { mediaKindForFileName } from "./mediaTypes.js";
 
 export type GalleryDuplicateAction = "cancel" | "replace" | "copy";
 
@@ -44,6 +45,7 @@ export interface GalleryExportResult {
 }
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+const MEDIA_EXTENSIONS = new Set([...IMAGE_EXTENSIONS, ".gif", ".mp4", ".webm", ".mov", ".m4v"]);
 const MAX_GALLERY_FOLDER_NAME_BYTES = 120;
 const MAX_GALLERY_FILE_NAME_BYTES = 180;
 const WINDOWS_RESERVED_FILE_NAMES = new Set([
@@ -153,11 +155,15 @@ function mimeTypeForFile(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
   if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".mp4" || ext === ".m4v") return "video/mp4";
+  if (ext === ".webm") return "video/webm";
+  if (ext === ".mov") return "video/quicktime";
   return "image/png";
 }
 
-function isImagePath(filePath: string): boolean {
-  return IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+function isSupportedMediaPath(filePath: string): boolean {
+  return MEDIA_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
 async function fileContentHash(filePath: string): Promise<string> {
@@ -333,7 +339,7 @@ function normalizeGalleryAssetNameInput(value: unknown, currentName: string): st
   const inputExt = path.posix.extname(rawName).toLowerCase();
   const nextName = inputExt ? rawName : `${rawName}${currentExt || ".png"}`;
   const nextExt = path.posix.extname(nextName).toLowerCase();
-  if (!IMAGE_EXTENSIONS.has(nextExt)) throw new Error("Gallery 图片名称必须使用 png、jpg、jpeg 或 webp 扩展名。");
+  if (!MEDIA_EXTENSIONS.has(nextExt)) throw new Error("Gallery 资源名称必须使用 png、jpg、jpeg、webp、gif、mp4、webm、mov 或 m4v 扩展名。");
   if (isIgnoredGalleryEntryName(nextName) || isReservedWindowsFileName(nextName)) throw new Error("Gallery 图片名称不可用于托管目录。");
   if (Buffer.byteLength(nextName, "utf8") > MAX_GALLERY_FILE_NAME_BYTES) throw new Error("Gallery 图片名称过长。");
   normalizeManagedRelativePath(nextName);
@@ -409,6 +415,7 @@ async function renameGalleryAssetFile(context: GalleryMutationContext, state: Ga
     fileName: nextRelPath,
     originalName: path.posix.basename(nextRelPath),
     mimeType: mimeTypeForFile(nextPath),
+    kind: mediaKindForFileName(nextPath),
     sizeBytes: stat?.size ?? asset.sizeBytes,
     modifiedAt: stat?.mtime.toISOString() ?? asset.modifiedAt
   };
@@ -456,12 +463,12 @@ async function createGalleryAssetFromFile(
   folderId: string | null,
   options: GalleryImportOptions = {}
 ): Promise<{ asset: GalleryAsset | null; replacedAssetId?: string; skipped?: { reason: string; existingAssetId?: string } }> {
-  if (!isImagePath(sourcePath)) {
+  if (!isSupportedMediaPath(sourcePath)) {
     return { asset: null, skipped: { reason: "unsupported_file_type" } };
   }
   await ensureGalleryFolderDirs(context, state);
   const stat = await fs.stat(sourcePath);
-  if (!stat.isFile()) throw new Error("Gallery 只能导入图片文件。");
+  if (!stat.isFile()) throw new Error("Gallery 只能导入受支持的媒体文件。");
   const originalName = path.basename(sourcePath);
   const contentHash = await fileContentHash(sourcePath);
   const sourcePathHash = filePathHash(sourcePath);
@@ -484,6 +491,7 @@ async function createGalleryAssetFromFile(
           ...duplicate,
           originalName,
           mimeType: mimeTypeForFile(sourcePath),
+          kind: mediaKindForFileName(sourcePath),
           sizeBytes: nextStat.size,
           tags: mergeTags(duplicate.tags, tags),
           source,
@@ -511,6 +519,7 @@ async function createGalleryAssetFromFile(
       fileName,
       originalName: path.posix.basename(fileName),
       mimeType: mimeTypeForFile(sourcePath),
+      kind: mediaKindForFileName(sourcePath),
       sizeBytes: stat.size,
       folderId,
       tags,

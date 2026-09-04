@@ -525,6 +525,51 @@ describe("state migration", () => {
     expect(migrated.activeProviderId).toBe("provider_openai");
   });
 
+  it("normalizes media outputs and preserves the parent job timestamp", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "default",
+      providers: [{
+        id: "default",
+        kind: "openai",
+        name: "OpenAI",
+        baseURL: "https://api.openai.com/v1",
+        enabled: true,
+        defaultModel: "gpt-image-2",
+        defaultSize: "auto",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        updatedAt: "2026-01-02T03:04:05.000Z",
+        encryption: "none"
+      }],
+      history: [{
+        id: "job-media",
+        mode: "generate",
+        prompt: "Generate a clip",
+        inputAssets: [],
+        params: legacyParams,
+        status: "succeeded",
+        createdAt: "2026-01-02T03:04:05.000Z",
+        updatedAt: "2026-01-02T03:04:06.000Z",
+        outputs: [{
+          id: "output-video",
+          jobId: "job-media",
+          path: "/tmp/video.mp4",
+          fileName: "video.mp4",
+          mimeType: "video/mp4",
+          sourceType: "result"
+        }]
+      }]
+    });
+
+    expect(migrated.history[0].outputs[0]).toMatchObject({
+      id: "output-video",
+      kind: "video",
+      mimeType: "video/mp4",
+      createdAt: "2026-01-02T03:04:05.000Z"
+    });
+  });
+
   it("migrates v1 drafts with active launch and model defaults", () => {
     const migrated = normalizeState({
       version: 1,

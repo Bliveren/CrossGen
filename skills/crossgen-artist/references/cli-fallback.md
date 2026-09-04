@@ -36,3 +36,8 @@ crossgen asset export <asset-id> --to ./out.png --yes --json
 ```
 
 `--yes` is required for generation, editing, cancellation/retry, and export. Never put keys in command arguments; CrossGen reads its local provider configuration.
+
+History and Gallery JSON is media-aware in v0.3.4. Use `kind`, `dimensions`,
+`sizeBytes`, `durationMs`, `fps`, `frameCount`, and `hasPoster` when present.
+Local `path`, `posterPath`, and preview URLs are intentionally omitted unless a
+separate explicit path operation is confirmed.

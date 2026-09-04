@@ -14,6 +14,8 @@ describe("dataDirs", () => {
     expect(dirs.queuePath).toBe(path.join(expectedUserDataDir, "crossgen-queue.v1.json"));
     expect(dirs.queueLockPath).toBe(dirs.lockPath);
     expect(dirs.legacyImageRoots).toContain(path.join(expectedUserDataDir, "images"));
+    expect(dirs.mediaRoot).toBe(path.join(expectedUserDataDir, "media"));
+    expect(dirs.mediaTempDir).toBe(path.join(expectedUserDataDir, "media", "tmp"));
   });
 
   it("prefers explicit user data directories", () => {

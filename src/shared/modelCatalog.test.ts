@@ -88,6 +88,9 @@ describe("focused model catalog", () => {
     expect(getGeneralImageModelCandidate(geminiModels, "gemini")?.id).toBe("gemini-2.0-flash-preview-image-generation");
     expect(getGeneralImageModelCandidate(customModels, "custom")?.id).toBe("flux-pro");
     expect(getGeneralImageModelCandidate([{ id: "gpt-4.1", providerKind: "openai" }], "openai")).toBeUndefined();
+    expect(getGeneralImageModelCandidate([
+      { id: "paint-model", providerKind: "custom", raw: { capabilities: { image_generation: true } } }
+    ], "custom")?.id).toBe("paint-model");
   });
 
   it("tracks provider-specific General reference support", () => {

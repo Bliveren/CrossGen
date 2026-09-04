@@ -370,6 +370,146 @@ describe("readonly CLI builders", () => {
     expect(result?.historyJob?.outputs[0]).not.toHaveProperty("path");
   });
 
+  it("reports image, GIF, and video metadata without disclosing poster paths", () => {
+    const state = {
+      providers: [],
+      activeProviderId: "",
+      galleryFolders: [],
+      galleryAssets: [
+        {
+          id: "gallery-video",
+          fileName: "clip.mp4",
+          originalName: "clip.mp4",
+          mimeType: "video/mp4",
+          kind: "video" as const,
+          sizeBytes: 2048,
+          width: 1920,
+          height: 1080,
+          tags: [],
+          source: "import" as const,
+          createdAt: "2026-07-14T00:00:00.000Z",
+          updatedAt: "2026-07-14T00:00:00.000Z"
+        }
+      ],
+      history: [
+        {
+          id: "history-media",
+          name: "Media result",
+          tags: [],
+          providerKind: "openai" as const,
+          providerId: "provider-1",
+          launchId: "gpt-image-2" as const,
+          modelId: "gpt-image-2",
+          modelDisplayName: "GPT Image 2",
+          mode: "generate" as const,
+          prompt: "media metadata",
+          inputAssets: [],
+          params: request().params,
+          status: "succeeded" as const,
+          durationMs: 4200,
+          createdAt: "2026-07-14T00:00:00.000Z",
+          updatedAt: "2026-07-14T00:00:04.200Z",
+          outputs: [
+            {
+              id: "image-output",
+              jobId: "history-media",
+              path: "/private/image.png",
+              fileName: "image.png",
+              mimeType: "image/png",
+              kind: "image" as const,
+              dimensions: { width: 1024, height: 768 },
+              sizeBytes: 4096,
+              sourceType: "result" as const,
+              createdAt: "2026-07-14T00:00:01.000Z"
+            },
+            {
+              id: "gif-output",
+              jobId: "history-media",
+              path: "/private/animation.gif",
+              fileName: "animation.gif",
+              mimeType: "image/gif",
+              kind: "animated-gif" as const,
+              dimensions: { width: 640, height: 480 },
+              sizeBytes: 8192,
+              durationMs: 1500,
+              fps: 12,
+              frameCount: 18,
+              posterPath: "/private/animation-poster.png",
+              sourceType: "result" as const,
+              createdAt: "2026-07-14T00:00:02.000Z"
+            },
+            {
+              id: "video-output",
+              jobId: "history-media",
+              path: "/private/clip.mp4",
+              fileName: "clip.mp4",
+              mimeType: "video/mp4",
+              kind: "video" as const,
+              dimensions: { width: 1920, height: 1080 },
+              sizeBytes: 16384,
+              durationMs: 2500,
+              fps: 24,
+              frameCount: 60,
+              posterPath: "/private/clip-poster.png",
+              sourceType: "result" as const,
+              createdAt: "2026-07-14T00:00:03.000Z"
+            }
+          ]
+        }
+      ]
+    };
+    const queue = {
+      schemaVersion: 1 as const,
+      updatedAt: "2026-07-14T00:00:00.000Z",
+      workerHosts: [],
+      items: []
+    };
+
+    const job = buildCliJobStatus(queue, state, "history-media");
+    expect(job?.historyJob?.outputs).toMatchObject([
+      {
+        id: "image-output",
+        kind: "image",
+        dimensions: { width: 1024, height: 768 },
+        sizeBytes: 4096,
+        hasPoster: false
+      },
+      {
+        id: "gif-output",
+        kind: "animated-gif",
+        dimensions: { width: 640, height: 480 },
+        sizeBytes: 8192,
+        durationMs: 1500,
+        fps: 12,
+        frameCount: 18,
+        hasPoster: true
+      },
+      {
+        id: "video-output",
+        kind: "video",
+        dimensions: { width: 1920, height: 1080 },
+        sizeBytes: 16384,
+        durationMs: 2500,
+        fps: 24,
+        frameCount: 60,
+        hasPoster: true
+      }
+    ]);
+    const serialized = JSON.stringify(job);
+    expect(serialized).not.toContain("/private/");
+    expect(serialized).not.toContain("posterPath");
+
+    const gallery = buildCliGalleryList(state);
+    expect(gallery.assets[0]).toMatchObject({
+      id: "gallery-video",
+      kind: "video",
+      sizeBytes: 2048,
+      width: 1920,
+      height: 1080
+    });
+    expect(JSON.stringify(gallery)).not.toContain("/private/");
+  });
+
   it("reports generate MCP mode without downgrading to write", () => {
     expect(buildCliMcpConfig({ client: "codex", mode: "generate", command: "/Applications/CrossGen.app" })).toMatchObject({
       requestedMode: "generate",

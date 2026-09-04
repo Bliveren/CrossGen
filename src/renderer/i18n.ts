@@ -229,6 +229,7 @@ export interface UiCopy {
   discoverModels: string;
   discoveringModels: string;
   discoveredModelsCount: (count: number) => string;
+  discoveredModelsSummary: (image: number, video: number, unknown: number) => string;
   connectionIdle: string;
   connectionChecking: string;
   connectionOk: string;
@@ -420,6 +421,8 @@ export interface UiCopy {
   download: string;
   saveImage: string;
   generatedResult: string;
+  mediaPreviewUnavailable: string;
+  mediaReferenceImagesOnly: string;
   jobFailed: string;
   outputEmpty: string;
   generatingElapsed: (seconds: number) => string;
@@ -526,6 +529,8 @@ export interface UiCopy {
   galleryStats: (assetCount: number, folderCount: number) => string;
   historyStorageUpdated: string;
   galleryStorageUpdated: string;
+  mediaRoot: string;
+  mediaRootStorageUpdated: string;
   storageFoldersUpdated: string;
   storageFolderDialogDescription: string;
   storageFolderSyncBoth: string;
@@ -683,7 +688,7 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessDraftStatus: "Configuring",
     apiAccessTestedStatus: "Tested",
     apiAccessDiscoveredStatus: "Discovered",
-    apiAccessModels: "Supported models",
+    apiAccessModels: "Discovered models",
     apiAccessNoModels: "No models discovered yet.",
     apiAccessSaved: "Saved",
     addApiAccess: "Add API config",
@@ -777,6 +782,8 @@ export const translations: Record<Language, UiCopy> = {
     discoverModels: "Discover models",
     discoveringModels: "Discovering",
     discoveredModelsCount: (count: number) => `${count} model${count === 1 ? "" : "s"} discovered`,
+    discoveredModelsSummary: (image: number, video: number, unknown: number) =>
+      `image ${image} · video ${video} · capability unknown ${unknown}`,
     connectionIdle: "Not tested",
     connectionChecking: "Checking",
     connectionOk: "Connected",
@@ -784,11 +791,11 @@ export const translations: Record<Language, UiCopy> = {
     connectionErrorDetail: (message: string) => `Connection issue: ${message}. Check the API key, base URL, API protocol, or network.`,
     launchModels: "Launch",
     selectModel: "Select model",
-    modelSupportHint: "Select an image model supported by the connected API.",
+    modelSupportHint: "Only models declaring image generation are shown; a model list does not prove API key access.",
     launchAvailable: "Available",
     launchUnavailableNoKey: "Save an API key first.",
     launchUnavailableNoDiscovery: "Run model discovery first.",
-    launchUnavailableNoImageModels: "No image models discovered.",
+    launchUnavailableNoImageModels: "Models were discovered, but none declares image generation; a model list does not prove API key access.",
     launchUnavailableProvider: (provider: string) => `Switch to ${provider}.`,
     launchUnavailableModel: (model: string) => `${model} was not discovered.`,
     launchRuntimeUnavailable: (model: string) => `${model} runtime is not connected yet.`,
@@ -969,6 +976,8 @@ export const translations: Record<Language, UiCopy> = {
     download: "Download",
     saveImage: "Save image",
     generatedResult: "Generated result",
+    mediaPreviewUnavailable: "This media cannot be played in the current preview. Download it or open its folder.",
+    mediaReferenceImagesOnly: "Only image assets can be used as reference images.",
     jobFailed: "Job failed",
     outputEmpty: "Generated images and partial previews appear here.",
     generatingElapsed: (seconds: number) => `Generating image, elapsed ${seconds} seconds`,
@@ -1075,7 +1084,9 @@ export const translations: Record<Language, UiCopy> = {
     galleryStats: (assetCount: number, folderCount: number) => `${assetCount} image${assetCount === 1 ? "" : "s"} · ${folderCount} folder${folderCount === 1 ? "" : "s"}`,
     historyStorageUpdated: "History storage folder updated.",
     storageFoldersUpdated: "History and Gallery storage folders updated.",
-    storageFolderDialogDescription: "Choose where CrossGen stores managed images. Enable one shared path to update both libraries at once.",
+    mediaRoot: "Media root",
+    mediaRootStorageUpdated: "Media root migrated. The previous root was retained for rollback.",
+    storageFolderDialogDescription: "Choose where CrossGen stores managed media. History and Gallery can still use separate paths; the Media root migration is copy-first and keeps the previous root for rollback.",
     storageFolderSyncBoth: "Use the same path for History and Gallery",
     storageSharedPath: "Shared",
     updates: "Updates",
@@ -1296,7 +1307,7 @@ export const translations: Record<Language, UiCopy> = {
     apiAccessDraftStatus: "正在配置",
     apiAccessTestedStatus: "已测试",
     apiAccessDiscoveredStatus: "已探测",
-    apiAccessModels: "支持的模型",
+    apiAccessModels: "已发现模型",
     apiAccessNoModels: "暂未探测到模型。",
     apiAccessSaved: "已保存",
     addApiAccess: "添加 API 配置",
@@ -1390,6 +1401,8 @@ export const translations: Record<Language, UiCopy> = {
     discoverModels: "探测模型",
     discoveringModels: "探测中",
     discoveredModelsCount: (count: number) => `探测到【${count}】个模型`,
+    discoveredModelsSummary: (image: number, video: number, unknown: number) =>
+      `图片 ${image} · 视频 ${video} · 能力未知 ${unknown}`,
     connectionIdle: "未测试",
     connectionChecking: "检测中",
     connectionOk: "连接成功",
@@ -1397,11 +1410,11 @@ export const translations: Record<Language, UiCopy> = {
     connectionErrorDetail: (message: string) => `连接异常：${message}。请检查 API Key、Base URL、服务商协议或网络。`,
     launchModels: "启动模型",
     selectModel: "选择模型",
-    modelSupportHint: "可选择当前接入 API 支持的生图模型。",
+    modelSupportHint: "仅展示已声明图片生成能力的模型；模型列表不等于 API Key 权限。",
     launchAvailable: "可用",
     launchUnavailableNoKey: "请先保存 API Key。",
     launchUnavailableNoDiscovery: "请先探测模型。",
-    launchUnavailableNoImageModels: "未探测到图片模型。",
+    launchUnavailableNoImageModels: "已发现模型，但没有模型声明图片生成能力；模型列表不等于 API Key 权限。",
     launchUnavailableProvider: (provider: string) => `切换到 ${provider}。`,
     launchUnavailableModel: (model: string) => `未探测到 ${model}。`,
     launchRuntimeUnavailable: (model: string) => `${model} 运行时尚未接入。`,
@@ -1582,6 +1595,8 @@ export const translations: Record<Language, UiCopy> = {
     download: "下载",
     saveImage: "保存图片",
     generatedResult: "生成结果",
+    mediaPreviewUnavailable: "当前预览无法播放该媒体，请下载文件或打开所在目录。",
+    mediaReferenceImagesOnly: "只有图片资产可以作为参考图使用。",
     jobFailed: "任务失败",
     outputEmpty: "生成图片和局部预览会显示在这里。",
     generatingElapsed: (seconds: number) => `正在生图，已耗时 ${seconds} 秒`,
@@ -1687,8 +1702,10 @@ export const translations: Record<Language, UiCopy> = {
     historyStats: (count: number) => `${count} 条历史`,
     galleryStats: (assetCount: number, folderCount: number) => `${assetCount} 张图片 · ${folderCount} 个文件夹`,
     historyStorageUpdated: "历史默认存储路径已更新。",
+    mediaRoot: "媒体资源根目录",
+    mediaRootStorageUpdated: "媒体资源根目录已迁移，原目录已保留以便回滚。",
     storageFoldersUpdated: "历史与图库默认存储路径已更新。",
-    storageFolderDialogDescription: "选择 CrossGen 托管图片的本地存储目录。勾选同路径后，历史与图库会一次设置完成。",
+    storageFolderDialogDescription: "选择 CrossGen 托管媒体的本地存储目录。历史与图库仍可分别设置；媒体根目录采用复制优先并保留原目录，便于回滚。",
     storageFolderSyncBoth: "历史与图库使用同一路径",
     storageSharedPath: "共同路径",
     updates: "升级",

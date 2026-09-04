@@ -42,6 +42,96 @@ const v033GateIds = [
   "exact-candidate-package"
 ];
 
+const v034GateIds = [
+  "applink-provider-import",
+  "media-foundation-contract",
+  "managed-media-root",
+  "media-aware-result-viewer",
+  "cli-mcp-media-contract"
+];
+
+const v034ChecklistGuards = [
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "完成 AppLink provider import 合约和跨平台冷启动验证。",
+    gateIds: ["applink-provider-import"]
+  },
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "完成 OutputAsset / VideoAsset / AnimationAsset 契约与 legacy migration 测试。",
+    gateIds: ["media-foundation-contract"]
+  },
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "完成 managed media root 迁移、临时目录清理和回滚验证。",
+    gateIds: ["managed-media-root"]
+  },
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "完成 ResultViewer、History、Gallery 的 media-aware 渲染边界验证。",
+    gateIds: ["media-aware-result-viewer"]
+  },
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "完成 CLI/MCP 媒体 metadata 契约与路径脱敏验证。",
+    gateIds: ["cli-mcp-media-contract"]
+  },
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "完成 `pnpm verify:release-evidence -- --require-complete` on the final v0.3.4 release branch.",
+    gateIds: [
+      "real-openai-api",
+      "real-gemini-api",
+      "macos-signed",
+      "macos-notarized",
+      "windows-native-release",
+      "linux-native-release",
+      "update-manifest-assets",
+      "build-and-mock-verifiers",
+      "cli-mcp-packaged-smoke",
+      "agent-integration-smoke",
+      "queue-concurrency-smoke",
+      "gallery-mutation-smoke",
+      "image-core-regression",
+      "agent-access-contract",
+      "agent-cli-link-management",
+      "exact-candidate-package",
+      "applink-provider-import",
+      "media-foundation-contract",
+      "managed-media-root",
+      "media-aware-result-viewer",
+      "cli-mcp-media-contract"
+    ]
+  },
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "Create and push `v0.3.4` tag.",
+    gateIds: [
+      "real-openai-api",
+      "real-gemini-api",
+      "macos-signed",
+      "macos-notarized",
+      "windows-native-release",
+      "linux-native-release",
+      "update-manifest-assets",
+      "build-and-mock-verifiers",
+      "cli-mcp-packaged-smoke",
+      "agent-integration-smoke",
+      "queue-concurrency-smoke",
+      "gallery-mutation-smoke",
+      "image-core-regression",
+      "agent-access-contract",
+      "agent-cli-link-management",
+      "exact-candidate-package",
+      "applink-provider-import",
+      "media-foundation-contract",
+      "managed-media-root",
+      "media-aware-result-viewer",
+      "cli-mcp-media-contract"
+    ]
+  }
+];
+
 const v030ChecklistGuards = [
   {
     file: "docs/release/v0.3.0-preflight.md",
@@ -379,6 +469,9 @@ function isAtLeastVersion(value, minimum) {
 }
 
 function knownGateIdsForRelease(releaseVersion) {
+  if (isAtLeastVersion(releaseVersion, "0.3.4")) {
+    return [...baseGateIds, ...v031GateIds, ...v032GateIds, ...v033GateIds, ...v034GateIds];
+  }
   if (isAtLeastVersion(releaseVersion, "0.3.3")) {
     return [...baseGateIds, ...v031GateIds, ...v032GateIds, ...v033GateIds];
   }
@@ -392,6 +485,9 @@ function knownGateIdsForRelease(releaseVersion) {
 }
 
 function checklistGuardsForRelease(releaseVersion) {
+  if (isAtLeastVersion(releaseVersion, "0.3.4")) {
+    return v034ChecklistGuards;
+  }
   if (isAtLeastVersion(releaseVersion, "0.3.3")) {
     // The repository checklists contain historical [x] entries for approved
     // releases. A new candidate must not inherit those assertions before its

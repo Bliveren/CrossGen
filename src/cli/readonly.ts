@@ -221,6 +221,12 @@ function publicHistoryJob(job: GenerationJob) {
       kind: output.kind ?? "image",
       width: output.width,
       height: output.height,
+      dimensions: output.dimensions,
+      sizeBytes: output.sizeBytes,
+      durationMs: "durationMs" in output ? output.durationMs : undefined,
+      fps: "fps" in output ? output.fps : undefined,
+      frameCount: "frameCount" in output ? output.frameCount : undefined,
+      hasPoster: "posterPath" in output ? Boolean(output.posterPath) : false,
       sourceType: output.sourceType,
       createdAt: output.createdAt
     })),
@@ -314,7 +320,8 @@ export function buildCliConfigStatus(state: ReadonlyAppState | null, queue: Gene
     liveWorkerHosts: liveWorkerHosts(queue),
     storageConfigured: {
       historyDir: Boolean(state?.storage?.historyDir),
-      galleryDir: Boolean(state?.storage?.galleryDir)
+      galleryDir: Boolean(state?.storage?.galleryDir),
+      mediaRoot: Boolean(state?.storage?.mediaRoot)
     }
   };
 }

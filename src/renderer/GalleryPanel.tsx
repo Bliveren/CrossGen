@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownUp, ChevronDown, ChevronRight, FileUp, Folder, FolderOpen, FolderPlus, Save, X } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ChevronRight, FileUp, Folder, FolderOpen, FolderPlus, Save, Video, X } from "lucide-react";
 import type { GalleryAsset, GalleryFolder } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
@@ -568,7 +568,11 @@ export function GalleryFolderCard({
               const asset = visiblePreviewAssets[index];
               return (
                 <span key={asset?.id ?? `empty-${index}`} className="folder-thumb-collage-cell">
-                  {asset ? <img src={assetThumbnailPath(asset)} alt="" draggable={false} loading="lazy" decoding="async" /> : <Folder size={14} />}
+                  {asset
+                    ? asset.kind === "video"
+                      ? <Video size={14} />
+                      : <img src={assetThumbnailPath(asset)} alt="" draggable={false} loading="lazy" decoding="async" />
+                    : <Folder size={14} />}
                 </span>
               );
             })}
@@ -664,7 +668,14 @@ export function GalleryAssetCard({
         onContextMenu={onContextMenu}
         title={copy.galleryOpenItem(asset.originalName)}
       >
-        <img src={thumbnailSrc} alt={asset.originalName} draggable={false} loading="lazy" decoding="async" />
+        {asset.kind === "video" ? (
+          <span className="media-preview-placeholder" aria-label="Video">
+            <Video size={22} />
+            <small>VIDEO</small>
+          </span>
+        ) : (
+          <img src={thumbnailSrc} alt={asset.originalName} draggable={false} loading="lazy" decoding="async" />
+        )}
       </button>
       <div className="gallery-meta">
         <div className="gallery-name-wrap">

@@ -6,6 +6,7 @@ import {
   getFocusedModelsForProvider,
   getModelDisplayName,
   isFocusedImageModelId,
+  discoveredModelCapabilityHints,
   isPotentialGeneralImageModel,
   normalizeModelId
 } from "../shared/modelCatalog.js";
@@ -70,6 +71,46 @@ function baseContract(
     contract,
     confidence
   };
+}
+
+function discoveredContractForModel(model: DiscoveredModel): ImageModelCapabilityContract | undefined {
+  const hints = discoveredModelCapabilityHints(model);
+  const imageByName = isPotentialGeneralImageModel(model);
+  // Explicit provider metadata takes precedence over the legacy name marker.
+  // This prevents a catalogue entry such as "image-preview" with
+  // `output_modalities: ["text"]` from being advertised as image-capable.
+  const image = hints.explicitMedia ? hints.image : hints.image || imageByName;
+  const video = hints.video;
+  if (!image && !video) return hints.explicit ? unknownCapabilities() : undefined;
+
+  const contract = baseContract(
+    {
+      generate: image,
+      edit: false,
+      inpaint: false,
+      referenceImages: false,
+      maxReferenceImages: 0,
+      multiTurn: false,
+      streamingPartials: false,
+      outputText: false,
+      configurableOutputFormat: false,
+      configurableResolution: "none",
+      supportsThinking: false,
+      supportsSearchGrounding: false
+    },
+    model.providerKind === "gemini" ? "gemini-generate-content" : "openai-compatible-minimal",
+    hints.explicit ? "discovered" : "discovered"
+  );
+  if (video) {
+    contract.video = true;
+    contract.videoRouteStrategy = model.providerKind === "openai" || model.providerKind === "custom"
+      ? "openai-compatible-video-generations"
+      : "provider-native";
+    contract.mediaKinds = image ? ["image", "video"] : ["video"];
+    contract.outputAssetKinds = image ? ["image", "video"] : ["video"];
+    contract.asyncJob = true;
+  }
+  return contract;
 }
 
 function selectionKeyForModel(launchId: FocusedLaunchId | undefined, providerKind: ProviderKind, modelId: string): string {
@@ -151,11 +192,27 @@ function focusedDefinitionForModel(providerKind: ProviderKind, modelId: string):
 export function capabilitySummaryForDiscoveredModel(providerId: string | undefined, model: DiscoveredModel): ModelCapabilitySummary {
   const focusedDefinition = focusedDefinitionForModel(model.providerKind, model.id);
   if (focusedDefinition) {
+    const hints = discoveredModelCapabilityHints(model);
+    // A gateway may reuse a known model id for a text-only deployment. Honor
+    // an explicit modality declaration instead of treating the id as proof of
+    // access to CrossGen's focused image runtime.
+    if (hints.explicitMedia && !hints.image) {
+      return {
+        providerId,
+        providerKind: model.providerKind,
+        modelId: model.id,
+        displayName: model.displayName?.trim() || model.id,
+        selectionKey: selectionKeyForModel(undefined, model.providerKind, model.id),
+        source: "unknown",
+        capabilities: unknownCapabilities()
+      };
+    }
     return summaryForFocusedModel(providerId, focusedDefinition, model.id);
   }
 
   const displayName = model.displayName?.trim() || model.id;
-  if (isPotentialGeneralImageModel(model)) {
+  const discoveredContract = discoveredContractForModel(model);
+  if (discoveredContract && (discoveredContract.generate || discoveredContract.video)) {
     return {
       providerId,
       providerKind: model.providerKind,
@@ -163,7 +220,19 @@ export function capabilitySummaryForDiscoveredModel(providerId: string | undefin
       displayName,
       selectionKey: selectionKeyForModel(undefined, model.providerKind, model.id),
       source: "discovered",
-      capabilities: promptOnlyCapabilities(model.providerKind, "discovered")
+      capabilities: discoveredContract
+    };
+  }
+
+  if (discoveredContract) {
+    return {
+      providerId,
+      providerKind: model.providerKind,
+      modelId: model.id,
+      displayName,
+      selectionKey: selectionKeyForModel(undefined, model.providerKind, model.id),
+      source: "unknown",
+      capabilities: discoveredContract
     };
   }
 
