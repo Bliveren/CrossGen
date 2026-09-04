@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-04T17:39:34.000Z",
+  "lastUpdated": "2026-09-04T17:58:18.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -73,7 +73,7 @@
       "id": "macos-signed",
       "title": "Developer ID signed macOS release package",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "macOS artifacts are built from the exact v0.3.4 release-candidate commit.",
         "Developer ID signing is performed without exposing secret values.",
@@ -82,13 +82,45 @@
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T17:58:18.000Z",
+        "commit": "0c96763334b5fc1556428836cbaffc7770c95cad",
+        "environment": "macOS 25.5.0 arm64 in detached exact-candidate worktree 0c96763334b5fc1556428836cbaffc7770c95cad. Developer ID Application identity hash C5A5172145291B971D3ACB7FB51FE5D4321D6691; TeamIdentifier RPX587R2R7. Notarization was explicitly disabled and is tracked separately.",
+        "commands": [
+          "git worktree add --detach /tmp/crossgen-v034-exact-0c967 0c96763334b5fc1556428836cbaffc7770c95cad",
+          "pnpm build",
+          "pnpm exec node scripts/electron-builder-pnpm.mjs --mac '-c.mac.identity=Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)' -c.mac.notarize=false",
+          "pnpm verify:release:mac",
+          "codesign --verify --deep --strict --verbose=2 release/mac-arm64/CrossGen.app",
+          "codesign -dv --verbose=4 release/mac-arm64/CrossGen.app"
+        ],
         "references": [],
-        "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Developer ID signed macOS release package."
+        "artifacts": [
+          {
+            "kind": "macOS arm64 signed DMG",
+            "path": "release/CrossGen-0.3.4-mac-arm64.dmg",
+            "public": false,
+            "description": "Size 104015559 bytes; SHA256 99bca07db3aeeee434cd84cb0b12b77977f1630589ded973b2ec30329909cf12."
+          },
+          {
+            "kind": "macOS arm64 signed ZIP",
+            "path": "release/CrossGen-0.3.4-mac-arm64.zip",
+            "public": false,
+            "description": "Size 99723993 bytes; SHA256 f5c2321e1499891988d6e5677e4427a935a58fa3f7cde75a1fd34cc9df1933ed."
+          },
+          {
+            "kind": "macOS DMG blockmap",
+            "path": "release/CrossGen-0.3.4-mac-arm64.dmg.blockmap",
+            "public": false,
+            "description": "Size 110152 bytes; SHA256 311f3cb98d52ea792a8b621d7fbe8461e8ea5a01535c2552731967ad256aa196."
+          },
+          {
+            "kind": "macOS ZIP blockmap",
+            "path": "release/CrossGen-0.3.4-mac-arm64.zip.blockmap",
+            "public": false,
+            "description": "Size 105043 bytes; SHA256 61059924da15a62f59c768bbd44bc790f769c88c2fe2319b421286bf5675aa94."
+          }
+        ],
+        "summary": "The exact 0c967633 candidate was rebuilt in a detached worktree, signed with the Developer ID Application identity, verified with codesign --deep --strict, and launched twice from the signed DMG with a visible main window. Apple notarization remains a separate pending gate."
       }
     },
     {
