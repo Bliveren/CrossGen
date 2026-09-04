@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-04T17:04:37.000Z",
+  "lastUpdated": "2026-09-04T17:39:34.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -117,7 +117,7 @@
       "id": "windows-native-release",
       "title": "Native Windows release package validation",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Windows installer artifacts are built from the exact v0.3.4 release-candidate commit.",
         "The Windows verifier runs on a native Windows runner.",
@@ -126,13 +126,16 @@
         "Any Windows-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T17:04:37.000Z",
+        "verifiedAt": "2026-09-04T17:39:34.000Z",
         "commit": "0c96763334b5fc1556428836cbaffc7770c95cad",
-        "environment": "GitHub Actions workflow_dispatch run 33898279054 on windows-latest; native package verification passed and the candidate artifact was retained.",
+        "environment": "GitHub Actions workflow_dispatch run 33898279054 on windows-latest; native package verification passed and the candidate artifact was retained. The artifact archive was streamed in HTTP Range chunks and the inner files were independently hashed without persisting secrets.",
         "commands": [
           "pnpm package:win",
           "IMAGE2TOOLS_WINDOWS_VERIFY_MODE=package-smoke pnpm verify:release:windows",
-          "actions/upload-artifact@v4: crossgen-windows-0c96763334b5fc1556428836cbaffc7770c95cad"
+          "actions/upload-artifact@v4: crossgen-windows-0c96763334b5fc1556428836cbaffc7770c95cad",
+          "HTTP Range reassembly of artifact 9946720311",
+          "bsdtar -xOf artifact.zip CrossGen-Setup.exe | sha256/size stream",
+          "bsdtar -xOf artifact.zip CrossGen-Setup.exe.blockmap | sha256/size stream"
         ],
         "references": [
           {
@@ -149,17 +152,29 @@
             "kind": "GitHub Actions Windows candidate artifact archive",
             "url": "https://api.github.com/repos/Bliveren/CrossGen/actions/artifacts/9946720311",
             "public": false,
-            "description": "Artifact id 9946720311; archive size 99261500 bytes. The native verifier passed, but the inner installer SHA256 and byte size still require artifact extraction."
+            "description": "Artifact id 9946720311; archive size 99261500 bytes; inner installer and blockmap were extracted from the retained archive."
+          },
+          {
+            "kind": "Windows NSIS installer",
+            "url": "https://api.github.com/repos/Bliveren/CrossGen/actions/artifacts/9946720311",
+            "public": false,
+            "description": "CrossGen-Setup.exe; size 99153994 bytes; SHA256 3a8cb3d152e5307cb65021fc783ecc6c28337592beef32ef018431518924c332."
+          },
+          {
+            "kind": "Windows NSIS blockmap",
+            "url": "https://api.github.com/repos/Bliveren/CrossGen/actions/artifacts/9946720311",
+            "public": false,
+            "description": "CrossGen-Setup.exe.blockmap; size 104030 bytes; SHA256 abda5d403762e334eac16f66e9d281722f842fb071d2e39d7141fdbc6303bfe3."
           }
         ],
-        "summary": "Native Windows packaging and package-smoke verification passed on the exact candidate, and the artifact was retained. Gate remains pending until the inner installer and blockmap hashes/sizes are independently recorded and the final release asset is validated."
+        "summary": "Native Windows packaging and package-smoke verification passed on the exact candidate. The retained artifact was reassembled by byte range, and the exact installer and blockmap hashes/sizes are recorded. Public Release upload remains a separate update-manifest gate."
       }
     },
     {
       "id": "linux-native-release",
       "title": "Linux AppImage package validation",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Linux AppImage artifacts are built from the exact v0.3.4 release-candidate commit.",
         "Packaged CLI/MCP and agent integration smoke pass against the Linux package.",
@@ -168,15 +183,17 @@
         "Any Linux-specific release blocker is fixed and retested before product acceptance."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T17:04:37.000Z",
+        "verifiedAt": "2026-09-04T17:39:34.000Z",
         "commit": "0c96763334b5fc1556428836cbaffc7770c95cad",
-        "environment": "GitHub Actions workflow_dispatch run 33898279054 on ubuntu-latest; Linux AppImage verification passed and the candidate artifact was retained.",
+        "environment": "GitHub Actions workflow_dispatch run 33898279054 on ubuntu-latest; Linux AppImage verification passed and the candidate artifact was retained. The artifact archive was streamed in HTTP Range chunks and the inner AppImage was independently hashed.",
         "commands": [
           "pnpm package",
           "CROSSGEN_APP_EXECUTABLE=<linux-unpacked>/crossgen CROSSGEN_APP_EXTRA_ARGS=--no-sandbox xvfb-run -a node scripts/verify-cli-mcp-smoke.mjs",
           "CROSSGEN_APP_EXECUTABLE=<linux-unpacked>/crossgen CROSSGEN_APP_EXTRA_ARGS=--no-sandbox xvfb-run -a node scripts/verify-agent-integration-smoke.mjs",
           "pnpm verify:release:linux",
-          "actions/upload-artifact@v4: crossgen-linux-0c96763334b5fc1556428836cbaffc7770c95cad"
+          "actions/upload-artifact@v4: crossgen-linux-0c96763334b5fc1556428836cbaffc7770c95cad",
+          "HTTP Range reassembly of artifact 9946685561",
+          "bsdtar -xOf artifact.numeric.zip CrossGen-0.3.4-linux-x86_64.AppImage | sha256/size stream"
         ],
         "references": [
           {
@@ -193,10 +210,16 @@
             "kind": "GitHub Actions Linux candidate artifact archive",
             "url": "https://api.github.com/repos/Bliveren/CrossGen/actions/artifacts/9946685561",
             "public": false,
-            "description": "Artifact id 9946685561; archive size 120453262 bytes. Packaged CLI/MCP, Agent integration, and Linux release verification passed, but the inner AppImage SHA256 and byte size still require artifact extraction."
+            "description": "Artifact id 9946685561; archive size 120453262 bytes; inner AppImage was extracted from the retained archive."
+          },
+          {
+            "kind": "Linux AppImage",
+            "url": "https://api.github.com/repos/Bliveren/CrossGen/actions/artifacts/9946685561",
+            "public": false,
+            "description": "CrossGen-0.3.4-linux-x86_64.AppImage; size 120938555 bytes; SHA256 44f4e02dc911d9e3ba437ab18f83b6db96d9f9748f55e5626972fd8bd7ddcf42."
           }
         ],
-        "summary": "Native Linux packaging, packaged CLI/MCP, Agent integration, and AppImage verification passed on the exact candidate, and the artifact was retained. Gate remains pending until the inner AppImage hash/size is independently recorded and the final release asset is validated."
+        "summary": "Native Linux packaging, packaged CLI/MCP, Agent integration, and AppImage verification passed on the exact candidate. The retained artifact was reassembled by byte range and the exact AppImage hash/size is recorded. Public Release upload remains a separate update-manifest gate."
       }
     },
     {
