@@ -192,9 +192,9 @@
         "Known harmless warnings are documented and do not hide failed tests."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T16:30:55.101Z",
-        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
-        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "verifiedAt": "2026-09-04T16:50:26.000Z",
+        "commit": "b11c19a4f733c50af21c95c4890684f849bb71d7",
+        "environment": "GitHub Actions workflow_dispatch run 33897036280 on ubuntu-latest, macos-latest, windows-latest, and ubuntu-latest; supplemented by macOS local candidate verification.",
         "commands": [
           "pnpm build",
           "pnpm verify:mock-api",
@@ -204,11 +204,17 @@
           "pnpm verify:gallery-mutation-smoke",
           "pnpm verify:image-core-regression-smoke",
           "pnpm verify:cli-mcp-smoke",
-          "pnpm verify:agent-integration-smoke"
+          "pnpm verify:agent-integration-smoke",
+          "gh run view 33897036280 --repo Bliveren/CrossGen"
         ],
-        "references": [],
+        "references": [
+          {
+            "label": "GitHub Actions CI run",
+            "url": "https://github.com/Bliveren/CrossGen/actions/runs/33897036280"
+          }
+        ],
         "artifacts": [],
-        "summary": "Build, mock provider, queue, Gallery, image-core, CLI/MCP, and Agent integration checks passed locally; known canvas warnings were harmless."
+        "summary": "The exact b11c19a candidate passed the public CI build/mock verifier and native macOS, Windows, and Linux package jobs. Known canvas and GitHub Actions Node.js deprecation warnings were non-blocking."
       }
     },
     {
