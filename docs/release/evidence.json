@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-04T15:16:38.571Z",
+  "lastUpdated": "2026-09-04T16:30:55.101Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -183,7 +183,7 @@
       "id": "build-and-mock-verifiers",
       "title": "Build and mock provider verifier suite",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "pnpm build passes on the v0.3.4 branch.",
         "Mock OpenAI-compatible, Gemini-compatible, and model discovery verifiers pass.",
@@ -192,20 +192,30 @@
         "Known harmless warnings are documented and do not hide failed tests."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm build",
+          "pnpm verify:mock-api",
+          "pnpm verify:mock-gemini-api",
+          "pnpm verify:mock-model-discovery",
+          "pnpm verify:queue-concurrency-smoke",
+          "pnpm verify:gallery-mutation-smoke",
+          "pnpm verify:image-core-regression-smoke",
+          "pnpm verify:cli-mcp-smoke",
+          "pnpm verify:agent-integration-smoke"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Build and mock provider verifier suite."
+        "summary": "Build, mock provider, queue, Gallery, image-core, CLI/MCP, and Agent integration checks passed locally; known canvas warnings were harmless."
       }
     },
     {
       "id": "cli-mcp-packaged-smoke",
       "title": "Packaged CLI and MCP smoke",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Packaged CLI launcher smoke runs against the exact v0.3.4 candidate package.",
         "MCP direct app executable smoke runs against the exact v0.3.4 candidate package.",
@@ -214,20 +224,30 @@
         "Source-tree CLI/MCP smoke is not used as a substitute for packaged smoke."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec node scripts/electron-builder-pnpm.mjs --dir -c.mac.identity=null -c.mac.notarize=false -c.mac.timestamp=null",
+          "CROSSGEN_APP_EXECUTABLE=release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen pnpm exec node scripts/verify-cli-mcp-smoke.mjs"
+        ],
         "references": [],
-        "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Packaged CLI and MCP smoke."
+        "artifacts": [
+          {
+            "kind": "unpacked macOS arm64 candidate",
+            "path": "release/mac-arm64/CrossGen.app",
+            "public": false,
+            "description": "Generated from fd1ed7e788fed8488e0907fea388e6fdf16eeeb0; aggregate file-tree SHA256 2861e558da319848fd4c98829370fa99ad6929f0d0dd8f4e91d091314500f53b; size 253004 KB."
+          }
+        ],
+        "summary": "The unsigned unpacked macOS arm64 candidate passed packaged CLI/MCP smoke without requiring a global Node.js installation."
       }
     },
     {
       "id": "agent-integration-smoke",
       "title": "Agent integration smoke",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Codex, Claude Code, and Cursor configuration output remains valid.",
         "MCP readonly and generate-mode configuration remains explicit and permissioned.",
@@ -236,20 +256,29 @@
         "No CLI/MCP productization UI is required for v0.3.4."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "CROSSGEN_APP_EXECUTABLE=release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen pnpm exec node scripts/verify-agent-integration-smoke.mjs"
+        ],
         "references": [],
-        "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Agent integration smoke."
+        "artifacts": [
+          {
+            "kind": "unpacked macOS arm64 candidate",
+            "path": "release/mac-arm64/CrossGen.app",
+            "public": false,
+            "description": "Generated from fd1ed7e788fed8488e0907fea388e6fdf16eeeb0; aggregate file-tree SHA256 2861e558da319848fd4c98829370fa99ad6929f0d0dd8f4e91d091314500f53b; size 253004 KB."
+          }
+        ],
+        "summary": "Packaged candidate Agent integration smoke passed for Codex, Claude Code, and Cursor configuration output."
       }
     },
     {
       "id": "queue-concurrency-smoke",
       "title": "Queue concurrency smoke",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Default concurrency remains one claim.",
         "Explicit bounded concurrency behaves as expected.",
@@ -258,20 +287,22 @@
         "The smoke passes on the v0.3.4 release evidence ledger commit."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm verify:queue-concurrency-smoke"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Queue concurrency smoke."
+        "summary": "Queue concurrency smoke passed for default serial execution, bounded concurrency, and worker recovery semantics."
       }
     },
     {
       "id": "gallery-mutation-smoke",
       "title": "Gallery mutation smoke",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Gallery folder and asset mutations remain protected by core locking.",
         "Gallery duplicate/path behaviors do not regress.",
@@ -280,20 +311,22 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm verify:gallery-mutation-smoke"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Gallery mutation smoke."
+        "summary": "Gallery mutation smoke passed with locking, duplicate/path, and disk-sync coverage."
       }
     },
     {
       "id": "image-core-regression",
       "title": "Image core regression smoke",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Renderer, OpenAI-compatible image adapter, Gemini image adapter, Gallery, and disk sync smoke tests pass.",
         "Image generation, editing, Gallery, and renderer hot paths do not regress.",
@@ -302,13 +335,15 @@
         "The evidence records local or CI command output."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm verify:image-core-regression-smoke"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Image core regression smoke."
+        "summary": "Image core regression smoke passed across renderer, OpenAI/Gemini adapters, Gallery, and disk sync."
       }
     },
     {
@@ -337,7 +372,7 @@
       "id": "queue-ui-visibility",
       "title": "v0.3.4 queue UI visibility",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Desktop UI can display queued, running, failed, cancelled, interrupted, and retryable task states.",
         "Generation overlay shows stage, elapsed seconds, attempt count, and a stop action.",
@@ -346,20 +381,22 @@
         "Renderer smoke tests cover the new queue UI states without layout blocker regressions."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec vitest run src/renderer/App.smoke.test.tsx src/core/queueStore.test.ts src/core/generationQueue.test.ts"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: v0.3.4 queue UI visibility."
+        "summary": "Queue UI and durable queue tests passed for visible task states, worker summary, cancel/retry surfaces, and recovery behavior."
       }
     },
     {
       "id": "provider-diagnostics-timeout",
       "title": "v0.3.4 provider diagnostics and timeout discipline",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Provider errors are normalized into actionable categories.",
         "Text-to-image success is not used as proof that image-to-image is supported.",
@@ -368,20 +405,22 @@
         "Diagnostics record operation, route, model, input image count, mask usage, attempt count, retryability, charged retry risk, and next actions."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec vitest run src/core/providerDiagnostics.test.ts src/main/services/openaiImage.test.ts"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: v0.3.4 provider diagnostics and timeout discipline."
+        "summary": "Provider diagnostic and timeout tests passed for unsupported capability, empty output, billing, timeout, cancellation, and route behavior."
       }
     },
     {
       "id": "reference-preflight",
       "title": "v0.3.4 reference image preflight",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Reference image metadata extraction records mime, bytes, dimensions, and request summary.",
         "Oversized references use non-destructive request-copy downsampling.",
@@ -390,20 +429,22 @@
         "Temporary request copies are cleaned up on completion, failure, cancellation, and next startup."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec vitest run src/core/referencePreflight.test.ts"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: v0.3.4 reference image preflight."
+        "summary": "Reference preflight tests passed for non-destructive optimized copies, alpha metadata, mask constraints, and cleanup summaries."
       }
     },
     {
       "id": "history-gallery-recovery",
       "title": "v0.3.4 History and Gallery recovery experience",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "History cards retain prompt, parameters, source channel, duration, failure/interrupted state, and retry flow.",
         "Interrupted jobs explain worker loss or app exit and do not silently retry.",
@@ -412,173 +453,203 @@
         "History/Gallery recovery paths are covered by smoke or focused tests."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec vitest run src/main/services/stateRecovery.test.ts src/main/services/galleryDiskSync.test.ts src/renderer/App.smoke.test.tsx"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: v0.3.4 History and Gallery recovery experience."
+        "summary": "History/Gallery recovery and renderer smoke tests passed for interrupted jobs, disk reconciliation, reuse, and recovery actions."
       }
     },
     {
       "id": "agent-access-contract",
       "title": "Agent Access runtime contract and development-mode MCP arguments",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "AgentRuntimeStatus remains schemaVersion 1 and keeps legacy cliExecutable, mcpCommand, and recommendedArgs fields.",
         "Development runtime MCP args include the Electron app path before --mcp so copied configuration is runnable from the source tree.",
         "doctor --agent and the desktop Agent Access panel consume the same runtime contract without exposing secrets or private data directories."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec vitest run src/main/services/agentRuntime.test.ts",
+          "pnpm verify:agent-integration-smoke"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Agent Access runtime contract and development-mode MCP arguments."
+        "summary": "Agent runtime contract and development/packaged MCP argument compatibility passed without secret or private data-directory disclosure."
       }
     },
     {
       "id": "agent-cli-link-management",
       "title": "Managed user-level CLI link and Windows shim safety",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "macOS and Linux create and remove only the CrossGen-managed user-level CLI symlink.",
         "Windows creates and removes only the marked CrossGen shim.",
         "Unmanaged files are never overwritten and stale links are reported clearly."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec vitest run src/main/services/agentRuntime.test.ts"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Managed user-level CLI link and Windows shim safety."
+        "summary": "Managed POSIX link and Windows shim tests passed, including refusal to overwrite unmanaged files."
       }
     },
     {
       "id": "exact-candidate-package",
       "title": "Exact v0.3.4 candidate package generation and smoke",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "package.json reports 0.3.4 and the package artifact embeds the exact candidate version.",
         "At least one exact candidate package or unpacked app is generated from the recorded commit.",
         "The candidate reaches the packaged CLI/MCP smoke path without requiring a global Node.js installation."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec node scripts/electron-builder-pnpm.mjs --dir -c.mac.identity=null -c.mac.notarize=false -c.mac.timestamp=null",
+          "CROSSGEN_APP_EXECUTABLE=release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen pnpm exec node scripts/verify-cli-mcp-smoke.mjs"
+        ],
         "references": [],
-        "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Exact v0.3.4 candidate package generation and smoke."
+        "artifacts": [
+          {
+            "kind": "unpacked macOS arm64 candidate",
+            "path": "release/mac-arm64/CrossGen.app",
+            "public": false,
+            "description": "Generated from fd1ed7e788fed8488e0907fea388e6fdf16eeeb0; aggregate file-tree SHA256 2861e558da319848fd4c98829370fa99ad6929f0d0dd8f4e91d091314500f53b; size 253004 KB."
+          }
+        ],
+        "summary": "Exact v0.3.4 unpacked macOS arm64 candidate was generated from the recorded commit and passed packaged command-mode smoke."
       }
     },
     {
       "id": "applink-provider-import",
       "title": "AppLink provider import contract and cross-platform launch handling",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The v0.3.4 candidate satisfies the applink provider import contract and cross-platform launch handling contract.",
         "Evidence records the exact candidate commit and deterministic validation commands.",
         "No API key, bearer token, private home-directory path, or unconfirmed local asset path is disclosed."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec vitest run src/shared/appLink.test.ts",
+          "plutil -p release/mac-arm64/CrossGen.app/Contents/Info.plist"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: AppLink provider import contract and cross-platform launch handling."
+        "summary": "AppLink parser, compatibility fixtures, redaction, validation, and macOS crossgen scheme registration checks passed."
       }
     },
     {
       "id": "media-foundation-contract",
       "title": "OutputAsset, VideoAsset, AnimationAsset, and legacy migration contract",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The v0.3.4 candidate satisfies the outputasset, videoasset, animationasset, and legacy migration contract contract.",
         "Evidence records the exact candidate commit and deterministic validation commands.",
         "No API key, bearer token, private home-directory path, or unconfirmed local asset path is disclosed."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec vitest run src/core/mediaTypes.test.ts src/main/services/stateMigration.test.ts"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: OutputAsset, VideoAsset, AnimationAsset, and legacy migration contract."
+        "summary": "OutputAsset/media-kind normalization, state v4 migration, and legacy image compatibility tests passed."
       }
     },
     {
       "id": "managed-media-root",
       "title": "Managed media root creation, migration, cleanup, and rollback",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The v0.3.4 candidate satisfies the managed media root creation, migration, cleanup, and rollback contract.",
         "Evidence records the exact candidate commit and deterministic validation commands.",
         "No API key, bearer token, private home-directory path, or unconfirmed local asset path is disclosed."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec vitest run src/core/mediaStorage.test.ts src/main/services/storagePaths.test.ts"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Managed media root creation, migration, cleanup, and rollback."
+        "summary": "Managed media root creation, traversal protection, cleanup, staging migration, and injected rollback failures passed."
       }
     },
     {
       "id": "media-aware-result-viewer",
       "title": "ResultViewer, History, and Gallery media-aware rendering boundaries",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The v0.3.4 candidate satisfies the resultviewer, history, and gallery media-aware rendering boundaries contract.",
         "Evidence records the exact candidate commit and deterministic validation commands.",
         "No API key, bearer token, private home-directory path, or unconfirmed local asset path is disclosed."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm verify:image-core-regression-smoke",
+          "pnpm exec vitest run src/main/services/galleryDiskSync.test.ts src/renderer/App.smoke.test.tsx"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: ResultViewer, History, and Gallery media-aware rendering boundaries."
+        "summary": "Media-aware ResultViewer, History, Gallery rendering boundaries and image regression coverage passed."
       }
     },
     {
       "id": "cli-mcp-media-contract",
       "title": "CLI/MCP media metadata contract and path redaction",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The v0.3.4 candidate satisfies the cli/mcp media metadata contract and path redaction contract.",
         "Evidence records the exact candidate commit and deterministic validation commands.",
         "No API key, bearer token, private home-directory path, or unconfirmed local asset path is disclosed."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-04T16:30:55.101Z",
+        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "commands": [
+          "pnpm exec vitest run src/cli/readonly.test.ts src/mcp/stdioServer.test.ts",
+          "CROSSGEN_APP_EXECUTABLE=release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen pnpm exec node scripts/verify-cli-mcp-smoke.mjs"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: CLI/MCP media metadata contract and path redaction."
+        "summary": "CLI/MCP media metadata and path-redaction tests passed, with packaged command-mode smoke also passing."
       }
     }
   ]
