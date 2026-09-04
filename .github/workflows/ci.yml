@@ -81,6 +81,16 @@ jobs:
       - name: Package macOS app
         run: pnpm package:mac
 
+      - name: Upload macOS candidate artifacts
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: crossgen-macos-${{ github.sha }}
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error
+
   windows-package:
     name: Windows package
     runs-on: windows-latest
@@ -113,6 +123,16 @@ jobs:
           # for dedicated Windows release evidence.
           IMAGE2TOOLS_WINDOWS_VERIFY_MODE: package-smoke
         run: pnpm verify:release:windows
+
+      - name: Upload Windows candidate artifacts
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: crossgen-windows-${{ github.sha }}
+          path: |
+            release/CrossGen-Setup.exe
+            release/CrossGen-Setup.exe.blockmap
+          if-no-files-found: error
 
   linux-package:
     name: Linux package
@@ -156,3 +176,11 @@ jobs:
 
       - name: Verify Linux package
         run: pnpm verify:release:linux
+
+      - name: Upload Linux candidate artifact
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: crossgen-linux-${{ github.sha }}
+          path: release/*.AppImage
+          if-no-files-found: error
