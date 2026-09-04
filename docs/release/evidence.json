@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-04T17:58:18.000Z",
+  "lastUpdated": "2026-09-04T18:36:28.815Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -29,7 +29,7 @@
       "id": "real-openai-api",
       "title": "Real OpenAI-compatible image acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "A saved or direct OpenAI-compatible provider configuration is available without exposing API keys.",
         "GPT Image 2 or equivalent text-to-image returns a savable image or an accepted operation-level diagnostic.",
@@ -38,20 +38,38 @@
         "Each operation respects the user-configured timeout and records route, model, input image count, mask usage, attempts, elapsed seconds, output count, diagnostic, and next actions."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Real OpenAI-compatible image acceptance."
+        "verifiedAt": "2026-09-04T18:29:40.578Z",
+        "commit": "d6f234683244f56a198c3dc22efbc51b84a5dbb3",
+        "environment": "macOS 25.5.0 arm64 local release shell using the AIHub aggregation endpoint https://aihub.nowosoft.cn/v1. Credentials and the ignored .env.local file contents are not recorded. The release branch contains only evidence/preflight documentation commits after the 0c967633 candidate code.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm verify:real-aihub-api"
+        ],
+        "references": [
+          {
+            "label": "v0.3.4 candidate pull request",
+            "url": "https://github.com/Bliveren/CrossGen/pull/212"
+          },
+          {
+            "label": "AIHub real API gate contract",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.0-aihub-real-api-gate.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/aihub/2026-09-04T18-22-51-213Z/summary.json",
+            "public": false,
+            "description": "AIHub OpenAI-compatible operation summary. gpt-image-2 text-to-image, image-to-image, and guided-region edit each returned one savable PNG through POST /chat/completions with stream=true, one attempt, a 240-second timeout, and no diagnostic."
+          }
+        ],
+        "summary": "GPT Image 2 passed all three required real operations through the approved AIHub aggregation API. The run recorded model, route, timeout, input image count, mask usage, elapsed time, output count, and next actions without exposing secrets."
       }
     },
     {
       "id": "real-gemini-api",
       "title": "Real Gemini-compatible image acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "A saved or direct Gemini-compatible provider configuration is available without exposing API keys.",
         "Gemini-compatible text-to-image returns a savable image or an accepted operation-level diagnostic.",
@@ -60,13 +78,31 @@
         "Missing Gemini-compatible provider configuration is not misreported as a generation failure."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Real Gemini-compatible image acceptance."
+        "verifiedAt": "2026-09-04T18:29:40.578Z",
+        "commit": "d6f234683244f56a198c3dc22efbc51b84a5dbb3",
+        "environment": "macOS 25.5.0 arm64 local release shell using the AIHub aggregation endpoint https://aihub.nowosoft.cn/v1. Credentials and the ignored .env.local file contents are not recorded. The release branch contains only evidence/preflight documentation commits after the 0c967633 candidate code.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm verify:real-aihub-api"
+        ],
+        "references": [
+          {
+            "label": "v0.3.4 candidate pull request",
+            "url": "https://github.com/Bliveren/CrossGen/pull/212"
+          },
+          {
+            "label": "AIHub real API gate contract",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.0-aihub-real-api-gate.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/aihub/2026-09-04T18-22-51-213Z/summary.json",
+            "public": false,
+            "description": "AIHub Gemini-compatible operation summary. gemini-3.1-flash-image text-to-image, image-to-image, and guided-region edit each returned one savable PNG through POST /chat/completions with stream=true, one attempt, a 240-second timeout, and no diagnostic."
+          }
+        ],
+        "summary": "Gemini-compatible image operations passed through the approved AIHub aggregation API. Model discovery confirmed the configured image model, and generation/reference/guided edits all returned one savable image with the required operation metadata."
       }
     },
     {
@@ -127,7 +163,7 @@
       "id": "macos-notarized",
       "title": "Apple notarized macOS release package",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "Apple notarization is submitted for the exact v0.3.4 macOS candidate artifact.",
         "Notarization succeeds without exposing Apple credentials.",
@@ -136,13 +172,59 @@
         "The evidence records the exact artifact identity, SHA256, and validation command results."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Apple notarized macOS release package."
+        "verifiedAt": "2026-09-04T18:36:28.815Z",
+        "commit": "d6f234683244f56a198c3dc22efbc51b84a5dbb3",
+        "environment": "macOS 25.5.0 arm64 local release shell. The exact v0.3.4 app bundle was signed with Developer ID Application identity hash C5A5172145291B971D3ACB7FB51FE5D4321D6691 and submitted to Apple without recording credentials.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
+          "pnpm verify:release:mac",
+          "codesign --verify --deep --strict --verbose=2 release/mac-arm64/CrossGen.app",
+          "xcrun stapler validate release/mac-arm64/CrossGen.app",
+          "spctl --assess --type execute --verbose=4 release/mac-arm64/CrossGen.app",
+          "hdiutil attach -nobrowse -readonly release/CrossGen-0.3.4-mac-arm64.dmg",
+          "xcrun stapler validate <mounted-volume>/CrossGen.app",
+          "spctl --assess --type execute --verbose=4 <mounted-volume>/CrossGen.app",
+          "set -a; . ./.env.local; set +a; xcrun notarytool history --apple-id \"$APPLE_ID\" --password \"$APPLE_APP_SPECIFIC_PASSWORD\" --team-id \"$APPLE_TEAM_ID\" --output-format json"
+        ],
+        "references": [
+          {
+            "label": "Apple notarization submission",
+            "url": "https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "macOS arm64 notarized app in DMG",
+            "path": "release/CrossGen-0.3.4-mac-arm64.dmg",
+            "public": false,
+            "description": "DMG size 104018747 bytes; SHA256 e4ec0bdae3d4f28f164501d9720e41379f9b52e20854b691edbb8f0ed9fb6738. Mounted app passed codesign verification, stapler validation, and spctl with source=Notarized Developer ID."
+          },
+          {
+            "kind": "macOS arm64 notarized app ZIP",
+            "path": "release/CrossGen-0.3.4-mac-arm64.zip",
+            "public": false,
+            "description": "ZIP size 99725621 bytes; SHA256 7d22fab5761b64daad8fcaea96147c45745bd81324f1f823ab10fa87eb9dd86a. Generated from the same notarized app bundle."
+          },
+          {
+            "kind": "Apple notarization submission",
+            "path": "notarytool history",
+            "public": false,
+            "description": "Submission a6887453-4b6a-4339-81ea-6ecc7f77e12e reported status Accepted at 2026-09-04T18:36:28.815Z."
+          },
+          {
+            "kind": "macOS DMG blockmap",
+            "path": "release/CrossGen-0.3.4-mac-arm64.dmg.blockmap",
+            "public": false,
+            "description": "Size 109594 bytes; SHA256 ba2320dd065cd57dca9dd2192b91a3bd0c8cb4f366f013b35be4a53bc59c9c20."
+          },
+          {
+            "kind": "macOS ZIP blockmap",
+            "path": "release/CrossGen-0.3.4-mac-arm64.zip.blockmap",
+            "public": false,
+            "description": "Size 105089 bytes; SHA256 697d23d98636aef656b869b67f630dd40ae14f8b06c8e59670856496eb5906e8."
+          }
+        ],
+        "summary": "Apple accepted the exact v0.3.4 macOS notarization submission. The app bundle was stapled, validated with stapler, accepted by Gatekeeper as Notarized Developer ID both from the build directory and after mounting the DMG, and launched successfully in the two-cycle release smoke."
       }
     },
     {
@@ -476,7 +558,7 @@
       "id": "real-provider-operation-matrix",
       "title": "v0.3.4 real provider operation matrix",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "OpenAI-compatible text-to-image is recorded as pass, pass-with-diagnostic, or blocker by operation.",
         "OpenAI-compatible image-to-image is recorded separately from text-to-image.",
@@ -485,13 +567,27 @@
         "Every gate records route, model, timeout, elapsed seconds, input image count, output count, diagnostic category, and next actions without exposing secrets."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: v0.3.4 real provider operation matrix."
+        "verifiedAt": "2026-09-04T18:29:40.578Z",
+        "commit": "d6f234683244f56a198c3dc22efbc51b84a5dbb3",
+        "environment": "macOS 25.5.0 arm64 local AIHub operation-matrix run. API credentials were loaded from the ignored .env.local file and are not recorded; the approved route was the app-supported streaming chat-completions path.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; pnpm verify:real-aihub-api"
+        ],
+        "references": [
+          {
+            "label": "v0.3.4 candidate pull request",
+            "url": "https://github.com/Bliveren/CrossGen/pull/212"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-file",
+            "path": "real-api-artifacts/aihub/2026-09-04T18-22-51-213Z/summary.json",
+            "public": false,
+            "description": "Six-operation AIHub matrix. OpenAI-compatible gpt-image-2: text-to-image 42.281s (0 inputs), image-to-image 44.212s (1 input), guided-region edit 68.240s (2 inputs, mask=true). Gemini-compatible gemini-3.1-flash-image: text-to-image 45.192s (0 inputs), image-to-image 176.230s (1 input), guided-region edit 33.134s (2 inputs, mask=true). Every operation used POST /chat/completions, stream=true, timeout 240s, one attempt, outputCount=1, result=pass."
+          }
+        ],
+        "summary": "The v0.3.4 real provider operation matrix passed all six required AIHub operations. The summary records route, model, timeout, elapsed seconds, input image count, mask usage, output count, diagnostic category, and next actions without exposing secrets."
       }
     },
     {
