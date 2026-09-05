@@ -65,6 +65,10 @@ import {
   isOpenAIImageParams,
   validateGptImage2Size
 } from "../shared/validation";
+import {
+  GPT_IMAGE_2_SIZE_PRESET_GROUPS,
+  isGptImage2SizePreset
+} from "../shared/imageSizePresets";
 import type {
   AppSnapshot,
   AgentRuntimeStatus,
@@ -329,7 +333,6 @@ const StableGalleryRailPanel = memo(
     previous.dependencies.every((dependency, index) => Object.is(dependency, next.dependencies[index]))
 );
 
-const sizePresets = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x1152", "2048x2048", "3840x2160", "2160x3840"];
 const qualityOptions: ImageQuality[] = ["auto", "low", "medium", "high"];
 const formatOptions: ImageFormat[] = ["png", "jpeg", "webp"];
 const backgroundOptions: ImageBackground[] = ["auto", "opaque"];
@@ -372,6 +375,29 @@ type ThemeMode = "system" | "light" | "dark";
 
 const THEME_STORAGE_KEY = "image2tools.theme";
 const themeModeOrder: ThemeMode[] = ["system", "light", "dark"];
+
+function renderSizePresetOptions(includeTier: boolean): ReactNode {
+  return (
+    <>
+      <option value="auto">auto</option>
+      {GPT_IMAGE_2_SIZE_PRESET_GROUPS.map((group) => (
+        <optgroup key={group.aspectRatio} label={group.aspectRatio}>
+          {group.presets.map((preset) => (
+            <option key={preset.size} value={preset.size}>
+              {includeTier ? `${preset.tier} - ${preset.size}` : preset.size}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  );
+}
+
+function editableImageSizeParts(size: string): { width: string; height: string } {
+  const match = /^(\d*)x(\d*)$/i.exec(size.trim());
+  if (match) return { width: match[1] ?? "", height: match[2] ?? "" };
+  return { width: size.replace(/\D/g, ""), height: "" };
+}
 
 function getInitialThemeMode(): ThemeMode {
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
@@ -987,10 +1013,15 @@ function paramsNotice(params: ImageParams, restoredText: string, copy: UiCopy): 
   return restoredText;
 }
 
-function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: string) => void) {
-  if (isOpenAIImageParams(params) && !sizePresets.includes(params.size)) {
-    setCustomSize(params.size);
-  }
+function updateCustomSizeFromParams(
+  params: ImageParams,
+  setCustomSize: (value: string) => void,
+  setIsCustomSizeMode: (value: boolean) => void
+) {
+  if (!isOpenAIImageParams(params)) return;
+  const isPreset = isGptImage2SizePreset(params.size);
+  setIsCustomSizeMode(!isPreset);
+  if (!isPreset) setCustomSize(params.size);
 }
 
 function launchDefinitionForModel(modelId: string): (typeof FOCUSED_MODEL_CATALOG)[number] | undefined {
@@ -1245,6 +1276,7 @@ export function App() {
   const [newApiAccessBaseURL, setNewApiAccessBaseURL] = useState(DEFAULT_BASE_URL);
   const [newApiAccessKey, setNewApiAccessKey] = useState("");
   const [customSize, setCustomSize] = useState("2048x1152");
+  const [isCustomSizeMode, setIsCustomSizeMode] = useState(false);
   const [inputAssets, setInputAssets] = useState<InputAsset[]>([]);
   const [maskAsset, setMaskAsset] = useState<InputAsset | null>(null);
   const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null);
@@ -1451,12 +1483,17 @@ export function App() {
   const primaryRunButtonRef = useRef<HTMLButtonElement | null>(null);
   const promptTemplateButtonRef = useRef<HTMLButtonElement | null>(null);
   const promptCopyButtonRef = useRef<HTMLButtonElement | null>(null);
+  const customWidthInputRef = useRef<HTMLInputElement | null>(null);
   const sidebarUtilityBarRef = useRef<HTMLElement | null>(null);
   const rightRailActionsRef = useRef<HTMLDivElement | null>(null);
   const appShellRef = useRef<HTMLElement | null>(null);
   const sidebarWidthRef = useRef(sidebarWidth);
   const historyWidthRef = useRef(historyWidth);
   const expandedHistoryWidthRef = useRef(Math.max(historyWidth, MIN_HISTORY_WIDTH));
+
+  useEffect(() => {
+    if (isParameterDialogOpen && isCustomSizeMode) customWidthInputRef.current?.focus();
+  }, [isCustomSizeMode, isParameterDialogOpen]);
 
   const activeConfig = snapshot.providers.find(p => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
   const isSidebarCompact = isSidebarCollapsed || isAutoSidebarCollapsed;
@@ -1522,7 +1559,7 @@ export function App() {
   const activeInpaintCapability = inpaintCapabilityForParams(params);
   const usesExactMask = activeInpaintCapability === "exact-mask";
   const showMaskRouteNotice = requestMode === "inpaint" && Boolean(activeInpaintCapability);
-  const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
+  const sizeSelectValue = openAIParams && !isCustomSizeMode && isGptImage2SizePreset(openAIParams.size) ? openAIParams.size : "custom";
   const streamDisabledReason = openAIParams ? streamPartialPreviewDisabledReason(openAIParams, activeConfig, requestMode, copy) : undefined;
   const streamPartialsAllowed = openAIParams ? !streamDisabledReason : false;
   const apiKeyPlaceholder = selectedApiConfig.apiKeyPreview ?? (selectedApiConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
@@ -2673,7 +2710,7 @@ export function App() {
     setPrompt(draft.prompt);
     clearPromptChips();
     setParams(restoredParams);
-    updateCustomSizeFromParams(restoredParams, setCustomSize);
+    updateCustomSizeFromParams(restoredParams, setCustomSize, setIsCustomSizeMode);
     setBaseURL(config.baseURL);
     setInputAssets(draft.inputAssets);
     setMaskAsset(isGeneralImageParams(restoredParams) ? null : draft.maskAsset ?? null);
@@ -3420,7 +3457,7 @@ export function App() {
   function syncParamsToConfig(config: ProviderConfig) {
     setParams((current) => {
       const nextParams = createParamsForConfig(config, current);
-      updateCustomSizeFromParams(nextParams, setCustomSize);
+      updateCustomSizeFromParams(nextParams, setCustomSize, setIsCustomSizeMode);
       return nextParams;
     });
   }
@@ -3665,7 +3702,7 @@ export function App() {
       setMaskAsset(null);
       setMaskDataUrl(null);
     }
-    updateCustomSizeFromParams(nextParams, setCustomSize);
+    updateCustomSizeFromParams(nextParams, setCustomSize, setIsCustomSizeMode);
     markDraftChanged();
     setIsSavingConfig(true);
     try {
@@ -4413,7 +4450,7 @@ export function App() {
     setPrompt(job.prompt);
     clearPromptChips();
     setParams(reusedParams);
-    updateCustomSizeFromParams(reusedParams, setCustomSize);
+    updateCustomSizeFromParams(reusedParams, setCustomSize, setIsCustomSizeMode);
     setBaseURL(activeConfig.baseURL);
     if (job.providerKind === activeConfig.kind) {
       setSnapshot((current) => {
@@ -5655,6 +5692,27 @@ export function App() {
   }
 
   const sizeValidation = openAIParams ? validateGptImage2Size(openAIParams.size) : null;
+  const customSizeParts = editableImageSizeParts(customSize);
+
+  function selectOpenAIImageSize(value: string, revealCustomEditor: boolean) {
+    if (value === "custom") {
+      setIsCustomSizeMode(true);
+      updateOpenAIParams({ size: customSize });
+      if (revealCustomEditor) setIsParameterDialogOpen(true);
+      return;
+    }
+    setIsCustomSizeMode(false);
+    updateOpenAIParams({ size: value });
+  }
+
+  function updateCustomSizeDimension(dimension: "width" | "height", value: string) {
+    const digits = value.replace(/\D/g, "");
+    const nextParts = { ...customSizeParts, [dimension]: digits };
+    const nextSize = `${nextParts.width}x${nextParts.height}`;
+    setCustomSize(nextSize);
+    updateOpenAIParams({ size: nextSize });
+  }
+
   const maskDescription = activeInpaintCapability === "guided-region" ? copy.guidedRegionDescription : copy.maskDescription;
   const effectiveOpenAIImageRoute = openAIParams ? selectedOpenAIImageRoute(openAIParams, activeConfig, requestMode) : null;
   const imageRouteStatusText = openAIParams ? openAIImageRouteStatusText(copy, openAIParams, activeConfig, requestMode) : undefined;
@@ -5685,24 +5743,30 @@ export function App() {
   ) : null;
   const parameterQuickControls = openAIParams ? (
     <>
-      <label className="parameter-summary-chip parameter-quick-field">
+      <div className="parameter-summary-chip parameter-quick-field">
         <small>{copy.size}</small>
-        <select
-          aria-label={copy.size}
-          value={sizeSelectValue}
-          onChange={(event) => {
-            const value = event.target.value;
-            updateOpenAIParams({ size: value === "custom" ? customSize : value });
-          }}
-        >
-          {sizePresets.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-          <option value="custom">{copy.custom}</option>
-        </select>
-      </label>
+        <div className="parameter-quick-size-control">
+          <select
+            aria-label={copy.size}
+            value={sizeSelectValue}
+            onChange={(event) => selectOpenAIImageSize(event.target.value, true)}
+          >
+            {renderSizePresetOptions(false)}
+            <option value="custom">{copy.custom}</option>
+          </select>
+          {sizeSelectValue === "custom" && (
+            <button
+              type="button"
+              className="icon-button parameter-custom-size-edit"
+              onClick={() => setIsParameterDialogOpen(true)}
+              aria-label={copy.editCustomSize}
+              data-tooltip={copy.editCustomSize}
+            >
+              <Pencil size={13} />
+            </button>
+          )}
+        </div>
+      </div>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.quality}</small>
         <select aria-label={copy.quality} value={openAIParams.quality} onChange={(event) => updateOpenAIParams({ quality: event.target.value as ImageQuality })}>
@@ -5788,16 +5852,9 @@ export function App() {
         <span>{copy.size}</span>
         <select
           value={sizeSelectValue}
-          onChange={(event) => {
-            const value = event.target.value;
-            updateOpenAIParams({ size: value === "custom" ? customSize : value });
-          }}
+          onChange={(event) => selectOpenAIImageSize(event.target.value, false)}
         >
-          {sizePresets.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
+          {renderSizePresetOptions(true)}
           <option value="custom">{copy.custom}</option>
         </select>
       </label>
@@ -5888,17 +5945,48 @@ export function App() {
   const advancedControls = openAIParams ? (
     <div className="advanced-controls">
       {sizeSelectValue === "custom" && (
-        <label>
-          {copy.customSize}
-          <input
-            value={customSize}
-            onChange={(event) => {
-              setCustomSize(event.target.value);
-              updateOpenAIParams({ size: event.target.value });
-            }}
-            placeholder="2048x1152"
-          />
-        </label>
+        <div className="custom-size-editor">
+          <div className="custom-size-editor-heading">
+            <strong>{copy.customSize}</strong>
+            <span>{customSize}</span>
+          </div>
+          <div className="custom-size-inputs">
+            <label>
+              <span>{copy.customWidth}</span>
+              <input
+                ref={customWidthInputRef}
+                aria-invalid={sizeValidation?.ok === false}
+                aria-describedby="custom-size-feedback custom-size-rules"
+                type="number"
+                min="16"
+                max="3840"
+                step="16"
+                value={customSizeParts.width}
+                onChange={(event) => updateCustomSizeDimension("width", event.target.value)}
+              />
+            </label>
+            <span className="custom-size-separator" aria-hidden="true">x</span>
+            <label>
+              <span>{copy.customHeight}</span>
+              <input
+                aria-invalid={sizeValidation?.ok === false}
+                aria-describedby="custom-size-feedback custom-size-rules"
+                type="number"
+                min="16"
+                max="3840"
+                step="16"
+                value={customSizeParts.height}
+                onChange={(event) => updateCustomSizeDimension("height", event.target.value)}
+              />
+            </label>
+          </div>
+          {sizeValidation && (
+            <p id="custom-size-feedback" className={sizeValidation.ok ? "inline-check ok" : "inline-check error"}>
+              {sizeValidation.ok ? copy.sizeValid : localizeValidationMessage(sizeValidation.message, copy)}
+            </p>
+          )}
+          <p id="custom-size-rules" className="custom-size-rules">{copy.customSizeRules}</p>
+        </div>
       )}
       {referenceImageModeControl}
       <label>
@@ -5986,7 +6074,7 @@ export function App() {
           onChange={(event) => updateOpenAIParams({ timeoutMs: clamp(Number(event.target.value), 30, 600) * 1000 })}
         />
       </label>
-      {sizeValidation && (
+      {sizeValidation && sizeSelectValue !== "custom" && (
         <p className={sizeValidation.ok ? "inline-check ok" : "inline-check error"}>
           {sizeValidation.ok ? copy.sizeValid : localizeValidationMessage(sizeValidation.message, copy)}
         </p>

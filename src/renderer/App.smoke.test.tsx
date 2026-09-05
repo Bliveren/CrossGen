@@ -23,6 +23,7 @@ import {
   DEFAULT_GEMINI_IMAGE_PARAMS,
   DEFAULT_IMAGE_PARAMS
 } from "../shared/validation";
+import { GPT_IMAGE_2_SIZE_PRESET_VALUES } from "../shared/imageSizePresets";
 import {
   GEMINI_3_PRO_IMAGE_MODEL_ID,
   GPT_IMAGE_2_LAUNCH_ID,
@@ -149,6 +150,13 @@ describe("renderer multi-model smoke", () => {
     expect(css).toMatch(/\.right-rail\.collapsed \.right-rail-action-group\s*{[^}]*z-index:\s*6100/s);
   });
 
+  it("keeps the primary parameter dropdowns readable in both themes", () => {
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+
+    expect(css).toMatch(/\.parameter-config-bar \.parameter-quick-field select\s*{[^}]*background-color:\s*var\(--surface-panel\)[^}]*color:\s*var\(--text-primary\)[^}]*color-scheme:\s*inherit/s);
+    expect(css).toMatch(/\.parameter-config-bar \.parameter-quick-field select option,\s*\.parameter-config-bar \.parameter-quick-field select optgroup\s*{[^}]*background-color:\s*var\(--surface-panel\)[^}]*color:\s*var\(--text-primary\)/s);
+  });
+
   it("disables all launch buttons before an API key is saved", async () => {
     const defaultConfig = providerConfig({ apiKeySaved: false, discoveredModels: [] });
     await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
@@ -221,6 +229,41 @@ describe("renderer multi-model smoke", () => {
           stream: false,
           partialImages: 0
         })
+      })
+    );
+  });
+
+  it("offers the full size preset matrix and edits a validated custom size", async () => {
+    const bridge = await renderApp(snapshot());
+    const quickSizeSelect = document.querySelector<HTMLSelectElement>('.parameter-config-bar select[aria-label="Size"]')!;
+
+    expect([...quickSizeSelect.options].map((option) => option.value)).toEqual([
+      ...GPT_IMAGE_2_SIZE_PRESET_VALUES,
+      "custom"
+    ]);
+
+    await changeSelect(quickSizeSelect, "custom");
+
+    const dialog = document.querySelector<HTMLElement>(".parameter-dialog")!;
+    const widthInput = inputByLabel("Width", dialog);
+    const heightInput = inputByLabel("Height", dialog);
+    expect(document.activeElement).toBe(widthInput);
+
+    await changeInput(widthInput, "1000");
+    expect(dialog.textContent).toContain("multiples of 16");
+    expect(document.querySelector<HTMLButtonElement>(".primary-run")?.disabled).toBe(true);
+
+    await changeInput(widthInput, "1600");
+    await changeInput(heightInput, "912");
+    expect(dialog.textContent).toContain("Size is valid for GPT Image 2.");
+    expect(document.querySelector<HTMLButtonElement>(".primary-run")?.disabled).toBe(false);
+
+    await click(dialog.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!);
+    await click(buttonByText("Generate", ".primary-run"));
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ size: "1600x912" })
       })
     );
   });
