@@ -1,7 +1,7 @@
 # GPT Image 2.5 Support Research
 
-> Research date: 2026-09-09  
-> Target release: CrossGen v0.3.4  
+> Research date: 2026-09-09
+> Target release: CrossGen v0.3.4
 > Status: implementation in the current v0.3.4 worktree
 
 ## Executive Summary
