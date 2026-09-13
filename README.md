@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>Download v0.3.3</b></a> ·
+  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>Download v0.3.4</b></a> ·
   <a href="#applink-api-configuration"><b>AppLink</b></a> ·
   <a href="#crossgen-artist-skill"><b>CrossGen Artist Skill</b></a> ·
   <a href="#agent-quickstart"><b>Agent Quickstart</b></a> ·
@@ -37,6 +37,7 @@
 
 <p align="center">
   <a href="#why-crossgen-034">Why 0.3.4</a> ·
+  <a href="#gpt-image-25">GPT Image 2.5</a> ·
   <a href="#visual-tour">Visual Tour</a> ·
   <a href="#core-workflows">Core Workflows</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -46,7 +47,7 @@
 
 ## Why CrossGen 0.3.4
 
-CrossGen 0.3.4 adds a media-aware foundation and a confirmed AppLink import flow on top of the reliable 0.3.3 image workspace. The visual app, CLI, and MCP share the same queue, provider diagnostics, reference-image handling, History, Gallery, and media metadata contracts, while the bundled crossgen-artist skill keeps Codex and other agents on the same path.
+CrossGen 0.3.4 adds GPT Image 2.5 support, a media-aware foundation, and a confirmed AppLink import flow on top of the reliable 0.3.3 image workspace. The visual app, CLI, and MCP share the same queue, provider diagnostics, reference-image handling, History, Gallery, and media metadata contracts, while the bundled crossgen-artist skill keeps Codex and other agents on the same path.
 
 The desktop app, CLI, and MCP server share the same API profiles, durable generation queue, History, and Gallery. The bundled skill stays aligned with that contract. Install CrossGen once; installed CLI and MCP use require no separate Node.js, npm, pnpm, global package, or local HTTP service.
 
@@ -63,7 +64,7 @@ Install and open the [latest desktop release](https://github.com/Bliveren/CrossG
 ```bash
 crossgen doctor --agent --json
 crossgen models list --json
-crossgen generate --prompt "A precise isometric app icon" --yes --wait --json
+crossgen generate --prompt "A precise isometric app icon" --model gpt-image-2.5-sunburst --quality xhigh --yes --wait --json
 ```
 
 Generate least-privilege MCP configuration for your client:
@@ -87,7 +88,7 @@ mkdir -p "$HOME/.codex/skills"
 ln -sfn "$(pwd)/skills/crossgen-artist" "$HOME/.codex/skills/crossgen-artist"
 ```
 
-Then invoke it as `$crossgen-artist`. The skill is versioned with CrossGen so its instructions stay aligned with the bundled CLI/MCP contract. When CrossGen is installed as a packaged app, use the skill files from the matching source/release archive; a future installer will make this one click from Agent access.
+Then invoke it as `$crossgen-artist`. The skill is versioned with CrossGen so its instructions stay aligned with the bundled CLI/MCP contract, including GPT Image 2.5 model selection, Responses multi-turn edits, mask preflight, and media-aware Gallery reads. When CrossGen is installed as a packaged app, use the skill files from the matching source/release archive; a future installer will make this one click from Agent access.
 
 The desktop **Agent access** panel remains the source of truth for MCP setup. Copy a client-specific snippet there, choose `readonly` for discovery, and switch to `write` or `generate` only for workflows that need those permissions. CrossGen does not silently edit Codex configuration or enable paid generation.
 
@@ -101,7 +102,7 @@ Canonical form:
 crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
 ```
 
-Accepted aliases include `apiKey`/`api_key`, `baseURL`/`base_url`, `defaultModel`/`default_model`, and `provider`/`kind`. Supported launch targets are `gpt-image-2`, `nano-banana-3`, and `general`; when omitted, CrossGen infers the focused launch from provider kind and model name. Packaged builds register the `crossgen` scheme on macOS, Windows, and Linux.
+Accepted aliases include `apiKey`/`api_key`, `baseURL`/`base_url`, `defaultModel`/`default_model`, and `provider`/`kind`. Supported launch targets are `gpt-image-2`, `gpt-image-2.5`, `nano-banana-3`, and `general`; when omitted, CrossGen infers the focused launch from provider kind and model name. Packaged builds register the `crossgen` scheme on macOS, Windows, and Linux.
 
 > Using CrossGen in a real desktop, CLI, or agent workflow? [Star the repository](https://github.com/Bliveren/CrossGen) so other local-first image-tool users can find it, and share the workflow in [Discord](https://discord.gg/XphwmYtY).
 
@@ -115,6 +116,47 @@ It is built for real image-generation work, not just one-off prompting. Designer
 6. generate again.
 
 CrossGen keeps that whole loop inside one app. No repeated file hunting, no scattered browser downloads, no separate folder cleanup before the next image-to-image attempt.
+
+## GPT Image 2.5
+
+CrossGen v0.3.4 supports the current GPT Image 2.5 family:
+
+- `gpt-image-2.5-sunburst` for precise edits, structure preservation, and high-fidelity reference work.
+- `gpt-image-2.5-flare` for fast, high-quality everyday generation.
+- Dated Sunburst/Flare snapshots are discovered automatically when the provider
+  exposes them.
+
+The desktop, CLI, and MCP surfaces expose the same controls: `auto`, `low`,
+`medium`, `high`, `xhigh`, and `max` quality; custom 16-multiple dimensions up
+to the documented 4K envelope; transparent/opaque/automatic background;
+PNG/JPEG/WebP output and JPEG/WebP compression; `n` up to 10; and streaming
+partial images from 0 to 3. Edits support up to 16 reference images,
+`input_fidelity`, and mask/inpainting with source/mask format and dimension
+checks, alpha validation, and a 50 MB mask limit.
+
+An optional `user` safety identifier is available in the desktop advanced
+settings, CLI (`--user`), and MCP (`user`). CrossGen sends it as `user` through
+the Images API and as `safety_identifier` through Responses. It must be an
+opaque stable identifier; CrossGen never derives it from API keys or personal
+account data.
+
+GPT Image 2.5 can use the Image API or the Responses API image-generation tool.
+Responses requests use a configurable mainline model (default `gpt-6-astra`)
+and support `action`, `previous_response_id`, revised-prompt metadata, and
+multi-turn editing. Responses streaming sends `partial_images` only when
+partial previews are requested (1 to 3); a value of 0 omits the optional field.
+GPT Image 2.5 never uses the legacy Chat Completions image
+route. In automatic route mode, CrossGen uses the Images API for ordinary and
+batch requests, and uses Responses only when conversation-specific controls are
+present. Route probes are diagnostic only and do not silently promote a normal
+2.5 request to the conversational path. Explicit Responses requests stay on
+Responses if they fail, preserving conversation semantics instead of retrying
+through a different billable route.
+
+For privacy and lifecycle simplicity, v0.3.4 sends local Responses inputs as
+base64 data URLs and does not upload or persist OpenAI Files API IDs. See the
+[GPT Image 2.5 support research note](./docs/plans/gpt-image-2.5-support.md)
+for the full capability matrix and official references.
 
 For agent-driven work, the loop becomes equally direct:
 
@@ -197,7 +239,7 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 
 ## Other Highlights
 
-- **GPT Image 2 and Gemini image workflows**: focused launch entries for GPT Image 2 and Nano Banana/Gemini image models.
+- **GPT Image 2 / 2.5 and Gemini image workflows**: focused launch entries for GPT Image 2.5 Sunburst/Flare, legacy GPT Image 2, and Nano Banana/Gemini image models.
 - **Agent-ready CLI/MCP runtime**: local agents can discover providers and models, submit queue-backed image jobs, inspect status, and export Gallery assets.
 - **Aggregation-provider compatibility**: release gates include real-provider validation through OpenAI-compatible aggregation endpoints and Gemini-compatible image models.
 - **Durable generation queue**: generation and edit work runs through a bounded local queue with status tracking, retry, cancel, and safe defaults.
@@ -210,7 +252,7 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 
 ## Agent Runtime
 
-CrossGen 0.3.3 exposes the local image runtime through structured JSON CLI commands and an MCP stdio server. The same queue, diagnostics, and Gallery rules protect desktop, CLI, and MCP workflows:
+CrossGen 0.3.4 exposes the local image runtime through structured JSON CLI commands and an MCP stdio server. The same queue, diagnostics, and Gallery rules protect desktop, CLI, and MCP workflows:
 
 - `crossgen doctor --agent --json` reports the app path, data directory, provider readiness, queue configuration, and MCP launch hints.
 - `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` prints client-ready MCP configuration.
@@ -226,7 +268,7 @@ After configuring an API profile in the desktop app, use the packaged `crossgen`
 ```bash
 crossgen doctor --agent --json
 crossgen models list --json
-crossgen generate --prompt "A precise isometric app icon" --yes --wait --json
+crossgen generate --prompt "A precise isometric app icon" --model gpt-image-2.5-sunburst --quality xhigh --yes --wait --json
 crossgen job status <job-id> --json
 crossgen asset export <asset-id> --to ./assets/app-icon.png --yes --json
 ```
@@ -283,7 +325,7 @@ Basic setup:
 1. Open **API access**.
 2. Add an API key and Base URL.
 3. Run model discovery.
-4. Launch GPT Image 2, Nano Banana/Gemini, or a compatible model.
+4. Launch GPT Image 2.5, GPT Image 2, Nano Banana/Gemini, or a compatible model.
 5. Generate, edit, save useful images to Gallery, and reuse them as references.
 
 The macOS arm64 release is Developer ID signed and Apple notarized. If Gatekeeper blocks a local unsigned build, right-click the app and choose **Open**, or clear the quarantine attribute:

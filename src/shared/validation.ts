@@ -13,25 +13,35 @@ import type {
   ModerationMode,
   OpenAIImageParams,
   ProviderKind,
-  ReferenceImageMode
+  ReferenceImageMode,
+  ResponsesInputImageDetail,
+  ResponsesImageAction,
+  RunJobRequest,
+  SketchTaskMetadata
 } from "./types.js";
 import { isImageAsset } from "../core/mediaTypes.js";
 import {
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
   getFocusedModelDefinition,
   generalFallbackSupportsReferenceImages,
-  isGeneralFallbackProvider
+  isGeneralFallbackProvider,
+  isGptImage25ModelId,
+  isGptImageModelId
 } from "./modelCatalog.js";
+import { SKETCH_GUIDANCE_KEYS, validateSketchDocument, validateSketchTaskMetadata } from "./sketch.js";
 
 export const GPT_IMAGE_2_MODEL = GPT_IMAGE_2_MODEL_ID;
 
 export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
+export const DEFAULT_RESPONSES_MODEL = "gpt-6-astra";
 export const MAX_GPT_IMAGE_INPUTS = 16;
+export const MAX_OPENAI_SAFETY_IDENTIFIER_LENGTH = 64;
 export const GENERAL_PROMPT_ONLY_MESSAGE = "General OpenAI 兼容兜底仅支持纯提示词生成。";
 
 export const DEFAULT_IMAGE_PARAMS: OpenAIImageParams = {
@@ -75,15 +85,40 @@ export const DEFAULT_GENERAL_IMAGE_PARAMS: GeneralImageParams = {
 };
 
 export const IMAGE_QUALITY_OPTIONS = ["auto", "low", "medium", "high"] as const satisfies readonly ImageQuality[];
+export const GPT_IMAGE_2_5_QUALITY_OPTIONS = ["auto", "low", "medium", "high", "xhigh", "max"] as const satisfies readonly ImageQuality[];
 export const IMAGE_FORMAT_OPTIONS = ["png", "jpeg", "webp"] as const satisfies readonly ImageFormat[];
-export const IMAGE_BACKGROUND_OPTIONS = ["auto", "opaque"] as const satisfies readonly ImageBackground[];
+export const IMAGE_BACKGROUND_OPTIONS = ["auto", "opaque", "transparent"] as const satisfies readonly ImageBackground[];
 export const MODERATION_MODE_OPTIONS = ["auto", "low"] as const satisfies readonly ModerationMode[];
+export const RESPONSES_IMAGE_ACTION_OPTIONS = ["auto", "generate", "edit"] as const satisfies readonly ResponsesImageAction[];
+export const RESPONSES_INPUT_IMAGE_DETAIL_OPTIONS = ["auto", "low", "high", "original"] as const satisfies readonly ResponsesInputImageDetail[];
 export const REFERENCE_IMAGE_MODE_OPTIONS = ["original", "optimized"] as const satisfies readonly ReferenceImageMode[];
 export const PROVIDER_KIND_OPTIONS = ["openai", "gemini", "custom"] as const satisfies readonly ProviderKind[];
-export const FOCUSED_LAUNCH_OPTIONS = [GPT_IMAGE_2_LAUNCH_ID, NANO_BANANA_3_LAUNCH_ID, GENERAL_LAUNCH_ID] as const satisfies readonly FocusedLaunchId[];
+export const FOCUSED_LAUNCH_OPTIONS = [GPT_IMAGE_2_LAUNCH_ID, GPT_IMAGE_2_5_LAUNCH_ID, NANO_BANANA_3_LAUNCH_ID, GENERAL_LAUNCH_ID] as const satisfies readonly FocusedLaunchId[];
 export const GEMINI_ASPECT_RATIO_OPTIONS = ["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"] as const satisfies readonly GeminiAspectRatio[];
 export const GEMINI_RESOLUTION_OPTIONS = ["0.5K", "1K", "2K", "4K"] as const satisfies readonly GeminiResolution[];
 const IMAGE_PATH_PATTERN = /\.(png|jpe?g|webp)$/i;
+
+export function isGptImage25Launch(launchId: FocusedLaunchId | undefined): boolean {
+  return launchId === GPT_IMAGE_2_5_LAUNCH_ID;
+}
+
+export function isGptImage25Params(params: unknown): params is OpenAIImageParams {
+  return isRecord(params) &&
+    params.providerKind === "openai" &&
+    (params.launchId === GPT_IMAGE_2_5_LAUNCH_ID || isGptImage25ModelId(typeof params.model === "string" ? params.model : ""));
+}
+
+function qualityOptionsForOpenAIModel(model: string, launchId?: FocusedLaunchId): readonly ImageQuality[] {
+  return isGptImage25Launch(launchId) || isGptImage25ModelId(model)
+    ? GPT_IMAGE_2_5_QUALITY_OPTIONS
+    : IMAGE_QUALITY_OPTIONS;
+}
+
+function backgroundOptionsForOpenAIModel(model: string, launchId?: FocusedLaunchId): readonly ImageBackground[] {
+  return isGptImage25Launch(launchId) || isGptImage25ModelId(model)
+    ? IMAGE_BACKGROUND_OPTIONS
+    : ["auto", "opaque"] as const;
+}
 
 export interface ValidationResult {
   ok: boolean;
@@ -174,18 +209,18 @@ export function validateGptImage2Size(size: unknown): ValidationResult {
   }
   const { width, height } = parsed;
   if (width % 16 !== 0 || height % 16 !== 0) {
-    return { ok: false, message: "GPT Image 2 要求宽高都是 16 的倍数。" };
+    return { ok: false, message: "GPT Image 2 / 2.5 要求宽高都是 16 的倍数。" };
   }
   if (Math.max(width, height) > 3840) {
-    return { ok: false, message: "GPT Image 2 最长边不能超过 3840px。" };
+    return { ok: false, message: "GPT Image 2 / 2.5 最长边不能超过 3840px。" };
   }
   const ratio = Math.max(width, height) / Math.min(width, height);
   if (ratio > 3) {
-    return { ok: false, message: "GPT Image 2 长短边比例不能超过 3:1。" };
+    return { ok: false, message: "GPT Image 2 / 2.5 长短边比例不能超过 3:1。" };
   }
   const pixels = width * height;
   if (pixels < 655360 || pixels > 8294400) {
-    return { ok: false, message: "GPT Image 2 总像素需在 655,360 到 8,294,400 之间。" };
+    return { ok: false, message: "GPT Image 2 / 2.5 总像素需在 655,360 到 8,294,400 之间。" };
   }
   return { ok: true };
 }
@@ -194,7 +229,7 @@ export function isOpenAIImageParams(params: unknown): params is OpenAIImageParam
   return (
     isRecord(params) &&
     params.providerKind === "openai" &&
-    params.launchId === GPT_IMAGE_2_LAUNCH_ID &&
+    (params.launchId === GPT_IMAGE_2_LAUNCH_ID || params.launchId === GPT_IMAGE_2_5_LAUNCH_ID) &&
     typeof params.model === "string" &&
     typeof params.size === "string" &&
     typeof params.stream === "boolean"
@@ -236,8 +271,8 @@ export function validateOpenAIImageParams(params: unknown): ValidationResult {
   if (params.providerKind !== undefined && params.providerKind !== "openai") {
     return { ok: false, message: "OpenAI 图片参数的 providerKind 必须为 openai。" };
   }
-  if (params.launchId !== undefined && params.launchId !== GPT_IMAGE_2_LAUNCH_ID) {
-    return { ok: false, message: `OpenAI 图片参数的 launchId 必须为 ${GPT_IMAGE_2_LAUNCH_ID}。` };
+  if (params.launchId !== undefined && params.launchId !== GPT_IMAGE_2_LAUNCH_ID && params.launchId !== GPT_IMAGE_2_5_LAUNCH_ID) {
+    return { ok: false, message: `OpenAI 图片参数的 launchId 必须为 ${GPT_IMAGE_2_LAUNCH_ID} 或 ${GPT_IMAGE_2_5_LAUNCH_ID}。` };
   }
   if (typeof params.model !== "string") {
     return { ok: false, message: "模型参数无效。" };
@@ -248,20 +283,92 @@ export function validateOpenAIImageParams(params: unknown): ValidationResult {
   if (typeof params.stream !== "boolean") {
     return { ok: false, message: "流式预览参数无效。" };
   }
-  if (!isOneOf(params.imageRoute ?? "auto", ["auto", "image-api", "responses", "chat-completions"] as const)) {
+  const imageRoute = params.imageRoute ?? "auto";
+  if (!isOneOf(imageRoute, ["auto", "image-api", "responses", "chat-completions"] as const)) {
     return { ok: false, message: "接口路径参数无效。" };
   }
-  if (params.model.trim() !== GPT_IMAGE_2_MODEL) {
-    return { ok: false, message: `MVP 仅支持 ${GPT_IMAGE_2_MODEL}。` };
+  const model = params.model.trim();
+  if (!isGptImageModelId(model)) {
+    return { ok: false, message: `OpenAI 图片模型仅支持 ${GPT_IMAGE_2_MODEL} 或 GPT Image 2.5 的 Sunburst/Flare 模型。` };
   }
-  if (!isOneOf(params.quality, IMAGE_QUALITY_OPTIONS)) {
-    return { ok: false, message: "质量参数需为 auto、low、medium 或 high。" };
+  const launchId = isGptImage25ModelId(model) ? GPT_IMAGE_2_5_LAUNCH_ID : GPT_IMAGE_2_LAUNCH_ID;
+  if (params.launchId !== undefined && params.launchId !== launchId) {
+    return { ok: false, message: "OpenAI 图片模型与启动模型不匹配。" };
+  }
+  if (launchId === GPT_IMAGE_2_5_LAUNCH_ID && imageRoute === "chat-completions") {
+    return { ok: false, message: "GPT Image 2.5 不支持 Chat Completions，请使用 auto、image-api 或 responses。" };
+  }
+  if (params.user !== undefined && (typeof params.user !== "string" || !params.user.trim())) {
+    return { ok: false, message: "安全标识不能为空。" };
+  }
+  if (typeof params.user === "string" && params.user.trim().length > MAX_OPENAI_SAFETY_IDENTIFIER_LENGTH) {
+    return { ok: false, message: `安全标识不能超过 ${MAX_OPENAI_SAFETY_IDENTIFIER_LENGTH} 个字符。` };
+  }
+  const qualityOptions = qualityOptionsForOpenAIModel(model, launchId);
+  if (!isOneOf(params.quality, qualityOptions)) {
+    return { ok: false, message: launchId === GPT_IMAGE_2_5_LAUNCH_ID ? "GPT Image 2.5 质量参数需为 auto、low、medium、high、xhigh 或 max。" : "质量参数需为 auto、low、medium 或 high。" };
   }
   if (!isOneOf(params.outputFormat, IMAGE_FORMAT_OPTIONS)) {
     return { ok: false, message: "输出格式需为 png、jpeg 或 webp。" };
   }
-  if (!isOneOf(params.background, IMAGE_BACKGROUND_OPTIONS)) {
-    return { ok: false, message: "背景参数需为 auto 或 opaque。" };
+  const backgroundOptions = backgroundOptionsForOpenAIModel(model, launchId);
+  if (!isOneOf(params.background, backgroundOptions)) {
+    return { ok: false, message: launchId === GPT_IMAGE_2_5_LAUNCH_ID ? "GPT Image 2.5 背景参数需为 auto、opaque 或 transparent。" : "GPT Image 2 背景参数需为 auto 或 opaque。" };
+  }
+  if (params.background === "transparent" && params.outputFormat !== "png" && params.outputFormat !== "webp") {
+    return { ok: false, message: "透明背景只能与 PNG 或 WebP 输出格式一起使用。" };
+  }
+  if (params.inputFidelity !== undefined && !isOneOf(params.inputFidelity, ["low", "high"] as const)) {
+    return { ok: false, message: "输入图保真度需为 low 或 high。" };
+  }
+  if (params.inputFidelity !== undefined && launchId !== GPT_IMAGE_2_5_LAUNCH_ID) {
+    return { ok: false, message: "输入图保真度仅适用于 GPT Image 2.5。" };
+  }
+  if (params.responsesModel !== undefined && (typeof params.responsesModel !== "string" || !params.responsesModel.trim())) {
+    return { ok: false, message: "Responses 主模型无效。" };
+  }
+  if (params.responsesModel !== undefined && launchId !== GPT_IMAGE_2_5_LAUNCH_ID) {
+    return { ok: false, message: "Responses 主模型仅适用于 GPT Image 2.5。" };
+  }
+  if (params.responsesAction !== undefined && !isOneOf(params.responsesAction, RESPONSES_IMAGE_ACTION_OPTIONS)) {
+    return { ok: false, message: "Responses 图像动作需为 auto、generate 或 edit。" };
+  }
+  if (params.responsesAction !== undefined && launchId !== GPT_IMAGE_2_5_LAUNCH_ID) {
+    return { ok: false, message: "Responses 图像动作仅适用于 GPT Image 2.5。" };
+  }
+  if (params.previousResponseId !== undefined && (typeof params.previousResponseId !== "string" || !params.previousResponseId.trim())) {
+    return { ok: false, message: "Responses 上一轮响应 ID 无效。" };
+  }
+  if (params.previousResponseId !== undefined && launchId !== GPT_IMAGE_2_5_LAUNCH_ID) {
+    return { ok: false, message: "Responses 上一轮响应 ID 仅适用于 GPT Image 2.5。" };
+  }
+  if (params.previousImageGenerationCallId !== undefined && (typeof params.previousImageGenerationCallId !== "string" || !params.previousImageGenerationCallId.trim())) {
+    return { ok: false, message: "Responses 图像生成调用 ID 无效。" };
+  }
+  if (params.previousImageGenerationCallId !== undefined && launchId !== GPT_IMAGE_2_5_LAUNCH_ID) {
+    return { ok: false, message: "Responses 图像生成调用 ID 仅适用于 GPT Image 2.5。" };
+  }
+  if (params.inputImageDetail !== undefined && !isOneOf(params.inputImageDetail, RESPONSES_INPUT_IMAGE_DETAIL_OPTIONS)) {
+    return { ok: false, message: "Responses 输入图细节需为 auto、low、high 或 original。" };
+  }
+  if (params.inputImageDetail !== undefined && launchId !== GPT_IMAGE_2_5_LAUNCH_ID) {
+    return { ok: false, message: "Responses 输入图细节仅适用于 GPT Image 2.5。" };
+  }
+  if (params.inputImageDetail !== undefined && params.inputImageDetail !== "auto" && imageRoute === "image-api") {
+    return { ok: false, message: "非 auto 的 Responses 输入图细节需要使用 Responses 路径。" };
+  }
+  const hasResponsesOnlyControls = Boolean(
+    params.responsesModel?.trim() ||
+    (params.responsesAction && params.responsesAction !== "auto") ||
+    params.previousResponseId?.trim() ||
+    params.previousImageGenerationCallId?.trim() ||
+    (params.inputImageDetail && params.inputImageDetail !== "auto")
+  );
+  if (hasResponsesOnlyControls && imageRoute === "image-api") {
+    return { ok: false, message: "Responses 专属参数需要使用 Responses 路径或 auto，不能与 Image API 一起使用。" };
+  }
+  if (params.previousResponseId !== undefined && params.previousImageGenerationCallId !== undefined) {
+    return { ok: false, message: "Responses 续接只能选择 previous_response_id 或 image_generation_call_id 其中一种。" };
   }
   if (!isOneOf(params.moderation, MODERATION_MODE_OPTIONS)) {
     return { ok: false, message: "内容审核参数需为 auto 或 low。" };
@@ -273,6 +380,16 @@ export function validateOpenAIImageParams(params: unknown): ValidationResult {
   if (!size.ok) return size;
   if (!isInteger(params.n) || params.n < 1 || params.n > 10) {
     return { ok: false, message: "生成数量需在 1 到 10 之间。" };
+  }
+  if (params.n > 1 && (
+    imageRoute === "responses" ||
+    params.previousResponseId !== undefined ||
+    params.previousImageGenerationCallId !== undefined ||
+    (params.inputImageDetail !== undefined && params.inputImageDetail !== "auto") ||
+    (typeof params.responsesModel === "string" && params.responsesModel.trim().length > 0) ||
+    (params.responsesAction !== undefined && params.responsesAction !== "auto")
+  )) {
+    return { ok: false, message: "Responses 多轮/动作参数仅支持生成 1 张图片；批量生成请清空这些参数或使用 Images API。" };
   }
   if (!isInteger(params.partialImages) || params.partialImages < 0 || params.partialImages > 3) {
     return { ok: false, message: "partial_images 需在 0 到 3 之间。" };
@@ -386,16 +503,20 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
   const defaultModel = input.defaultModel.trim();
   const nanoDefinition = getFocusedModelDefinition(NANO_BANANA_3_LAUNCH_ID);
   const isNanoModel = activeLaunchId === NANO_BANANA_3_LAUNCH_ID && Boolean(nanoDefinition?.modelIds.some((modelId) => modelId === defaultModel));
-  if ((kind === undefined || kind === "openai") && activeLaunchId !== GENERAL_LAUNCH_ID && !isNanoModel && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
-    return { ok: false, message: `默认模型仅支持 ${DEFAULT_IMAGE_PARAMS.model}。` };
+  const isGpt25Model = activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID && isGptImage25ModelId(defaultModel);
+  if ((kind === undefined || kind === "openai") && activeLaunchId !== GENERAL_LAUNCH_ID && !isNanoModel && !isGpt25Model && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
+    return { ok: false, message: `默认模型仅支持 ${DEFAULT_IMAGE_PARAMS.model} 或 GPT Image 2.5 的 Sunburst/Flare 模型。` };
   }
   const defaultSize = input.defaultSize.trim();
   if (defaultSize) {
     const size = validateGptImage2Size(defaultSize);
     if (!size.ok) return size;
   }
-  if (typeof input.defaultQuality !== "string" || !isOneOf(input.defaultQuality, IMAGE_QUALITY_OPTIONS)) {
-    return { ok: false, message: "默认质量需为 auto、low、medium 或 high。" };
+  const defaultQualityOptions = activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID || isGptImage25ModelId(defaultModel)
+    ? GPT_IMAGE_2_5_QUALITY_OPTIONS
+    : IMAGE_QUALITY_OPTIONS;
+  if (typeof input.defaultQuality !== "string" || !isOneOf(input.defaultQuality, defaultQualityOptions)) {
+    return { ok: false, message: "默认质量参数无效。" };
   }
   if (!isInteger(input.timeoutMs) || input.timeoutMs < 30000 || input.timeoutMs > 600000) {
     return { ok: false, message: "默认超时时间需在 30 到 600 秒之间。" };
@@ -446,6 +567,33 @@ export function validateInputAssetShape(asset: unknown): ValidationResult {
   if (asset.height !== undefined && (!isInteger(asset.height) || asset.height < 1)) {
     return { ok: false, message: "输入资源高度无效。" };
   }
+  if (asset.role !== undefined && asset.role !== "reference" && asset.role !== "sketch") {
+    return { ok: false, message: "输入资源角色无效。" };
+  }
+  if (asset.artifactId !== undefined && (typeof asset.artifactId !== "string" || !asset.artifactId.trim())) {
+    return { ok: false, message: "输入资源 artifact ID 无效。" };
+  }
+  if (asset.documentHash !== undefined && (typeof asset.documentHash !== "string" || !/^[0-9a-f]{8,128}$/i.test(asset.documentHash))) {
+    return { ok: false, message: "输入资源文档 hash 无效。" };
+  }
+  if (asset.sourceAssetId !== undefined && (typeof asset.sourceAssetId !== "string" || !asset.sourceAssetId.trim())) {
+    return { ok: false, message: "输入资源来源 ID 无效。" };
+  }
+  if (asset.sourceOperation !== undefined && !["sketch", "annotation", "crop", "import"].includes(asset.sourceOperation as string)) {
+    return { ok: false, message: "输入资源来源操作无效。" };
+  }
+  if (asset.parentArtifactId !== undefined && (
+    typeof asset.parentArtifactId !== "string" ||
+    !/^[a-zA-Z0-9_-]{8,120}$/.test(asset.parentArtifactId)
+  )) {
+    return { ok: false, message: "输入资源父 artifact ID 无效。" };
+  }
+  if (asset.guidance !== undefined && (
+    !Array.isArray(asset.guidance) ||
+    asset.guidance.some((item) => !SKETCH_GUIDANCE_KEYS.includes(item as (typeof SKETCH_GUIDANCE_KEYS)[number]))
+  )) {
+    return { ok: false, message: "输入资源 Sketch 引导设置无效。" };
+  }
   return { ok: true };
 }
 
@@ -453,7 +601,8 @@ function hasOpenAIParamsShape(params: unknown): boolean {
   if (!isRecord(params)) return false;
   const providerKind = paramsProviderKind(params);
   const launchId = paramsLaunchId(params);
-  return (providerKind === undefined || providerKind === "openai") && (launchId === undefined || launchId === GPT_IMAGE_2_LAUNCH_ID);
+  return (providerKind === undefined || providerKind === "openai") &&
+    (launchId === undefined || launchId === GPT_IMAGE_2_LAUNCH_ID || launchId === GPT_IMAGE_2_5_LAUNCH_ID);
 }
 
 function hasGeminiParamsShape(params: unknown): boolean {
@@ -483,6 +632,23 @@ function validateRunJobRequestBase(request: unknown): ValidationResult {
   }
   if (request.inputPaths.some((item) => !IMAGE_PATH_PATTERN.test(item))) {
     return { ok: false, message: "输入图片必须是 PNG、JPEG 或 WebP。" };
+  }
+  const workflow = request.workflow;
+  if (workflow !== undefined && workflow !== "standard" && workflow !== "sketch") {
+    return { ok: false, message: "图片工作流无效。" };
+  }
+  if (workflow === "standard" && request.sketch !== undefined) {
+    return { ok: false, message: "standard 工作流不能携带 Sketch metadata。" };
+  }
+  if (workflow !== "sketch" && request.sketch !== undefined) {
+    return { ok: false, message: "Sketch metadata 需要使用 sketch 工作流。" };
+  }
+  if (workflow === "sketch") {
+    if (request.mode !== "edit") return { ok: false, message: "Sketch 工作流必须使用 edit 模式。" };
+    if (request.inputPaths.length === 0) return { ok: false, message: "Sketch 工作流至少需要一张输入图。" };
+    if (request.maskPath || request.maskDataUrl) return { ok: false, message: "Sketch 工作流不能携带 mask。" };
+    const sketchValidation = validateSketchTaskMetadata(request.sketch);
+    if (!sketchValidation.ok) return sketchValidation;
   }
   return { ok: true };
 }
@@ -527,6 +693,9 @@ export function validateOpenAIRunJobRequest(request: unknown): ValidationResult 
   if (request.mode === "inpaint" && !hasMask) {
     return { ok: false, message: "局部重绘需要提供 mask。" };
   }
+  if (isRecord(request) && request.workflow === "sketch" && inputPaths.length > MAX_GPT_IMAGE_INPUTS) {
+    return { ok: false, message: `Sketch 输入图片不能超过 ${MAX_GPT_IMAGE_INPUTS} 张。` };
+  }
   return validateOpenAIImageParams(request.params);
 }
 
@@ -567,6 +736,9 @@ export function validateGeminiRunJobRequest(request: unknown): ValidationResult 
   if (request.mode === "inpaint" && !hasMask) {
     return { ok: false, message: "局部重绘需要提供 mask。" };
   }
+  if (isRecord(request) && request.workflow === "sketch" && inputPaths.length > 2) {
+    return { ok: false, message: "Nano Banana 3 的 Sketch 最多携带 2 张参考图。" };
+  }
   return validateGeminiImageParams(request.params);
 }
 
@@ -584,6 +756,9 @@ export function validateGeneralRunJobRequest(request: unknown): ValidationResult
   }
   if (!isGeneralFallbackProvider(request.params.providerKind)) {
     return { ok: false, message: "当前 provider 暂未接入 General 运行时。" };
+  }
+  if (request.workflow === "sketch") {
+    return { ok: false, message: "General 当前不支持 Sketch 输入。" };
   }
   if (!request.params.model.trim()) {
     return { ok: false, message: "请选择可用的图片模型。" };
@@ -640,6 +815,9 @@ export function validateWorkspaceDraftInput(input: unknown): ValidationResult {
   if (input.mode !== "generate" && input.mode !== "edit" && input.mode !== "inpaint") {
     return { ok: false, message: "草稿模式无效。" };
   }
+  if (input.workflow !== undefined && input.workflow !== "standard" && input.workflow !== "sketch") {
+    return { ok: false, message: "草稿工作流无效。" };
+  }
   if (typeof input.prompt !== "string") {
     return { ok: false, message: "草稿 Prompt 无效。" };
   }
@@ -659,6 +837,31 @@ export function validateWorkspaceDraftInput(input: unknown): ValidationResult {
   }
   if (input.maskDataUrl !== undefined && typeof input.maskDataUrl !== "string") {
     return { ok: false, message: "草稿 Mask 数据无效。" };
+  }
+  if (input.sketchGuidance !== undefined && (
+    !Array.isArray(input.sketchGuidance) ||
+    input.sketchGuidance.some((item) => !SKETCH_GUIDANCE_KEYS.includes(item as (typeof SKETCH_GUIDANCE_KEYS)[number]))
+  )) {
+    return { ok: false, message: "草稿 Sketch 引导设置无效。" };
+  }
+  if (input.sketch !== undefined) {
+    if (input.workflow !== "sketch") {
+      return { ok: false, message: "Sketch 草稿需要使用 sketch 工作流。" };
+    }
+    if (input.mode !== "edit") {
+      return { ok: false, message: "Sketch 草稿必须使用 edit 模式。" };
+    }
+    if (input.maskAsset || input.maskDataUrl) {
+      return { ok: false, message: "Sketch 草稿不能携带 mask。" };
+    }
+    const sketchValidation = validateSketchDocument(input.sketch);
+    if (!sketchValidation.ok) return sketchValidation;
+  }
+  if (input.workflow === "sketch" && input.sketch === undefined) {
+    return { ok: false, message: "Sketch 草稿缺少文档。" };
+  }
+  if (input.workflow === "sketch" && input.params && isRecord(input.params) && input.params.launchId === GENERAL_LAUNCH_ID) {
+    return { ok: false, message: "General 当前不支持 Sketch 草稿。" };
   }
   if (!isInteger(input.brushSize) || input.brushSize < 1) {
     return { ok: false, message: "画笔大小无效。" };
@@ -748,6 +951,25 @@ export function stripTransientPreviewsFromJob(job: GenerationJob): GenerationJob
   return {
     ...job,
     outputs: job.outputs.map((asset) => isImageAsset(asset) ? stripTransientPreviewFromImageAsset(asset) : asset)
+  };
+}
+
+/**
+ * History and Gallery persist only provider-final outputs. Partial frames are
+ * progress artifacts owned by the queue and renderer; keeping them in the
+ * durable job would make history grow with every streamed preview.
+ */
+export function stripTransientOutputsFromJob(job: GenerationJob): GenerationJob {
+  const withoutTransientPreviews = stripTransientPreviewsFromJob(job);
+  if (
+    withoutTransientPreviews === job &&
+    !job.outputs.some((asset) => asset.sourceType === "partial")
+  ) {
+    return withoutTransientPreviews;
+  }
+  return {
+    ...withoutTransientPreviews,
+    outputs: withoutTransientPreviews.outputs.filter((asset) => asset.sourceType !== "partial")
   };
 }
 

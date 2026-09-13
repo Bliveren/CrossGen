@@ -1,7 +1,10 @@
 import {
   GPT_IMAGE_2_LAUNCH_ID,
-  GPT_IMAGE_2_MODEL_ID
+  GPT_IMAGE_2_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
+  isGptImage25ModelId
 } from "../../shared/modelCatalog.js";
+import { DEFAULT_RESPONSES_MODEL } from "../../shared/validation.js";
 import type { OpenAIImageRoute, OpenAIImageRouteProbe, OpenAIImageRouting } from "../../shared/types.js";
 import { buildEndpoint, fetchWithTimeout } from "./openaiImageAdapter.js";
 import { redactLikelySecrets } from "./providerHttp.js";
@@ -37,12 +40,17 @@ export function buildOpenAIImageRouteProbeRequest(route: OpenAIImageRoute, mode:
   }
 
   if (route === "responses") {
+    const officialToolShape = isGptImage25ModelId(model);
     return {
       endpoint: "/responses",
       body: {
-        model,
+        model: officialToolShape ? DEFAULT_RESPONSES_MODEL : model,
         input: [],
-        tools: [{ type: "image_generation", action: mode === "guided-region" ? "edit" : mode }]
+        tools: [{
+          type: "image_generation",
+          ...(officialToolShape ? { model } : {}),
+          action: mode === "guided-region" ? "edit" : mode
+        }]
       }
     };
   }
@@ -78,45 +86,80 @@ export async function probeOpenAIImageRouting(
   if (!shouldProbeOpenAIImageRouting(config)) return config.openAIImageRouting;
 
   const model = config.activeModelId || config.defaultModel || GPT_IMAGE_2_MODEL_ID;
+  const gptImage25 = isGptImage25ModelId(model) ||
+    config.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID ||
+    isGptImage25ModelId(config.defaultModel);
   const probeTimeoutMs = Math.min(Math.max(Math.floor(config.timeoutMs / 8), 2500), 8000);
-  const routes: Array<[OpenAIImageRoute, ProbeMode]> = [
-    ["image-api", "generate"],
-    ["image-api", "edit"],
-    ["image-api", "guided-region"],
-    ["responses", "edit"],
-    ["responses", "guided-region"],
-    ["responses", "generate"],
-    ["chat-completions", "edit"],
-    ["chat-completions", "guided-region"],
-    ["chat-completions", "generate"]
-  ];
+  const routes: Array<[OpenAIImageRoute, ProbeMode]> = gptImage25
+    ? [
+        ["image-api", "generate"],
+        ["image-api", "edit"],
+        ["image-api", "guided-region"]
+      ]
+    : [
+        ["image-api", "generate"],
+        ["image-api", "edit"],
+        ["image-api", "guided-region"],
+        ["responses", "edit"],
+        ["responses", "guided-region"],
+        ["responses", "generate"],
+        ["chat-completions", "edit"],
+        ["chat-completions", "guided-region"],
+        ["chat-completions", "generate"]
+      ];
   const probes = await Promise.all(
     routes.map(([route, mode]) => probeOpenAIImageRoute(fetchImpl, config.baseURL, apiKey, probeTimeoutMs, route, mode, buildOpenAIImageRouteProbeRequest(route, mode, model)))
   );
 
   return {
-    preferredGenerateRoute: preferredOpenAIImageRoute(probes, "generate"),
-    preferredEditRoute: preferredOpenAIImageRoute(probes, "edit"),
-    preferredGuidedEditRoute: preferredOpenAIImageRoute(probes, "guided-region"),
-    preferredGenerateRouteVerified: preferredOpenAIImageRouteVerified(probes, "generate"),
-    preferredEditRouteVerified: preferredOpenAIImageRouteVerified(probes, "edit"),
-    preferredGuidedEditRouteVerified: preferredOpenAIImageRouteVerified(probes, "guided-region"),
+    // A successful Responses probe only proves that the endpoint accepted the
+    // probe payload. It must not silently opt a normal GPT Image 2.5 request
+    // into a potentially billable conversational image call. Responses is
+    // selected only when the caller explicitly asks for it (or supplies a
+    // continuation/Responses-only control).
+    preferredGenerateRoute: gptImage25
+      ? "image-api"
+      : preferredOpenAIImageRoute(probes, "generate", "chat-completions"),
+    preferredEditRoute: gptImage25
+      ? "image-api"
+      : preferredOpenAIImageRoute(probes, "edit", "chat-completions"),
+    preferredGuidedEditRoute: gptImage25
+      ? "image-api"
+      : preferredOpenAIImageRoute(probes, "guided-region", "chat-completions"),
+    preferredGenerateRouteVerified: gptImage25
+      ? preferredOpenAIImageRouteVerified(probes, "generate", "image-api")
+      : preferredOpenAIImageRouteVerified(probes, "generate", "chat-completions"),
+    preferredEditRouteVerified: gptImage25
+      ? preferredOpenAIImageRouteVerified(probes, "edit", "image-api")
+      : preferredOpenAIImageRouteVerified(probes, "edit", "chat-completions"),
+    preferredGuidedEditRouteVerified: gptImage25
+      ? preferredOpenAIImageRouteVerified(probes, "guided-region", "image-api")
+      : preferredOpenAIImageRouteVerified(probes, "guided-region", "chat-completions"),
     probes,
     updatedAt: nowIso()
   };
 }
 
 function shouldProbeOpenAIImageRouting(config: StoredProviderConfig): boolean {
-  if (config.kind === "openai") return config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID;
+  if (config.kind === "openai") {
+    return config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ||
+      config.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID ||
+      isGptImage25ModelId(config.activeModelId) ||
+      isGptImage25ModelId(config.defaultModel);
+  }
   if (config.kind !== "custom") return false;
   const activeModelId = (config.activeModelId || "").trim().toLowerCase();
   const defaultModel = (config.defaultModel || "").trim().toLowerCase();
   const discoveredOpenAIImageModel = config.discoveredModels.some(
-    (model) => model.providerKind === "openai" && model.id.trim().toLowerCase() === GPT_IMAGE_2_MODEL_ID.toLowerCase()
+    (model) => model.providerKind === "openai" &&
+      (model.id.trim().toLowerCase() === GPT_IMAGE_2_MODEL_ID.toLowerCase() || isGptImage25ModelId(model.id))
   );
   return config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ||
+    config.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID ||
     activeModelId === GPT_IMAGE_2_MODEL_ID.toLowerCase() ||
+    isGptImage25ModelId(activeModelId) ||
     defaultModel === GPT_IMAGE_2_MODEL_ID.toLowerCase() ||
+    isGptImage25ModelId(defaultModel) ||
     discoveredOpenAIImageModel;
 }
 
@@ -168,17 +211,25 @@ export async function probeOpenAIImageRoute(
   }
 }
 
-export function preferredOpenAIImageRoute(probes: OpenAIImageRouteProbe[], mode: ProbeMode): OpenAIImageRoute | undefined {
+export function preferredOpenAIImageRoute(
+  probes: OpenAIImageRouteProbe[],
+  mode: ProbeMode,
+  fallback: OpenAIImageRoute = "chat-completions"
+): OpenAIImageRoute | undefined {
   const successfulCandidates = probes
     .filter((probe) => probe.mode === mode && isRouteProbeSuccessStatus(probe.status ?? 0))
     .sort((a, b) => routePreferenceScore(a) - routePreferenceScore(b));
   if (successfulCandidates[0]) return successfulCandidates[0].route;
 
-  return "chat-completions";
+  return fallback;
 }
 
-export function preferredOpenAIImageRouteVerified(probes: OpenAIImageRouteProbe[], mode: ProbeMode): boolean {
-  const route = preferredOpenAIImageRoute(probes, mode);
+export function preferredOpenAIImageRouteVerified(
+  probes: OpenAIImageRouteProbe[],
+  mode: ProbeMode,
+  fallback: OpenAIImageRoute = "chat-completions"
+): boolean {
+  const route = preferredOpenAIImageRoute(probes, mode, fallback);
   return probes.some((probe) => probe.mode === mode && probe.route === route && isRouteProbeSuccessStatus(probe.status ?? 0));
 }
 

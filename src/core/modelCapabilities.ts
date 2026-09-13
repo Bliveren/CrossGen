@@ -2,12 +2,14 @@ import {
   FOCUSED_MODEL_CATALOG,
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   getFocusedModelsForProvider,
   getModelDisplayName,
   isFocusedImageModelId,
   discoveredModelCapabilityHints,
   isPotentialGeneralImageModel,
+  isGptImage25ModelId,
   normalizeModelId
 } from "../shared/modelCatalog.js";
 import type {
@@ -37,6 +39,12 @@ export interface ModelCapabilitySummary {
   capabilities: ImageModelCapabilityContract;
 }
 
+export interface SketchCapabilityPreflight {
+  ok: boolean;
+  reason?: string;
+  summary?: ModelCapabilitySummary;
+}
+
 const IMAGE_MEDIA_KINDS: MediaKind[] = ["image"];
 
 const NO_VIDEO_ROUTE: VideoRouteStrategy = "none";
@@ -46,7 +54,7 @@ function imageOnlyKinds(): MediaKind[] {
 }
 
 function focusedContractKind(launchId: FocusedLaunchId, providerKind: ProviderKind): ImageCapabilityContractKind {
-  if (launchId === GPT_IMAGE_2_LAUNCH_ID) return "openai-image";
+  if (launchId === GPT_IMAGE_2_LAUNCH_ID || launchId === GPT_IMAGE_2_5_LAUNCH_ID) return "openai-image";
   if (launchId === NANO_BANANA_3_LAUNCH_ID) return "gemini-generate-content";
   return providerKind === "gemini" ? "gemini-generate-content" : "openai-compatible-minimal";
 }
@@ -181,6 +189,9 @@ function summaryForFocusedModel(providerId: string | undefined, definition: Focu
 
 function focusedDefinitionForModel(providerKind: ProviderKind, modelId: string): FocusedModelDefinition | undefined {
   const normalized = normalizeModelId(modelId);
+  if (providerKind === "openai" && isGptImage25ModelId(normalized)) {
+    return FOCUSED_MODEL_CATALOG.find((definition) => definition.launchId === GPT_IMAGE_2_5_LAUNCH_ID);
+  }
   return FOCUSED_MODEL_CATALOG.find(
     (definition) =>
       definition.launchId !== GENERAL_LAUNCH_ID &&
@@ -245,6 +256,65 @@ export function capabilitySummaryForDiscoveredModel(providerId: string | undefin
     source: "unknown",
     capabilities: unknownCapabilities()
   };
+}
+
+/**
+ * Sketch is an edit workflow, so a model id alone is never enough to enable it.
+ * The id must be present in the latest discovery result and the discovered
+ * contract must explicitly provide edit/reference-image support. This keeps a
+ * focused catalogue entry from being mistaken for proof that the current API
+ * key can actually use that model.
+ */
+export function preflightSketchCapability(
+  provider: Pick<ProviderConfig, "id" | "discoveredModels" | "lastModelDiscoveryAt" | "lastModelDiscoveryError">,
+  modelId: string
+): SketchCapabilityPreflight {
+  const normalizedModelId = normalizeModelId(modelId);
+  if (!normalizedModelId) {
+    return {
+      ok: false,
+      reason: "Sketch 需要先选择一个支持图像编辑和参考图输入的模型。"
+    };
+  }
+  if (provider.lastModelDiscoveryError) {
+    return {
+      ok: false,
+      reason: `当前 API Key 的模型探测失败，暂时不能确认 ${modelId} 支持 Sketch。${provider.lastModelDiscoveryError}`
+    };
+  }
+
+  const discovered = provider.discoveredModels.find(
+    (candidate) => normalizeModelId(candidate.id) === normalizedModelId
+  );
+  if (!discovered) {
+    const suffix = provider.lastModelDiscoveryError
+      ? ` ${provider.lastModelDiscoveryError}`
+      : provider.lastModelDiscoveryAt
+        ? " 当前 API Key 的模型探测结果中未找到该模型。"
+        : " 请先探测当前 API Key 可用的模型。";
+    return {
+      ok: false,
+      reason: `当前 API Key 尚未确认 ${modelId} 支持 Sketch。${suffix}`
+    };
+  }
+
+  const summary = capabilitySummaryForDiscoveredModel(provider.id, discovered);
+  const capabilities = summary.capabilities;
+  if (
+    summary.source === "unknown" ||
+    capabilities.confidence === "unknown" ||
+    !capabilities.edit ||
+    !capabilities.referenceImages ||
+    capabilities.maxReferenceImages < 1
+  ) {
+    return {
+      ok: false,
+      summary,
+      reason: `当前 API Key 已探测到 ${modelId}，但未声明支持 Sketch 所需的图像编辑和参考图输入能力。`
+    };
+  }
+
+  return { ok: true, summary };
 }
 
 export function listProviderModelCapabilitySummaries(provider: ProviderConfig): ModelCapabilitySummary[] {

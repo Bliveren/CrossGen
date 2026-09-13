@@ -3,6 +3,7 @@ import {
   DEFAULT_IMAGE_PARAMS,
   DEFAULT_GEMINI_IMAGE_PARAMS,
   DEFAULT_GENERAL_IMAGE_PARAMS,
+  GPT_IMAGE_2_5_QUALITY_OPTIONS,
   GENERAL_PROMPT_ONLY_MESSAGE,
   MAX_GPT_IMAGE_INPUTS,
   dataUrlToBase64,
@@ -15,6 +16,7 @@ import {
   normalizeImageMimeType,
   redactSecret,
   stripTransientPreviewsFromJob,
+  stripTransientOutputsFromJob,
   validateApiKey,
   shouldSendCompression,
   validateGptImage2Size,
@@ -27,16 +29,21 @@ import {
   validateWorkspaceDraftInput
 } from "./validation";
 import {
+  GPT_IMAGE_2_5_LAUNCH_ID,
+  GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID
 } from "./modelCatalog";
 import type { GenerationJob } from "./types";
+import type { SketchDocument } from "./types";
+import { sketchDocumentHash } from "./sketch";
 
 describe("gpt-image-2 validation", () => {
   it("accepts auto and supported popular sizes", () => {
     expect(validateGptImage2Size("auto").ok).toBe(true);
     expect(validateGptImage2Size("1024x1024").ok).toBe(true);
     expect(validateGptImage2Size("1536x1024").ok).toBe(true);
+    expect(validateGptImage2Size("1536x864").ok).toBe(true);
     expect(validateGptImage2Size("3840x2160").ok).toBe(true);
   });
 
@@ -51,6 +58,46 @@ describe("gpt-image-2 validation", () => {
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, partialImages: 3 }).ok).toBe(true);
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, partialImages: 4 }).ok).toBe(false);
     expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, model: "gpt-image-1.5" }).ok).toBe(false);
+  });
+
+  it("validates GPT Image 2.5 controls and disallows Chat Completions", () => {
+    const base = {
+      ...DEFAULT_IMAGE_PARAMS,
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      quality: "max" as const,
+      background: "transparent" as const,
+      outputFormat: "webp" as const,
+      inputFidelity: "high" as const,
+      imageRoute: "responses" as const
+    };
+    expect(validateImageParams(base).ok).toBe(true);
+    expect(GPT_IMAGE_2_5_QUALITY_OPTIONS).toContain(base.quality);
+    expect(validateImageParams({ ...base, imageRoute: "chat-completions" }).ok).toBe(false);
+    expect(validateImageParams({ ...base, background: "transparent", outputFormat: "jpeg" }).ok).toBe(false);
+    expect(validateImageParams({ ...base, inputFidelity: "high", model: "gpt-image-2" }).ok).toBe(false);
+    expect(validateImageParams({ ...base, responsesAction: "auto" }).ok).toBe(true);
+    expect(validateImageParams({ ...base, responsesAction: "invalid" } as unknown as typeof base).ok).toBe(false);
+    expect(validateImageParams({ ...base, imageRoute: "image-api", responsesAction: "edit" }).ok).toBe(false);
+    expect(validateImageParams({ ...base, imageRoute: "image-api", responsesModel: "gpt-6-astra" }).ok).toBe(false);
+    expect(validateImageParams({ ...base, inputImageDetail: "original" as const, previousImageGenerationCallId: "ig_previous" }).ok).toBe(true);
+    expect(validateImageParams({ ...base, previousResponseId: "resp_previous", previousImageGenerationCallId: "ig_previous" }).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, responsesAction: "auto" } as unknown as typeof DEFAULT_IMAGE_PARAMS).ok).toBe(false);
+    expect(validateImageParams({ ...DEFAULT_IMAGE_PARAMS, responsesModel: "gpt-6-astra" }).ok).toBe(false);
+    expect(validateImageParams({ ...base, user: "user_hash_123" }).ok).toBe(true);
+    expect(validateImageParams({ ...base, user: "   " }).ok).toBe(false);
+    expect(validateImageParams({ ...base, user: "u".repeat(64) }).ok).toBe(true);
+    expect(validateImageParams({ ...base, user: "u".repeat(65) }).ok).toBe(false);
+  });
+
+  it("rejects Responses-only controls when batch generation requests multiple images", () => {
+    expect(validateImageParams({
+      ...DEFAULT_IMAGE_PARAMS,
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      n: 2,
+      responsesAction: "generate"
+    }).ok).toBe(false);
   });
 
   it("rejects invalid enum-like params from runtime state or IPC", () => {
@@ -306,6 +353,73 @@ describe("gpt-image-2 validation", () => {
     expect(dataUrlToBase64("abc123")).toBe("abc123");
   });
 
+  it("keeps Sketch as an edit-only input workflow and rejects General or masks", () => {
+    const document: SketchDocument = {
+      schemaVersion: 1,
+      width: 1024,
+      height: 1024,
+      background: "white",
+      strokes: [{
+        id: "stroke_1",
+        tool: "brush",
+        color: "#1f2937",
+        size: 8,
+        opacity: 1,
+        points: [{ x: 10, y: 10 }, { x: 200, y: 200 }]
+      }]
+    };
+    const sketch = {
+      artifactId: "sketch_1",
+      width: document.width,
+      height: document.height,
+      background: document.background,
+      strokeCount: 1,
+      pointCount: 2,
+      documentHash: sketchDocumentHash(document)
+    };
+    const request = {
+      mode: "edit" as const,
+      workflow: "sketch" as const,
+      prompt: "Turn this sketch into a polished illustration.",
+      inputPaths: ["/tmp/sketch_1.png"],
+      params: DEFAULT_IMAGE_PARAMS,
+      sketch
+    };
+
+    expect(validateRunJobRequest(request).ok).toBe(true);
+    expect(validateRunJobRequest({ ...request, mode: "inpaint" }).ok).toBe(false);
+    expect(validateRunJobRequest({ ...request, maskPath: "/tmp/mask.png" }).ok).toBe(false);
+    expect(validateRunJobRequest({
+      ...request,
+      params: DEFAULT_GEMINI_IMAGE_PARAMS,
+      inputPaths: ["/tmp/sketch_1.png"],
+      sketch
+    }).ok).toBe(true);
+    expect(validateRunJobRequest({
+      ...request,
+      params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "openai", model: "dall-e-3" },
+      sketch
+    }).ok).toBe(false);
+    expect(validateWorkspaceDraftInput({
+      mode: "edit",
+      workflow: "sketch",
+      prompt: "draft",
+      params: DEFAULT_IMAGE_PARAMS,
+      inputAssets: [],
+      sketch: document,
+      brushSize: 24
+    }).ok).toBe(true);
+    expect(validateWorkspaceDraftInput({
+      mode: "edit",
+      workflow: "standard",
+      prompt: "draft",
+      params: DEFAULT_IMAGE_PARAMS,
+      inputAssets: [],
+      sketch: document,
+      brushSize: 24
+    }).ok).toBe(false);
+  });
+
   it("strips transient previews from generated jobs before persistence", () => {
     const job = {
       id: "job_test",
@@ -344,6 +458,54 @@ describe("gpt-image-2 validation", () => {
     expect(stripped.outputs[0]).not.toHaveProperty("transientPreview");
     expect(stripped.outputs[0].path).toBe("/tmp/result.png");
     expect(JSON.stringify(stripped)).not.toContain("data:image/png;base64");
+  });
+
+  it("keeps only final outputs in durable history while retaining result metadata", () => {
+    const job = {
+      id: "job_partial",
+      name: "result.png",
+      tags: [],
+      providerKind: "openai",
+      providerId: "default",
+      launchId: "gpt-image-2",
+      modelId: "gpt-image-2",
+      modelDisplayName: "GPT Image 2",
+      mode: "edit",
+      prompt: "prompt",
+      inputAssets: [],
+      params: DEFAULT_IMAGE_PARAMS,
+      status: "succeeded",
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+      outputs: [
+        {
+          id: "img_partial",
+          jobId: "job_partial",
+          path: "/tmp/partial.png",
+          fileName: "partial.png",
+          mimeType: "image/png",
+          sourceType: "partial",
+          createdAt: new Date(0).toISOString(),
+          transientPreview: { dataUrl: "data:image/png;base64,partial" }
+        },
+        {
+          id: "img_result",
+          jobId: "job_partial",
+          path: "/tmp/result.png",
+          fileName: "result.png",
+          mimeType: "image/png",
+          sourceType: "result",
+          createdAt: new Date(0).toISOString(),
+          transientPreview: { dataUrl: "data:image/png;base64,result" }
+        }
+      ]
+    } satisfies GenerationJob;
+
+    const persisted = stripTransientOutputsFromJob(job);
+
+    expect(persisted.outputs.map((asset) => asset.id)).toEqual(["img_result"]);
+    expect(persisted.outputs[0]).not.toHaveProperty("transientPreview");
+    expect(JSON.stringify(persisted)).not.toContain("partial.png");
   });
 
   it("validates mask MIME type and source format compatibility", () => {

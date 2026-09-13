@@ -9,9 +9,13 @@ import {
 import {
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
+  GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
-  getFocusedModelDefinition
+  getFocusedModelDefinition,
+  isGptImage25ModelId,
+  normalizeModelId
 } from "../../shared/modelCatalog.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 
@@ -24,13 +28,17 @@ export function providerDisplayName(kind: StoredProviderConfig["kind"]): string 
 export function buildProviderConfigForSave(current: StoredProviderConfig, input: ProviderConfigInput, now: string): StoredProviderConfig {
   const kind = input.kind ?? current.kind;
   const providerChanged = kind !== current.kind;
-  const defaultModel = defaultModelForProvider(kind, input.defaultModel);
+  const requestedLaunchId = input.activeLaunchId;
+  const defaultModel = requestedLaunchId
+    ? defaultModelForLaunch(requestedLaunchId, input.defaultModel)
+    : defaultModelForProvider(kind, input.defaultModel);
   const baseURL = normalizeBaseURL(input.baseURL || defaultBaseURLForProvider(kind, current.baseURL));
   const name = input.name?.trim() || (providerChanged ? providerDisplayName(kind) : current.name);
   const discoveryInvalidated = providerChanged || baseURL !== current.baseURL;
-  const requestedLaunchId = input.activeLaunchId;
   const activeLaunchId = activeLaunchForProvider(kind, requestedLaunchId ?? (providerChanged ? undefined : current.activeLaunchId));
-  const activeModelId = requestedLaunchId ? input.activeModelId?.trim() || defaultModelForLaunch(requestedLaunchId, defaultModel) : defaultModel;
+  const activeModelId = requestedLaunchId
+    ? defaultModelForLaunch(requestedLaunchId, input.activeModelId?.trim() || defaultModel)
+    : defaultModel;
   const streamingPartialsEnabled = typeof input.streamingPartialsEnabled === "boolean"
     ? input.streamingPartialsEnabled
     : discoveryInvalidated
@@ -82,5 +90,17 @@ function activeLaunchForProvider(kind: StoredProviderConfig["kind"], requestedLa
 function defaultModelForLaunch(launchId: FocusedLaunchId, fallback: string): string {
   const definition = getFocusedModelDefinition(launchId);
   if (!definition || definition.launchId === GENERAL_LAUNCH_ID) return fallback;
+  const normalized = normalizeModelId(fallback);
+  if (launchId === GPT_IMAGE_2_LAUNCH_ID) {
+    return normalized === normalizeModelId(DEFAULT_IMAGE_PARAMS.model)
+      ? DEFAULT_IMAGE_PARAMS.model
+      : definition.defaultModelId;
+  }
+  if (launchId === GPT_IMAGE_2_5_LAUNCH_ID) {
+    return isGptImage25ModelId(normalized) ? normalized : GPT_IMAGE_2_5_DEFAULT_MODEL_ID;
+  }
+  if (definition.modelIds.some((modelId) => normalizeModelId(modelId) === normalized)) {
+    return normalized;
+  }
   return definition.defaultModelId;
 }

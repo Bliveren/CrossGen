@@ -22,12 +22,19 @@ import {
   validateMaskSourceFormat,
   validateOpenAIRunJobRequest
 } from "../../shared/validation.js";
+import {
+  GPT_IMAGE_2_5_LAUNCH_ID,
+  isGptImage25ModelId
+} from "../../shared/modelCatalog.js";
+import { DEFAULT_RESPONSES_MODEL } from "../../shared/validation.js";
 import type { ImageJobRuntime, ImageProviderAdapter, ImageProviderRuntime } from "./imageProviderAdapter.js";
 import { isImageAsset } from "../../core/mediaTypes.js";
 import { firstString, isRecord, readProviderApiError, readProviderJsonResponse, redactLikelySecrets } from "./providerHttp.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
+import { sketchGuidanceLines } from "../../shared/sketch.js";
 
 export interface ImagesResponse {
+  id?: string;
   data?: Array<{ b64_json?: string; url?: string; revised_prompt?: string }>;
   output?: unknown[];
   usage?: UsageDetails;
@@ -38,6 +45,7 @@ interface ModelsResponse {
 }
 
 export interface ImageStreamEvent {
+  id?: string;
   type?: string;
   b64_json?: string;
   partial_image_b64?: string;
@@ -57,6 +65,9 @@ export interface ImageStreamEvent {
 interface JsonImagesResult {
   outputs: ImageAsset[];
   usage?: UsageDetails;
+  responseId?: string;
+  imageGenerationCallId?: string;
+  revisedPrompt?: string;
   emptyReason?: string;
   retryableEmpty?: boolean;
 }
@@ -89,6 +100,7 @@ const EDIT_IMAGE_FIELD_NAMES = ["image", "image[]", "images"] as const satisfies
 const REQUEST_TIMEOUT_MESSAGE = "请求超时，请稍后重试或调高超时时间。";
 const REQUEST_CANCELLED_MESSAGE = "任务已取消。";
 const MAX_STREAM_PARTIAL_PREVIEWS = 3;
+const MAX_OPENAI_MASK_BYTES = 50 * 1024 * 1024;
 
 export type OpenAIImageRuntime = ImageJobRuntime;
 export type OpenAIImageJob = GenerationJob & { params: OpenAIImageParams };
@@ -141,6 +153,10 @@ export function baseRequestBody(params: OpenAIImageParams, prompt: string): Reco
     moderation: requestParams.moderation
   };
 
+  if (requestParams.user?.trim()) {
+    body.user = requestParams.user.trim();
+  }
+
   if (requestParams.stream) {
     body.partial_images = requestParams.partialImages;
   }
@@ -171,6 +187,15 @@ export function openAIEditPrompt(job: OpenAIImageJob): string {
 
   if (job.maskAsset) {
     lines.push("- A mask is attached. Use it as guidance for the editable area on the first reference image and keep unmasked regions stable where possible.");
+  }
+  if (job.workflow === "sketch" || job.inputAssets[0]?.role === "sketch") {
+    lines.push("- The first attached image is a hand-drawn sketch. Treat its composition, pose, spatial layout, silhouette, and line relationships as strong constraints while completing it into a polished image.");
+    lines.push("- Preserve the sketch's intentional structure; do not interpret the sketch itself as a finished photographic reference.");
+    const selectedGuidance = sketchGuidanceLines(job.sketch?.guidance);
+    if (selectedGuidance.length > 0) {
+      lines.push("- Apply the selected Sketch guidance priorities:");
+      lines.push(...selectedGuidance);
+    }
   }
 
   return lines.join("\n");
@@ -370,12 +395,16 @@ async function runGeneration(
   options: OpenAIStreamOptions = {}
 ): Promise<GenerationJob> {
   const preferredRoute = preferredOpenAIImageRouteForJob(job, options, "generate");
+  const responsesRouteRequired = preferredRoute === "responses" && requiresResponsesRoute(job);
   let preferredRouteError: string | undefined;
   if (preferredRoute === "responses" || preferredRoute === "chat-completions") {
     try {
       return await runPreferredConversationalImageRoute(job, apiKey, baseURL, runtime, preferredRoute, options);
     } catch (error) {
       throwIfRequestStopped(error);
+      if (responsesRouteRequired) {
+        throw error;
+      }
       preferredRouteError = `${preferredRoute}: ${normalizeAdapterError(error)}`;
     }
   }
@@ -479,6 +508,7 @@ async function runEdit(
 
   const initialImageFieldName = defaultEditImageFieldName(job);
   const preferredRoute = preferredOpenAIImageRouteForJob(job, options, "edit");
+  const responsesRouteRequired = preferredRoute === "responses" && requiresResponsesRoute(job);
   let preferredRouteError: string | undefined;
 
   if (preferredRoute === "responses" || preferredRoute === "chat-completions") {
@@ -486,6 +516,9 @@ async function runEdit(
       return await runPreferredConversationalImageRoute(job, apiKey, baseURL, runtime, preferredRoute, options);
     } catch (error) {
       throwIfRequestStopped(error);
+      if (responsesRouteRequired) {
+        throw error;
+      }
       preferredRouteError = `${preferredRoute}: ${normalizeAdapterError(error)}`;
     }
   }
@@ -540,12 +573,40 @@ function preferredOpenAIImageRouteForJob(
   mode: "generate" | "edit"
 ) {
   if (job.params.imageRoute !== "auto") return job.params.imageRoute;
+  if (isGptImage25Request(job.params)) {
+    const hasResponsesOnlyControls = Boolean(
+      job.params.previousResponseId?.trim() ||
+      job.params.previousImageGenerationCallId?.trim() ||
+      job.params.responsesModel?.trim() ||
+      (job.params.responsesAction && job.params.responsesAction !== "auto") ||
+      (job.params.inputImageDetail && job.params.inputImageDetail !== "auto")
+    );
+    if (hasResponsesOnlyControls) return "responses";
+    // Responses image_generation returns one final image per call. Keep auto
+    // mode capable of honoring Images API batching when n > 1.
+    if (job.params.n > 1) return "image-api";
+    // Keep ordinary 2.5 requests on the single-call Images API. A Responses
+    // request is selected only by explicit continuation/Responses controls.
+    return "image-api";
+  }
   const probedRoute = mode === "generate"
     ? options.routePreference?.preferredGenerateRoute
     : job.mode === "inpaint" || job.maskAsset
       ? options.routePreference?.preferredGuidedEditRoute ?? options.routePreference?.preferredEditRoute
       : options.routePreference?.preferredEditRoute;
   return probedRoute ?? "chat-completions";
+}
+
+function requiresResponsesRoute(job: OpenAIImageJob): boolean {
+  if (job.params.imageRoute === "responses") return true;
+  if (!isGptImage25Request(job.params)) return false;
+  return Boolean(
+    job.params.previousResponseId?.trim() ||
+    job.params.previousImageGenerationCallId?.trim() ||
+    job.params.responsesModel?.trim() ||
+    (job.params.responsesAction && job.params.responsesAction !== "auto") ||
+    (job.params.inputImageDetail && job.params.inputImageDetail !== "auto")
+  );
 }
 
 function emitOpenAIAttempt(
@@ -573,13 +634,18 @@ async function runPreferredConversationalImageRoute(
   preferredRoute: "responses" | "chat-completions",
   options: OpenAIStreamOptions
 ): Promise<GenerationJob> {
+  if (preferredRoute === "responses" && job.params.n > 1) {
+    throw new Error("Responses 图像工具当前一次只返回一张图片，请切换到 Images API 或将生成数量设为 1。");
+  }
+  const useStream = preferredRoute === "responses" ? job.params.stream : true;
   const streamJob: OpenAIImageJob = {
     ...job,
     params: {
       ...job.params,
       n: 1,
-      stream: true,
-      partialImages: Math.max(1, job.params.partialImages || 1)
+      stream: useStream,
+      partialImages: useStream ? normalizeResponsesPartialImages(job.params.partialImages) ?? 0 : 0,
+      imageRoute: preferredRoute
     }
   };
 
@@ -589,13 +655,16 @@ async function runPreferredConversationalImageRoute(
     return { ...result, params: job.params };
   }
 
-  const response = await fetchResponsesImageResponse(streamJob, apiKey, baseURL, runtime, true, options);
+  const response = await fetchResponsesImageResponse(streamJob, apiKey, baseURL, runtime, streamJob.params.stream, options);
   const result = await handleImagesResponse(response, streamJob, "image_generation", runtime);
   return { ...result, params: job.params };
 }
 
 function canUseResponsesImageFallback(job: OpenAIImageJob): boolean {
-  return job.mode === "edit" && !job.maskAsset;
+  // The Responses image tool returns one final image per call. Never use it
+  // to satisfy an Images API batch request, otherwise a partial result could
+  // be marked successful while silently dropping the remaining outputs.
+  return job.params.n <= 1 && (job.mode === "edit" || (isGptImage25Request(job.params) && job.mode === "inpaint"));
 }
 
 async function runResponsesImageFallback(
@@ -612,7 +681,8 @@ async function runResponsesImageFallback(
     params: {
       ...job.params,
       stream: false,
-      partialImages: 0
+      partialImages: 0,
+      imageRoute: "responses"
     }
   };
 
@@ -627,7 +697,8 @@ async function runResponsesImageFallback(
         ...job.params,
         n: 1,
         stream: true,
-        partialImages: 1
+        partialImages: normalizeResponsesPartialImages(job.params.partialImages) ?? 0,
+        imageRoute: "responses"
       }
     };
     try {
@@ -639,6 +710,11 @@ async function runResponsesImageFallback(
       };
     } catch (streamError) {
       throwIfRequestStopped(streamError);
+      if (isGptImage25Request(job.params)) {
+        throw new Error(
+          `${preferredRouteError ? `首选路径失败：${preferredRouteError}；` : ""}${normalizeAdapterError(priorError)}；已尝试 Responses 图像工具兜底但仍失败：非流式 ${normalizeAdapterError(jsonError)}；流式 ${normalizeAdapterError(streamError)}`
+        );
+      }
       try {
         const response = await fetchChatCompletionsImageResponse(streamJob, apiKey, baseURL, runtime, options);
         const result = await handleImagesResponse(response, streamJob, "image_generation", runtime);
@@ -657,6 +733,14 @@ async function runResponsesImageFallback(
   }
 }
 
+function normalizeResponsesPartialImages(partialImages: number): number | undefined {
+  // The Responses tool guide accepts 1-3 partial previews. CrossGen's shared
+  // state uses 0 for "no partial previews", so omit the optional field rather
+  // than sending a tool value that some gateways reject.
+  if (partialImages <= 0) return undefined;
+  return Math.max(1, Math.min(3, partialImages));
+}
+
 function defaultEditImageFieldName(job: OpenAIImageJob): EditImageFieldName {
   return job.inputAssets.length === 1 ? "image" : "image[]";
 }
@@ -672,6 +756,11 @@ function validateEditJob(job: OpenAIImageJob): void {
   if (job.mode === "inpaint" && !job.maskAsset) {
     throw new Error("局部重绘需要提供 mask。");
   }
+  if (job.workflow === "sketch") {
+    if (job.mode !== "edit") throw new Error("Sketch 工作流必须使用 edit 模式。");
+    if (job.maskAsset) throw new Error("Sketch 工作流不能携带 mask。");
+    if (job.inputAssets[0]?.role !== "sketch") throw new Error("Sketch 必须作为第一张输入图。");
+  }
   if (job.maskAsset) {
     const maskType = validateMaskMimeType(job.maskAsset.mimeType);
     if (!maskType.ok) {
@@ -680,6 +769,17 @@ function validateEditJob(job: OpenAIImageJob): void {
     const sourceFormat = validateMaskSourceFormat(job.inputAssets[0]?.mimeType, job.maskAsset.mimeType);
     if (!sourceFormat.ok) {
       throw new Error(sourceFormat.message ?? "Mask format is invalid.");
+    }
+    if (job.maskAsset.sizeBytes >= MAX_OPENAI_MASK_BYTES) {
+      throw new Error("GPT Image mask must be smaller than 50 MB.");
+    }
+    if (job.maskAsset.hasAlpha === false) {
+      throw new Error("GPT Image mask must contain an alpha channel.");
+    }
+    const source = job.inputAssets[0];
+    if (source?.width && source.height && job.maskAsset.width && job.maskAsset.height &&
+      (source.width !== job.maskAsset.width || source.height !== job.maskAsset.height)) {
+      throw new Error("GPT Image mask dimensions must match the first source image.");
     }
   }
 }
@@ -946,24 +1046,35 @@ async function chatCompletionsImageContent(job: OpenAIImageJob): Promise<Array<R
 }
 
 async function responsesImageRequestBody(job: OpenAIImageJob, stream: boolean): Promise<Record<string, unknown>> {
-  const inputContent: Array<Record<string, string>> = [
+  const officialToolShape = isGptImage25Request(job.params);
+  const prompt = job.inputAssets.length > 0 || job.maskAsset ? openAIEditPrompt(job) : job.prompt.trim();
+  const inputContent: Array<Record<string, unknown>> = [
     {
       type: "input_text",
-      text: openAIEditPrompt(job)
+      text: prompt
     }
   ];
 
   for (const asset of job.inputAssets) {
-    inputContent.push({
+    const inputImage: Record<string, unknown> = {
       type: "input_image",
       image_url: await assetToDataUrl(asset)
-    });
+    };
+    if (job.params.inputImageDetail) {
+      inputImage.detail = job.params.inputImageDetail;
+    }
+    inputContent.push(inputImage);
   }
 
   const tool: Record<string, unknown> = {
     type: "image_generation",
-    action: job.mode === "generate" ? "generate" : "edit"
+    // OpenAI's Responses image tool defaults to auto. Preserve that default
+    // when older state or an agent request omits the optional action.
+    action: job.params.responsesAction ?? "auto"
   };
+  if (officialToolShape) {
+    tool.model = job.params.model;
+  }
   if (job.params.quality !== "auto") {
     tool.quality = job.params.quality;
   }
@@ -977,22 +1088,56 @@ async function responsesImageRequestBody(job: OpenAIImageJob, stream: boolean): 
     tool.output_compression = job.params.outputCompression;
   }
   if (stream) {
-    tool.partial_images = Math.max(1, job.params.partialImages || 1);
+    const partialImages = normalizeResponsesPartialImages(job.params.partialImages);
+    if (partialImages !== undefined) {
+      tool.partial_images = partialImages;
+    }
+  }
+  if (job.params.background !== "auto") {
+    tool.background = job.params.background;
+  }
+  if (job.params.moderation !== "auto") {
+    tool.moderation = job.params.moderation;
+  }
+  if (job.params.inputFidelity && isGptImage25Request(job.params) && (job.mode !== "generate" || job.inputAssets.length > 0)) {
+    tool.input_fidelity = job.params.inputFidelity;
+  }
+  if (job.maskAsset) {
+    tool.input_image_mask = {
+      image_url: await assetToDataUrl(job.maskAsset)
+    };
+  }
+
+  const input: Array<Record<string, unknown>> = [{
+    role: "user",
+    content: inputContent
+  }];
+  if (job.params.previousImageGenerationCallId?.trim()) {
+    input.push({
+      type: "image_generation_call",
+      id: job.params.previousImageGenerationCallId.trim()
+    });
   }
 
   const body: Record<string, unknown> = {
-    model: job.params.model,
-    input: [
-      {
-        role: "user",
-        content: inputContent
-      }
-    ],
+    model: officialToolShape ? job.params.responsesModel?.trim() || DEFAULT_RESPONSES_MODEL : job.params.model,
+    input,
     tools: [tool]
   };
+  if (job.params.user?.trim()) {
+    body.safety_identifier = job.params.user.trim();
+  }
+  if (officialToolShape) {
+    // CrossGen is an explicit image-generation action. Force the Responses
+    // model to call the image tool instead of answering with text only.
+    body.tool_choice = { type: "image_generation" };
+  }
 
   if (stream) {
     body.stream = true;
+  }
+  if (job.params.previousResponseId?.trim()) {
+    body.previous_response_id = job.params.previousResponseId.trim();
   }
 
   return body;
@@ -1031,11 +1176,21 @@ function editRequestBody(params: OpenAIImageParams, prompt: string): Record<stri
   if (requestParams.moderation !== "auto") {
     body.moderation = requestParams.moderation;
   }
+  if (requestParams.user?.trim()) {
+    body.user = requestParams.user.trim();
+  }
+  if (requestParams.inputFidelity && isGptImage25Request(requestParams)) {
+    body.input_fidelity = requestParams.inputFidelity;
+  }
   if (requestParams.stream) {
     body.stream = true;
     body.partial_images = requestParams.partialImages;
   }
   return body;
+}
+
+function isGptImage25Request(params: OpenAIImageParams): boolean {
+  return params.launchId === GPT_IMAGE_2_5_LAUNCH_ID || isGptImage25ModelId(params.model);
 }
 
 async function assetToBlob(asset: InputAsset): Promise<Blob> {
@@ -1070,19 +1225,19 @@ async function handleJsonImagesResponse(
   job: OpenAIImageJob,
   runtime: OpenAIImageRuntime
 ): Promise<GenerationJob> {
-  const { outputs, usage, emptyReason } = await readAndSaveJsonImagesResponse(response, job, runtime, 0, job.params.n);
+  const { outputs, usage, responseId, imageGenerationCallId, revisedPrompt, emptyReason } = await readAndSaveJsonImagesResponse(response, job, runtime, 0, job.params.n);
 
   if (outputs.length === 0) {
     throw new Error(noSavableOpenAIImageMessage(emptyReason));
   }
 
-  return {
+  return withResponseMetadata({
     ...job,
     outputs,
     usage,
     status: "succeeded",
     updatedAt: new Date().toISOString()
-  };
+  }, { responseId, imageGenerationCallId, revisedPrompt });
 }
 
 async function handleJsonImagesWithBackfill(
@@ -1096,6 +1251,9 @@ async function handleJsonImagesWithBackfill(
   const outputs = [...firstResult.outputs];
   let usage = firstResult.usage;
   let emptyReason = firstResult.emptyReason;
+  let responseId = firstResult.responseId;
+  let imageGenerationCallId = firstResult.imageGenerationCallId;
+  let revisedPrompt = firstResult.revisedPrompt;
 
   if (outputs.length === 0 && firstResult.retryableEmpty) {
     const retryJob: OpenAIImageJob = {
@@ -1111,6 +1269,9 @@ async function handleJsonImagesWithBackfill(
     const retryResult = await readAndSaveJsonImagesResponse(retryResponse, job, runtime, 0, requestedCount);
     outputs.push(...retryResult.outputs);
     usage = mergeUsageDetails(usage, retryResult.usage);
+    responseId = retryResult.responseId ?? responseId;
+    imageGenerationCallId = retryResult.imageGenerationCallId ?? imageGenerationCallId;
+    revisedPrompt = retryResult.revisedPrompt ?? revisedPrompt;
     emptyReason = retryResult.emptyReason
       ? `${retryResult.emptyReason}；已自动重试 1 次，仍未收到图片。`
       : "已自动重试 1 次，仍未收到图片。";
@@ -1138,19 +1299,22 @@ async function handleJsonImagesWithBackfill(
     }
     outputs.push(...nextResult.outputs);
     usage = mergeUsageDetails(usage, nextResult.usage);
+    responseId = nextResult.responseId ?? responseId;
+    imageGenerationCallId = nextResult.imageGenerationCallId ?? imageGenerationCallId;
+    revisedPrompt = nextResult.revisedPrompt ?? revisedPrompt;
   }
 
   if (outputs.length < requestedCount) {
     throw new Error(`OpenAI API 返回图片数量不足：请求 ${requestedCount} 张，实际收到 ${outputs.length} 张。`);
   }
 
-  return {
+  return withResponseMetadata({
     ...job,
     outputs,
     usage,
     status: "succeeded",
     updatedAt: new Date().toISOString()
-  };
+  }, { responseId, imageGenerationCallId, revisedPrompt });
 }
 
 async function handleJsonGenerationImagesWithFallback(
@@ -1165,9 +1329,12 @@ async function handleJsonGenerationImagesWithFallback(
   const outputs = [...firstResult.outputs];
   let usage = firstResult.usage;
   let emptyReason = firstResult.emptyReason;
+  let responseId = firstResult.responseId;
+  let imageGenerationCallId = firstResult.imageGenerationCallId;
+  let revisedPrompt = firstResult.revisedPrompt;
 
   if (outputs.length > 0) {
-    return completeJsonBackfill(job, outputs, usage, runtime, fetchAdditional);
+    return completeJsonBackfill(job, outputs, usage, runtime, fetchAdditional, responseId, revisedPrompt, imageGenerationCallId);
   }
 
   if (firstResult.retryableEmpty) {
@@ -1184,15 +1351,20 @@ async function handleJsonGenerationImagesWithFallback(
     const retryResult = await readAndSaveJsonImagesResponse(retryResponse, job, runtime, 0, requestedCount);
     outputs.push(...retryResult.outputs);
     usage = mergeUsageDetails(usage, retryResult.usage);
+    responseId = retryResult.responseId ?? responseId;
+    imageGenerationCallId = retryResult.imageGenerationCallId ?? imageGenerationCallId;
+    revisedPrompt = retryResult.revisedPrompt ?? revisedPrompt;
     emptyReason = retryResult.emptyReason
       ? `${retryResult.emptyReason}；已自动重试 1 次，仍未收到图片。`
       : "已自动重试 1 次，仍未收到图片。";
 
     if (outputs.length > 0) {
-      return completeJsonBackfill(job, outputs, usage, runtime, fetchAdditional);
+      return completeJsonBackfill(job, outputs, usage, runtime, fetchAdditional, responseId, revisedPrompt, imageGenerationCallId);
     }
 
     try {
+      let streamResponseId: string | undefined;
+      let streamImageGenerationCallId: string | undefined;
       while (countFinalOutputs(outputs) < requestedCount) {
         const firstIndex = countFinalOutputs(outputs);
         const streamJob: OpenAIImageJob = {
@@ -1209,17 +1381,19 @@ async function handleJsonGenerationImagesWithFallback(
         const finalCountBefore = countFinalOutputs(outputs);
         outputs.push(...streamResult.outputs.filter(isImageAsset));
         usage = mergeUsageDetails(usage, streamResult.usage);
+        streamResponseId = responseIdFromProviderMetadata(streamResult.providerMetadata) ?? streamResponseId;
+        streamImageGenerationCallId = imageGenerationCallIdFromProviderMetadata(streamResult.providerMetadata) ?? streamImageGenerationCallId;
         if (countFinalOutputs(outputs) <= finalCountBefore) break;
       }
 
       if (countFinalOutputs(outputs) >= requestedCount) {
-        return {
+        return withResponseMetadata({
           ...job,
           outputs,
           usage,
           status: "succeeded",
           updatedAt: new Date().toISOString()
-        };
+        }, { responseId: streamResponseId ?? responseId, imageGenerationCallId: streamImageGenerationCallId ?? imageGenerationCallId, revisedPrompt });
       }
     } catch (error) {
       throwIfRequestStopped(error);
@@ -1243,9 +1417,12 @@ async function handleJsonEditImagesWithFallback(
   const outputs = [...firstResult.outputs];
   let usage = firstResult.usage;
   let emptyReason = firstResult.emptyReason;
+  let responseId = firstResult.responseId;
+  let imageGenerationCallId = firstResult.imageGenerationCallId;
+  let revisedPrompt = firstResult.revisedPrompt;
 
   if (outputs.length > 0) {
-    return completeJsonBackfill(job, outputs, usage, runtime, (nextJob, purpose) => fetchAdditional(nextJob, initialImageFieldName, purpose));
+    return completeJsonBackfill(job, outputs, usage, runtime, (nextJob, purpose) => fetchAdditional(nextJob, initialImageFieldName, purpose), responseId, revisedPrompt, imageGenerationCallId);
   }
 
   if (firstResult.retryableEmpty) {
@@ -1267,12 +1444,15 @@ async function handleJsonEditImagesWithFallback(
         const retryResult = await readAndSaveJsonImagesResponse(retryResponse, job, runtime, 0, requestedCount);
         outputs.push(...retryResult.outputs);
         usage = mergeUsageDetails(usage, retryResult.usage);
+        responseId = retryResult.responseId ?? responseId;
+        imageGenerationCallId = retryResult.imageGenerationCallId ?? imageGenerationCallId;
+        revisedPrompt = retryResult.revisedPrompt ?? revisedPrompt;
         emptyReason = retryResult.emptyReason
           ? `${retryResult.emptyReason}；已自动重试 ${retryCount} 次，仍未收到图片。`
           : `已自动重试 ${retryCount} 次，仍未收到图片。`;
 
         if (outputs.length > 0) {
-          return completeJsonBackfill(job, outputs, usage, runtime, (nextJob, purpose) => fetchAdditional(nextJob, imageFieldName, purpose));
+          return completeJsonBackfill(job, outputs, usage, runtime, (nextJob, purpose) => fetchAdditional(nextJob, imageFieldName, purpose), responseId, revisedPrompt, imageGenerationCallId);
         }
       } catch (error) {
         throwIfRequestStopped(error);
@@ -1298,11 +1478,15 @@ async function handleJsonEditImagesWithFallback(
       try {
         const streamResponse = await fetchStreamFallback(streamJob, imageFieldName);
         const streamResult = await handleImagesResponse(streamResponse, streamJob, "image_edit", runtime);
-        return {
+        return withResponseMetadata({
           ...streamResult,
           usage: mergeUsageDetails(usage, streamResult.usage),
           params: job.params
-        };
+        }, {
+          responseId: responseIdFromProviderMetadata(streamResult.providerMetadata) ?? responseId,
+          imageGenerationCallId: imageGenerationCallIdFromProviderMetadata(streamResult.providerMetadata) ?? imageGenerationCallId,
+          revisedPrompt
+        });
       } catch (error) {
         throwIfRequestStopped(error);
         streamErrors.push(`${imageFieldName}: ${normalizeAdapterError(error)}`);
@@ -1323,11 +1507,17 @@ async function completeJsonBackfill(
   initialOutputs: ImageAsset[],
   initialUsage: UsageDetails | undefined,
   runtime: OpenAIImageRuntime,
-  fetchAdditional: (job: OpenAIImageJob, purpose: JsonImageFetchPurpose) => Promise<Response>
+  fetchAdditional: (job: OpenAIImageJob, purpose: JsonImageFetchPurpose) => Promise<Response>,
+  initialResponseId?: string,
+  initialRevisedPrompt?: string,
+  initialImageGenerationCallId?: string
 ): Promise<GenerationJob> {
   const requestedCount = Math.max(1, job.params.n);
   const outputs = [...initialOutputs];
   let usage = initialUsage;
+  let responseId = initialResponseId;
+  let revisedPrompt = initialRevisedPrompt;
+  let imageGenerationCallId = initialImageGenerationCallId;
 
   while (outputs.length < requestedCount) {
     const remainingCount = requestedCount - outputs.length;
@@ -1345,19 +1535,22 @@ async function completeJsonBackfill(
     if (nextResult.outputs.length === 0) break;
     outputs.push(...nextResult.outputs);
     usage = mergeUsageDetails(usage, nextResult.usage);
+    responseId = nextResult.responseId ?? responseId;
+    imageGenerationCallId = nextResult.imageGenerationCallId ?? imageGenerationCallId;
+    revisedPrompt = nextResult.revisedPrompt ?? revisedPrompt;
   }
 
   if (outputs.length < requestedCount) {
     throw new Error(`OpenAI API 返回图片数量不足：请求 ${requestedCount} 张，实际收到 ${outputs.length} 张。`);
   }
 
-  return {
+  return withResponseMetadata({
     ...job,
     outputs,
     usage,
     status: "succeeded",
     updatedAt: new Date().toISOString()
-  };
+  }, { responseId, imageGenerationCallId, revisedPrompt });
 }
 
 async function readAndSaveJsonImagesResponse(
@@ -1384,24 +1577,121 @@ async function readAndSaveJsonImagesResponse(
   }
   const imageItems = collectImageItemsFromPayload(payload).slice(0, maxResults);
   const outputs = await saveImageItems(job, imageItems, "result", runtime, firstIndex);
-
   return {
     outputs,
     usage: payload.usage,
+    responseId: job.params.imageRoute === "responses" ? responseIdFromPayload(payload) : undefined,
+    imageGenerationCallId: job.params.imageRoute === "responses" ? imageGenerationCallIdFromPayload(payload) : undefined,
+    // Images API returns revised_prompt on each data item, while Responses
+    // returns it on the image_generation_call. Keep one durable metadata path
+    // for both transports.
+    revisedPrompt: revisedPromptFromPayload(payload),
     emptyReason: outputs.length === 0 ? describeNoImagePayload(payload) : undefined,
     retryableEmpty: outputs.length === 0 ? isRetryableEmptyImagePayload(payload) : false
+  };
+}
+
+function responseIdFromPayload(payload: unknown): string | undefined {
+  if (!isRecord(payload)) return undefined;
+  const direct = firstString(payload.id, payload.response_id, payload.responseId);
+  if (direct) return direct;
+  const response = payload.response;
+  if (isRecord(response)) {
+    return firstString(response.id, response.response_id, response.responseId);
+  }
+  return undefined;
+}
+
+function revisedPromptFromPayload(payload: unknown): string | undefined {
+  if (!isRecord(payload)) return undefined;
+  const direct = firstString(payload.revised_prompt, payload.revisedPrompt);
+  if (direct) return direct;
+  const data = payload.data;
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (!isRecord(item)) continue;
+      const revisedPrompt = firstString(item.revised_prompt, item.revisedPrompt);
+      if (revisedPrompt) return revisedPrompt;
+    }
+  }
+  const output = payload.output;
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      if (!isRecord(item)) continue;
+      const revisedPrompt = firstString(item.revised_prompt, item.revisedPrompt);
+      if (revisedPrompt) return revisedPrompt;
+    }
+  }
+  const item = payload.item;
+  if (isRecord(item)) {
+    const revisedPrompt = firstString(item.revised_prompt, item.revisedPrompt);
+    if (revisedPrompt) return revisedPrompt;
+  }
+  const response = payload.response;
+  if (isRecord(response)) return revisedPromptFromPayload(response);
+  return undefined;
+}
+
+function imageGenerationCallIdFromPayload(payload: unknown): string | undefined {
+  if (!isRecord(payload)) return undefined;
+  if (payload.type === "image_generation_call") {
+    const directId = firstString(payload.id, payload.call_id, payload.callId);
+    if (directId) return directId;
+  }
+  const output = payload.output;
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      if (!isRecord(item) || item.type !== "image_generation_call") continue;
+      const id = firstString(item.id, item.call_id, item.callId);
+      if (id) return id;
+    }
+  }
+  const item = payload.item;
+  if (isRecord(item) && item.type === "image_generation_call") {
+    const itemId = firstString(item.id, item.call_id, item.callId);
+    if (itemId) return itemId;
+  }
+  const response = payload.response;
+  if (isRecord(response)) return imageGenerationCallIdFromPayload(response);
+  return undefined;
+}
+
+function responseIdFromProviderMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
+  if (!metadata) return undefined;
+  return firstString(metadata.responsesResponseId, metadata.responseId);
+}
+
+function imageGenerationCallIdFromProviderMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
+  if (!metadata) return undefined;
+  return firstString(metadata.responsesImageGenerationCallId, metadata.imageGenerationCallId);
+}
+
+function withResponseMetadata(
+  job: GenerationJob,
+  metadata: { responseId?: string; imageGenerationCallId?: string; revisedPrompt?: string }
+): GenerationJob {
+  if (!metadata.responseId && !metadata.imageGenerationCallId && !metadata.revisedPrompt) return job;
+  const providerMetadata = { ...job.providerMetadata };
+  if (metadata.responseId) providerMetadata.responsesResponseId = metadata.responseId;
+  if (metadata.imageGenerationCallId) providerMetadata.responsesImageGenerationCallId = metadata.imageGenerationCallId;
+  if (metadata.revisedPrompt) providerMetadata.responsesRevisedPrompt = metadata.revisedPrompt;
+  return {
+    ...job,
+    providerMetadata
   };
 }
 
 function mergeUsageDetails(current: UsageDetails | undefined, next: UsageDetails | undefined): UsageDetails | undefined {
   if (!current) return next;
   if (!next) return current;
-  const details = mergeUsageTokenDetails(current.input_tokens_details, next.input_tokens_details);
+  const inputDetails = mergeUsageTokenDetails(current.input_tokens_details, next.input_tokens_details);
+  const outputDetails = mergeUsageTokenDetails(current.output_tokens_details, next.output_tokens_details);
   return {
     total_tokens: sumOptionalNumbers(current.total_tokens, next.total_tokens),
     input_tokens: sumOptionalNumbers(current.input_tokens, next.input_tokens),
     output_tokens: sumOptionalNumbers(current.output_tokens, next.output_tokens),
-    ...(details ? { input_tokens_details: details } : {})
+    ...(inputDetails ? { input_tokens_details: inputDetails } : {}),
+    ...(outputDetails ? { output_tokens_details: outputDetails } : {})
   };
 }
 
@@ -1411,12 +1701,19 @@ function mergeUsageTokenDetails(
 ): UsageDetails["input_tokens_details"] | undefined {
   if (!current) return next;
   if (!next) return current;
-  const textTokens = sumOptionalNumbers(current.text_tokens, next.text_tokens);
-  const imageTokens = sumOptionalNumbers(current.image_tokens, next.image_tokens);
-  return {
-    ...(textTokens === undefined ? {} : { text_tokens: textTokens }),
-    ...(imageTokens === undefined ? {} : { image_tokens: imageTokens })
-  };
+  const keys = [
+    "text_tokens",
+    "image_tokens",
+    "cached_tokens",
+    "cache_write_tokens",
+    "reasoning_tokens"
+  ] as const;
+  const merged: NonNullable<UsageDetails["input_tokens_details"]> = {};
+  for (const key of keys) {
+    const value = sumOptionalNumbers(current[key], next[key]);
+    if (value !== undefined) merged[key] = value;
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 function sumOptionalNumbers(current: number | undefined, next: number | undefined): number | undefined {
@@ -1869,7 +2166,20 @@ async function readApiError(response: Response): Promise<string> {
     formatMessage: (message, requestSuffix) => `OpenAI API 请求失败：${message}${requestSuffix}`,
     extractJsonMessage(payload) {
       if (!isRecord(payload) || !isRecord(payload.error)) return undefined;
-      return firstString(payload.error.message, payload.error.code, payload.error.type);
+      const error = payload.error;
+      const message = firstString(error.message, error.code, error.type);
+      if (error.code !== "moderation_blocked" || !isRecord(error.moderation_details)) {
+        return message;
+      }
+      const stage = firstString(error.moderation_details.moderation_stage);
+      const categories = Array.isArray(error.moderation_details.categories)
+        ? error.moderation_details.categories.filter((value): value is string => typeof value === "string" && Boolean(value.trim())).join(",")
+        : "";
+      const details = [
+        stage ? `moderation_stage=${stage}` : "",
+        categories ? `categories=${categories}` : ""
+      ].filter(Boolean).join(" ");
+      return [message ?? "moderation_blocked", details].filter(Boolean).join(" ");
     }
   });
 }
@@ -1886,7 +2196,7 @@ function normalizeAdapterError(error: unknown): string {
   return redactLikelySecrets(String(error));
 }
 
-async function handleStreamResponse(
+export async function handleStreamResponse(
   response: Response,
   job: OpenAIImageJob,
   eventPrefix: "image_generation" | "image_edit",
@@ -1902,6 +2212,9 @@ async function handleStreamResponse(
   let partialIndex = firstIndex;
   let resultIndex = firstIndex;
   const expectedFinalResults = Math.max(1, job.params.n);
+  let responseId: string | undefined;
+  let imageGenerationCallId: string | undefined;
+  let revisedPrompt: string | undefined;
   let streamedTextBuffer = "";
   const seenTextImageSources = new Set<string>();
 
@@ -1912,6 +2225,15 @@ async function handleStreamResponse(
       }
 
       const type = event.type ?? "";
+      if (isRecord(event.response)) {
+        responseId = firstString(event.response.id, event.response.response_id, event.response.responseId) ?? responseId;
+        imageGenerationCallId = imageGenerationCallIdFromPayload(event.response) ?? imageGenerationCallId;
+        revisedPrompt = revisedPromptFromPayload(event.response) ?? revisedPrompt;
+        if (event.response.usage && isRecord(event.response.usage)) {
+          usage = event.response.usage as UsageDetails;
+        }
+      }
+      imageGenerationCallId = imageGenerationCallIdFromPayload(event) ?? imageGenerationCallId;
       const isPartial = type === `${eventPrefix}.partial_image` || type.endsWith(".partial_image");
       const sourceType = isPartial ? "partial" : "result";
       const index = isPartial ? event.partial_image_index ?? partialIndex : resultIndex;
@@ -1976,14 +2298,17 @@ async function handleStreamResponse(
   if (finalOutputs.length === 0) {
     throw new Error("OpenAI API 没有返回最终图片。");
   }
+  if (finalOutputs.length < expectedFinalResults) {
+    throw new Error(`OpenAI API 返回图片数量不足：请求 ${expectedFinalResults} 张，实际收到 ${finalOutputs.length} 张。`);
+  }
 
-  return {
+  return withResponseMetadata({
     ...job,
     outputs,
     usage,
     status: "succeeded",
     updatedAt: new Date().toISOString()
-  };
+  }, { responseId, imageGenerationCallId, revisedPrompt });
 }
 
 function imageItemsFromStreamEvent(event: ImageStreamEvent): OpenAIImageItem[] {

@@ -4,6 +4,11 @@ import type { ProviderConfigInput } from "../shared/types";
 import { buildProviderConfigForSave } from "./services/providerConfigSave";
 import { canRunRequestWithConfig } from "./services/providerRequestMatch";
 import { defaultStoredConfig, type StoredProviderConfig } from "./services/stateMigration";
+import {
+  GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
+  GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID
+} from "../shared/modelCatalog";
 
 function savedConfig(patch: Partial<StoredProviderConfig> = {}): StoredProviderConfig {
   return {
@@ -127,8 +132,27 @@ describe("main config save builder", () => {
       "2026-06-09T02:00:00.000Z"
     );
 
+    expect(next.defaultModel).toBe("gpt-image-2");
     expect(next.activeLaunchId).toBe("gpt-image-2");
     expect(next.activeModelId).toBe("gpt-image-2");
+  });
+
+  it("preserves the selected Nano Banana model when a Gemini endpoint exposes multiple image models", () => {
+    const next = buildProviderConfigForSave(
+      savedConfig({ kind: "gemini" }),
+      input({
+        kind: "gemini",
+        baseURL: "https://generativelanguage.googleapis.com/v1beta",
+        defaultModel: "gemini-3-pro-image",
+        activeLaunchId: "nano-banana-3",
+        activeModelId: "gemini-3-pro-image"
+      }),
+      "2026-06-09T02:00:00.000Z"
+    );
+
+    expect(next.defaultModel).toBe("gemini-3-pro-image");
+    expect(next.activeLaunchId).toBe("nano-banana-3");
+    expect(next.activeModelId).toBe("gemini-3-pro-image");
   });
 
   it("allows custom providers to run discovered Gemini image models", () => {
@@ -156,5 +180,33 @@ describe("main config save builder", () => {
     };
 
     expect(canRunRequestWithConfig(request, provider)).toBe(true);
+  });
+
+  it("normalizes GPT Image 2.5 launch models and dated snapshots when saving", () => {
+    const snapshot = buildProviderConfigForSave(
+      savedConfig(),
+      input({
+        activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        activeModelId: ` models/${GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID} `,
+        defaultModel: ` models/${GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID} `
+      }),
+      "2026-09-10T02:00:00.000Z"
+    );
+
+    expect(snapshot.defaultModel).toBe(GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID);
+    expect(snapshot.activeModelId).toBe(GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID);
+
+    const fallback = buildProviderConfigForSave(
+      savedConfig(),
+      input({
+        activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        activeModelId: "gpt-image-2",
+        defaultModel: "gpt-image-2"
+      }),
+      "2026-09-10T02:00:00.000Z"
+    );
+
+    expect(fallback.defaultModel).toBe(GPT_IMAGE_2_5_DEFAULT_MODEL_ID);
+    expect(fallback.activeModelId).toBe(GPT_IMAGE_2_5_DEFAULT_MODEL_ID);
   });
 });

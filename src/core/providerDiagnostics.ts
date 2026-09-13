@@ -90,6 +90,7 @@ export function defaultRouteForRequest(request: RunJobRequest, providerKind: Pro
   if (request.params.providerKind === "gemini") return "chat-completions";
   if (request.params.providerKind !== "openai") return undefined;
   if (request.params.imageRoute !== "auto") return request.params.imageRoute;
+  if (request.params.launchId === "gpt-image-2.5") return "image-api";
   return "chat-completions";
 }
 

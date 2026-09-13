@@ -1,16 +1,71 @@
 export type WorkMode = "generate" | "edit" | "inpaint";
 
+export type InputAssetRole = "reference" | "sketch";
+
+export type ImageWorkflow = "standard" | "sketch";
+
+export type SketchTool = "brush" | "eraser";
+
+export type SketchBackground = "white" | "transparent";
+
+export type SketchGuidanceKey = "composition" | "pose" | "perspective";
+
+export interface SketchPoint {
+  x: number;
+  y: number;
+  pressure?: number;
+}
+
+export interface SketchStroke {
+  id: string;
+  tool: SketchTool;
+  color: string;
+  size: number;
+  opacity: number;
+  points: SketchPoint[];
+}
+
+export interface SketchDocument {
+  schemaVersion: 1;
+  width: number;
+  height: number;
+  background: SketchBackground;
+  strokes: SketchStroke[];
+}
+
+export interface SketchTaskMetadata {
+  artifactId: string;
+  width: number;
+  height: number;
+  background: SketchBackground;
+  strokeCount: number;
+  pointCount: number;
+  documentHash: string;
+  /**
+   * Optional renderer-only provenance for an explicitly flattened underlay.
+   * The vector document and its hash remain unchanged.
+   */
+  underlayIncluded?: boolean;
+  underlayAssetId?: string;
+  guidance?: SketchGuidanceKey[];
+  parentArtifactId?: string;
+}
+
 export type ProviderKind = "openai" | "gemini" | "custom";
 
-export type FocusedLaunchId = "gpt-image-2" | "nano-banana-3" | "general";
+export type FocusedLaunchId = "gpt-image-2" | "gpt-image-2.5" | "nano-banana-3" | "general";
 
-export type ImageQuality = "auto" | "low" | "medium" | "high";
+export type ImageQuality = "auto" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export type ImageFormat = "png" | "jpeg" | "webp";
 
-export type ImageBackground = "auto" | "opaque";
+export type ImageBackground = "auto" | "opaque" | "transparent";
 
 export type ModerationMode = "auto" | "low";
+
+export type ResponsesImageAction = "auto" | "generate" | "edit";
+
+export type ResponsesInputImageDetail = "auto" | "low" | "high" | "original";
 
 export type ReferenceImageMode = "original" | "optimized";
 
@@ -95,6 +150,8 @@ export interface QueueTaskSummary {
   status: JobStatus;
   stage: QueueStage;
   mode: WorkMode;
+  workflow?: ImageWorkflow;
+  sketch?: SketchTaskMetadata;
   promptPreview: string;
   inputCount: number;
   hasMask: boolean;
@@ -317,15 +374,29 @@ export interface ProviderConfigInput {
 
 export interface OpenAIImageParams {
   providerKind: "openai";
-  launchId: "gpt-image-2";
+  launchId: "gpt-image-2" | "gpt-image-2.5";
   model: string;
   imageRoute: OpenAIImageRouteSelection;
+  /** Optional privacy-preserving end-user identifier for provider safety telemetry. */
+  user?: string;
+  /** Mainline Responses model used when the image model is invoked as a tool. */
+  responsesModel?: string;
+  /** Responses image_generation tool action. Defaults to generate/edit from the work mode. */
+  responsesAction?: ResponsesImageAction;
+  /** Optional Responses conversation continuation token. */
+  previousResponseId?: string;
+  /** Optional Responses input item id for continuing from an image_generation_call. */
+  previousImageGenerationCallId?: string;
+  /** Detail level sent for Responses input_image items. */
+  inputImageDetail?: ResponsesInputImageDetail;
   referenceImageMode?: ReferenceImageMode;
   size: string;
   quality: ImageQuality;
   outputFormat: ImageFormat;
   outputCompression: number;
   background: ImageBackground;
+  /** GPT Image 2.5 edit fidelity control; omitted for legacy GPT Image 2. */
+  inputFidelity?: "low" | "high";
   n: number;
   stream: boolean;
   partialImages: number;
@@ -372,6 +443,15 @@ export interface InputAsset {
   width?: number;
   height?: number;
   hasAlpha?: boolean;
+  role?: InputAssetRole;
+  artifactId?: string;
+  documentHash?: string;
+  underlayIncluded?: boolean;
+  underlayAssetId?: string;
+  guidance?: SketchGuidanceKey[];
+  sourceAssetId?: string;
+  sourceOperation?: "sketch" | "annotation" | "crop" | "import";
+  parentArtifactId?: string;
 }
 
 export type ReferencePreflightRole = "reference" | "mask";
@@ -382,7 +462,9 @@ export type ReferencePreflightReason =
   | "byte_limit"
   | "provider_limit"
   | "mask_preserved"
-  | "mask_dimension_mismatch";
+  | "mask_dimension_mismatch"
+  | "mask_alpha_missing"
+  | "mask_size_limit";
 
 export interface ReferencePreflightImageMetadata {
   mime: string;
@@ -530,6 +612,13 @@ export interface EditedImageDownloadRequest {
   suggestedName?: string;
 }
 
+export interface InputAssetCopyRequest {
+  dataUrl: string;
+  originalName?: string;
+  sourceAssetId: string;
+  sourceOperation: "annotation" | "crop" | "import";
+}
+
 export interface GalleryFolderDeleteResult {
   folders: GalleryFolder[];
   assets: GalleryAsset[];
@@ -557,10 +646,21 @@ export interface UsageDetails {
   total_tokens?: number;
   input_tokens?: number;
   output_tokens?: number;
-  input_tokens_details?: {
-    text_tokens?: number;
-    image_tokens?: number;
-  };
+  input_tokens_details?: UsageTokenDetails;
+  output_tokens_details?: UsageTokenDetails;
+}
+
+/**
+ * Provider usage breakdowns are intentionally additive and provider-tolerant.
+ * Responses currently reports cached/cache-write input tokens and reasoning
+ * output tokens, while compatible image gateways may report text/image tokens.
+ */
+export interface UsageTokenDetails {
+  text_tokens?: number;
+  image_tokens?: number;
+  cached_tokens?: number;
+  cache_write_tokens?: number;
+  reasoning_tokens?: number;
 }
 
 export interface GenerationJob {
@@ -574,6 +674,8 @@ export interface GenerationJob {
   modelId: string;
   modelDisplayName: string;
   mode: WorkMode;
+  workflow?: ImageWorkflow;
+  sketch?: SketchTaskMetadata;
   prompt: string;
   inputAssets: InputAsset[];
   maskAsset?: InputAsset;
@@ -592,6 +694,8 @@ export interface GenerationJob {
 
 export interface RunJobRequest {
   mode: WorkMode;
+  workflow?: ImageWorkflow;
+  sketch?: SketchTaskMetadata;
   prompt: string;
   inputPaths: string[];
   maskPath?: string;
@@ -819,6 +923,9 @@ export interface ConnectionTestResult {
 
 export interface AppSnapshot {
   appVersion: string;
+  features?: {
+    sketchEnabled: boolean;
+  };
   providers: ProviderConfig[];
   activeProviderId: string;
   history: GenerationJob[];
@@ -838,9 +945,12 @@ export interface WorkspaceDraftInput {
   activeLaunchId?: FocusedLaunchId;
   activeModelId?: string;
   mode: WorkMode;
+  workflow?: ImageWorkflow;
   prompt: string;
   params: ImageParams;
   inputAssets: InputAsset[];
+  sketch?: SketchDocument;
+  sketchGuidance?: SketchGuidanceKey[];
   maskAsset?: InputAsset;
   maskDataUrl?: string;
   brushSize: number;
@@ -919,6 +1029,8 @@ export interface AppBridge {
   testConnection: () => Promise<ConnectionTestResult>;
   saveDraft: (input: WorkspaceDraftInput) => Promise<WorkspaceDraft>;
   clearDraft: () => Promise<void>;
+  saveSketchAsset?: (input: SketchExportRequest) => Promise<SketchExportResult>;
+  loadSketchDocument?: (artifactId: string) => Promise<SketchDocument>;
   listTemplates: () => Promise<PromptTemplate[]>;
   saveTemplate: (input: PromptTemplateInput, templateId?: string) => Promise<PromptTemplate>;
   deleteTemplate: (id: string) => Promise<void>;
@@ -933,6 +1045,7 @@ export interface AppBridge {
   importToGallery: (paths?: string[], folderId?: string | null) => Promise<GalleryAsset[]>;
   addHistoryAssetToGallery: (assetPath: string, folderId?: string | null, tags?: string[]) => Promise<GalleryAsset | null>;
   addEditedImageToGallery: (input: EditedGalleryImageInput) => Promise<GalleryAsset | null>;
+  saveInputAssetCopy: (input: InputAssetCopyRequest) => Promise<InputAsset>;
   replaceGalleryAssetImage: (id: string, input: EditedGalleryImageInput) => Promise<GalleryAsset>;
   updateGalleryAsset: (id: string, patch: GalleryAssetPatch) => Promise<GalleryAsset>;
   moveGalleryAsset: (id: string, folderId: string | null) => Promise<GalleryAsset>;
@@ -961,4 +1074,20 @@ export interface AppBridge {
   onQueueSnapshot: (callback: (snapshot: QueueSnapshot) => void) => () => void;
   onGalleryEvent: (callback: (event: GallerySyncEvent) => void) => () => void;
   onSnapshotChange: (callback: (snapshot: AppSnapshot) => void) => () => void;
+}
+
+export interface SketchExportRequest {
+  document: SketchDocument;
+  pngBytes: Uint8Array;
+  documentHash: string;
+  underlayIncluded?: boolean;
+  underlayAssetId?: string;
+  guidance?: SketchGuidanceKey[];
+  parentArtifactId?: string;
+}
+
+export interface SketchExportResult {
+  artifactId: string;
+  asset: InputAsset;
+  documentHash: string;
 }

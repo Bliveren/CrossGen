@@ -131,9 +131,22 @@ describe("reference preflight", () => {
 
     expect(summaries?.find((summary) => summary.role === "mask")).toMatchObject({
       blocked: true,
-      reason: "mask_preserved"
+      reason: "mask_size_limit"
     });
     expect(referencePreflightBlockingMessage(summaries)).toContain("Mask");
+  });
+
+  it("blocks masks that are known to have no alpha channel", () => {
+    const summaries = buildReferencePreflightSummaries(
+      [asset({ id: "source", width: 1024, height: 1024 })],
+      asset({ id: "mask", name: "mask.png", width: 1024, height: 1024, hasAlpha: false })
+    );
+
+    expect(summaries?.find((summary) => summary.role === "mask")).toMatchObject({
+      blocked: true,
+      reason: "mask_alpha_missing"
+    });
+    expect(referencePreflightBlockingMessage(summaries)).toContain("alpha channel");
   });
 
   it("blocks mask requests when source and mask dimensions do not match", () => {

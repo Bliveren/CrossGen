@@ -123,6 +123,8 @@ export function buildQueueTaskSummary(
     status: item.status,
     stage: item.stage,
     mode: item.request.mode,
+    workflow: item.request.workflow,
+    sketch: item.request.sketch,
     promptPreview: promptPreview(item.request.prompt, previewLength),
     inputCount: item.request.inputPaths.length,
     hasMask: Boolean(item.request.maskPath || item.request.maskDataUrl),

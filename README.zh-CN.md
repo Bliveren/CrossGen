@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载 v0.3.3</b></a> ·
+  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载 v0.3.4</b></a> ·
   <a href="#applink-api-配置"><b>AppLink</b></a> ·
   <a href="#crossgen-artist-skill"><b>CrossGen Artist Skill</b></a> ·
   <a href="#agent-快速开始"><b>Agent 快速开始</b></a> ·
@@ -46,7 +46,7 @@
 
 ## 为什么是 CrossGen 0.3.4
 
-CrossGen 0.3.4 在可靠的 0.3.3 图片工作区之上增加媒体感知基础层和需要确认的 AppLink 导入流程。桌面端、CLI 和 MCP 共用同一套队列、接口路径诊断、参考图处理、历史、图库和媒体元数据契约，内置的 crossgen-artist skill 也围绕同一套契约工作。
+CrossGen 0.3.4 在可靠的 0.3.3 图片工作区之上增加 GPT Image 2.5 支持、媒体感知基础层和需要确认的 AppLink 导入流程。桌面端、CLI 和 MCP 共用同一套队列、接口路径诊断、参考图处理、历史、图库和媒体元数据契约，内置的 crossgen-artist skill 也围绕同一套契约工作。
 
 | 在桌面端完成可视化工作 | 让 Agent 调用同一本地运行时 |
 | --- | --- |
@@ -63,7 +63,7 @@ CrossGen 0.3.4 在可靠的 0.3.3 图片工作区之上增加媒体感知基础�
 ```bash
 crossgen doctor --agent --json
 crossgen models list --json
-crossgen generate --prompt "一个结构精确的等距视角应用图标" --yes --wait --json
+crossgen generate --prompt "一个结构精确的等距视角应用图标" --model gpt-image-2.5-sunburst --quality xhigh --yes --wait --json
 ```
 
 为对应客户端生成最小权限 MCP 配置：
@@ -87,7 +87,7 @@ mkdir -p "$HOME/.codex/skills"
 ln -sfn "$(pwd)/skills/crossgen-artist" "$HOME/.codex/skills/crossgen-artist"
 ```
 
-之后可以使用 `$crossgen-artist` 调用。该 skill 与 CrossGen 一起版本管理，确保说明始终匹配内置 CLI/MCP 契约。使用打包应用时，应使用对应版本源码或 release archive 中的 skill 文件；后续会在 Agent access 中补充一键安装入口。
+之后可以使用 `$crossgen-artist` 调用。该 skill 与 CrossGen 一起版本管理，确保说明始终匹配内置 CLI/MCP 契约，包括 GPT Image 2.5 模型选择、Responses 多轮编辑、mask 预检和媒体感知图库读取。使用打包应用时，应使用对应版本源码或 release archive 中的 skill 文件；后续会在 Agent access 中补充一键安装入口。
 
 桌面端 **Agent access** 面板是 MCP 配置的唯一来源。可在面板中复制对应客户端的配置片段：模型发现先使用 `readonly`，只有确实需要时再切换到 `write` 或 `generate`。CrossGen 不会静默修改 Codex 配置，也不会自动开启付费生图。
 
@@ -101,7 +101,7 @@ CrossGen 0.3.4 增加 `crossgen://` AppLink，供 API 聚合平台把 API 名称
 crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
 ```
 
-同时兼容 `apiKey`/`api_key`、`baseURL`/`base_url`、`defaultModel`/`default_model`、`provider`/`kind` 等常见别名。支持的启动模型为 `gpt-image-2`、`nano-banana-3` 和 `general`；未提供时会根据 provider 类型和模型名自动推断。macOS、Windows、Linux 打包版本都会注册 `crossgen` scheme。
+同时兼容 `apiKey`/`api_key`、`baseURL`/`base_url`、`defaultModel`/`default_model`、`provider`/`kind` 等常见别名。支持的启动模型为 `gpt-image-2`、`gpt-image-2.5`、`nano-banana-3` 和 `general`；未提供时会根据 provider 类型和模型名自动推断。macOS、Windows、Linux 打包版本都会注册 `crossgen` scheme。
 
 > 已经在桌面、CLI 或 Agent 工作流中使用 CrossGen？可以 [Star 仓库](https://github.com/Bliveren/CrossGen)，帮助更多需要本地优先图像工具的用户发现它，也欢迎在 [Discord](https://discord.gg/XphwmYtY) 分享你的真实工作流。
 
@@ -123,6 +123,41 @@ CrossGen 把这些环节放在一个桌面应用里：配置 API、自动探测�
 3. 查询、取消或重试队列任务；
 4. 检查生成后的图库资产；
 5. 将选中的结果导出到 Agent 当前处理的项目。
+
+## GPT Image 2.5
+
+CrossGen v0.3.4 已完整接入当前 GPT Image 2.5 系列：
+
+- `gpt-image-2.5-sunburst`：适合精确编辑、结构保持和高保真参考图工作流；
+- `gpt-image-2.5-flare`：适合快速、高质量的日常生成；
+- 如果 provider 暴露了带日期的 Sunburst/Flare snapshot，模型探测会自动识别。
+
+桌面端、CLI 和 MCP 使用同一套参数：`auto`、`low`、`medium`、`high`、
+`xhigh`、`max` 质量；宽高为 16 倍数的自定义尺寸；透明/不透明/自动背景；
+PNG/JPEG/WebP 输出及 JPEG/WebP 压缩；最多 10 张批量输出；以及 0 到 3 张
+流式局部预览。编辑最多支持 16 张参考图，并支持 `input_fidelity` 和
+mask/局部重绘。CrossGen 会检查源图与 mask 的格式、尺寸、alpha 通道和
+50 MB 大小限制，在发现明显无效时于付费请求前拦截。
+
+桌面端高级配置、CLI（`--user`）和 MCP（`user`）还支持可选的安全标识。
+CrossGen 在 Images API 中将其发送为 `user`，在 Responses API 中发送为
+`safety_identifier`。该值应是稳定且不含个人信息的项目或会话标识；
+CrossGen 不会从 API Key、邮箱、操作系统用户名等信息自动生成。
+
+GPT Image 2.5 可以走 Images API，也可以走 Responses API 的
+`image_generation` 工具。Responses 请求顶层使用可配置的主模型（默认
+`gpt-6-astra`），并支持 `action`、`previous_response_id`、多轮编辑和
+`revised_prompt` 元数据。GPT Image 2.5 不会进入旧的 Chat Completions
+图片路径；自动路由默认使用 Images API，在存在多轮或 Responses 专属参数
+时使用 Responses。Responses 流式请求只有在需要局部预览时才发送 `partial_images`
+（1 到 3）；路由探测只用于诊断，不会把普通 2.5 请求静默升级为对话
+式路径。显式 Responses 请求失败时会原样返回错误，不会改走另一条可能重复
+计费的路径，以保持多轮上下文语义。
+
+为保持本地优先和可控的文件生命周期，0.3.4 在 Responses 请求中使用
+base64 data URL 传递本地参考图和 mask，不上传或持久化 OpenAI Files API
+的 File ID。完整能力矩阵和官方资料见
+[GPT Image 2.5 支持调研记录](./docs/plans/gpt-image-2.5-support.md)。
 
 ## 功能演示
 
@@ -197,7 +232,7 @@ CrossGen 的图片编辑区不再只是预览结果，而是串联图库和图�
 
 ## 其他特点
 
-- **GPT Image 2 与 Gemini/Nano Banana 图像模型**：面向重点图片模型提供清晰启动入口。
+- **GPT Image 2 / 2.5 与 Gemini/Nano Banana 图像模型**：面向 GPT Image 2.5 Sunburst/Flare、GPT Image 2 和 Nano Banana/Gemini 提供清晰启动入口。
 - **Agent-ready CLI/MCP runtime**：本地 agent 可以发现模型、提交 queue-backed 生图任务、查询状态并导出图库资产。
 - **聚合平台兼容验证**：release gate 已覆盖 OpenAI 兼容聚合端点与 Gemini 兼容图像模型真实生图门禁。
 - **持久化生图队列**：生成与编辑任务统一进入本地队列，支持状态追踪、重试、取消和默认安全并发。
@@ -210,7 +245,7 @@ CrossGen 的图片编辑区不再只是预览结果，而是串联图库和图�
 
 ## Agent Runtime
 
-CrossGen 0.3.3 通过结构化 JSON CLI 和 MCP stdio server 暴露本地生图运行时。桌面端、CLI 和 MCP 使用同一套队列、诊断与图库规则：
+CrossGen 0.3.4 通过结构化 JSON CLI 和 MCP stdio server 暴露本地生图运行时。桌面端、CLI 和 MCP 使用同一套队列、诊断与图库规则：
 
 - `crossgen doctor --agent --json` 返回应用路径、数据目录、provider 就绪状态、队列配置和 MCP 启动建议；
 - `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` 输出可直接粘贴的 MCP 配置；
@@ -226,7 +261,7 @@ CLI 和 MCP 是两个独立入口。打包后的 MCP 使用安装包内 CLI laun
 ```bash
 crossgen doctor --agent --json
 crossgen models list --json
-crossgen generate --prompt "一个结构精确的等距视角应用图标" --yes --wait --json
+crossgen generate --prompt "一个结构精确的等距视角应用图标" --model gpt-image-2.5-sunburst --quality xhigh --yes --wait --json
 crossgen job status <job-id> --json
 crossgen asset export <asset-id> --to ./assets/app-icon.png --yes --json
 ```
@@ -280,7 +315,7 @@ CrossGen 提供 release 安装包。到 [GitHub Releases](https://github.com/Bli
 1. 打开 **API 配置**；
 2. 填写 API Key 和 Base URL；
 3. 执行模型探测；
-4. 启动 GPT Image 2、Nano Banana/Gemini 或兼容模型；
+4. 启动 GPT Image 2.5、GPT Image 2、Nano Banana/Gemini 或兼容模型；
 5. 输入提示词生图；
 6. 将有用的结果保存到图库；
 7. 从历史或图库拖回参考图区域，继续图生图。

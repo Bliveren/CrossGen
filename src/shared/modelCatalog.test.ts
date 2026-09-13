@@ -4,6 +4,8 @@ import {
   GEMINI_3_PRO_IMAGE_MODEL_ID,
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
+  GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
   generalFallbackSupportsReferenceImages,
@@ -18,6 +20,7 @@ describe("focused model catalog", () => {
   it("defines the phase 1 focused launches", () => {
     expect(FOCUSED_MODEL_CATALOG.map((definition) => definition.launchId)).toEqual([
       GPT_IMAGE_2_LAUNCH_ID,
+      GPT_IMAGE_2_5_LAUNCH_ID,
       NANO_BANANA_3_LAUNCH_ID,
       GENERAL_LAUNCH_ID
     ]);
@@ -27,6 +30,17 @@ describe("focused model catalog", () => {
       defaultModelId: "gpt-image-2",
       capabilities: {
         inpaint: "exact-mask",
+        streamingPartials: true,
+        configurableResolution: "openai-size"
+      }
+    });
+    expect(getFocusedModelDefinition(GPT_IMAGE_2_5_LAUNCH_ID)).toMatchObject({
+      displayName: "GPT Image 2.5",
+      providerKind: "openai",
+      defaultModelId: GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
+      capabilities: {
+        inpaint: "exact-mask",
+        multiTurn: true,
         streamingPartials: true,
         configurableResolution: "openai-size"
       }
@@ -63,6 +77,7 @@ describe("focused model catalog", () => {
     });
     expect(getFocusedModelsForProvider("openai").map((definition) => definition.launchId)).toEqual([
       GPT_IMAGE_2_LAUNCH_ID,
+      GPT_IMAGE_2_5_LAUNCH_ID,
       GENERAL_LAUNCH_ID
     ]);
     expect(getModelDisplayName(GENERAL_LAUNCH_ID, "image-model-x")).toBe("image-model-x");

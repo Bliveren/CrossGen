@@ -52,12 +52,27 @@ export interface GenerationMcpControllers {
     folderId?: string | null;
     providerId?: string;
     model?: string;
+    user?: string;
     idempotencyKey?: string;
     confirm: boolean;
     waitMs?: number;
     timeoutMs?: number;
     size?: string;
     quality?: string;
+    n?: number;
+    outputFormat?: string;
+    outputCompression?: number;
+    background?: string;
+    moderation?: string;
+    inputFidelity?: string;
+    inputImageDetail?: string;
+    responsesModel?: string;
+    responsesAction?: string;
+    previousResponseId?: string;
+    previousImageGenerationCallId?: string;
+    partialImages?: number;
+    stream?: boolean;
+    imageRoute?: string;
     aspectRatio?: string;
     resolution?: string;
     referenceImageMode?: string;
@@ -460,12 +475,27 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
         prompt: stringProperty("Generation prompt."),
         providerId: stringProperty("Optional provider id. Defaults to the active provider."),
         model: stringProperty("Optional model id override."),
+        user: stringProperty("Optional privacy-preserving end-user safety identifier. Sent as Images API user or Responses safety_identifier."),
         folderId: nullableStringProperty("Optional Gallery folder id for generated outputs. Use null for uncategorized."),
         idempotencyKey: stringProperty("Optional key to prevent duplicate paid submissions."),
         waitMs: numberProperty("Optional short wait window in milliseconds. The MCP host still starts queue execution in generate mode."),
         timeoutMs: numberProperty("Optional request timeout in milliseconds."),
         size: stringProperty("Optional OpenAI image size, such as auto or 1024x1024."),
         quality: stringProperty("Optional OpenAI quality."),
+        n: numberProperty("Optional number of images, from 1 to 10."),
+        outputFormat: { type: "string", enum: ["png", "jpeg", "webp"], description: "Optional OpenAI output format." },
+        outputCompression: numberProperty("Optional JPEG/WebP compression quality from 0 to 100."),
+        background: { type: "string", enum: ["auto", "opaque", "transparent"], description: "Optional OpenAI background mode." },
+        moderation: { type: "string", enum: ["auto", "low"], description: "Optional OpenAI moderation mode." },
+        inputFidelity: { type: "string", enum: ["low", "high"], description: "Optional GPT Image 2.5 input fidelity for edits/reference workflows." },
+        inputImageDetail: { type: "string", enum: ["auto", "low", "high", "original"], description: "Optional Responses input_image detail level for GPT Image 2.5 reference images." },
+        responsesModel: stringProperty("Optional Responses API mainline model used to invoke GPT Image 2.5."),
+        responsesAction: { type: "string", enum: ["auto", "generate", "edit"], description: "Optional Responses image tool action for GPT Image 2.5." },
+        previousResponseId: stringProperty("Optional Responses response id for multi-turn editing."),
+        previousImageGenerationCallId: stringProperty("Optional image_generation_call id for multi-turn editing without a previous_response_id."),
+        partialImages: numberProperty("Optional streamed partial image count from 0 to 3."),
+        stream: { type: "boolean", description: "Optional streaming preview toggle." },
+        imageRoute: { type: "string", enum: ["auto", "image-api", "responses", "chat-completions"], description: "Optional OpenAI route. GPT Image 2.5 supports auto, image-api, and responses." },
         aspectRatio: stringProperty("Optional Gemini aspect ratio."),
         resolution: stringProperty("Optional Gemini resolution."),
         referenceImageMode: { type: "string", enum: ["original", "optimized"], description: "Optional reference image upload mode. Defaults to original; optimized uses a temporary smaller request copy." },
@@ -484,12 +514,27 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
           folderId: optionalStringOrNull(args, "folderId"),
           providerId: typeof args.providerId === "string" ? args.providerId.trim() : undefined,
           model: typeof args.model === "string" ? args.model.trim() : undefined,
+          user: typeof args.user === "string" ? args.user.trim() : undefined,
           idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey.trim() : undefined,
           confirm: true,
           waitMs: typeof args.waitMs === "number" ? args.waitMs : undefined,
           timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : undefined,
           size: typeof args.size === "string" ? args.size.trim() : undefined,
           quality: typeof args.quality === "string" ? args.quality.trim() : undefined,
+          n: typeof args.n === "number" ? args.n : undefined,
+          outputFormat: typeof args.outputFormat === "string" ? args.outputFormat.trim() : undefined,
+          outputCompression: typeof args.outputCompression === "number" ? args.outputCompression : undefined,
+          background: typeof args.background === "string" ? args.background.trim() : undefined,
+          moderation: typeof args.moderation === "string" ? args.moderation.trim() : undefined,
+          inputFidelity: typeof args.inputFidelity === "string" ? args.inputFidelity.trim() : undefined,
+          inputImageDetail: typeof args.inputImageDetail === "string" ? args.inputImageDetail.trim() : undefined,
+          responsesModel: typeof args.responsesModel === "string" ? args.responsesModel.trim() : undefined,
+          responsesAction: typeof args.responsesAction === "string" ? args.responsesAction.trim() : undefined,
+          previousResponseId: typeof args.previousResponseId === "string" ? args.previousResponseId.trim() : undefined,
+          previousImageGenerationCallId: typeof args.previousImageGenerationCallId === "string" ? args.previousImageGenerationCallId.trim() : undefined,
+          partialImages: typeof args.partialImages === "number" ? args.partialImages : undefined,
+          stream: typeof args.stream === "boolean" ? args.stream : undefined,
+          imageRoute: typeof args.imageRoute === "string" ? args.imageRoute.trim() : undefined,
           aspectRatio: typeof args.aspectRatio === "string" ? args.aspectRatio.trim() : undefined,
           resolution: typeof args.resolution === "string" ? args.resolution.trim() : undefined,
           referenceImageMode: typeof args.referenceImageMode === "string" ? args.referenceImageMode.trim() : undefined
@@ -507,11 +552,26 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
         folderId: nullableStringProperty("Optional Gallery folder id for edited outputs. Use null for uncategorized."),
         providerId: stringProperty("Optional provider id. Defaults to the active provider."),
         model: stringProperty("Optional model id override."),
+        user: stringProperty("Optional privacy-preserving end-user safety identifier. Sent as Images API user or Responses safety_identifier."),
         idempotencyKey: stringProperty("Optional key to prevent duplicate paid submissions."),
         waitMs: numberProperty("Optional short wait window in milliseconds. The MCP host still starts queue execution in generate mode."),
         timeoutMs: numberProperty("Optional request timeout in milliseconds."),
         size: stringProperty("Optional OpenAI image size, such as auto or 1024x1024."),
         quality: stringProperty("Optional OpenAI quality."),
+        n: numberProperty("Optional number of images, from 1 to 10."),
+        outputFormat: { type: "string", enum: ["png", "jpeg", "webp"], description: "Optional OpenAI output format." },
+        outputCompression: numberProperty("Optional JPEG/WebP compression quality from 0 to 100."),
+        background: { type: "string", enum: ["auto", "opaque", "transparent"], description: "Optional OpenAI background mode." },
+        moderation: { type: "string", enum: ["auto", "low"], description: "Optional OpenAI moderation mode." },
+        inputFidelity: { type: "string", enum: ["low", "high"], description: "Optional GPT Image 2.5 input fidelity for edits/reference workflows." },
+        inputImageDetail: { type: "string", enum: ["auto", "low", "high", "original"], description: "Optional Responses input_image detail level for GPT Image 2.5 reference images." },
+        responsesModel: stringProperty("Optional Responses API mainline model used to invoke GPT Image 2.5."),
+        responsesAction: { type: "string", enum: ["auto", "generate", "edit"], description: "Optional Responses image tool action for GPT Image 2.5." },
+        previousResponseId: stringProperty("Optional Responses response id for multi-turn editing."),
+        previousImageGenerationCallId: stringProperty("Optional image_generation_call id for multi-turn editing without a previous_response_id."),
+        partialImages: numberProperty("Optional streamed partial image count from 0 to 3."),
+        stream: { type: "boolean", description: "Optional streaming preview toggle." },
+        imageRoute: { type: "string", enum: ["auto", "image-api", "responses", "chat-completions"], description: "Optional OpenAI route. GPT Image 2.5 supports auto, image-api, and responses." },
         aspectRatio: stringProperty("Optional Gemini aspect ratio."),
         resolution: stringProperty("Optional Gemini resolution."),
         referenceImageMode: { type: "string", enum: ["original", "optimized"], description: "Optional reference image upload mode. Defaults to original; optimized uses a temporary smaller request copy." },
@@ -533,12 +593,27 @@ function makeGenerationControlTools(controllers: GenerationMcpControllers): Read
           folderId: optionalStringOrNull(args, "folderId"),
           providerId: typeof args.providerId === "string" ? args.providerId.trim() : undefined,
           model: typeof args.model === "string" ? args.model.trim() : undefined,
+          user: typeof args.user === "string" ? args.user.trim() : undefined,
           idempotencyKey: typeof args.idempotencyKey === "string" ? args.idempotencyKey.trim() : undefined,
           confirm: true,
           waitMs: typeof args.waitMs === "number" ? args.waitMs : undefined,
           timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : undefined,
           size: typeof args.size === "string" ? args.size.trim() : undefined,
           quality: typeof args.quality === "string" ? args.quality.trim() : undefined,
+          n: typeof args.n === "number" ? args.n : undefined,
+          outputFormat: typeof args.outputFormat === "string" ? args.outputFormat.trim() : undefined,
+          outputCompression: typeof args.outputCompression === "number" ? args.outputCompression : undefined,
+          background: typeof args.background === "string" ? args.background.trim() : undefined,
+          moderation: typeof args.moderation === "string" ? args.moderation.trim() : undefined,
+          inputFidelity: typeof args.inputFidelity === "string" ? args.inputFidelity.trim() : undefined,
+          inputImageDetail: typeof args.inputImageDetail === "string" ? args.inputImageDetail.trim() : undefined,
+          responsesModel: typeof args.responsesModel === "string" ? args.responsesModel.trim() : undefined,
+          responsesAction: typeof args.responsesAction === "string" ? args.responsesAction.trim() : undefined,
+          previousResponseId: typeof args.previousResponseId === "string" ? args.previousResponseId.trim() : undefined,
+          previousImageGenerationCallId: typeof args.previousImageGenerationCallId === "string" ? args.previousImageGenerationCallId.trim() : undefined,
+          partialImages: typeof args.partialImages === "number" ? args.partialImages : undefined,
+          stream: typeof args.stream === "boolean" ? args.stream : undefined,
+          imageRoute: typeof args.imageRoute === "string" ? args.imageRoute.trim() : undefined,
           aspectRatio: typeof args.aspectRatio === "string" ? args.aspectRatio.trim() : undefined,
           resolution: typeof args.resolution === "string" ? args.resolution.trim() : undefined,
           referenceImageMode: typeof args.referenceImageMode === "string" ? args.referenceImageMode.trim() : undefined

@@ -317,6 +317,45 @@ describe("Gemini image adapter", () => {
     expect(parts[2]).toEqual({ inlineData: { mimeType: "image/png", data: tinyMaskBase64 } });
   });
 
+  it("sends Sketch first and includes composition guidance for Nano Banana 3", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-gemini-sketch-"));
+    const sketchPath = path.join(tmpDir, "sketch.png");
+    const referencePath = path.join(tmpDir, "reference.png");
+    await writeFile(sketchPath, Buffer.from(tinyPngBase64, "base64"));
+    await writeFile(referencePath, Buffer.from(tinyPngBase64, "base64"));
+    const sketch: InputAsset = { id: "sketch", name: "sketch.png", path: sketchPath, mimeType: "image/png", sizeBytes: 1, role: "sketch" };
+    const reference: InputAsset = { id: "reference", name: "reference.png", path: referencePath, mimeType: "image/png", sizeBytes: 1, role: "reference" };
+    let parts: Array<Record<string, unknown>> = [];
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { contents: Array<{ parts: Array<Record<string, unknown>> }> };
+      parts = body.contents[0]?.parts ?? [];
+      return Response.json({
+        candidates: [{ content: { parts: [{ inlineData: { mimeType: "image/png", data: tinyPngBase64 } }] } }]
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await runGeminiImageJob(
+      job({
+        mode: "edit",
+        workflow: "sketch",
+        sketch: { guidance: ["composition", "perspective"] } as GenerationJob["sketch"],
+        inputAssets: [sketch, reference]
+      }),
+      "mock-gemini-key",
+      "https://api.test/v1beta",
+      runtime
+    );
+
+    expect(parts).toHaveLength(3);
+    expect(parts[0]?.text).toContain("hand-drawn sketch");
+    expect(parts[0]?.text).toContain("composition, pose, spatial layout");
+    expect(parts[0]?.text).toContain("Preserve the sketch's composition and subject placement.");
+    expect(parts[0]?.text).toContain("Preserve the sketch's perspective, depth, and spatial relationships.");
+    expect(parts[1]).toEqual({ inlineData: { mimeType: "image/png", data: tinyPngBase64 } });
+    expect(parts[2]).toEqual({ inlineData: { mimeType: "image/png", data: tinyPngBase64 } });
+  });
+
   it("runs Gemini-capable custom providers through compatible chat completions", async () => {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-gemini-inputs-"));
     const sourcePath = path.join(tmpDir, "source.png");

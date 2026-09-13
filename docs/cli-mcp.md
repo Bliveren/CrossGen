@@ -2,6 +2,63 @@
 
 CrossGen exposes the same local app state to terminal workflows and MCP hosts. The CLI defaults to read-only inspection unless a command asks for explicit confirmation with `--yes`.
 
+## GPT Image 2.5
+
+CrossGen v0.3.4 exposes `gpt-image-2.5-sunburst` and
+`gpt-image-2.5-flare`, including dated model snapshots returned by provider
+discovery. Sunburst is the preferred choice for precise editing and structure
+preservation; Flare is the preferred choice for fast, high-quality everyday
+generation.
+
+The OpenAI image options below are available to both CLI and MCP when the
+discovered model advertises GPT Image 2.5:
+
+```bash
+crossgen generate \
+  --model gpt-image-2.5-sunburst \
+  --quality xhigh \
+  --size 2048x1152 \
+  --output-format webp \
+  --output-compression 82 \
+  --background transparent \
+  --user agent-project-42 \
+  --prompt "A clean product render" \
+  --yes --wait --json
+```
+
+`--quality` accepts `auto`, `low`, `medium`, `high`, `xhigh`, and `max`.
+Custom dimensions must use 16-pixel multiples within the documented GPT Image
+2.5 output envelope. Transparent output requires PNG or WebP. `--n` supports
+1-10 images; automatic routing keeps `n > 1` on the Images API because a
+Responses image-generation call returns one final image per call.
+
+For conversational Responses workflows:
+
+```bash
+crossgen edit \
+  --model gpt-image-2.5-sunburst \
+  --image-route responses \
+  --responses-model gpt-6-astra \
+  --responses-action edit \
+  --previous-response-id resp_... \
+  --input ./reference.png \
+  --prompt "Keep the subject and composition; change the background to white" \
+  --yes --wait --json
+```
+
+Responses uses the mainline model in `--responses-model` at the top level and
+the GPT Image 2.5 model in the `image_generation` tool. CrossGen stores the
+returned response ID and revised prompt in job metadata so the next edit can
+continue from the latest result. Local Responses inputs use base64 data URLs;
+v0.3.4 does not upload or persist OpenAI Files API IDs.
+
+`--user` is an optional stable, privacy-preserving end-user safety identifier.
+Images API requests send it as `user`; Responses requests send it as
+`safety_identifier`. CrossGen never derives this value from an API key, local
+username, email address, or other personal data. Agents should provide an
+opaque project- or session-scoped identifier when the provider policy requires
+one, and omit it when no stable identifier is available.
+
 The desktop app also exposes an **Agent access** section in the left sidebar.
 It shows the current CLI status, packaged launcher path, MCP executable,
 data/state paths, active provider, live queue workers, copyable diagnostics, and
@@ -136,6 +193,10 @@ crossgen job status <queue-id-or-history-job-id> --json
 crossgen asset export <asset-id> --to ./out.png --yes --json
 ```
 
+Mask/inpaint requests must use a PNG or WebP mask with the same format and
+dimensions as the first source image, an alpha channel, and a file size below
+50 MB. CrossGen blocks a known-invalid mask before sending a paid request.
+
 For durable background work:
 
 ```bash
@@ -235,7 +296,7 @@ launcher; it never assumes `/Applications/CrossGen.app`.
 
 ## CrossGen Artist Skill
 
-The repository includes [`skills/crossgen-artist`](../skills/crossgen-artist/), a media-aware Codex-compatible skill for model discovery, prompt-to-image generation, reference-image editing, inpainting, durable job polling, Gallery inspection, media metadata reads, and explicit asset export. It is intentionally versioned with CrossGen because it depends on the CrossGen CLI/MCP tool names and permission contract.
+The repository includes [`skills/crossgen-artist`](../skills/crossgen-artist/), a media-aware Codex-compatible skill for model discovery, GPT Image 2.5 route and variant selection, prompt-to-image generation, reference-image editing, inpainting, durable job polling, Gallery inspection, media metadata reads, and explicit asset export. It is intentionally versioned with CrossGen because it depends on the CrossGen CLI/MCP tool names and permission contract.
 
 Install it for the current user from a CrossGen checkout:
 
