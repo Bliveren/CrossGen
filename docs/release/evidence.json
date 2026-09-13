@@ -1071,7 +1071,7 @@
         "Mock tests and provider success responses are not treated as a substitute for product-owner quality review."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T21:55:16.587Z",
+        "verifiedAt": "2026-09-13T22:22:11.677Z",
         "commit": "eb60f2e40b33cf8986c8fba8529b6dabc2a26bac",
         "environment": "Approved AIHub aggregation API /models probe returned HTTP 200 from https://aihub.nowosoft.cn/v1 against the current origin/main candidate. The configured key exposed gemini-3.1-flash-image, gemini-3.1-flash-lite-image, gemini-3-pro-image, and gpt-image-2; GPT Image 2.5, Sunburst, Flare, and Nano Banana 3 were not listed. Direct read-only probes returned model_not_found for each target. Credentials were loaded from the ignored local environment file and were not recorded.",
         "commands": [
