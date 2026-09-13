@@ -70,7 +70,7 @@
       ],
       "evidence": {
         "verifiedAt": "2026-09-13T21:34:28.530Z",
-        "commit": "e3c4a8e288388d9ce757a01281045a17da8d90c6",
+        "commit": "eb60f2e40b33cf8986c8fba8529b6dabc2a26bac",
         "environment": "macOS arm64 local release shell using the approved AIHub aggregation endpoint https://aihub.nowosoft.cn/v1 against the current origin/main candidate. Credentials were loaded from the ignored .env.local file and are not recorded.",
         "commands": [
           "set -a; . ./.env.local; set +a; pnpm verify:real-aihub-api"
@@ -801,9 +801,9 @@
         "The candidate reaches the packaged CLI/MCP smoke path without requiring a global Node.js installation."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T20:36:40.300Z",
-        "commit": "ce50a67348a66636edb501dd6682b6d7d7dff427",
-        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
+        "verifiedAt": "2026-09-13T21:59:12.300Z",
+        "commit": "eb60f2e40b33cf8986c8fba8529b6dabc2a26bac",
+        "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification against the current HEAD.",
         "commands": [
           "pnpm package:mac",
           "release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen --cli version --json",
@@ -818,10 +818,10 @@
             "kind": "macOS arm64 test package",
             "path": "release/mac-arm64/CrossGen.app",
             "public": false,
-            "description": "Generated from ce50a67; app.asar SHA256 a4d71de5721a2bd550dacfd2afda44376cf82c96456e1e0d6e5de2e1dc535d39; main executable SHA256 183cf9370f7f2ae62c36aed06e21bed50366ac622f7b013bddeed1cd880889ea. DMG size 104000917 bytes SHA256 e91b920cb06e09ea2dbadf3d48095733c2bfcf16c759def5cb0fffc2569122f6; ZIP size 99746454 bytes SHA256 4a22b1e2f7cb4bc9a4d6ea074e2319a98c39520020cd4bf190da07fd3134348c."
+            "description": "Generated from eb60f2e; app.asar SHA256 a4d71de5721a2bd550dacfd2afda44376cf82c96456e1e0d6e5de2e1dc535d39; main executable SHA256 183cf9370f7f2ae62c36aed06e21bed50366ac622f7b013bddeed1cd880889ea. DMG size 104000992 bytes SHA256 7868ababb81f05b10d46f6ec18c42f9a2a0009cc2f57af8a718badbf2c71cbc6; ZIP size 99746454 bytes SHA256 9cac8ce12a8df5400c0c021c380640b6fdefbf9289a4cba895bb66c697166f03."
           }
         ],
-        "summary": "Exact v0.3.4 macOS arm64 candidate generated from ce50a67; packaged app and bundled launcher both report appVersion 0.3.4 and pass CLI/MCP plus Sketch packaged smoke."
+        "summary": "Exact v0.3.4 macOS arm64 candidate generated from eb60f2e; packaged app and bundled launcher both report appVersion 0.3.4 and pass CLI/MCP plus Sketch packaged smoke."
       }
     },
     {
@@ -949,9 +949,9 @@
         "No API key, bearer token, private home-directory path, or unconfirmed local asset path is disclosed."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T20:36:40.300Z",
-        "commit": "ce50a67348a66636edb501dd6682b6d7d7dff427",
-        "environment": "macOS arm64 local release shell. Exact ce50a67 candidate passed type checking, 52-file/528-test regression, renderer/main builds, lint with zero errors, deterministic Sketch smoke, IPC smoke, memory smoke, and whitespace validation. No API key, bearer token, or private absolute path was recorded.",
+        "verifiedAt": "2026-09-13T21:59:12.300Z",
+        "commit": "eb60f2e40b33cf8986c8fba8529b6dabc2a26bac",
+        "environment": "macOS arm64 local release shell. Exact eb60f2e candidate passed type checking, 52-file/528-test regression, renderer/main builds, lint with zero errors, deterministic Sketch smoke, IPC smoke, memory smoke, and whitespace validation. No API key, bearer token, or private absolute path was recorded.",
         "commands": [
           "pnpm build",
           "pnpm lint",
@@ -975,16 +975,16 @@
             "kind": "local-file",
             "path": "output/playwright/v034-sketch-packaged/1440x900.png",
             "public": false,
-            "description": "Packaged Sketch workspace screenshot from the ce50a67 macOS arm64 test package; SHA256 568f4893aa651be34351e2524233b626607d30b16cf4d47d947a45d8cb9aeff4."
+            "description": "Packaged Sketch workspace screenshot from the eb60f2e macOS arm64 test package; SHA256 79193e60b0e513b9a4edcf47976365e9d6ef1baebb3515b1a9402b87ea799e75."
           },
           {
             "kind": "local-file",
             "path": "output/playwright/v034-sketch-packaged/760x640.png",
             "public": false,
-            "description": "Constrained packaged Sketch workspace screenshot from the ce50a67 macOS arm64 test package; SHA256 a8b45d920407cb80cd0501696543a79acc826c329ec1f457336f4df9d1d62016."
+            "description": "Constrained packaged Sketch workspace screenshot from the eb60f2e macOS arm64 test package; SHA256 1f5ae9445e582c3098d29c225158630ea582a1bbb7edd93938ea7af354b618de."
           }
         ],
-        "summary": "The exact ce50a67 Sketch candidate passed the package build (type checking, 52-file/528-test regression, renderer/main builds), lint with zero errors, deterministic Sketch smoke, IPC smoke, memory smoke (2048x2048, 500 strokes, 32000 points, 0.79 MB post-GC heap growth), and whitespace validation."
+        "summary": "The exact eb60f2e Sketch candidate passed the package build (type checking, 52-file/528-test regression, renderer/main builds), lint with zero errors, deterministic Sketch smoke, IPC smoke, memory smoke (2048x2048, 500 strokes, 32000 points, 0.79 MB post-GC heap growth), and whitespace validation."
       }
     },
     {
@@ -998,9 +998,9 @@
         "The evidence records the exact package identity and screenshots without exposing secrets or private paths."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T20:36:40.300Z",
-        "commit": "ce50a67348a66636edb501dd6682b6d7d7dff427",
-        "environment": "macOS arm64 packaged Electron candidate from ce50a67, Electron 39.8.10, Chromium 142. Candidate app bundle: release/mac-arm64/CrossGen.app; app.asar SHA256 a4d71de5721a2bd550dacfd2afda44376cf82c96456e1e0d6e5de2e1dc535d39; main executable SHA256 183cf9370f7f2ae62c36aed06e21bed50366ac622f7b013bddeed1cd880889ea.",
+        "verifiedAt": "2026-09-13T21:59:12.300Z",
+        "commit": "eb60f2e40b33cf8986c8fba8529b6dabc2a26bac",
+        "environment": "macOS arm64 packaged Electron candidate from eb60f2e, Electron 39.8.10, Chromium 142. Candidate app bundle: release/mac-arm64/CrossGen.app; app.asar SHA256 a4d71de5721a2bd550dacfd2afda44376cf82c96456e1e0d6e5de2e1dc535d39; main executable SHA256 183cf9370f7f2ae62c36aed06e21bed50366ac622f7b013bddeed1cd880889ea.",
         "commands": [
           "pnpm package:mac",
           "pnpm verify:sketch-packaged-smoke"
@@ -1020,16 +1020,16 @@
             "kind": "local-directory",
             "path": "release/mac-arm64/CrossGen.app",
             "public": false,
-            "description": "Current ce50a67 macOS arm64 test package; DMG size 104000917 bytes SHA256 e91b920cb06e09ea2dbadf3d48095733c2bfcf16c759def5cb0fffc2569122f6, ZIP size 99746454 bytes SHA256 4a22b1e2f7cb4bc9a4d6ea074e2319a98c39520020cd4bf190da07fd3134348c."
+            "description": "Current eb60f2e macOS arm64 test package; DMG size 104000992 bytes SHA256 7868ababb81f05b10d46f6ec18c42f9a2a0009cc2f57af8a718badbf2c71cbc6, ZIP size 99746454 bytes SHA256 9cac8ce12a8df5400c0c021c380640b6fdefbf9289a4cba895bb66c697166f03."
           },
           {
             "kind": "local-file",
             "path": "output/playwright/v034-sketch-packaged/compact-sidebar.png",
             "public": false,
-            "description": "Compact-sidebar layout screenshot from the ce50a67 test package; SHA256 686134f51bef5d6a07cd71d454bdef88cde259fd700e9f8a48357abbef71a4f1."
+            "description": "Compact-sidebar layout screenshot from the eb60f2e test package; SHA256 2e2c996c6e7dc705d42289c2026dc69c0e2a181c6a8a5071760a6b70562bd1b3."
           }
         ],
-        "summary": "The exact ce50a67 packaged candidate opened Sketch from the image-to-image reference area without adding a top-level mode, verified drawing, undo/redo/clear, underlay, save-and-use, restart recovery, mock generation, input/result switching, Sketch removal followed by ordinary reference Mask recovery, model switching, constrained viewports, and compact sidebar layout."
+        "summary": "The exact eb60f2e packaged candidate opened Sketch from the image-to-image reference area without adding a top-level mode, verified drawing, undo/redo/clear, underlay, save-and-use, restart recovery, mock generation, input/result switching, Sketch removal followed by ordinary reference Mask recovery, model switching, constrained viewports, and compact sidebar layout."
       }
     },
     {
@@ -1043,9 +1043,9 @@
         "The evidence records the flag value, exact candidate, and observed ordinary-workflow recovery."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T20:36:40.300Z",
-        "commit": "ce50a67348a66636edb501dd6682b6d7d7dff427",
-        "environment": "macOS arm64 packaged Electron candidate from ce50a67 with CROSSGEN_SKETCH_ENABLED=0 and an isolated temporary user-data directory. No provider credential was used.",
+        "verifiedAt": "2026-09-13T21:59:12.300Z",
+        "commit": "eb60f2e40b33cf8986c8fba8529b6dabc2a26bac",
+        "environment": "macOS arm64 packaged Electron candidate from eb60f2e with CROSSGEN_SKETCH_ENABLED=0 and an isolated temporary user-data directory. No provider credential was used.",
         "commands": [
           "pnpm verify:sketch-feature-flag-smoke"
         ],
@@ -1056,7 +1056,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "With CROSSGEN_SKETCH_ENABLED=0, the renderer entry disappeared and Sketch asset/document IPC, Sketch draft, and Sketch queue requests were explicitly rejected, while ordinary text-to-image, image-to-image, Mask, History, Gallery, and Queue read surfaces remained available on the ce50a67 packaged candidate."
+        "summary": "With CROSSGEN_SKETCH_ENABLED=0, the renderer entry disappeared and Sketch asset/document IPC, Sketch draft, and Sketch queue requests were explicitly rejected, while ordinary text-to-image, image-to-image, Mask, History, Gallery, and Queue read surfaces remained available on the eb60f2e packaged candidate."
       }
     },
     {
@@ -1071,7 +1071,7 @@
         "Mock tests and provider success responses are not treated as a substitute for product-owner quality review."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T21:25:05.231Z",
+        "verifiedAt": "2026-09-13T21:55:16.587Z",
         "commit": "e3c4a8e288388d9ce757a01281045a17da8d90c6",
         "environment": "Approved AIHub aggregation API /models probe returned HTTP 200 from https://aihub.nowosoft.cn/v1 against the current origin/main candidate. The configured key exposed gemini-3.1-flash-image, gemini-3.1-flash-lite-image, gemini-3-pro-image, and gpt-image-2; GPT Image 2.5, Sunburst, Flare, and Nano Banana 3 were not listed. Direct read-only probes returned model_not_found for each target. Credentials were loaded from the ignored local environment file and were not recorded.",
         "commands": [
@@ -1080,15 +1080,15 @@
         "references": [
           {
             "label": "v0.3.4 current mainline candidate",
-            "url": "https://github.com/Bliveren/CrossGen/commit/e3c4a8e288388d9ce757a01281045a17da8d90c6"
+            "url": "https://github.com/Bliveren/CrossGen/commit/eb60f2e40b33cf8986c8fba8529b6dabc2a26bac"
           }
         ],
         "artifacts": [
           {
             "kind": "read-only-model-probe",
-            "path": "stdout from pnpm probe:real-aihub-models",
+            "path": "docs/release/aihub-model-probe-2026-09-13.json",
             "public": false,
-            "description": "No-cost probe recorded the available image model IDs and redacted direct target-model responses; no image-generation request was made."
+            "description": "No-cost read-only probe recorded the available image model IDs and redacted direct target-model responses; no image-generation request was made."
           }
         ],
         "summary": "Real AIHub Sketch quality and recovery matrix remains pending because the approved AIHub /models response still does not expose GPT Image 2.5 or Nano Banana 3. Direct probes for gpt-image-2.5, gpt-image-2.5-sunburst, gpt-image-2.5-flare, and nano-banana-3 returned model_not_found. No mock, legacy model, or compatible model is used as a substitute; human quality review remains required."
