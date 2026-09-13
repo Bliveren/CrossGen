@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-13T08:41:10.000Z",
+  "lastUpdated": "2026-09-13T09:11:47.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -1066,13 +1066,15 @@
         "Mock tests and provider success responses are not treated as a substitute for product-owner quality review."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
+        "verifiedAt": "2026-09-13T09:11:47.000Z",
+        "commit": "e84d446610a8ea6085a39394fd46bee5dafbbee3",
+        "environment": "Approved AIHub aggregation API model discovery returned HTTP 200. The configured key exposed gemini-3-pro-image, gemini-3.1-flash-image, gemini-3.1-flash-lite-image, and gpt-image-2; GPT Image 2.5 variants and Nano Banana 3 were not present. Credentials were loaded from the ignored local environment file and were not recorded.",
+        "commands": [
+          "set -a; . ./.env.local; set +a; node <redacted model-discovery probe>"
+        ],
         "references": [],
         "artifacts": [],
-        "summary": "Real AIHub Sketch quality and recovery matrix is pending explicit authorized execution and human review."
+        "summary": "Real AIHub Sketch quality and recovery matrix remains pending because the current approved AIHub /models response does not expose GPT Image 2.5 or Nano Banana 3. No mock or compatible model is being used as a substitute; explicit authorization and human quality review remain required."
       }
     }
   ]
