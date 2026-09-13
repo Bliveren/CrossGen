@@ -27,6 +27,7 @@ docs/products/
 
 # planning docs stay local; unreleased plans should not be public
 # already-released plans are kept tracked via the exceptions below
-docs/plans/
+docs/plans/*
+!docs/plans/gpt-image-2.5-support.md
 !docs/plans/v0.2.1-plan.md
 !docs/plans/v0.2.3-plan.md

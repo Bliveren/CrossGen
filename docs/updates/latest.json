@@ -1,30 +1,30 @@
 {
-  "version": "0.3.3",
-  "pubDate": "2026-09-01T14:15:16.000Z",
-  "notes": "CrossGen 0.3.3 finalizes Agent Access, AIHub-backed real-provider validation, and refreshed macOS, Windows, and Linux release assets.",
+  "version": "0.3.4",
+  "pubDate": "2026-09-06T11:40:21.000Z",
+  "notes": "CrossGen 0.3.4 adds AppLink provider import and media-aware release foundations, with refreshed macOS, Windows, and Linux release assets.",
   "assets": [
     {
       "platform": "darwin",
-      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.3/CrossGen-0.3.3-mac-arm64.dmg",
-      "fileName": "CrossGen-0.3.3-mac-arm64.dmg",
-      "sha256": "c414b0b9ac91a12529bee0d98d5bf7b15eb5325250c343fbe54a36677295243d",
-      "sizeBytes": 104019414,
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.4/CrossGen-0.3.4-mac-arm64.dmg",
+      "fileName": "CrossGen-0.3.4-mac-arm64.dmg",
+      "sha256": "46462e3ee473edfaabe92f1b0b66e06988e4f4aae94b245f40154449adda707b",
+      "sizeBytes": 104018744,
       "arch": "arm64"
     },
     {
       "platform": "win32",
-      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.3/CrossGen-Setup.exe",
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.4/CrossGen-Setup.exe",
       "fileName": "CrossGen-Setup.exe",
-      "sha256": "5c8baa188db481ec63cb21be69e1143d7a82ab907329befad0148c18e367816b",
-      "sizeBytes": 99139780,
+      "sha256": "3a8cb3d152e5307cb65021fc783ecc6c28337592beef32ef018431518924c332",
+      "sizeBytes": 99153994,
       "arch": "x64"
     },
     {
       "platform": "linux",
-      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.3/CrossGen-0.3.3-linux-x86_64.AppImage",
-      "fileName": "CrossGen-0.3.3-linux-x86_64.AppImage",
-      "sha256": "0e811670ce4775526714f0914aade8a85fb265826ff5b48741a152be4a7a5760",
-      "sizeBytes": 120913725,
+      "url": "https://github.com/Bliveren/CrossGen/releases/download/v0.3.4/CrossGen-0.3.4-linux-x86_64.AppImage",
+      "fileName": "CrossGen-0.3.4-linux-x86_64.AppImage",
+      "sha256": "44f4e02dc911d9e3ba437ab18f83b6db96d9f9748f55e5626972fd8bd7ddcf42",
+      "sizeBytes": 120938555,
       "arch": "x64"
     }
   ]

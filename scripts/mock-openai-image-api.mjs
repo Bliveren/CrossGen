@@ -4,7 +4,11 @@ import http from "node:http";
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
-const modelIds = parseModelIds(process.env.MOCK_OPENAI_MODELS, ["gpt-image-2"]);
+const modelIds = parseModelIds(process.env.MOCK_OPENAI_MODELS, [
+  "gpt-image-2",
+  "gpt-image-2.5-sunburst",
+  "gpt-image-2.5-flare"
+]);
 const recentRequests = [];
 
 function parseModelIds(value, fallback) {
@@ -59,6 +63,12 @@ function parseRequestFields(bodyText) {
 }
 
 function validateImageRequest(pathname, bodyText) {
+  if (pathname.endsWith("/responses")) {
+    if (!hasField(bodyText, "model") || !hasField(bodyText, "tools")) {
+      return "Missing Responses model/tools fields";
+    }
+    return null;
+  }
   if (!hasField(bodyText, "model")) {
     return "Missing model field";
   }
@@ -79,7 +89,7 @@ function recordImageRequest(pathname, bodyText) {
   recentRequests.splice(0, Math.max(0, recentRequests.length - 20));
 }
 
-function sendSse(response, prefix) {
+function sendSse(response, prefix, responseId = `resp_mock_${Date.now()}`) {
   response.writeHead(200, {
     "content-type": "text/event-stream",
     "cache-control": "no-cache",
@@ -90,7 +100,21 @@ function sendSse(response, prefix) {
   response.write(`event: ${prefix}.partial_image\n`);
   response.write(`data: ${JSON.stringify({ type: `${prefix}.partial_image`, partial_image_index: 0, b64_json: tinyPngBase64 })}\n\n`);
   response.write(`event: ${prefix}.completed\n`);
-  response.write(`data: ${JSON.stringify({ type: `${prefix}.completed`, b64_json: tinyPngBase64, usage: { total_tokens: 1 } })}\n\n`);
+  response.write(`data: ${JSON.stringify({ type: `${prefix}.completed`, b64_json: tinyPngBase64, usage: { total_tokens: 1 }, response: { id: responseId } })}\n\n`);
+  response.end("data: [DONE]\n\n");
+}
+
+function sendResponsesSse(response, responseId = `resp_mock_${Date.now()}`) {
+  response.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+    "x-request-id": `mock_${Date.now()}`
+  });
+  response.write("event: image_generation_call.partial_image\n");
+  response.write(`data: ${JSON.stringify({ type: "image_generation_call.partial_image", partial_image_index: 0, b64_json: tinyPngBase64 })}\n\n`);
+  response.write("event: image_generation_call.completed\n");
+  response.write(`data: ${JSON.stringify({ type: "image_generation_call.completed", b64_json: tinyPngBase64, usage: { total_tokens: 1 }, response: { id: responseId } })}\n\n`);
   response.end("data: [DONE]\n\n");
 }
 
@@ -125,7 +149,7 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    if (request.method === "POST" && (url.pathname === "/v1/images/generations" || url.pathname === "/v1/images/edits")) {
+    if (request.method === "POST" && (url.pathname === "/v1/images/generations" || url.pathname === "/v1/images/edits" || url.pathname === "/v1/responses")) {
       const bodyText = await readText(request);
       const validationError = validateImageRequest(url.pathname, bodyText);
       if (validationError) {
@@ -135,7 +159,16 @@ const server = http.createServer(async (request, response) => {
       recordImageRequest(url.pathname, bodyText);
       const prefix = url.pathname.endsWith("/edits") ? "image_edit" : "image_generation";
       if (wantsStream(request, bodyText)) {
-        sendSse(response, prefix);
+        if (url.pathname.endsWith("/responses")) sendResponsesSse(response);
+        else sendSse(response, prefix);
+        return;
+      }
+      if (url.pathname.endsWith("/responses")) {
+        sendJson(response, 200, {
+          id: `resp_mock_${Date.now()}`,
+          output: [{ type: "image_generation_call", result: tinyPngBase64 }],
+          usage: { total_tokens: 1 }
+        });
         return;
       }
       sendJson(response, 200, {

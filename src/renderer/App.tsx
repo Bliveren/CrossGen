@@ -2,6 +2,7 @@ import { memo, Profiler, useEffect, useMemo, useRef, useState, type ReactNode } 
 import {
   AlertTriangle,
   BookOpen,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -52,7 +53,12 @@ import {
   DEFAULT_IMAGE_PARAMS,
   GEMINI_ASPECT_RATIO_OPTIONS,
   GEMINI_RESOLUTION_OPTIONS,
+  GPT_IMAGE_2_5_QUALITY_OPTIONS,
+  IMAGE_BACKGROUND_OPTIONS,
+  IMAGE_FORMAT_OPTIONS,
+  IMAGE_QUALITY_OPTIONS,
   MAX_GPT_IMAGE_INPUTS,
+  RESPONSES_INPUT_IMAGE_DETAIL_OPTIONS,
   REFERENCE_IMAGE_MODE_OPTIONS,
   maskMimeTypeForSource,
   mimeTypeFromDataUrl,
@@ -79,6 +85,7 @@ import type {
   ImageAsset,
   ImageBackground,
   ImageFormat,
+  ImageWorkflow,
   ImageParams,
   ImageQuality,
   InputAsset,
@@ -86,6 +93,8 @@ import type {
   OpenAIImageRoute,
   OpenAIImageRouteSelection,
   OpenAIImageParams,
+  ResponsesInputImageDetail,
+  ResponsesImageAction,
   PromptTemplate,
   PromptTemplateInput,
   ProviderConfig,
@@ -100,7 +109,11 @@ import type {
   UpdateCheckResult,
   HistoryJobPatch,
   OutputAsset,
-  WorkspaceDraft
+  WorkspaceDraft,
+  SketchDocument,
+  SketchGuidanceKey,
+  SketchTaskMetadata,
+  SketchExportResult
 } from "../shared/types";
 import {
   FOCUSED_MODEL_CATALOG,
@@ -108,6 +121,8 @@ import {
   GENERAL_MODEL_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
+  GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
   generalFallbackSupportsReferenceImages,
@@ -115,6 +130,7 @@ import {
   isGeneralFallbackProvider,
   discoveredModelCapabilityHints,
   isDiscoveredImageModel,
+  isGptImage25ModelId,
   isPotentialGeneralImageModel,
   normalizeModelId
 } from "../shared/modelCatalog";
@@ -140,6 +156,7 @@ import {
 } from "./GalleryPanel";
 import { getInitialLanguage, localizeValidationMessage, translations, type Language, type UiCopy } from "./i18n";
 import { useImageEditor } from "./useImageEditor";
+import { SketchCanvas, type SketchSaveOptions } from "./SketchCanvas";
 import { useHistoryListModel } from "./useHistoryListModel";
 import {
   GALLERY_ALL_FILTER,
@@ -156,6 +173,14 @@ import {
   type EditorSnapshot
 } from "./imageEditorTypes";
 import { serializePromptTokens, type PromptToken } from "./promptTokens";
+import {
+  countBrushStrokes,
+  countSketchPoints,
+  fitSketchCanvasSize,
+  hasSketchMarks,
+  normalizeSketchGuidance,
+  sketchDocumentHash
+} from "../shared/sketch";
 
 type NoticeKind = "info" | "success" | "error";
 
@@ -330,8 +355,8 @@ const StableGalleryRailPanel = memo(
 );
 
 const sizePresets = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x1152", "2048x2048", "3840x2160", "2160x3840"];
-const qualityOptions: ImageQuality[] = ["auto", "low", "medium", "high"];
-const formatOptions: ImageFormat[] = ["png", "jpeg", "webp"];
+const qualityOptions: ImageQuality[] = [...IMAGE_QUALITY_OPTIONS];
+const formatOptions: ImageFormat[] = [...IMAGE_FORMAT_OPTIONS];
 const backgroundOptions: ImageBackground[] = ["auto", "opaque"];
 const moderationOptions: ModerationMode[] = ["auto", "low"];
 const MIN_PREVIEW_ZOOM = 0.25;
@@ -360,6 +385,7 @@ const MIN_PREVIEW_PANEL_RATIO = 0.48;
 const MAX_PREVIEW_PANEL_RATIO = 0.74;
 const RESIZER_WIDTH = 12;
 const HISTORY_COLLAPSED_LIMIT = 6;
+const SKETCH_EMBED_BREAKPOINT = 1100;
 const MAX_RENDERER_PARTIAL_IMAGES = 3;
 const MAX_EDITOR_UNDO_STEPS = 12;
 const MAX_EDITOR_UNDO_BYTES = 96 * 1024 * 1024;
@@ -399,7 +425,7 @@ function themeModeLabel(copy: UiCopy, mode: ThemeMode): string {
 
 function getReferenceImageLimit(params: ImageParams): number {
   if (isOpenAIImageParams(params)) {
-    return getFocusedModelDefinition(GPT_IMAGE_2_LAUNCH_ID)?.capabilities.maxReferenceImages ?? MAX_GPT_IMAGE_INPUTS;
+    return getFocusedModelDefinition(params.launchId)?.capabilities.maxReferenceImages ?? MAX_GPT_IMAGE_INPUTS;
   }
   if (isGeminiImageParams(params)) {
     return getFocusedModelDefinition(NANO_BANANA_3_LAUNCH_ID)?.capabilities.maxReferenceImages ?? 2;
@@ -412,6 +438,35 @@ function getReferenceImageLimit(params: ImageParams): number {
 
 function tabModeForWorkMode(mode: WorkMode): TabMode {
   return mode === "generate" ? "text2img" : "img2img";
+}
+
+function sketchCanvasSizeForParams(params: ImageParams, customSize: string): { width: number; height: number } {
+  if (isOpenAIImageParams(params)) {
+    const candidate = params.size === "auto" ? customSize : params.size;
+    const match = /^(\d+)x(\d+)$/.exec(candidate.trim());
+    if (match) {
+      return fitSketchCanvasSize(Number(match[1]), Number(match[2]));
+    }
+    return fitSketchCanvasSize(1536, 1024);
+  }
+  if (isGeminiImageParams(params)) {
+    const [rawWidth, rawHeight] = params.aspectRatio.split(":").map(Number);
+    const ratio = rawWidth > 0 && rawHeight > 0 ? rawWidth / rawHeight : 1;
+    const base = ratio >= 1 ? { width: 1536, height: 1536 / ratio } : { width: 1536 * ratio, height: 1536 };
+    return fitSketchCanvasSize(base.width, base.height);
+  }
+  return fitSketchCanvasSize(1536, 1024);
+}
+
+function newSketchDocument(params: ImageParams, customSize: string): SketchDocument {
+  const { width, height } = sketchCanvasSizeForParams(params, customSize);
+  return {
+    schemaVersion: 1,
+    width,
+    height,
+    background: "white",
+    strokes: []
+  };
 }
 
 interface HistoryModelDetails {
@@ -735,6 +790,8 @@ function runtimeRecord(value: unknown): Record<string, unknown> {
 
 function modelLabelFromId(value: string): string {
   if (value === "gpt-image-2") return DEFAULT_HISTORY_MODEL_DISPLAY;
+  if (value.startsWith("gpt-image-2.5-sunburst")) return "GPT Image 2.5 · Sunburst";
+  if (value.startsWith("gpt-image-2.5-flare")) return "GPT Image 2.5 · Flare";
   return value;
 }
 
@@ -800,16 +857,56 @@ function defaultLaunchForProvider(kind: ProviderKind): FocusedLaunchId {
 
 function createOpenAIParams(modelId: string, current: ImageParams, config?: ProviderConfig): OpenAIImageParams {
   const base = isOpenAIImageParams(current) ? current : DEFAULT_IMAGE_PARAMS;
+  const requestedModel = modelId || base.model || config?.activeModelId || config?.defaultModel || GPT_IMAGE_2_MODEL_ID;
+  const launchId = isGptImage25ModelId(requestedModel)
+    ? GPT_IMAGE_2_5_LAUNCH_ID
+    : normalizeModelId(requestedModel) === normalizeModelId(GPT_IMAGE_2_MODEL_ID)
+      ? GPT_IMAGE_2_LAUNCH_ID
+      : config?.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID
+        ? GPT_IMAGE_2_5_LAUNCH_ID
+        : GPT_IMAGE_2_LAUNCH_ID;
+  const qualityOptions: readonly ImageQuality[] = launchId === GPT_IMAGE_2_5_LAUNCH_ID
+    ? GPT_IMAGE_2_5_QUALITY_OPTIONS
+    : IMAGE_QUALITY_OPTIONS;
+  const backgroundOptions: readonly ImageBackground[] = launchId === GPT_IMAGE_2_5_LAUNCH_ID
+    ? IMAGE_BACKGROUND_OPTIONS
+    : ["auto", "opaque"];
+  const quality = config?.defaultQuality ?? base.quality;
+  const background = backgroundOptions.includes(base.background) ? base.background : "auto";
+  const imageRoute: OpenAIImageRouteSelection =
+    launchId === GPT_IMAGE_2_5_LAUNCH_ID && base.imageRoute === "chat-completions"
+      ? "auto"
+      : base.imageRoute;
+  const model = requestedModel || (launchId === GPT_IMAGE_2_5_LAUNCH_ID ? GPT_IMAGE_2_5_DEFAULT_MODEL_ID : GPT_IMAGE_2_MODEL_ID);
+  const gptImage25OnlyParams = launchId === GPT_IMAGE_2_5_LAUNCH_ID
+    ? {
+        inputFidelity: base.inputFidelity,
+        user: base.user,
+        responsesModel: base.responsesModel,
+        responsesAction: base.responsesAction,
+        previousResponseId: base.previousResponseId,
+        previousImageGenerationCallId: base.previousImageGenerationCallId,
+        inputImageDetail: base.inputImageDetail
+      }
+    : {};
   return normalizeOpenAIParamsForOutputCount({
     ...DEFAULT_IMAGE_PARAMS,
-    ...base,
     providerKind: "openai",
-    launchId: GPT_IMAGE_2_LAUNCH_ID,
-    model: modelId || GPT_IMAGE_2_MODEL_ID,
-    referenceImageMode: current.referenceImageMode,
+    launchId,
+    model,
+    imageRoute,
+    referenceImageMode: base.referenceImageMode,
     size: config?.defaultSize ?? base.size,
-    quality: config?.defaultQuality ?? base.quality,
-    timeoutMs: config?.timeoutMs ?? base.timeoutMs
+    quality: qualityOptions.includes(quality) ? quality : "auto",
+    outputFormat: base.outputFormat,
+    outputCompression: base.outputCompression,
+    background,
+    n: base.n,
+    stream: base.stream,
+    partialImages: base.partialImages,
+    moderation: base.moderation,
+    timeoutMs: config?.timeoutMs ?? base.timeoutMs,
+    ...gptImage25OnlyParams
   });
 }
 
@@ -823,7 +920,9 @@ function normalizeOpenAIParamsForOutputCount(params: OpenAIImageParams): OpenAII
 }
 
 function canUseStreamPartialPreview(config: ProviderConfig, mode: WorkMode): boolean {
-  return config.kind === "openai" && config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID && (mode === "generate" || mode === "edit" || mode === "inpaint");
+  return config.kind === "openai" &&
+    (config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID || config.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID) &&
+    (mode === "generate" || mode === "edit" || mode === "inpaint");
 }
 
 function streamPartialPreviewDisabledReason(params: OpenAIImageParams, config: ProviderConfig, mode: WorkMode, copy: UiCopy): string | undefined {
@@ -838,7 +937,12 @@ function openAIImageRouteLabel(copy: UiCopy, route: OpenAIImageRoute): string {
   return copy.imageRouteImageApi;
 }
 
-function autoOpenAIImageRoute(config: ProviderConfig, mode: WorkMode): OpenAIImageRoute {
+function autoOpenAIImageRoute(config: ProviderConfig, mode: WorkMode, launchId = config.activeLaunchId): OpenAIImageRoute {
+  if (launchId === GPT_IMAGE_2_5_LAUNCH_ID) {
+    // Keep ordinary 2.5 requests on the single-call Images API. Responses is
+    // selected only by explicit multi-turn/Responses controls.
+    return "image-api";
+  }
   if (mode === "inpaint") return config.openAIImageRouting?.preferredGuidedEditRoute ?? "image-api";
   const probedRoute = mode === "generate"
     ? config.openAIImageRouting?.preferredGenerateRoute
@@ -873,8 +977,8 @@ function openAIImageRouteStatusText(copy: UiCopy, params: OpenAIImageParams, con
 }
 
 function selectedOpenAIImageRoute(params: OpenAIImageParams, config: ProviderConfig, mode: WorkMode): OpenAIImageRoute {
-  if (mode === "inpaint") return "image-api";
-  return params.imageRoute === "auto" ? autoOpenAIImageRoute(config, mode) : params.imageRoute;
+  if (mode === "inpaint" && params.launchId !== GPT_IMAGE_2_5_LAUNCH_ID) return "image-api";
+  return params.imageRoute === "auto" ? autoOpenAIImageRoute(config, mode, params.launchId) : params.imageRoute;
 }
 
 function normalizeParamsForOutputCount(params: ImageParams): ImageParams {
@@ -927,12 +1031,24 @@ function createParamsForConfig(config: ProviderConfig, current: ImageParams): Im
   return createOpenAIParams(config.activeModelId || config.defaultModel || GPT_IMAGE_2_MODEL_ID, current, config);
 }
 
+function paramsMatchActiveConfig(params: ImageParams, config: ProviderConfig): boolean {
+  const activeModelId = normalizeModelId(config.activeModelId || config.defaultModel);
+  const restoredModelId = normalizeModelId(params.model);
+  const modelMatches = !activeModelId || !restoredModelId || activeModelId === restoredModelId;
+
+  if (config.activeLaunchId === NANO_BANANA_3_LAUNCH_ID) {
+    return isGeminiImageParams(params) && params.launchId === NANO_BANANA_3_LAUNCH_ID && modelMatches;
+  }
+  if (config.activeLaunchId === GENERAL_LAUNCH_ID) {
+    return isGeneralImageParams(params) && params.providerKind === config.kind && modelMatches;
+  }
+  return isOpenAIImageParams(params) && params.launchId === config.activeLaunchId && modelMatches;
+}
+
 function defaultModelForConfigSave(kind: ProviderKind, params: ImageParams, config: ProviderConfig): string {
   if (isGeneralImageParams(params)) return params.model;
   if (isGeminiImageParams(params)) return params.model;
-  if (kind === "openai") {
-    return isOpenAIImageParams(params) ? params.model : GPT_IMAGE_2_MODEL_ID;
-  }
+  if (isOpenAIImageParams(params)) return params.model;
   if (kind === "gemini") return NANO_BANANA_3_MODEL_ID;
   if (kind === config.kind && config.defaultModel) return config.defaultModel;
   return defaultModelForProvider(kind);
@@ -953,7 +1069,9 @@ function defaultQualityForConfigSave(params: ImageParams, config: ProviderConfig
 
 function runtimeSelectionError(params: ImageParams, config: ProviderConfig, copy: UiCopy): string | null {
   if (isOpenAIImageParams(params)) {
-    return config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ? null : copy.selectLaunchToRun("GPT Image 2");
+    return config.activeLaunchId === params.launchId
+      ? null
+      : copy.selectLaunchToRun(params.launchId === GPT_IMAGE_2_5_LAUNCH_ID ? "GPT Image 2.5" : "GPT Image 2");
   }
   if (isGeminiImageParams(params)) {
     if (config.activeLaunchId !== NANO_BANANA_3_LAUNCH_ID) return copy.selectLaunchToRun("Nano Banana 3");
@@ -995,7 +1113,11 @@ function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: 
 
 function launchDefinitionForModel(modelId: string): (typeof FOCUSED_MODEL_CATALOG)[number] | undefined {
   const normalizedId = normalizeModelId(modelId);
-  return FOCUSED_MODEL_CATALOG.find((definition) => definition.modelIds.some((id) => normalizeModelId(id) === normalizedId));
+  return FOCUSED_MODEL_CATALOG.find((definition) =>
+    definition.modelIds.some((id) => normalizeModelId(id) === normalizedId)
+  ) ?? (isGptImage25ModelId(normalizedId)
+    ? FOCUSED_MODEL_CATALOG.find((definition) => definition.launchId === GPT_IMAGE_2_5_LAUNCH_ID)
+    : undefined);
 }
 
 function getDiscoveredLaunchModelOptions(config: ProviderConfig): LaunchModelOption[] {
@@ -1246,11 +1368,18 @@ export function App() {
   const [newApiAccessKey, setNewApiAccessKey] = useState("");
   const [customSize, setCustomSize] = useState("2048x1152");
   const [inputAssets, setInputAssets] = useState<InputAsset[]>([]);
+  const [selectedInputAssetId, setSelectedInputAssetId] = useState<string | null>(null);
+  const [sketchDocument, setSketchDocument] = useState<SketchDocument | null>(null);
+  const [sketchGuidance, setSketchGuidance] = useState<SketchGuidanceKey[]>([]);
+  const [isSketchEditorOpen, setIsSketchEditorOpen] = useState(false);
+  const [sketchEditorSessionKey, setSketchEditorSessionKey] = useState(0);
+  const [isSavingSketch, setIsSavingSketch] = useState(false);
   const [maskAsset, setMaskAsset] = useState<InputAsset | null>(null);
   const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null);
   const [maskCheck, setMaskCheck] = useState<MaskCheck | null>(null);
   const [activeJob, setActiveJob] = useState<GenerationJob | null>(null);
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
+  const [inputStudioView, setInputStudioView] = useState<"input" | "result">("result");
   const [partialImages, setPartialImages] = useState<ImageAsset[]>([]);
   const [notice, setNotice] = useState<Notice>({
     kind: bridge ? "info" : "error",
@@ -1459,6 +1588,8 @@ export function App() {
   const expandedHistoryWidthRef = useRef(Math.max(historyWidth, MIN_HISTORY_WIDTH));
 
   const activeConfig = snapshot.providers.find(p => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
+  const sketchEnabled = snapshot.features?.sketchEnabled !== false;
+  const shouldEmbedSketchEditor = isSketchEditorOpen && viewportWidth >= SKETCH_EMBED_BREAKPOINT;
   const isSidebarCompact = isSidebarCollapsed || isAutoSidebarCollapsed;
   const selectedApiConfig = snapshot.providers.find(p => p.id === selectedApiConfigId) ?? activeConfig;
   const isDiscoveringModels = discoveringProviderId !== null;
@@ -1473,6 +1604,35 @@ export function App() {
   );
   const sourceAsset = effectiveInputAssets[0];
   const sourcePreview = assetSource(sourceAsset);
+  const activeSketchAsset = sketchEnabled ? inputAssets.find((asset) => asset.role === "sketch") : undefined;
+  const activeSketchMetadata = useMemo<SketchTaskMetadata | undefined>(
+    () => activeSketchAsset && sketchDocument && activeSketchAsset.artifactId
+      ? {
+          artifactId: activeSketchAsset.artifactId,
+          width: sketchDocument.width,
+          height: sketchDocument.height,
+          background: sketchDocument.background,
+          strokeCount: countBrushStrokes(sketchDocument),
+          pointCount: countSketchPoints(sketchDocument),
+          documentHash: sketchDocumentHash(sketchDocument),
+          ...(sketchGuidance.length > 0 ? { guidance: [...sketchGuidance] } : {}),
+          ...(activeSketchAsset.underlayIncluded ? { underlayIncluded: true } : {}),
+          ...(activeSketchAsset.underlayAssetId ? { underlayAssetId: activeSketchAsset.underlayAssetId } : {})
+        }
+      : undefined,
+    [activeSketchAsset, sketchDocument, sketchGuidance]
+  );
+  const sketchPreviewSource = activeSketchAsset ? assetSource(activeSketchAsset) : undefined;
+  const sketchUnderlayOptions = useMemo(
+    () => inputAssets
+      .filter((asset) => asset.role !== "sketch")
+      .map((asset) => {
+        const source = assetSource(asset);
+        return source ? { id: asset.id, name: asset.name, source } : null;
+      })
+      .filter((option): option is { id: string; name: string; source: string } => option !== null),
+    [inputAssets]
+  );
   const referencePreviewAsset = referencePreviewAssetId ? inputAssets.find((asset) => asset.id === referencePreviewAssetId) ?? null : null;
   const referencePreviewSource = referencePreviewAsset ? assetSource(referencePreviewAsset) : undefined;
   const referenceMaskConfirmAsset = referenceMaskConfirmAssetId
@@ -1495,9 +1655,20 @@ export function App() {
     createdAt: activeGalleryAsset.createdAt
   } : undefined;
   const activeMedia = activeGalleryPreviewMedia ?? selectedResult ?? getBestMediaResult(activeJob) ?? partialImages[partialImages.length - 1];
-  const activeImage = activeMedia && isImageAsset(activeMedia) ? activeMedia : undefined;
-  const activeMediaSource = activeGalleryAsset ? galleryAssetPath(activeGalleryAsset) : assetSource(activeMedia);
-  const activePreviewSource = activeImage && editedImageDataUrl ? editedImageDataUrl : activeMediaSource;
+  const isInputStudioInputView = Boolean(sketchPreviewSource) && inputStudioView === "input";
+  const previewMedia = isInputStudioInputView ? undefined : activeMedia;
+  const previewImage = previewMedia && isImageAsset(previewMedia) ? previewMedia : undefined;
+  const previewMediaSource = isInputStudioInputView
+    ? undefined
+    : activeGalleryAsset
+      ? galleryAssetPath(activeGalleryAsset)
+      : assetSource(previewMedia);
+  const isSketchInputPreview = Boolean(sketchPreviewSource) && (isInputStudioInputView || !activeMedia);
+  const activePreviewSource = previewImage && editedImageDataUrl
+    ? editedImageDataUrl
+    : previewMediaSource ?? (isSketchInputPreview ? sketchPreviewSource : undefined);
+  const activeImage = previewImage;
+  const activeMediaSource = previewMediaSource;
   const activeJobError = getJobError(activeJob);
   const openAIParams = isOpenAIImageParams(params) ? params : null;
   const geminiParams = isGeminiImageParams(params) ? params : null;
@@ -1507,22 +1678,29 @@ export function App() {
   const hasMask = Boolean(maskAsset || maskDataUrl);
   // 内部 WorkMode 由 UI 的 tabMode 推导：text2img→generate；img2img 有蒙版→inpaint，否则→edit。
   // General 模式仍按既有规则（支持参考图且已选图→edit，否则 generate）。
-  const requestMode: WorkMode = generalParams
-    ? generalAllowsReferences && effectiveInputAssets.length > 0
-      ? "edit"
-      : "generate"
+  const requestMode: WorkMode = activeSketchAsset
+    ? "edit"
+    : generalParams
+      ? generalAllowsReferences && effectiveInputAssets.length > 0
+        ? "edit"
+        : "generate"
     : tabMode === "text2img"
       ? "generate"
       : hasMask
         ? "inpaint"
         : "edit";
-  const showReferenceTools = generalParams ? generalAllowsReferences || effectiveInputAssets.length > 0 : tabMode === "img2img";
+  const requestWorkflow: ImageWorkflow | undefined = activeSketchAsset ? "sketch" : undefined;
+  const showReferenceTools = generalParams ? generalAllowsReferences || effectiveInputAssets.length > 0 : tabMode === "img2img" || Boolean(activeSketchAsset);
   const activeReferenceImageLimit = getReferenceImageLimit(params);
   const generalModeNotice = generalParams ? generalRuntimeNotice(generalParams.providerKind, copy) : copy.generalRuntimeUnsupported;
   const activeInpaintCapability = inpaintCapabilityForParams(params);
   const usesExactMask = activeInpaintCapability === "exact-mask";
-  const showMaskRouteNotice = requestMode === "inpaint" && Boolean(activeInpaintCapability);
+  const showMaskRouteNotice = requestMode === "inpaint" &&
+    Boolean(activeInpaintCapability) &&
+    openAIParams?.launchId !== GPT_IMAGE_2_5_LAUNCH_ID;
   const sizeSelectValue = openAIParams && sizePresets.includes(openAIParams.size) ? openAIParams.size : "custom";
+  const activeQualityOptions = openAIParams?.launchId === GPT_IMAGE_2_5_LAUNCH_ID ? GPT_IMAGE_2_5_QUALITY_OPTIONS : qualityOptions;
+  const activeBackgroundOptions = openAIParams?.launchId === GPT_IMAGE_2_5_LAUNCH_ID ? IMAGE_BACKGROUND_OPTIONS : backgroundOptions;
   const streamDisabledReason = openAIParams ? streamPartialPreviewDisabledReason(openAIParams, activeConfig, requestMode, copy) : undefined;
   const streamPartialsAllowed = openAIParams ? !streamDisabledReason : false;
   const apiKeyPlaceholder = selectedApiConfig.apiKeyPreview ?? (selectedApiConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
@@ -1946,6 +2124,9 @@ export function App() {
   }
 
   const modeError = useMemo(() => {
+    if (activeSketchAsset && generalParams) return `${copy.validation.generalPromptOnly} ${copy.sketchGeneralUnsupported}`;
+    if (activeSketchAsset && hasMask) return copy.sketchMaskUnsupported;
+    if (activeSketchAsset && !hasSketchMarks(sketchDocument)) return copy.sketchEmptyHint;
     if (generalParams && !generalFallbackSupportsReferenceImages(generalParams.providerKind) && effectiveInputAssets.length > 0) {
       return copy.validation.generalPromptOnly;
     }
@@ -1956,13 +2137,25 @@ export function App() {
     }
     if (usesExactMask && requestMode === "inpaint" && maskCheck && !maskCheck.ok) return maskCheck.message;
     return null;
-  }, [activeReferenceImageLimit, copy, effectiveInputAssets.length, generalParams, maskCheck, requestMode, usesExactMask]);
+  }, [activeReferenceImageLimit, activeSketchAsset, copy, effectiveInputAssets.length, generalParams, hasMask, maskCheck, requestMode, sketchDocument, usesExactMask]);
 
   const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, effectivePrompt), copy) ?? modeError;
+  const sketchPreflight = activeSketchAsset ? {
+    model: modelLabelFromId(params.model),
+    canvas: openAIParams
+      ? openAIParams.size
+      : geminiParams
+        ? `${geminiParams.aspectRatio} · ${geminiParams.resolution}`
+        : copy.generalFallback,
+    background: openAIParams ? openAIParams.background : copy.generalFallback,
+    references: `${effectiveInputAssets.length}/${activeReferenceImageLimit > 0 ? activeReferenceImageLimit : "—"}`,
+    reason: validationError ?? copy.sketchPreflightReady,
+    ready: !validationError
+  } : null;
   const canRun = !validationError && !isRunning;
   const canCancelRun = isRunning && Boolean(runningJobId);
-  const primaryRunActionLabel = isRunning ? copy.cancelGeneration : modeLabels[requestMode].action;
+  const primaryRunActionLabel = isRunning ? copy.cancelGeneration : requestWorkflow === "sketch" ? copy.useSketchToGenerate : modeLabels[requestMode].action;
   const promptCopyActionLabel = buttonFeedback["copy:prompt"] ? copy.clicked : copy.copyPrompt;
   const savedApiConfigs = snapshot.providers;
   const canDeleteActiveApiAccess = snapshot.providers.length > 1;
@@ -2421,6 +2614,16 @@ export function App() {
   }, [activeJob?.id, activeJob?.outputs]);
 
   useEffect(() => {
+    if (!sketchPreviewSource) {
+      setInputStudioView("result");
+      return;
+    }
+    if (!activeMedia) {
+      setInputStudioView("input");
+    }
+  }, [activeMedia?.id, sketchPreviewSource]);
+
+  useEffect(() => {
     setPreviewZoom(1);
     setPreviewPan({ x: 0, y: 0 });
     setIsAnnotationColorSampling(false);
@@ -2456,6 +2659,13 @@ export function App() {
   }, [inputAssets, referencePreviewAssetId]);
 
   useEffect(() => {
+    setSelectedInputAssetId((current) => {
+      if (current && inputAssets.some((asset) => asset.id === current)) return current;
+      return inputAssets[0]?.id ?? null;
+    });
+  }, [inputAssets]);
+
+  useEffect(() => {
     if (!bridge) return;
     if (!activeConfig.apiKeySaved) {
       hasAutoTestedConnectionRef.current = false;
@@ -2469,15 +2679,21 @@ export function App() {
 
   useEffect(() => {
     if (!bridge || !hasRestoredDraft || !hasUserChangedDraft) return;
+    // General is prompt-only. Keep a Sketch visible when users switch models,
+    // but do not persist an invalid General + Sketch draft combination.
+    if (requestWorkflow === "sketch" && generalParams) return;
     const timer = window.setTimeout(() => {
       bridge
         .saveDraft({
           activeLaunchId: params.launchId,
           activeModelId: params.model,
           mode: requestMode,
+          workflow: requestWorkflow,
           prompt: effectivePrompt,
           params,
           inputAssets: effectiveInputAssets.map(assetForDraft),
+          sketch: activeSketchAsset ? sketchDocument ?? undefined : undefined,
+          sketchGuidance: activeSketchAsset && sketchGuidance.length > 0 ? [...sketchGuidance] : undefined,
           maskAsset: maskAsset ? assetForDraft(maskAsset) : undefined,
           maskDataUrl: maskDataUrl ?? undefined,
           brushSize
@@ -2487,7 +2703,7 @@ export function App() {
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [bridge, brushSize, effectiveInputAssets, effectivePrompt, hasRestoredDraft, hasUserChangedDraft, maskAsset, maskDataUrl, requestMode, params]);
+  }, [activeSketchAsset, bridge, brushSize, effectiveInputAssets, effectivePrompt, generalParams, hasRestoredDraft, hasUserChangedDraft, maskAsset, maskDataUrl, requestMode, requestWorkflow, sketchDocument, sketchGuidance, params]);
 
   function resetPartialImages() {
     partialImageCountRef.current = 0;
@@ -2667,7 +2883,10 @@ export function App() {
   function restoreDraft(draft?: WorkspaceDraft, config = activeConfig) {
     setHasRestoredDraft(true);
     if (!draft) return;
-    const restoredParams = normalizeParamsForOutputCount(draft.params);
+    const draftParams = normalizeParamsForOutputCount(draft.params);
+    const restoredParams = paramsMatchActiveConfig(draftParams, config)
+      ? draftParams
+      : createParamsForConfig(config, draftParams);
     // 兼容 v0.2.0 旧 draft（仅存 WorkMode）：generate→text2img；edit/inpaint→img2img。
     setTabMode(tabModeForWorkMode(draft.mode));
     setPrompt(draft.prompt);
@@ -2676,8 +2895,11 @@ export function App() {
     updateCustomSizeFromParams(restoredParams, setCustomSize);
     setBaseURL(config.baseURL);
     setInputAssets(draft.inputAssets);
-    setMaskAsset(isGeneralImageParams(restoredParams) ? null : draft.maskAsset ?? null);
-    setMaskDataUrl(isGeneralImageParams(restoredParams) ? null : draft.maskDataUrl ?? null);
+    setSketchDocument(draft.workflow === "sketch" || draft.sketch ? draft.sketch ?? null : null);
+    setSketchGuidance(normalizeSketchGuidance(draft.sketchGuidance));
+    const restoredIsSketch = draft.workflow === "sketch" || Boolean(draft.sketch);
+    setMaskAsset(isGeneralImageParams(restoredParams) || restoredIsSketch ? null : draft.maskAsset ?? null);
+    setMaskDataUrl(isGeneralImageParams(restoredParams) || restoredIsSketch ? null : draft.maskDataUrl ?? null);
     setBrushSize(draft.brushSize);
     setDraftUpdatedAt(draft.updatedAt);
     setNotice({ kind: "info", text: paramsNotice(restoredParams, copy.notices.draftRestored(formatDate(draft.updatedAt)), copy) });
@@ -2688,6 +2910,7 @@ export function App() {
     try {
       await bridge.clearDraft();
       clearPromptChips();
+      setSketchGuidance([]);
       setDraftUpdatedAt(null);
       setHasUserChangedDraft(false);
       setNotice({ kind: "success", text: copy.notices.draftCleared });
@@ -2763,9 +2986,12 @@ export function App() {
         activeLaunchId: params.launchId,
         activeModelId: params.model,
         mode: requestMode,
+        workflow: requestWorkflow,
         prompt: template.body,
         params,
         inputAssets: effectiveInputAssets.map(assetForDraft),
+        sketch: activeSketchAsset ? sketchDocument ?? undefined : undefined,
+        sketchGuidance: activeSketchAsset && sketchGuidance.length > 0 ? [...sketchGuidance] : undefined,
         maskAsset: maskAsset ? assetForDraft(maskAsset) : undefined,
         maskDataUrl: maskDataUrl ?? undefined,
         brushSize
@@ -3342,9 +3568,17 @@ export function App() {
         ...(isOpenAIImageParams(current) ? current : createOpenAIParams("", current, activeConfig)),
         ...patch,
         providerKind: "openai",
-        launchId: GPT_IMAGE_2_LAUNCH_ID
+        launchId: isOpenAIImageParams(current)
+          ? current.launchId
+          : activeConfig.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID
+            ? GPT_IMAGE_2_5_LAUNCH_ID
+            : GPT_IMAGE_2_LAUNCH_ID
       })
     );
+  }
+
+  function updateOpenAIResponsesParams(patch: OpenAIParamPatch) {
+    updateOpenAIParams({ ...patch, imageRoute: "responses" });
   }
 
   function updateGeminiParams(patch: GeminiParamPatch) {
@@ -3468,9 +3702,12 @@ export function App() {
       activeLaunchId: params.launchId,
       activeModelId: params.model,
       mode: requestMode,
+      workflow: requestWorkflow,
       prompt: effectivePrompt,
       params,
       inputAssets: effectiveInputAssets.map(assetForDraft),
+      sketch: activeSketchAsset ? sketchDocument ?? undefined : undefined,
+      sketchGuidance: activeSketchAsset && sketchGuidance.length > 0 ? [...sketchGuidance] : undefined,
       maskAsset: maskAsset ? assetForDraft(maskAsset) : undefined,
       maskDataUrl: maskDataUrl ?? undefined,
       brushSize
@@ -3760,9 +3997,12 @@ export function App() {
         activeLaunchId: params.launchId,
         activeModelId: params.model,
         mode: requestMode,
+        workflow: requestWorkflow,
         prompt: effectivePrompt,
         params,
         inputAssets: effectiveInputAssets.map(assetForDraft),
+        sketch: activeSketchAsset ? sketchDocument ?? undefined : undefined,
+        sketchGuidance: activeSketchAsset && sketchGuidance.length > 0 ? [...sketchGuidance] : undefined,
         maskAsset: maskAsset ? assetForDraft(maskAsset) : undefined,
         maskDataUrl: maskDataUrl ?? undefined,
         brushSize
@@ -3844,6 +4084,9 @@ export function App() {
     const addedCount = Math.max(0, cappedNext.length - inputAssets.length);
     const capped = Boolean(referenceLimit > 0 && next.length > referenceLimit);
     setInputAssets(cappedNext);
+    if (!selectedInputAssetId && cappedNext[0]) {
+      setSelectedInputAssetId(cappedNext[0].id);
+    }
     if (tabMode === "text2img") setTabMode("img2img");
     if (capped) showReferenceLimitHint(referenceLimit);
     if (addedCount > 0) {
@@ -3852,6 +4095,162 @@ export function App() {
         text: copy.notices.imagesAdded(addedCount, cappedNext.length, false, referenceLimit)
       });
     }
+  }
+
+  async function openSketchEditorNow(asset?: InputAsset, options: { clearMask?: boolean } = {}) {
+    if (isSavingSketch) return;
+    if (isGeneralMode) {
+      setNotice({ kind: "error", text: copy.sketchGeneralUnsupported });
+      return;
+    }
+    if (asset?.role === "sketch") {
+      if (!asset.artifactId || !bridge?.loadSketchDocument) {
+        setNotice({ kind: "error", text: bridge ? copy.sketchLoadFailed : copy.notices.bridgeRunJob });
+        return;
+      }
+      try {
+        const document = await bridge.loadSketchDocument(asset.artifactId);
+        setSketchDocument(document);
+        setSketchGuidance(normalizeSketchGuidance(asset.guidance));
+      } catch (error) {
+        setNotice({ kind: "error", text: `${copy.sketchLoadFailed} ${normalizeNotice(error)}` });
+        return;
+      }
+    } else {
+      // A new Sketch must never inherit a renderer draft or an unsaved
+      // document from a previous editing session. Only the explicit
+      // “continue editing” path may restore an existing Sketch artifact.
+      setSketchDocument(newSketchDocument(params, customSize));
+      setSketchGuidance([]);
+    }
+    if (asset?.id) setSelectedInputAssetId(asset.id);
+    setTabMode("img2img");
+    if (options.clearMask) {
+      setMaskAsset(null);
+      setMaskDataUrl(null);
+      setMaskCheck(null);
+    }
+    setInputStudioView("input");
+    setSketchEditorSessionKey((current) => current + 1);
+    setIsSketchEditorOpen(true);
+  }
+
+  function openSketchEditor(asset?: InputAsset) {
+    if (isSavingSketch) return;
+    if (maskAsset || maskDataUrl) {
+      setConfirmDialog({
+        title: copy.sketchMaskConfirmTitle,
+        body: copy.sketchMaskConfirmBody,
+        confirmLabel: copy.sketchMaskConfirmAction,
+        onConfirm: () => openSketchEditorNow(asset, { clearMask: true })
+      });
+      return;
+    }
+    void openSketchEditorNow(asset);
+  }
+
+  function closeSketchEditor() {
+    setIsSketchEditorOpen(false);
+  }
+
+  function handleInputStudioViewChange(view: "input" | "result") {
+    if (view === "result" && isSketchEditorOpen) {
+      setIsSketchEditorOpen(false);
+    }
+    setInputStudioView(view);
+  }
+
+  async function saveSketchAndUse(document: SketchDocument, pngBytes: Uint8Array, options?: SketchSaveOptions) {
+    if (!bridge?.saveSketchAsset) {
+      setNotice({ kind: "error", text: copy.notices.bridgeRunJob });
+      return;
+    }
+    setIsSavingSketch(true);
+    try {
+      const documentHash = sketchDocumentHash(document);
+      const guidance = normalizeSketchGuidance(options?.guidance ?? sketchGuidance);
+      const result: SketchExportResult = await bridge.saveSketchAsset({
+        document,
+        pngBytes,
+        documentHash,
+        ...(options?.underlayIncluded ? { underlayIncluded: true } : {}),
+        ...(options?.underlayAssetId ? { underlayAssetId: options.underlayAssetId } : {}),
+        ...(guidance.length > 0 ? { guidance } : {})
+      });
+      setSketchDocument(document);
+      setSketchGuidance(guidance);
+      setInputAssets((current) => [result.asset, ...current.filter((asset) => asset.role !== "sketch")]);
+      setSelectedInputAssetId(result.asset.id);
+      setTabMode("img2img");
+      setMaskAsset(null);
+      setMaskDataUrl(null);
+      setMaskCheck(null);
+      setInputStudioView("input");
+      markDraftChanged();
+      setIsSketchEditorOpen(false);
+      setNotice({ kind: "success", text: copy.sketchSaved });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    } finally {
+      setIsSavingSketch(false);
+    }
+  }
+
+  function renderSketchCanvas(embedded = false): ReactNode {
+    if (!sketchDocument) return null;
+    return (
+      <SketchCanvas
+        key={`sketch-editor-${sketchEditorSessionKey}`}
+        initialDocument={sketchDocument}
+        embedded={embedded}
+        title={copy.sketchTitle}
+        saveLabel={copy.sketchSaveUse}
+        cancelLabel={copy.cancel}
+        clearLabel={copy.clear}
+        undoLabel={copy.undo}
+        redoLabel={copy.redo}
+        brushLabel={copy.sketchBrush}
+        eraserLabel={copy.sketchEraser}
+        colorLabel={copy.sketchColor}
+        sizeLabel={copy.sketchSize}
+        backgroundLabel={copy.sketchBackground}
+        whiteLabel={copy.sketchWhite}
+        transparentLabel={copy.sketchTransparent}
+        emptyHint={copy.sketchEmptyHint}
+        underlayOptions={sketchUnderlayOptions}
+        underlayLabel={copy.sketchUnderlay}
+        underlayNoneLabel={copy.sketchUnderlayNone}
+        underlayOpacityLabel={copy.sketchUnderlayOpacity}
+        underlayNotice={copy.sketchUnderlayNotice}
+        includeUnderlayLabel={copy.sketchIncludeUnderlay}
+        gridLabel={copy.sketchGrid}
+        centerLabel={copy.sketchCenter}
+        safeAreaLabel={copy.sketchSafeArea}
+        pressureLabel={copy.sketchPressure}
+        pressureEnabledLabel={copy.sketchPressureOn}
+        pressureDisabledLabel={copy.sketchPressureOff}
+        guidance={sketchGuidance}
+        guidanceLabel={copy.sketchGuidance}
+        guidanceOptions={[
+          { key: "composition", label: copy.sketchGuidanceComposition },
+          { key: "pose", label: copy.sketchGuidancePose },
+          { key: "perspective", label: copy.sketchGuidancePerspective }
+        ]}
+        onGuidanceChange={(nextGuidance) => {
+          setSketchGuidance(normalizeSketchGuidance(nextGuidance));
+          markDraftChanged();
+        }}
+        zoomInLabel={copy.zoomIn}
+        zoomOutLabel={copy.zoomOut}
+        resetZoomLabel={copy.resetZoom}
+        onCancel={closeSketchEditor}
+        onChange={(nextDocument) => {
+          setSketchDocument(nextDocument);
+          markDraftChanged();
+        }}
+        onSave={saveSketchAndUse}
+      />
+    );
   }
 
   function clearReferenceClickTimer() {
@@ -3865,6 +4264,7 @@ export function App() {
     if (index <= 0) return;
     const target = inputAssets[index];
     setInputAssets([target, ...inputAssets.slice(0, index), ...inputAssets.slice(index + 1)]);
+    setSelectedInputAssetId(target.id);
     markDraftChanged();
     setTabMode("img2img");
     if (options.clearMask && (maskAsset || maskDataUrl)) {
@@ -3877,14 +4277,16 @@ export function App() {
 
   function handleReferenceTileClick(assetId: string) {
     clearReferenceClickTimer();
-    referenceClickTimerRef.current = window.setTimeout(() => {
-      referenceClickTimerRef.current = null;
-      promoteReferenceAssetToFirst(assetId);
-    }, 180);
+    setSelectedInputAssetId(assetId);
   }
 
   function openReferencePreview(assetId: string) {
     clearReferenceClickTimer();
+    const asset = inputAssets.find((item) => item.id === assetId);
+    if (sketchEnabled && asset?.role === "sketch") {
+      void openSketchEditor(asset);
+      return;
+    }
     setReferencePreviewAssetId(assetId);
     setIsReferenceMaskToolsOpen(false);
     setReferenceMaskConfirmAssetId(null);
@@ -3899,6 +4301,10 @@ export function App() {
   }
 
   function requestReferenceMaskEditor(asset: InputAsset) {
+    if (sketchEnabled && asset.role === "sketch") {
+      setNotice({ kind: "error", text: copy.sketchMaskUnsupported });
+      return;
+    }
     if (isGeneralMode) {
       setNotice({ kind: "error", text: copy.validation.generalNoMask });
       return;
@@ -3995,6 +4401,7 @@ export function App() {
     }
 
     setIsRunning(true);
+    setInputStudioView("result");
     setRunningJobId(null);
     setRunningQueueId(null);
     resetPartialImages();
@@ -4009,6 +4416,8 @@ export function App() {
       const requestParams = normalizeParamsForOutputCount(params);
       const job = await bridge.runJob({
         mode: requestMode,
+        workflow: requestWorkflow,
+        sketch: activeSketchMetadata,
         prompt: effectivePrompt,
         inputPaths: requestMode === "generate" ? [] : effectiveInputAssets.map((asset) => asset.path),
         maskPath: requestMode === "inpaint" && !maskDataUrl ? maskAsset?.path : undefined,
@@ -4110,6 +4519,8 @@ export function App() {
       const requestParams = normalizeParamsForOutputCount(job.params);
       const retriedJob = await bridge.runJob({
         mode: job.mode,
+        workflow: job.workflow,
+        sketch: job.sketch,
         prompt: job.prompt,
         inputPaths: job.mode === "generate" ? [] : job.inputAssets.map((asset) => asset.path),
         maskPath: job.mode === "inpaint" ? job.maskAsset?.path : undefined,
@@ -4424,7 +4835,16 @@ export function App() {
       });
     }
     setInputAssets(job.inputAssets);
-    setMaskAsset(isGeneralImageParams(reusedParams) ? null : job.maskAsset ?? null);
+    const isSketchJob = sketchEnabled && (job.workflow === "sketch" || job.inputAssets.some((asset) => asset.role === "sketch"));
+    setSketchDocument(null);
+    setSketchGuidance(normalizeSketchGuidance(job.sketch?.guidance ?? job.inputAssets.find((asset) => asset.role === "sketch")?.guidance));
+    setMaskAsset(isSketchJob || isGeneralImageParams(reusedParams) ? null : job.maskAsset ?? null);
+    const sketchBridge = bridge;
+    if (isSketchJob && job.sketch?.artifactId && sketchBridge?.loadSketchDocument) {
+      void sketchBridge.loadSketchDocument(job.sketch.artifactId)
+        .then((document) => setSketchDocument(document))
+        .catch(() => setNotice({ kind: "error", text: copy.sketchLoadFailed }));
+    }
     setMaskDataUrl(null);
     setActiveJob(job);
     setActiveGalleryAssetId(null);
@@ -4438,7 +4858,15 @@ export function App() {
 
   function removeInputAsset(assetId: string) {
     markDraftChanged();
+    const removed = inputAssets.find((asset) => asset.id === assetId);
     setInputAssets((current) => current.filter((asset) => asset.id !== assetId));
+    if (selectedInputAssetId === assetId) {
+      setSelectedInputAssetId(inputAssets.find((asset) => asset.id !== assetId)?.id ?? null);
+    }
+    if (removed?.role === "sketch") {
+      setSketchDocument(null);
+      setSketchGuidance([]);
+    }
     if (inputAssets[0]?.id === assetId) {
       clearPaintedMask();
     }
@@ -5658,7 +6086,7 @@ export function App() {
   const maskDescription = activeInpaintCapability === "guided-region" ? copy.guidedRegionDescription : copy.maskDescription;
   const effectiveOpenAIImageRoute = openAIParams ? selectedOpenAIImageRoute(openAIParams, activeConfig, requestMode) : null;
   const imageRouteStatusText = openAIParams ? openAIImageRouteStatusText(copy, openAIParams, activeConfig, requestMode) : undefined;
-  const imageRouteTitle = requestMode === "inpaint"
+  const imageRouteTitle = requestMode === "inpaint" && openAIParams?.launchId !== GPT_IMAGE_2_5_LAUNCH_ID
     ? [copy.imageRouteInpaintLocked, imageRouteStatusText].filter(Boolean).join(" · ")
     : effectiveOpenAIImageRoute
       ? [copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, effectiveOpenAIImageRoute)), imageRouteStatusText].filter(Boolean).join(" · ")
@@ -5672,12 +6100,26 @@ export function App() {
         </span>
       </span>
       <select
-        value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
-        disabled={requestMode === "inpaint"}
-        onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
+        value={requestMode === "inpaint" && openAIParams.launchId !== GPT_IMAGE_2_5_LAUNCH_ID ? "image-api" : openAIParams.imageRoute}
+        disabled={requestMode === "inpaint" && openAIParams.launchId !== GPT_IMAGE_2_5_LAUNCH_ID}
+        onChange={(event) => {
+          const imageRoute = event.target.value as OpenAIImageRouteSelection;
+          updateOpenAIParams({
+            imageRoute,
+            ...(imageRoute === "image-api"
+              ? {
+                  responsesModel: undefined,
+                  responsesAction: undefined,
+                  previousResponseId: undefined,
+                  previousImageGenerationCallId: undefined,
+                  inputImageDetail: undefined
+                }
+              : {})
+          });
+        }}
       >
-        <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
-        <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
+        <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode, openAIParams.launchId)))}</option>
+        {openAIParams.launchId !== GPT_IMAGE_2_5_LAUNCH_ID && <option value="chat-completions">{copy.imageRouteChatCompletions}</option>}
         <option value="responses">{copy.imageRouteResponses}</option>
         <option value="image-api">{copy.imageRouteImageApi}</option>
       </select>
@@ -5706,7 +6148,7 @@ export function App() {
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.quality}</small>
         <select aria-label={copy.quality} value={openAIParams.quality} onChange={(event) => updateOpenAIParams({ quality: event.target.value as ImageQuality })}>
-          {qualityOptions.map((quality) => (
+          {activeQualityOptions.map((quality) => (
             <option key={quality} value={quality}>
               {quality}
             </option>
@@ -5715,7 +6157,17 @@ export function App() {
       </label>
       <label className="parameter-summary-chip parameter-quick-field">
         <small>{copy.format}</small>
-        <select aria-label={copy.format} value={openAIParams.outputFormat} onChange={(event) => updateOpenAIParams({ outputFormat: event.target.value as ImageFormat })}>
+        <select
+          aria-label={copy.format}
+          value={openAIParams.outputFormat}
+          onChange={(event) => {
+            const outputFormat = event.target.value as ImageFormat;
+            updateOpenAIParams({
+              outputFormat,
+              ...(outputFormat === "jpeg" && openAIParams.background === "transparent" ? { background: "opaque" as const } : {})
+            });
+          }}
+        >
           {formatOptions.map((format) => (
             <option key={format} value={format}>
               {format.toUpperCase()}
@@ -5732,12 +6184,26 @@ export function App() {
         </span>
         <select
           aria-label={copy.imageRoute}
-          value={requestMode === "inpaint" ? "image-api" : openAIParams.imageRoute}
-          disabled={requestMode === "inpaint"}
-          onChange={(event) => updateOpenAIParams({ imageRoute: event.target.value as OpenAIImageRouteSelection })}
+          value={requestMode === "inpaint" && openAIParams.launchId !== GPT_IMAGE_2_5_LAUNCH_ID ? "image-api" : openAIParams.imageRoute}
+          disabled={requestMode === "inpaint" && openAIParams.launchId !== GPT_IMAGE_2_5_LAUNCH_ID}
+          onChange={(event) => {
+            const imageRoute = event.target.value as OpenAIImageRouteSelection;
+            updateOpenAIParams({
+              imageRoute,
+              ...(imageRoute === "image-api"
+                ? {
+                    responsesModel: undefined,
+                    responsesAction: undefined,
+                    previousResponseId: undefined,
+                    previousImageGenerationCallId: undefined,
+                    inputImageDetail: undefined
+                  }
+                : {})
+            });
+          }}
         >
-          <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode)))}</option>
-          <option value="chat-completions">{copy.imageRouteChatCompletions}</option>
+          <option value="auto">{copy.imageRouteAutoUsing(openAIImageRouteLabel(copy, autoOpenAIImageRoute(activeConfig, requestMode, openAIParams.launchId)))}</option>
+          {openAIParams.launchId !== GPT_IMAGE_2_5_LAUNCH_ID && <option value="chat-completions">{copy.imageRouteChatCompletions}</option>}
           <option value="responses">{copy.imageRouteResponses}</option>
           <option value="image-api">{copy.imageRouteImageApi}</option>
         </select>
@@ -5804,7 +6270,7 @@ export function App() {
       <label>
         <span>{copy.quality}</span>
         <select value={openAIParams.quality} onChange={(event) => updateOpenAIParams({ quality: event.target.value as ImageQuality })}>
-          {qualityOptions.map((quality) => (
+          {activeQualityOptions.map((quality) => (
             <option key={quality} value={quality}>
               {quality}
             </option>
@@ -5813,7 +6279,16 @@ export function App() {
       </label>
       <label>
         <span>{copy.format}</span>
-        <select value={openAIParams.outputFormat} onChange={(event) => updateOpenAIParams({ outputFormat: event.target.value as ImageFormat })}>
+        <select
+          value={openAIParams.outputFormat}
+          onChange={(event) => {
+            const outputFormat = event.target.value as ImageFormat;
+            updateOpenAIParams({
+              outputFormat,
+              ...(outputFormat === "jpeg" && openAIParams.background === "transparent" ? { background: "opaque" as const } : {})
+            });
+          }}
+        >
           {formatOptions.map((format) => (
             <option key={format} value={format}>
               {format.toUpperCase()}
@@ -5921,8 +6396,17 @@ export function App() {
       </label>
       <label>
         {copy.background}
-        <select value={openAIParams.background} onChange={(event) => updateOpenAIParams({ background: event.target.value as ImageBackground })}>
-          {backgroundOptions.map((background) => (
+        <select
+          value={openAIParams.background}
+          onChange={(event) => {
+            const background = event.target.value as ImageBackground;
+            updateOpenAIParams({
+              background,
+              ...(background === "transparent" && openAIParams.outputFormat === "jpeg" ? { outputFormat: "png" as const } : {})
+            });
+          }}
+        >
+          {activeBackgroundOptions.map((background) => (
             <option key={background} value={background}>
               {background}
             </option>
@@ -5950,7 +6434,11 @@ export function App() {
             const checked = event.target.checked;
             updateOpenAIParams({
               stream: checked,
-              partialImages: checked ? Math.max(1, openAIParams.partialImages) : 0
+              partialImages: checked
+                ? openAIParams.partialImages === 0
+                  ? 1
+                  : clamp(openAIParams.partialImages, 0, 3)
+                : 0
             });
           }}
         />
@@ -5976,6 +6464,136 @@ export function App() {
           ))}
         </select>
       </label>
+      <label title={copy.safetyIdentifierInfo}>
+        {copy.safetyIdentifier}
+        <input
+          value={openAIParams.user ?? ""}
+          placeholder={copy.safetyIdentifierPlaceholder}
+          onChange={(event) => {
+            const value = event.target.value.trim();
+            updateOpenAIParams({ user: value || undefined });
+          }}
+        />
+      </label>
+      {openAIParams.launchId === GPT_IMAGE_2_5_LAUNCH_ID && (
+        <>
+          <label title={copy.inputFidelityInfo}>
+            {copy.inputFidelity}
+            <select
+              value={openAIParams.inputFidelity ?? "low"}
+              disabled={requestMode === "generate" && effectiveInputAssets.length === 0}
+              onChange={(event) => updateOpenAIParams({ inputFidelity: event.target.value as OpenAIImageParams["inputFidelity"] })}
+            >
+              <option value="low">{copy.inputFidelityLow}</option>
+              <option value="high">{copy.inputFidelityHigh}</option>
+            </select>
+          </label>
+          <label title={copy.inputImageDetailInfo}>
+            {copy.inputImageDetail}
+            <select
+              value={openAIParams.inputImageDetail ?? "auto"}
+              disabled={effectiveInputAssets.length === 0}
+              onChange={(event) => {
+                const inputImageDetail = event.target.value as ResponsesInputImageDetail;
+                updateOpenAIResponsesParams({ inputImageDetail });
+              }}
+            >
+              {RESPONSES_INPUT_IMAGE_DETAIL_OPTIONS.map((detail) => (
+                <option key={detail} value={detail}>
+                  {detail === "auto"
+                    ? copy.inputImageDetailAuto
+                    : detail === "low"
+                      ? copy.inputImageDetailLow
+                      : detail === "high"
+                        ? copy.inputImageDetailHigh
+                        : copy.inputImageDetailOriginal}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label title={copy.responsesModelInfo}>
+            {copy.responsesModel}
+            <input
+              value={openAIParams.responsesModel ?? ""}
+              placeholder="gpt-6-astra"
+              onChange={(event) => {
+                const value = event.target.value.trim();
+                updateOpenAIResponsesParams({ responsesModel: value || undefined });
+              }}
+            />
+          </label>
+          <label title={copy.responsesActionInfo}>
+            {copy.responsesAction}
+            <select
+              value={openAIParams.responsesAction ?? "auto"}
+              onChange={(event) => {
+                const responsesAction = event.target.value as ResponsesImageAction;
+                updateOpenAIResponsesParams({ responsesAction });
+              }}
+            >
+              <option value="auto">{copy.responsesActionAuto}</option>
+              <option value="generate">{copy.responsesActionGenerate}</option>
+              <option value="edit">{copy.responsesActionEdit}</option>
+            </select>
+          </label>
+          <label title={copy.previousResponseIdInfo}>
+            {copy.previousResponseId}
+            <input
+              value={openAIParams.previousResponseId ?? ""}
+              placeholder={copy.previousResponseIdPlaceholder}
+              onChange={(event) => {
+                const value = event.target.value.trim();
+                updateOpenAIResponsesParams({
+                  previousResponseId: value || undefined,
+                  ...(value ? { previousImageGenerationCallId: undefined } : {})
+                });
+              }}
+            />
+          </label>
+          <label title={copy.previousImageGenerationCallIdInfo}>
+            {copy.previousImageGenerationCallId}
+            <input
+              value={openAIParams.previousImageGenerationCallId ?? ""}
+              placeholder={copy.previousImageGenerationCallIdPlaceholder}
+              onChange={(event) => {
+                const value = event.target.value.trim();
+                updateOpenAIResponsesParams({
+                  previousImageGenerationCallId: value || undefined,
+                  ...(value ? { previousResponseId: undefined } : {})
+                });
+              }}
+            />
+          </label>
+          {typeof activeJob?.providerMetadata?.responsesResponseId === "string" && (
+            <button
+              type="button"
+              className="secondary inline-control-action"
+              title={copy.continueFromResultInfo}
+              onClick={() => updateOpenAIResponsesParams({
+                previousResponseId: String(activeJob.providerMetadata?.responsesResponseId),
+                previousImageGenerationCallId: undefined
+              })}
+            >
+              <ChevronDown size={14} />
+              {copy.continueFromResult}
+            </button>
+          )}
+          {typeof activeJob?.providerMetadata?.responsesImageGenerationCallId === "string" && (
+            <button
+              type="button"
+              className="secondary inline-control-action"
+              title={copy.continueFromLatestImageInfo}
+              onClick={() => updateOpenAIResponsesParams({
+                previousImageGenerationCallId: String(activeJob.providerMetadata?.responsesImageGenerationCallId),
+                previousResponseId: undefined
+              })}
+            >
+              <ChevronDown size={14} />
+              {copy.continueFromLatestImage}
+            </button>
+          )}
+        </>
+      )}
       <label>
         {copy.timeoutSeconds}
         <input
@@ -6539,13 +7157,23 @@ export function App() {
             annotationImageRef={annotationImageRef}
             annotationCanvasRef={annotationCanvasRef}
             activePreviewSource={activePreviewSource}
+            embeddedInputEditor={shouldEmbedSketchEditor ? renderSketchCanvas(true) : undefined}
+            inputPreview={isSketchInputPreview}
+            inputPreviewLabel={copy.sketchInputPreview}
+            showInputStudioToggle={Boolean(sketchPreviewSource && activeMedia)}
+            inputStudioView={inputStudioView}
+            inputStudioInputLabel={language === "zh" ? "输入" : "Input"}
+            inputStudioResultLabel={language === "zh" ? "结果" : "Result"}
+            inputStudioEditLabel={copy.editSketch}
+            onInputStudioViewChange={handleInputStudioViewChange}
+            onEditInput={isSketchInputPreview ? () => void openSketchEditor(activeSketchAsset) : undefined}
             activeJobError={activeJobError}
             isGenerating={isRunning}
             generationElapsedSeconds={generationElapsedSeconds}
             generationAttemptIndex={displayedGenerationAttemptIndex}
             generationAttemptLabel={displayedGenerationAttemptLabel}
             activeImage={activeImage}
-            activeMedia={activeMedia}
+            activeMedia={previewMedia}
             activeResults={activeResults}
             partialImages={partialImages}
             previewZoom={previewZoom}
@@ -6783,13 +7411,17 @@ export function App() {
                           className={[
                             "asset-tile",
                             "reference-thumb-tile",
+                            sketchEnabled && asset.role === "sketch" ? "sketch-reference-tile" : "",
                             index === 0 ? "primary-reference" : "",
-                            index === 0 && maskPreview ? "has-mask" : ""
+                            index === 0 && maskPreview ? "has-mask" : "",
+                            selectedInputAssetId === asset.id ? "selected-input-asset" : ""
                           ].filter(Boolean).join(" ")}
                           role="button"
                           tabIndex={0}
-                          title={copy.referenceTileHint}
-                          data-tooltip={copy.referenceTileHint}
+                          aria-pressed={selectedInputAssetId === asset.id}
+                          data-selected={selectedInputAssetId === asset.id ? "true" : "false"}
+                          title={sketchEnabled && asset.role === "sketch" ? copy.editSketch : copy.referenceTileHint}
+                          data-tooltip={sketchEnabled && asset.role === "sketch" ? copy.editSketch : copy.referenceTileHint}
                           onClick={() => handleReferenceTileClick(asset.id)}
                           onDoubleClick={() => openReferencePreview(asset.id)}
                           onKeyDown={(event) => {
@@ -6805,6 +7437,15 @@ export function App() {
                           }}
                         >
                           {assetSource(asset) && <img src={assetSource(asset)} alt={asset.name} />}
+                          <span className="reference-order-badge" aria-label={`${copy.reference} ${index + 1}`}>{index + 1}</span>
+                          <span className="reference-role-badge">
+                            {sketchEnabled && asset.role === "sketch"
+                              ? copy.sketchTitle
+                              : index === 0
+                                ? copy.source
+                                : copy.reference}
+                          </span>
+                          {selectedInputAssetId === asset.id && <CheckCircle2 className="reference-selected-mark" size={15} aria-hidden="true" />}
                           <button
                             type="button"
                             className="tile-remove"
@@ -6834,12 +7475,39 @@ export function App() {
                     >
                       <Plus size={18} />
                     </button>
+                    {sketchEnabled && (
+                      <button
+                        type="button"
+                        className="icon-button reference-sketch-button"
+                        onClick={() => void openSketchEditor(activeSketchAsset)}
+                        disabled={isGeneralMode || Boolean(activeSketchAsset && !activeSketchAsset.artifactId)}
+                        aria-label={activeSketchAsset ? copy.editSketch : copy.newSketch}
+                        data-tooltip={activeSketchAsset ? copy.editSketch : copy.newSketch}
+                      >
+                        <SquarePen size={17} />
+                      </button>
+                    )}
                     {referenceLimitToast && (
                       <div key={referenceLimitToast.id} className="reference-limit-toast" role="status">
                         {referenceLimitToast.text}
                       </div>
                     )}
                   </div>
+                  {sketchPreflight && (
+                    <section className={sketchPreflight.ready ? "sketch-preflight-strip ready" : "sketch-preflight-strip error"} aria-label={copy.sketchPreflightTitle}>
+                      <div className="sketch-preflight-heading">
+                        <strong>{copy.sketchPreflightTitle}</strong>
+                        <span>{sketchPreflight.ready ? copy.sketchPreflightReady : copy.sketchPreflightPending}</span>
+                      </div>
+                      <div className="sketch-preflight-facts">
+                        <span><small>{copy.sketchPreflightModel}</small><b>{sketchPreflight.model}</b></span>
+                        <span><small>{copy.sketchPreflightCanvas}</small><b>{sketchPreflight.canvas}</b></span>
+                        <span><small>{copy.sketchPreflightBackground}</small><b>{sketchPreflight.background}</b></span>
+                        <span><small>{copy.sketchPreflightReferences}</small><b>{sketchPreflight.references}</b></span>
+                      </div>
+                      {!sketchPreflight.ready && <p role="alert">{sketchPreflight.reason}</p>}
+                    </section>
+                  )}
                   {(geminiParams || (generalParams && generalFallbackSupportsReferenceImages(generalParams.providerKind))) && (
                     <p className="inline-check reference-rights-reminder">
                       <AlertTriangle size={14} />
@@ -7539,6 +8207,12 @@ export function App() {
                 <dt>{copy.queue.inputImages}</dt>
                 <dd>{historyDiagnosticJob.diagnostic?.inputImageCount ?? historyDiagnosticJob.inputAssets.length}{historyDiagnosticJob.diagnostic?.hasMask || historyDiagnosticJob.maskAsset ? ` + ${copy.mask}` : ""}</dd>
               </div>
+              {historyDiagnosticJob.workflow === "sketch" && historyDiagnosticJob.sketch && (
+                <div>
+                  <dt>{copy.sketchTitle}</dt>
+                  <dd>{historyDiagnosticJob.sketch.strokeCount} strokes · {historyDiagnosticJob.sketch.pointCount} points</dd>
+                </div>
+              )}
               <div>
                 <dt>{copy.queue.timeout}</dt>
                 <dd>{historyDiagnosticJob.diagnostic ? formatDuration(historyDiagnosticJob.diagnostic.timeoutMs) : formatDuration(historyDiagnosticJob.durationMs)}</dd>
@@ -7606,6 +8280,11 @@ export function App() {
                 {copy.galleryOverwrite}
               </button>
             </div>
+        </DialogShell>
+      )}
+      {isSketchEditorOpen && !shouldEmbedSketchEditor && sketchDocument && (
+        <DialogShell className="preview-modal-dialog sketch-editor-dialog" backdropClassName="preview-modal-backdrop" labelledBy="sketch-editor-title" onClose={closeSketchEditor}>
+          {renderSketchCanvas(false)}
         </DialogShell>
       )}
       {referencePreviewAsset && referencePreviewSource && (

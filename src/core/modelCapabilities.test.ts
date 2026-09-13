@@ -3,6 +3,8 @@ import {
   GENERAL_LAUNCH_ID,
   GEMINI_3_PRO_IMAGE_MODEL_ID,
   GPT_IMAGE_2_LAUNCH_ID,
+  GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID
 } from "../shared/modelCatalog";
@@ -74,6 +76,30 @@ describe("model capability contracts", () => {
       video: false,
       contract: "gemini-generate-content",
       confidence: "verified"
+    });
+  });
+
+  it("applies the GPT Image 2.5 focused contract to dated provider snapshots", () => {
+    const summary = capabilitySummaryForDiscoveredModel("provider-openai", {
+      id: GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
+      providerKind: "openai"
+    });
+
+    expect(summary).toMatchObject({
+      modelId: GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      source: "focused-catalog",
+      capabilities: {
+        generate: true,
+        edit: true,
+        inpaint: "exact-mask",
+        referenceImages: true,
+        maxReferenceImages: 16,
+        multiTurn: true,
+        streamingPartials: true,
+        contract: "openai-image",
+        confidence: "verified"
+      }
     });
   });
 
@@ -182,7 +208,7 @@ describe("model capability contracts", () => {
       })
     );
 
-    expect(summaries.map((summary) => summary.modelId)).toEqual(["gpt-image-2", "general", "dall-e-3", "text-only"]);
+    expect(summaries.map((summary) => summary.modelId)).toEqual(["gpt-image-2", "gpt-image-2.5-sunburst", "general", "dall-e-3", "text-only"]);
     expect(summaries.find((summary) => summary.modelId === "text-only")?.capabilities.confidence).toBe("unknown");
     expect(summaries.find((summary) => summary.modelId === "dall-e-3")?.capabilities).toMatchObject({
       generate: true,

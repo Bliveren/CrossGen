@@ -2,6 +2,18 @@ import type { DiscoveredModel, FocusedLaunchId, FocusedModelDefinition, Provider
 
 export const GPT_IMAGE_2_LAUNCH_ID = "gpt-image-2" as const;
 export const GPT_IMAGE_2_MODEL_ID = "gpt-image-2" as const;
+export const GPT_IMAGE_2_5_LAUNCH_ID = "gpt-image-2.5" as const;
+export const GPT_IMAGE_2_5_SUNBURST_MODEL_ID = "gpt-image-2.5-sunburst" as const;
+export const GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID = "gpt-image-2.5-sunburst-2026-09-08" as const;
+export const GPT_IMAGE_2_5_FLARE_MODEL_ID = "gpt-image-2.5-flare" as const;
+export const GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID = "gpt-image-2.5-flare-2026-09-08" as const;
+export const GPT_IMAGE_2_5_MODEL_IDS = [
+  GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+  GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID,
+  GPT_IMAGE_2_5_FLARE_MODEL_ID,
+  GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID
+] as const;
+export const GPT_IMAGE_2_5_DEFAULT_MODEL_ID = GPT_IMAGE_2_5_SUNBURST_MODEL_ID;
 export const NANO_BANANA_3_LAUNCH_ID = "nano-banana-3" as const;
 export const NANO_BANANA_3_MODEL_ID = "gemini-3.1-flash-image" as const;
 export const GEMINI_3_PRO_IMAGE_MODEL_ID = "gemini-3-pro-image" as const;
@@ -46,6 +58,27 @@ export const FOCUSED_MODEL_CATALOG = [
       referenceImages: true,
       maxReferenceImages: 16,
       multiTurn: false,
+      streamingPartials: true,
+      outputText: false,
+      configurableOutputFormat: true,
+      configurableResolution: "openai-size",
+      supportsThinking: false,
+      supportsSearchGrounding: false
+    }
+  },
+  {
+    launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+    displayName: "GPT Image 2.5",
+    providerKind: "openai",
+    modelIds: [...GPT_IMAGE_2_5_MODEL_IDS],
+    defaultModelId: GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
+    capabilities: {
+      generate: true,
+      edit: true,
+      inpaint: "exact-mask",
+      referenceImages: true,
+      maxReferenceImages: 16,
+      multiTurn: true,
       streamingPartials: true,
       outputText: false,
       configurableOutputFormat: true,
@@ -114,7 +147,32 @@ export function getFocusedModelsForProvider(providerKind: ProviderKind): Focused
 export function getModelDisplayName(launchId: FocusedLaunchId, modelId: string): string {
   const definition = getFocusedModelDefinition(launchId);
   if (!definition) return modelId;
+  if (launchId === GPT_IMAGE_2_5_LAUNCH_ID) {
+    return `${definition.displayName} · ${gptImage25VariantLabel(modelId)}`;
+  }
   return definition.launchId === GENERAL_LAUNCH_ID ? modelId || definition.displayName : definition.displayName;
+}
+
+export function isGptImage25ModelId(modelId: string): boolean {
+  const normalized = normalizeModelId(modelId);
+  return GPT_IMAGE_2_5_MODEL_IDS.some((candidate) => normalizeModelId(candidate) === normalized) ||
+    /^gpt-image-2\.5-(?:sunburst|flare)(?:-\d{4}-\d{2}-\d{2})?$/.test(normalized);
+}
+
+export function isGptImageModelId(modelId: string): boolean {
+  const normalized = normalizeModelId(modelId);
+  return normalized === normalizeModelId(GPT_IMAGE_2_MODEL_ID) || isGptImage25ModelId(normalized);
+}
+
+export function gptImage25VariantLabel(modelId: string): string {
+  const normalized = normalizeModelId(modelId);
+  if (normalized.includes("flare")) return "Flare";
+  if (normalized.includes("sunburst")) return "Sunburst";
+  return "GPT Image 2.5";
+}
+
+export function getFocusedModelDisplayName(launchId: FocusedLaunchId, modelId: string): string {
+  return getModelDisplayName(launchId, modelId);
 }
 
 export function isGeneralFallbackProvider(providerKind: ProviderKind): boolean {
@@ -131,6 +189,9 @@ export function generalFallbackSupportsReferenceImages(providerKind: ProviderKin
 
 export function isFocusedImageModelId(providerKind: ProviderKind, modelId: string): boolean {
   const normalizedId = normalizeModelId(modelId);
+  if (providerKind === "openai" && (normalizedId === normalizeModelId(GPT_IMAGE_2_MODEL_ID) || isGptImage25ModelId(normalizedId))) {
+    return true;
+  }
   return FOCUSED_MODEL_CATALOG.some(
     (definition) =>
       definition.launchId !== GENERAL_LAUNCH_ID &&
@@ -141,6 +202,7 @@ export function isFocusedImageModelId(providerKind: ProviderKind, modelId: strin
 
 export function getProviderKindForFocusedModelId(modelId: string): ProviderKind | undefined {
   const normalizedId = normalizeModelId(modelId);
+  if (normalizedId === normalizeModelId(GPT_IMAGE_2_MODEL_ID) || isGptImage25ModelId(normalizedId)) return "openai";
   return FOCUSED_MODEL_CATALOG.find(
     (definition) =>
       definition.launchId !== GENERAL_LAUNCH_ID &&

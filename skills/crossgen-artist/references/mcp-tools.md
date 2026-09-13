@@ -15,9 +15,22 @@ Use the names exposed by `tools/list`; this table documents the stable CrossGen 
 
 ## Generate mode tools
 
-`crossgen_generate_image` accepts `prompt` and `confirm` plus optional `providerId`, `model`, `folderId`, `idempotencyKey`, `waitMs`, `timeoutMs`, `size`, `quality`, `aspectRatio`, `resolution`, and `referenceImageMode`.
+`crossgen_generate_image` accepts `prompt` and `confirm` plus optional
+`providerId`, `model`, `folderId`, `idempotencyKey`, `waitMs`, `timeoutMs`,
+`size`, `quality`, `n`, `outputFormat`, `outputCompression`, `background`,
+`moderation`, `user`, `partialImages`, `stream`, `imageRoute`, `responsesModel`,
+`responsesAction`, and `previousResponseId`, plus Gemini
+`aspectRatio`/`resolution` and `referenceImageMode`.
 
-`crossgen_edit_image` requires `prompt`, `inputPaths`, and `confirm`. It additionally accepts `maskPath`, the provider/model and adapter options above. A non-empty `maskPath` selects the inpaint path; only use it when the selected model supports it.
+`crossgen_edit_image` requires `prompt`, `inputPaths`, and `confirm`. It
+additionally accepts `maskPath`, `inputFidelity`, `user`, and the provider/model
+adapter options above. A non-empty `maskPath` selects the inpaint path; only
+use it when the selected model supports it. GPT Image 2.5 masks must match the
+first source image's format and dimensions, contain alpha, and be below 50 MB.
+
+When using GPT Image 2.5, `user` is an opaque, stable safety identifier. CrossGen
+maps it to `user` for Images API calls and `safety_identifier` for Responses
+calls. Do not pass API keys, email addresses, or local usernames.
 
 `crossgen_job_cancel` requires a queue id and confirmation. `crossgen_job_retry` requires a queue or history job id and confirmation.
 

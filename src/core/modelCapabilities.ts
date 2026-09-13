@@ -2,12 +2,14 @@ import {
   FOCUSED_MODEL_CATALOG,
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   getFocusedModelsForProvider,
   getModelDisplayName,
   isFocusedImageModelId,
   discoveredModelCapabilityHints,
   isPotentialGeneralImageModel,
+  isGptImage25ModelId,
   normalizeModelId
 } from "../shared/modelCatalog.js";
 import type {
@@ -46,7 +48,7 @@ function imageOnlyKinds(): MediaKind[] {
 }
 
 function focusedContractKind(launchId: FocusedLaunchId, providerKind: ProviderKind): ImageCapabilityContractKind {
-  if (launchId === GPT_IMAGE_2_LAUNCH_ID) return "openai-image";
+  if (launchId === GPT_IMAGE_2_LAUNCH_ID || launchId === GPT_IMAGE_2_5_LAUNCH_ID) return "openai-image";
   if (launchId === NANO_BANANA_3_LAUNCH_ID) return "gemini-generate-content";
   return providerKind === "gemini" ? "gemini-generate-content" : "openai-compatible-minimal";
 }
@@ -181,6 +183,9 @@ function summaryForFocusedModel(providerId: string | undefined, definition: Focu
 
 function focusedDefinitionForModel(providerKind: ProviderKind, modelId: string): FocusedModelDefinition | undefined {
   const normalized = normalizeModelId(modelId);
+  if (providerKind === "openai" && isGptImage25ModelId(normalized)) {
+    return FOCUSED_MODEL_CATALOG.find((definition) => definition.launchId === GPT_IMAGE_2_5_LAUNCH_ID);
+  }
   return FOCUSED_MODEL_CATALOG.find(
     (definition) =>
       definition.launchId !== GENERAL_LAUNCH_ID &&

@@ -148,6 +148,12 @@ function warningFor(input: {
   if (input.reason === "mask_dimension_mismatch") {
     return `${label}${name} dimensions (${dimensions}) do not match the source image dimensions. Use a mask with the same width and height as the first reference image before retrying.`;
   }
+  if (input.reason === "mask_alpha_missing") {
+    return `${label}${name} must contain an alpha channel. Export the mask as PNG or WebP with transparency before retrying.`;
+  }
+  if (input.reason === "mask_size_limit") {
+    return `${label}${name} must be smaller than 50 MB for GPT Image mask editing.`;
+  }
   if (input.blocked) {
     if (input.allowReferenceDownsampling) {
       return `${label}${name} is too large for a safe provider request (${dimensions}, ${input.metadata.bytes} bytes). Reduce image size before retrying.`;
@@ -193,11 +199,21 @@ export function buildReferencePreflightSummaries(
   const maskDimensionMismatch = Boolean(firstReference && maskMetadata && dimensionsKnown(firstReference) && dimensionsKnown(maskMetadata) && !dimensionsEqual(firstReference, maskMetadata));
   return assets.map(({ asset, role }) => {
     const original = metadataFor(asset);
-    const reason = role === "mask" && maskDimensionMismatch ? "mask_dimension_mismatch" : reasonFor(original, role, limits);
+    const reason = role === "mask"
+      ? maskDimensionMismatch
+        ? "mask_dimension_mismatch"
+        : original.hasAlpha === false
+          ? "mask_alpha_missing"
+          : original.bytes >= limits.hardBytes
+            ? "mask_size_limit"
+            : "mask_preserved"
+      : reasonFor(original, role, limits);
     const pixels = pixelCount(original) ?? 0;
     const hardLimitExceeded = original.bytes > limits.hardBytes || pixels > limits.hardPixels;
     const canDownsample = role === "reference" && allowReferenceDownsampling && Boolean(original.width && original.height);
-    const blocked = (role === "mask" && maskDimensionMismatch) || (hardLimitExceeded && !canDownsample);
+    const blocked = role === "mask"
+      ? maskDimensionMismatch || original.hasAlpha === false || original.bytes >= limits.hardBytes
+      : hardLimitExceeded && !canDownsample;
     const summary: ReferencePreflightSummary = {
       id: asset.id,
       role,
@@ -288,7 +304,9 @@ function normalizeReason(value: unknown): ReferencePreflightReason | undefined {
     value === "byte_limit" ||
     value === "provider_limit" ||
     value === "mask_preserved" ||
-    value === "mask_dimension_mismatch"
+    value === "mask_dimension_mismatch" ||
+    value === "mask_alpha_missing" ||
+    value === "mask_size_limit"
     ? value
     : undefined;
 }

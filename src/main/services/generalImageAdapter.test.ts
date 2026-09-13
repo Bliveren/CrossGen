@@ -96,6 +96,25 @@ describe("General image adapter", () => {
       ok: false,
       message: GENERAL_PROMPT_ONLY_MESSAGE
     });
+    expect(generalImageAdapter.validateJob({
+      mode: "edit",
+      workflow: "sketch",
+      sketch: {
+        artifactId: "sketch_general_1",
+        width: 1024,
+        height: 1024,
+        background: "white",
+        strokeCount: 1,
+        pointCount: 2,
+        documentHash: "12345678"
+      },
+      prompt: "Prompt",
+      inputPaths: ["/tmp/sketch.png"],
+      params: job().params
+    })).toMatchObject({
+      ok: false,
+      message: "General 当前不支持 Sketch 输入。"
+    });
   });
 
   it("builds minimal OpenAI-compatible General request bodies", () => {

@@ -123,9 +123,20 @@ function hasImageLikeCandidate(modelIds) {
 }
 
 async function verifyOpenAIFocusedDiscovery() {
-  await withOpenAIMock(8791, ["gpt-image-2", "gpt-4.1"], async (baseURL) => {
+  await withOpenAIMock(8791, [
+    "gpt-image-2",
+    "gpt-image-2.5-sunburst",
+    "gpt-image-2.5-sunburst-2026-09-08",
+    "gpt-image-2.5-flare",
+    "gpt-image-2.5-flare-2026-09-08",
+    "gpt-4.1"
+  ], async (baseURL) => {
     const ids = await openAIModelIds(baseURL);
     assert(ids.includes("gpt-image-2"), "OpenAI mock did not expose gpt-image-2");
+    assert(ids.includes("gpt-image-2.5-sunburst"), "OpenAI mock did not expose GPT Image 2.5 Sunburst");
+    assert(ids.includes("gpt-image-2.5-sunburst-2026-09-08"), "OpenAI mock did not expose the Sunburst snapshot");
+    assert(ids.includes("gpt-image-2.5-flare"), "OpenAI mock did not expose GPT Image 2.5 Flare");
+    assert(ids.includes("gpt-image-2.5-flare-2026-09-08"), "OpenAI mock did not expose the Flare snapshot");
   });
 }
 

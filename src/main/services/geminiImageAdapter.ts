@@ -10,6 +10,7 @@ import type {
   ImageAsset,
   InputAsset,
   RunJobRequest,
+  SketchGuidanceKey,
   UsageDetails
 } from "../../shared/types.js";
 import {
@@ -30,6 +31,7 @@ import {
   type SecretRedactionOptions
 } from "./providerHttp.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
+import { sketchGuidanceLines } from "../../shared/sketch.js";
 
 export interface GeminiInlineData {
   mimeType: string;
@@ -151,6 +153,23 @@ export function buildGeminiGenerateContentBody(
   return body;
 }
 
+const GEMINI_SKETCH_GUIDANCE = [
+  "Sketch guidance:",
+  "- The first attached image is a hand-drawn sketch. Follow its composition, pose, spatial layout, silhouette, and line relationships as strong visual guidance while rendering the requested subject.",
+  "- Complete the sketch into a coherent finished image without treating the sketch as a finished photo."
+];
+
+export function geminiSketchPrompt(prompt: string, guidance?: readonly SketchGuidanceKey[]): string {
+  const selectedGuidance = sketchGuidanceLines(guidance);
+  return [
+    prompt.trim(),
+    GEMINI_SKETCH_GUIDANCE.join("\n"),
+    selectedGuidance.length > 0
+      ? ["Selected Sketch guidance priorities:", ...selectedGuidance].join("\n")
+      : ""
+  ].filter(Boolean).join("\n\n");
+}
+
 function geminiPromptWithOutputConstraints(
   prompt: string,
   aspectRatio: GeminiImageParams["aspectRatio"],
@@ -249,9 +268,18 @@ export async function runGeminiImageJob(
   if (job.mode === "inpaint" && !job.maskAsset) {
     throw new Error("局部重绘需要提供 mask。");
   }
+  if (job.workflow === "sketch") {
+    if (job.mode !== "edit") throw new Error("Sketch 工作流必须使用 edit 模式。");
+    if (job.maskAsset) throw new Error("Sketch 工作流不能携带 mask。");
+    if (job.inputAssets[0]?.role !== "sketch") throw new Error("Sketch 必须作为第一张输入图。");
+    if (job.inputAssets.length > 2) throw new Error("Nano Banana 3 的 Sketch 最多携带 2 张参考图。");
+  }
 
   const inlineDataParts = await inputAssetsToInlineDataParts(job.inputAssets, job.maskAsset);
   const deadlineMs = Date.now() + job.params.timeoutMs;
+  const requestPrompt = job.workflow === "sketch" || job.inputAssets[0]?.role === "sketch"
+    ? geminiSketchPrompt(job.prompt, job.sketch?.guidance)
+    : job.prompt;
   const response = await fetchWithTimeout(
     runtime.fetch,
     buildGeminiGenerateContentEndpoint(baseURL, job.params.model),
@@ -259,7 +287,7 @@ export async function runGeminiImageJob(
       method: "POST",
       signal: runtime.abortSignal,
       headers: geminiJsonHeaders(apiKey),
-      body: JSON.stringify(buildGeminiGenerateContentBody(job.params, job.prompt, inlineDataParts))
+      body: JSON.stringify(buildGeminiGenerateContentBody(job.params, requestPrompt, inlineDataParts))
     },
     remainingTimeoutMs(deadlineMs)
   );
@@ -325,6 +353,14 @@ function buildGeminiCompatibleChatPrompt(job: GeminiImageJob): string {
 
   if (job.maskAsset) {
     guidance.push("- A mask is attached. Use it as guidance for the editable area on the first reference image and keep unmasked regions stable where possible.");
+  }
+  if (job.workflow === "sketch" || job.inputAssets[0]?.role === "sketch") {
+    guidance.push(...GEMINI_SKETCH_GUIDANCE.slice(1));
+    const selectedGuidance = sketchGuidanceLines(job.sketch?.guidance);
+    if (selectedGuidance.length > 0) {
+      guidance.push("Selected Sketch guidance priorities:");
+      guidance.push(...selectedGuidance);
+    }
   }
 
   return [job.prompt.trim(), constraints, guidance.join("\n")].filter(Boolean).join("\n\n");

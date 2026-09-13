@@ -17,7 +17,8 @@ import type {
   RunJobRequest,
   ProviderConfig,
   UpdateCheckResult,
-  WorkspaceDraft
+  WorkspaceDraft,
+  SketchDocument
 } from "../shared/types";
 import {
   DEFAULT_GEMINI_IMAGE_PARAMS,
@@ -63,6 +64,187 @@ afterEach(() => {
 });
 
 describe("renderer multi-model smoke", () => {
+  it("opens Sketch from the image-to-image reference area without adding a top-level mode", async () => {
+    await renderApp(snapshot());
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    const sketchButton = document.querySelector<HTMLButtonElement>(".reference-sketch-button");
+    expect(sketchButton).not.toBeNull();
+    await click(sketchButton!);
+
+    expect(document.querySelector('.sketch-editor-shell[data-sketch-editor-mode="embedded"]')).not.toBeNull();
+    expect(document.querySelectorAll(".mode-tab")).toHaveLength(2);
+    expect(document.body.textContent).toContain("Sketch input");
+  });
+
+  it("starts a new Sketch blank instead of reusing a stale workspace draft", async () => {
+    const staleSketch: SketchDocument = {
+      schemaVersion: 1,
+      width: 1200,
+      height: 800,
+      background: "white",
+      strokes: [{
+        id: "stale-stroke",
+        tool: "brush",
+        color: "#1f2937",
+        size: 24,
+        opacity: 1,
+        points: [{ x: 120, y: 120 }, { x: 320, y: 240 }]
+      }]
+    };
+    await renderApp(snapshot({
+      draft: {
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        mode: "edit",
+        workflow: "sketch",
+        prompt: "Keep this prompt while creating a fresh sketch",
+        params: DEFAULT_IMAGE_PARAMS,
+        inputAssets: [],
+        sketch: staleSketch,
+        brushSize: 48,
+        updatedAt: now
+      }
+    }));
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    await click(document.querySelector<HTMLButtonElement>(".reference-sketch-button")!);
+    await flushAsync();
+
+    expect(document.querySelector(".sketch-editor-header p")?.textContent).toContain("0 strokes");
+    expect(document.querySelector(".sketch-editor-header p")?.textContent).toContain("0 points");
+    expect(document.body.textContent).toContain("Keep this prompt while creating a fresh sketch");
+  });
+
+  it("restores the matching artifact only when continuing an existing Sketch", async () => {
+    const existingSketch: SketchDocument = {
+      schemaVersion: 1,
+      width: 1200,
+      height: 800,
+      background: "transparent",
+      strokes: [{
+        id: "existing-stroke",
+        tool: "brush",
+        color: "#2563eb",
+        size: 18,
+        opacity: 0.8,
+        points: [{ x: 140, y: 160 }, { x: 420, y: 280 }]
+      }]
+    };
+    const asset: InputAsset = {
+      ...inputAsset("existing-sketch.png"),
+      id: "sketch-existing",
+      role: "sketch",
+      artifactId: "artifact-existing",
+      guidance: ["composition"]
+    };
+    const bridge = await renderApp(snapshot({
+      draft: {
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        mode: "edit",
+        workflow: "sketch",
+        prompt: "Continue the existing sketch",
+        params: DEFAULT_IMAGE_PARAMS,
+        inputAssets: [asset],
+        sketch: existingSketch,
+        sketchGuidance: ["composition"],
+        brushSize: 48,
+        updatedAt: now
+      }
+    }));
+    bridge.loadSketchDocument = vi.fn(async (artifactId) => {
+      expect(artifactId).toBe("artifact-existing");
+      return existingSketch;
+    });
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    await click(document.querySelector<HTMLButtonElement>(".reference-sketch-button")!);
+    await flushAsync();
+
+    expect(document.querySelector(".sketch-editor-header p")?.textContent).toContain("1 strokes");
+    expect(document.querySelector(".sketch-editor-header p")?.textContent).toContain("2 points");
+    expect(document.querySelector<HTMLButtonElement>(".sketch-guidance-chip")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("preserves Sketch undo history when the parent mirrors a drawn document", async () => {
+    await renderApp(snapshot());
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    const sketchButton = document.querySelector<HTMLButtonElement>(".reference-sketch-button");
+    expect(sketchButton).not.toBeNull();
+    await click(sketchButton!);
+
+    const canvas = document.querySelector<HTMLCanvasElement>(".sketch-canvas");
+    expect(canvas).not.toBeNull();
+    const target = canvas!;
+    const rect = { left: 0, top: 0, width: 200, height: 120, right: 200, bottom: 120, x: 0, y: 0, toJSON: () => undefined };
+    Object.defineProperty(target, "getBoundingClientRect", { configurable: true, value: () => rect });
+    target.setPointerCapture = vi.fn();
+    target.hasPointerCapture = vi.fn(() => true);
+    target.releasePointerCapture = vi.fn();
+
+    await pointer(target, "pointerdown", { clientX: 20, clientY: 20 });
+    await pointer(target, "pointermove", { clientX: 90, clientY: 65 });
+    await pointer(target, "pointerup", { clientX: 160, clientY: 90 });
+    await flushAsync();
+
+    const undo = [...document.querySelectorAll<HTMLButtonElement>(".sketch-editor-toolbar button")]
+      .find((button) => button.getAttribute("aria-label") === "Undo" || button.getAttribute("aria-label") === "回退");
+    expect(undo).not.toBeNull();
+    expect(undo?.disabled).toBe(false);
+
+    const guidance = [...document.querySelectorAll<HTMLButtonElement>(".sketch-guidance-chip")]
+      .find((button) => button.textContent?.trim() === "Composition" || button.textContent?.trim() === "构图");
+    expect(guidance).not.toBeNull();
+    await click(guidance!);
+    await flushAsync();
+    expect(undo?.disabled).toBe(false);
+
+    await click(undo!);
+    await flushAsync();
+    expect(document.querySelector(".sketch-editor-header p")?.textContent).toContain("0 strokes");
+  });
+
+  it("hides the Sketch entry when the rollback feature flag is disabled", async () => {
+    await renderApp(snapshot({ features: { sketchEnabled: false } }));
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    expect(document.querySelector(".reference-sketch-button")).toBeNull();
+    expect(document.querySelectorAll(".mode-tab")).toHaveLength(2);
+  });
+
+  it("reconciles a stale draft with the active provider before restoring parameters", async () => {
+    const activeConfig = providerConfig({
+      kind: "custom",
+      name: "AIHub",
+      baseURL: "https://aihub.example/v1",
+      defaultModel: "image-model",
+      activeLaunchId: "general",
+      activeModelId: "image-model",
+      discoveredModels: [{ id: "image-model", providerKind: "custom" }]
+    });
+
+    await renderApp(snapshot({
+      providers: [activeConfig],
+      activeProviderId: activeConfig.id,
+      draft: {
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        mode: "edit",
+        prompt: "Keep the prompt while switching providers",
+        params: DEFAULT_IMAGE_PARAMS,
+        inputAssets: [inputAsset("stale-reference.png")],
+        brushSize: 48,
+        updatedAt: now
+      }
+    }));
+
+    expect(document.body.textContent).not.toContain("Select GPT Image 2 before running.");
+    expect(document.body.textContent).toContain("General OpenAI-compatible fallback only supports prompt-only generation.");
+    expect(document.body.textContent).toContain("Keep the prompt while switching providers");
+  });
+
   it("shows a clear browser preview notice when the Electron bridge is missing", async () => {
     await renderAppWithoutBridge();
 
@@ -2157,6 +2339,58 @@ describe("renderer multi-model smoke", () => {
         activeModelId: "dall-e-3"
       })
     );
+  });
+
+  it("shows the General capability error instead of an internal Sketch draft error", async () => {
+    const defaultConfig = providerConfig({
+      discoveredModels: [
+        { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" },
+        { id: "dall-e-3", providerKind: "openai" }
+      ],
+      lastModelDiscoveryAt: now
+    });
+    const sketch: SketchDocument = {
+      schemaVersion: 1,
+      width: 1024,
+      height: 1024,
+      background: "white",
+      strokes: [{
+        id: "stroke-1",
+        tool: "brush",
+        color: "#1f2937",
+        size: 24,
+        opacity: 1,
+        points: [{ x: 100, y: 100 }, { x: 300, y: 300 }]
+      }]
+    };
+    const bridge = await renderApp(snapshot({
+      providers: [defaultConfig],
+      activeProviderId: defaultConfig.id,
+      draft: {
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        mode: "edit",
+        workflow: "sketch",
+        prompt: "Switch this sketch to an incompatible model",
+        params: DEFAULT_IMAGE_PARAMS,
+        inputAssets: [{
+          ...inputAsset("sketch-source.png"),
+          role: "sketch",
+          artifactId: "sketch-artifact-1",
+          documentHash: "hash-1"
+        }],
+        sketch,
+        brushSize: 48,
+        updatedAt: now
+      }
+    }));
+
+    await selectAndLaunchModel("dall-e-3");
+    await new Promise((resolve) => setTimeout(resolve, 750));
+
+    expect(document.body.textContent).toContain("General OpenAI-compatible fallback only supports prompt-only generation.");
+    expect(document.body.textContent).not.toContain("Sketch 草稿必须使用 edit 模式。");
+    expect(bridge.saveDraft).not.toHaveBeenCalled();
   });
 
   it("keeps API config and launch buttons in the left rail and moves parameters into the workspace", async () => {

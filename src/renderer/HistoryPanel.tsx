@@ -535,6 +535,7 @@ export function HistoryItemCard({
           </div>
           <div className="history-chip-row history-tag-row" aria-label={copy.historyEditTags}>
             <span className="history-chip system-tag" title={copy.historySystemTag}>{systemTag}</span>
+            {job.workflow === "sketch" && <span className="history-chip sketch-tag" title={copy.sketchTitle}>{copy.sketchTitle}</span>}
             {sourceLabel && <span className="history-chip source-tag" title={copy.historySourceTag}>{sourceLabel}</span>}
             {job.tags.map((tag) => (
               <span key={tag} className="history-chip">{tag}</span>

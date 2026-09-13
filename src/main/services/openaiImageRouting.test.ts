@@ -8,6 +8,10 @@ import {
 } from "./openaiImageRouting";
 import { defaultStoredConfig } from "./stateMigration";
 import type { OpenAIImageRouteProbe } from "../../shared/types";
+import {
+  GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID
+} from "../../shared/modelCatalog";
 
 describe("OpenAI image route probing", () => {
   it("builds lightweight probe requests that do not trigger full image generation", () => {
@@ -90,6 +94,21 @@ describe("OpenAI image route probing", () => {
     expect(preferredOpenAIImageRoute(probes, "generate")).toBe("responses");
   });
 
+  it("builds the Responses tool shape for GPT Image 2.5 without using the image model as the mainline model", () => {
+    expect(buildOpenAIImageRouteProbeRequest("responses", "edit", GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID)).toMatchObject({
+      endpoint: "/responses",
+      body: {
+        model: "gpt-6-astra",
+        input: [],
+        tools: [{
+          type: "image_generation",
+          model: GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
+          action: "edit"
+        }]
+      }
+    });
+  });
+
   it("defaults GPT Image 2 probe preferences to chat when routes are only validation-reachable", async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -165,6 +184,68 @@ describe("OpenAI image route probing", () => {
     expect(routing?.preferredGenerateRoute).toBe("chat-completions");
     expect(routing?.preferredEditRoute).toBe("chat-completions");
     expect(routing?.preferredGuidedEditRoute).toBe("chat-completions");
+  });
+
+  it("does not probe Chat Completions for GPT Image 2.5, including dated snapshots", async () => {
+    const requests: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request) => {
+      requests.push(String(url));
+      return new Response(JSON.stringify({ error: { message: "validation error" } }), {
+        status: 400,
+        headers: { "content-type": "application/json" }
+      });
+    }) as typeof fetch;
+
+    const routing = await probeOpenAIImageRouting(
+      {
+        ...defaultStoredConfig,
+        baseURL: "https://api.test/v1",
+        activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
+        defaultModel: GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
+        timeoutMs: 60000
+      },
+      "sk-test",
+      fetchImpl,
+      () => "2026-09-10T02:00:00.000Z"
+    );
+
+    expect(routing?.probes).toHaveLength(3);
+    expect(requests).toHaveLength(3);
+    expect(requests.every((url) => url.endsWith("/images/generations") || url.endsWith("/images/edits"))).toBe(true);
+    expect(routing?.preferredGenerateRoute).toBe("image-api");
+    expect(routing?.preferredEditRoute).toBe("image-api");
+    expect(routing?.preferredGuidedEditRoute).toBe("image-api");
+    expect(routing?.preferredGenerateRouteVerified).toBe(false);
+  });
+
+  it("does not let a successful GPT Image 2.5 probe promote auto mode to Responses", async () => {
+    const fetchImpl = (async (url: string | URL | Request) => {
+      const target = String(url);
+      if (target.endsWith("/images/generations")) {
+        return Response.json({ data: [] });
+      }
+      return Response.json({ output: [] });
+    }) as typeof fetch;
+
+    const routing = await probeOpenAIImageRouting(
+      {
+        ...defaultStoredConfig,
+        baseURL: "https://api.test/v1",
+        activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
+        defaultModel: GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
+        timeoutMs: 60000
+      },
+      "sk-test",
+      fetchImpl,
+      () => "2026-09-09T02:00:00.000Z"
+    );
+
+    expect(routing?.preferredGenerateRoute).toBe("image-api");
+    expect(routing?.preferredEditRoute).toBe("image-api");
+    expect(routing?.preferredGuidedEditRoute).toBe("image-api");
+    expect(routing?.preferredGenerateRouteVerified).toBe(true);
   });
 
   it("keeps text-to-image route verification separate from image-to-image verification", async () => {

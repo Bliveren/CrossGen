@@ -404,6 +404,36 @@ export interface UiCopy {
   streamPartialPreviewUnavailable: string;
   streamPartialPreviewGenerateOnly: string;
   partialImages: string;
+  safetyIdentifier: string;
+  safetyIdentifierInfo: string;
+  safetyIdentifierPlaceholder: string;
+  inputFidelity: string;
+  inputFidelityLow: string;
+  inputFidelityHigh: string;
+  inputFidelityInfo: string;
+  inputImageDetail: string;
+  inputImageDetailAuto: string;
+  inputImageDetailLow: string;
+  inputImageDetailHigh: string;
+  inputImageDetailOriginal: string;
+  inputImageDetailInfo: string;
+  responsesModel: string;
+  responsesModelInfo: string;
+  responsesAction: string;
+  responsesActionAuto: string;
+  responsesActionGenerate: string;
+  responsesActionEdit: string;
+  responsesActionInfo: string;
+  previousResponseId: string;
+  previousResponseIdInfo: string;
+  previousResponseIdPlaceholder: string;
+  previousImageGenerationCallId: string;
+  previousImageGenerationCallIdPlaceholder: string;
+  previousImageGenerationCallIdInfo: string;
+  continueFromResult: string;
+  continueFromResultInfo: string;
+  continueFromLatestImage: string;
+  continueFromLatestImageInfo: string;
   thinking: string;
   searchGrounding: string;
   moderation: string;
@@ -433,6 +463,49 @@ export interface UiCopy {
   copy: string;
   addReferences: string;
   addLocalReferences: string;
+  newSketch: string;
+  editSketch: string;
+  sketchTitle: string;
+  sketchSaveUse: string;
+  sketchEmptyHint: string;
+  sketchBrush: string;
+  sketchEraser: string;
+  sketchColor: string;
+  sketchSize: string;
+  sketchBackground: string;
+  sketchWhite: string;
+  sketchTransparent: string;
+  sketchInputPreview: string;
+  sketchSaved: string;
+  sketchLoadFailed: string;
+  sketchGeneralUnsupported: string;
+  sketchMaskUnsupported: string;
+  sketchMaskConfirmTitle: string;
+  sketchMaskConfirmBody: string;
+  sketchMaskConfirmAction: string;
+  sketchPreflightTitle: string;
+  sketchPreflightModel: string;
+  sketchPreflightCanvas: string;
+  sketchPreflightBackground: string;
+  sketchPreflightReferences: string;
+  sketchPreflightReady: string;
+  sketchPreflightPending: string;
+  sketchUnderlay: string;
+  sketchUnderlayNone: string;
+  sketchUnderlayOpacity: string;
+  sketchUnderlayNotice: string;
+  sketchIncludeUnderlay: string;
+  sketchGrid: string;
+  sketchCenter: string;
+  sketchSafeArea: string;
+  sketchPressure: string;
+  sketchPressureOn: string;
+  sketchPressureOff: string;
+  sketchGuidance: string;
+  sketchGuidanceComposition: string;
+  sketchGuidancePose: string;
+  sketchGuidancePerspective: string;
+  useSketchToGenerate: string;
   referenceLimitReached: (max: number) => string;
   uploadRightsReminder: string;
   uploadMask: string;
@@ -574,6 +647,7 @@ export interface UiCopy {
   textSize: string;
   boldText: string;
   undo: string;
+  redo: string;
   clearAnnotations: string;
   saveToGallery: string;
   saveCropSelectionToGallery: string;
@@ -956,14 +1030,44 @@ export const translations: Record<Language, UiCopy> = {
     count: "Count",
     streamPartialPreview: "Stream partial preview",
     streamSingleOutputOnly: "Stream partial preview is available only when count is 1.",
-    streamPartialPreviewUnavailable: "Stream partial preview is available only for GPT Image 2 generation and editing.",
-    streamPartialPreviewGenerateOnly: "Stream partial preview is available only for GPT Image 2 generation and editing.",
+    streamPartialPreviewUnavailable: "Stream partial preview is available only for GPT Image 2 / 2.5 generation and editing.",
+    streamPartialPreviewGenerateOnly: "Stream partial preview is available only for GPT Image 2 / 2.5 generation and editing.",
     partialImages: "Partial images",
+    safetyIdentifier: "Safety identifier",
+    safetyIdentifierInfo: "Optional stable, privacy-preserving end-user identifier. Images API sends it as user; Responses sends it as safety_identifier.",
+    safetyIdentifierPlaceholder: "user_...",
+    inputFidelity: "Input fidelity",
+    inputFidelityLow: "Low",
+    inputFidelityHigh: "High",
+    inputFidelityInfo: "GPT Image 2.5 only: controls how strongly reference-image details are preserved. It applies to edits and reference-image workflows.",
+    inputImageDetail: "Input image detail",
+    inputImageDetailAuto: "Auto",
+    inputImageDetailLow: "Low",
+    inputImageDetailHigh: "High",
+    inputImageDetailOriginal: "Original",
+    inputImageDetailInfo: "Responses API input_image detail level. Higher detail can improve fidelity while increasing input cost and latency.",
+    responsesModel: "Responses model",
+    responsesModelInfo: "Mainline Responses model used to invoke GPT Image 2.5 as an image-generation tool.",
+    responsesAction: "Responses action",
+    responsesActionAuto: "Auto",
+    responsesActionGenerate: "Generate",
+    responsesActionEdit: "Edit",
+    responsesActionInfo: "Controls whether the Responses image tool generates a new image, edits image context, or decides automatically.",
+    previousResponseId: "Previous response ID",
+    previousResponseIdInfo: "Optional Responses conversation ID for multi-turn image editing.",
+    previousResponseIdPlaceholder: "resp_...",
+    previousImageGenerationCallId: "Image generation call ID",
+    previousImageGenerationCallIdPlaceholder: "ig_...",
+    previousImageGenerationCallIdInfo: "Optional image_generation_call ID for continuing from a specific generated image.",
+    continueFromResult: "Continue from latest result",
+    continueFromResultInfo: "Use the latest Responses result as the next turn.",
+    continueFromLatestImage: "Continue from latest image",
+    continueFromLatestImageInfo: "Use the latest image_generation_call as the next turn without replaying the full response.",
     thinking: "Thinking",
     searchGrounding: "Search grounding",
     moderation: "Moderation",
     timeoutSeconds: "Timeout seconds",
-    sizeValid: "Size is valid for GPT Image 2.",
+    sizeValid: "Size is valid for GPT Image 2 / 2.5.",
     draft: "Draft",
     autosaved: "Autosaved",
     workspaceAutosaves: "Workspace autosaves after edits.",
@@ -988,6 +1092,49 @@ export const translations: Record<Language, UiCopy> = {
     copy: "Copy",
     addReferences: "Add references",
     addLocalReferences: "Add local reference image",
+    newSketch: "New Sketch",
+    editSketch: "Edit Sketch",
+    sketchTitle: "Sketch input",
+    sketchSaveUse: "Save and use",
+    sketchEmptyHint: "Draw a few strokes to guide the image model.",
+    sketchBrush: "Brush",
+    sketchEraser: "Eraser",
+    sketchColor: "Stroke color",
+    sketchSize: "Brush size",
+    sketchBackground: "Canvas background",
+    sketchWhite: "White",
+    sketchTransparent: "Transparent",
+    sketchInputPreview: "Input preview · Sketch",
+    sketchSaved: "Sketch saved as a reference input.",
+    sketchLoadFailed: "Could not reopen the Sketch document.",
+    sketchGeneralUnsupported: "General does not support Sketch input.",
+    sketchMaskUnsupported: "Sketch input cannot be combined with a mask.",
+    sketchMaskConfirmTitle: "Replace the current mask?",
+    sketchMaskConfirmBody: "Sketch and Mask are separate input modes. Continuing will clear the current mask and open Sketch editing.",
+    sketchMaskConfirmAction: "Clear mask and open Sketch",
+    sketchPreflightTitle: "Sketch input check",
+    sketchPreflightModel: "Model",
+    sketchPreflightCanvas: "Canvas",
+    sketchPreflightBackground: "Background",
+    sketchPreflightReferences: "References",
+    sketchPreflightReady: "Ready to use Sketch as the first input.",
+    sketchPreflightPending: "Sketch is not ready to submit yet.",
+    sketchUnderlay: "Reference underlay",
+    sketchUnderlayNone: "None",
+    sketchUnderlayOpacity: "Underlay opacity",
+    sketchUnderlayNotice: "Underlay is view-only unless explicitly included.",
+    sketchIncludeUnderlay: "Include underlay in export",
+    sketchGrid: "Grid",
+    sketchCenter: "Center line",
+    sketchSafeArea: "Safe area",
+    sketchPressure: "Pressure",
+    sketchPressureOn: "Pressure on",
+    sketchPressureOff: "Pressure off",
+    sketchGuidance: "Sketch priorities",
+    sketchGuidanceComposition: "Composition",
+    sketchGuidancePose: "Pose",
+    sketchGuidancePerspective: "Perspective",
+    useSketchToGenerate: "Use Sketch",
     referenceLimitReached: (max: number) => `The current model supports up to ${max} reference image${max === 1 ? "" : "s"}.`,
     uploadRightsReminder: "Only upload images you have permission to use; selected references are sent to the active image provider.",
     uploadMask: "Upload mask",
@@ -1128,6 +1275,7 @@ export const translations: Record<Language, UiCopy> = {
     textSize: "Text size",
     boldText: "Bold",
     undo: "Undo",
+    redo: "Redo",
     clearAnnotations: "Clear annotations",
     saveToGallery: "Save to Gallery",
     saveCropSelectionToGallery: "Save selected area to Gallery",
@@ -1166,7 +1314,7 @@ export const translations: Record<Language, UiCopy> = {
       keyCleared: "Saved API key cleared.",
       bridgeSelectImages: "Electron bridge is required to select local image paths.",
       imagesAdded: (added: number, selected: number, capped: boolean, max: number) =>
-        `${added} image${added === 1 ? "" : "s"} added, ${selected} selected.${capped ? ` GPT Image 2 accepts up to ${max} input images.` : ""}`,
+        `${added} image${added === 1 ? "" : "s"} added, ${selected} selected.${capped ? ` The active model accepts up to ${max} input images.` : ""}`,
       bridgeSelectMask: "Electron bridge is required to select a mask.",
       maskAdded: "Mask added.",
       bridgeRunJob: "Electron bridge is required to run image jobs.",
@@ -1188,10 +1336,10 @@ export const translations: Record<Language, UiCopy> = {
       promptTooLong: "GPT Image prompts cannot exceed 32,000 characters.",
       sizeInvalid: "Size parameter is invalid.",
       sizeFormat: "Size must be auto or WIDTHxHEIGHT, for example 1536x1024.",
-      sizeMultiple: "GPT Image 2 requires width and height to be multiples of 16.",
-      sizeLongest: "GPT Image 2 maximum side length is 3840px.",
-      sizeRatio: "GPT Image 2 aspect ratio cannot exceed 3:1.",
-      sizePixels: "GPT Image 2 total pixels must be between 655,360 and 8,294,400.",
+      sizeMultiple: "GPT Image 2 / 2.5 requires width and height to be multiples of 16.",
+      sizeLongest: "GPT Image 2 / 2.5 maximum side length is 3840px.",
+      sizeRatio: "GPT Image 2 / 2.5 aspect ratio cannot exceed 3:1.",
+      sizePixels: "GPT Image 2 / 2.5 total pixels must be between 655,360 and 8,294,400.",
       addReference: "Add at least one reference image.",
       addSource: "Add a source image before inpainting.",
       maxInputs: (max: number) => `The current model supports up to ${max} reference images.`,
@@ -1575,14 +1723,44 @@ export const translations: Record<Language, UiCopy> = {
     count: "数量",
     streamPartialPreview: "流式局部预览",
     streamSingleOutputOnly: "流式局部预览仅支持数量为 1 时使用。",
-    streamPartialPreviewUnavailable: "流式局部预览仅支持 GPT Image 2 生成与图像编辑。",
-    streamPartialPreviewGenerateOnly: "流式局部预览仅支持 GPT Image 2 生成与图像编辑。",
+    streamPartialPreviewUnavailable: "流式局部预览仅支持 GPT Image 2 / 2.5 生成与图像编辑。",
+    streamPartialPreviewGenerateOnly: "流式局部预览仅支持 GPT Image 2 / 2.5 生成与图像编辑。",
     partialImages: "局部预览数",
+    safetyIdentifier: "安全标识",
+    safetyIdentifierInfo: "可选的稳定且不含个人信息的用户标识。Images API 会发送为 user，Responses API 会发送为 safety_identifier。",
+    safetyIdentifierPlaceholder: "user_...",
+    inputFidelity: "输入图保真度",
+    inputFidelityLow: "低",
+    inputFidelityHigh: "高",
+    inputFidelityInfo: "仅 GPT Image 2.5：控制编辑和参考图工作流对输入图细节的保留强度。",
+    inputImageDetail: "输入图细节",
+    inputImageDetailAuto: "自动",
+    inputImageDetailLow: "低",
+    inputImageDetailHigh: "高",
+    inputImageDetailOriginal: "原始",
+    inputImageDetailInfo: "Responses API input_image 的细节级别。更高细节可能提升保真度，同时增加输入成本和延迟。",
+    responsesModel: "Responses 主模型",
+    responsesModelInfo: "将 GPT Image 2.5 作为图像生成工具调用时使用的 Responses 主模型。",
+    responsesAction: "Responses 图像动作",
+    responsesActionAuto: "自动",
+    responsesActionGenerate: "生成",
+    responsesActionEdit: "编辑",
+    responsesActionInfo: "控制 Responses 图像工具是生成新图、编辑上下文图片，还是自动判断。",
+    previousResponseId: "上一轮响应 ID",
+    previousResponseIdInfo: "可选的 Responses 会话 ID，用于多轮图像编辑。",
+    previousResponseIdPlaceholder: "resp_...",
+    previousImageGenerationCallId: "图像生成调用 ID",
+    previousImageGenerationCallIdPlaceholder: "ig_...",
+    previousImageGenerationCallIdInfo: "可选的 image_generation_call ID，用于从指定生成图继续编辑。",
+    continueFromResult: "接着最新结果继续编辑",
+    continueFromResultInfo: "将最近一次 Responses 结果作为下一轮上下文。",
+    continueFromLatestImage: "接着最新图像继续",
+    continueFromLatestImageInfo: "将最近一次 image_generation_call 作为下一轮上下文，不重放完整响应。",
     thinking: "Thinking",
     searchGrounding: "联网搜索 grounding",
     moderation: "内容审核",
     timeoutSeconds: "超时秒数",
-    sizeValid: "尺寸符合 GPT Image 2 要求。",
+    sizeValid: "尺寸符合 GPT Image 2 / 2.5 要求。",
     draft: "草稿",
     autosaved: "已自动保存",
     workspaceAutosaves: "编辑后会自动保存工作区。",
@@ -1607,6 +1785,49 @@ export const translations: Record<Language, UiCopy> = {
     copy: "复制",
     addReferences: "添加参考图",
     addLocalReferences: "添加本地参考图",
+    newSketch: "新建 Sketch",
+    editSketch: "编辑 Sketch",
+    sketchTitle: "Sketch 输入",
+    sketchSaveUse: "保存并使用",
+    sketchEmptyHint: "画几笔，为模型提供构图与姿态引导。",
+    sketchBrush: "画笔",
+    sketchEraser: "橡皮擦",
+    sketchColor: "笔触颜色",
+    sketchSize: "画笔大小",
+    sketchBackground: "画布背景",
+    sketchWhite: "白色",
+    sketchTransparent: "透明",
+    sketchInputPreview: "输入预览 · Sketch",
+    sketchSaved: "Sketch 已保存并加入参考图。",
+    sketchLoadFailed: "无法重新打开 Sketch 文档。",
+    sketchGeneralUnsupported: "General 不支持 Sketch 输入。",
+    sketchMaskUnsupported: "Sketch 输入不能与蒙版同时使用。",
+    sketchMaskConfirmTitle: "替换当前蒙版？",
+    sketchMaskConfirmBody: "Sketch 与蒙版是两种独立的输入模式。继续后会清除当前蒙版并打开 Sketch 编辑。",
+    sketchMaskConfirmAction: "清除蒙版并打开 Sketch",
+    sketchPreflightTitle: "Sketch 输入检查",
+    sketchPreflightModel: "模型",
+    sketchPreflightCanvas: "画布",
+    sketchPreflightBackground: "背景",
+    sketchPreflightReferences: "参考图",
+    sketchPreflightReady: "可以将 Sketch 作为首张输入使用。",
+    sketchPreflightPending: "Sketch 尚未满足提交条件。",
+    sketchUnderlay: "参考图叠底",
+    sketchUnderlayNone: "无",
+    sketchUnderlayOpacity: "叠底透明度",
+    sketchUnderlayNotice: "叠底仅用于视图，除非明确勾选才会合成导出。",
+    sketchIncludeUnderlay: "导出时合成叠底",
+    sketchGrid: "网格",
+    sketchCenter: "中心线",
+    sketchSafeArea: "安全区域",
+    sketchPressure: "压力感应",
+    sketchPressureOn: "压力已开启",
+    sketchPressureOff: "压力已关闭",
+    sketchGuidance: "Sketch 引导重点",
+    sketchGuidanceComposition: "构图",
+    sketchGuidancePose: "姿态",
+    sketchGuidancePerspective: "透视",
+    useSketchToGenerate: "使用 Sketch",
     referenceLimitReached: (max: number) => `当前模型最多支持 ${max} 张参考图。`,
     uploadRightsReminder: "仅上传你有权使用的图片；已选择的参考图会发送给当前图片服务商。",
     uploadMask: "上传蒙版",
@@ -1747,6 +1968,7 @@ export const translations: Record<Language, UiCopy> = {
     textSize: "字号大小",
     boldText: "加粗",
     undo: "回退",
+    redo: "重做",
     clearAnnotations: "清除批注",
     saveToGallery: "保存到图库",
     saveCropSelectionToGallery: "将选定区域存储到图库",
@@ -1807,10 +2029,10 @@ export const translations: Record<Language, UiCopy> = {
       promptTooLong: "GPT Image prompt 不能超过 32000 字符。",
       sizeInvalid: "尺寸参数无效。",
       sizeFormat: "尺寸需使用 auto 或 WIDTHxHEIGHT，例如 1536x1024。",
-      sizeMultiple: "GPT Image 2 要求宽高都是 16 的倍数。",
-      sizeLongest: "GPT Image 2 最长边不能超过 3840px。",
-      sizeRatio: "GPT Image 2 长短边比例不能超过 3:1。",
-      sizePixels: "GPT Image 2 总像素需在 655,360 到 8,294,400 之间。",
+      sizeMultiple: "GPT Image 2 / 2.5 要求宽高都是 16 的倍数。",
+      sizeLongest: "GPT Image 2 / 2.5 最长边不能超过 3840px。",
+      sizeRatio: "GPT Image 2 / 2.5 长短边比例不能超过 3:1。",
+      sizePixels: "GPT Image 2 / 2.5 总像素需在 655,360 到 8,294,400 之间。",
       addReference: "请至少添加一张参考图。",
       addSource: "局部重绘前请先添加源图。",
       maxInputs: (max: number) => `当前模型最多支持 ${max} 张参考图。`,
@@ -1839,10 +2061,10 @@ const validationMessageMap: Record<string, keyof UiCopy["validation"]> = {
   "GPT Image prompt 不能超过 32000 字符。": "promptTooLong",
   "尺寸参数无效。": "sizeInvalid",
   "尺寸需使用 auto 或 WIDTHxHEIGHT，例如 1536x1024。": "sizeFormat",
-  "GPT Image 2 要求宽高都是 16 的倍数。": "sizeMultiple",
-  "GPT Image 2 最长边不能超过 3840px。": "sizeLongest",
-  "GPT Image 2 长短边比例不能超过 3:1。": "sizeRatio",
-  "GPT Image 2 总像素需在 655,360 到 8,294,400 之间。": "sizePixels",
+  "GPT Image 2 / 2.5 要求宽高都是 16 的倍数。": "sizeMultiple",
+  "GPT Image 2 / 2.5 最长边不能超过 3840px。": "sizeLongest",
+  "GPT Image 2 / 2.5 长短边比例不能超过 3:1。": "sizeRatio",
+  "GPT Image 2 / 2.5 总像素需在 655,360 到 8,294,400 之间。": "sizePixels",
   "当前 provider 暂未接入 General 运行时。": "generalProviderUnsupported",
   "当前 API 配置暂未接入 General 运行时。": "generalProviderUnsupported",
   "请选择可用的图片模型。": "generalSelectImageModel",

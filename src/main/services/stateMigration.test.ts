@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
-import { STATE_VERSION, normalizeState } from "./stateMigration";
+import {
+  GPT_IMAGE_2_5_LAUNCH_ID,
+  GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+  GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID
+} from "../../shared/modelCatalog";
+import { STATE_VERSION, normalizeImageParams, normalizeState } from "./stateMigration";
+import { sketchDocumentHash } from "../../shared/sketch";
 
 const legacyParams = {
   model: "gpt-image-2",
@@ -17,6 +23,83 @@ const legacyParams = {
 };
 
 describe("state migration", () => {
+  it("preserves Sketch workflow metadata in history and draft state", () => {
+    const sketch = {
+      schemaVersion: 1 as const,
+      width: 1024,
+      height: 1024,
+      background: "white" as const,
+      strokes: [{
+        id: "stroke_1",
+        tool: "brush" as const,
+        color: "#1f2937",
+        size: 12,
+        opacity: 1,
+        points: [{ x: 10, y: 10 }, { x: 200, y: 200 }]
+      }]
+    };
+    const documentHash = sketchDocumentHash(sketch);
+    const migrated = normalizeState({
+      version: 4,
+      activeProviderId: "default",
+      providers: [{
+        id: "default",
+        kind: "openai",
+        name: "OpenAI",
+        baseURL: "https://api.openai.com/v1",
+        enabled: true,
+        defaultModel: "gpt-image-2",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        encryption: "none"
+      }],
+      history: [{
+        id: "job_sketch",
+        name: "",
+        tags: [],
+        providerKind: "openai",
+        providerId: "default",
+        launchId: "gpt-image-2",
+        modelId: "gpt-image-2",
+        modelDisplayName: "GPT Image 2",
+        mode: "edit",
+        workflow: "sketch",
+        sketch: {
+          artifactId: "sketch_1",
+          width: 1024,
+          height: 1024,
+          background: "white",
+          strokeCount: 1,
+          pointCount: 2,
+          documentHash
+        },
+        prompt: "Turn sketch into image",
+        inputAssets: [],
+        params: DEFAULT_IMAGE_PARAMS,
+        status: "succeeded",
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+        outputs: []
+      }],
+      draft: {
+        mode: "edit",
+        workflow: "sketch",
+        prompt: "draft",
+        params: DEFAULT_IMAGE_PARAMS,
+        inputAssets: [],
+        sketch,
+        brushSize: 24
+      }
+    });
+
+    expect(migrated.version).toBe(STATE_VERSION);
+    expect(migrated.history[0]?.workflow).toBe("sketch");
+    expect(migrated.history[0]?.sketch?.documentHash).toBe(documentHash);
+    expect(migrated.draft?.workflow).toBe("sketch");
+    expect(migrated.draft?.sketch).toEqual(sketch);
+  });
+
   it("migrates v1 config to an OpenAI provider config", () => {
     const migrated = normalizeState({
       version: 1,
@@ -627,5 +710,108 @@ describe("state migration", () => {
     expect(migrated.history[0].params).toEqual(DEFAULT_IMAGE_PARAMS);
     expect(migrated.history[0].modelId).toBe("gpt-image-2");
     expect(migrated.history[0].modelDisplayName).toBe("GPT Image 2");
+  });
+
+  it("defaults a GPT Image 2.5 launch to Sunburst when the model is missing", () => {
+    const params = normalizeImageParams({
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      quality: "max",
+      background: "transparent",
+      imageRoute: "chat-completions",
+      inputFidelity: "high",
+      responsesModel: "gpt-6-astra",
+      responsesAction: "edit",
+      previousResponseId: "resp_previous"
+    });
+
+    expect(params).toMatchObject({
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      quality: "max",
+      background: "transparent",
+      imageRoute: "auto",
+      inputFidelity: "high",
+      responsesModel: "gpt-6-astra",
+      responsesAction: "edit",
+      previousResponseId: "resp_previous"
+    });
+  });
+
+  it("preserves the optional GPT Image safety identifier during migration", () => {
+    const migrated = normalizeImageParams({
+      providerKind: "openai",
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      user: "  user_hash_123  "
+    });
+
+    expect(migrated).toMatchObject({
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      user: "user_hash_123"
+    });
+  });
+
+  it("recognizes dated GPT Image 2.5 snapshots and removes 2.5-only fields from GPT Image 2", () => {
+    const snapshot = normalizeImageParams({
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      model: `models/${GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID}`,
+      quality: "xhigh"
+    });
+    expect(snapshot).toMatchObject({
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      model: GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID,
+      quality: "xhigh"
+    });
+
+    const legacy = normalizeImageParams({
+      launchId: "gpt-image-2",
+      model: "gpt-image-2",
+      quality: "xhigh",
+      background: "transparent",
+      inputFidelity: "high",
+      responsesModel: "gpt-6-astra",
+      responsesAction: "edit",
+      previousResponseId: "resp_previous",
+      imageRoute: "chat-completions"
+    });
+    expect(legacy).toMatchObject({
+      launchId: "gpt-image-2",
+      model: "gpt-image-2",
+      quality: "auto",
+      background: "auto",
+      imageRoute: "chat-completions"
+    });
+    expect(legacy).not.toHaveProperty("inputFidelity");
+    expect(legacy).not.toHaveProperty("responsesModel");
+    expect(legacy).not.toHaveProperty("responsesAction");
+    expect(legacy).not.toHaveProperty("previousResponseId");
+  });
+
+  it("migrates a stored GPT Image 2.5 provider without a model to its default", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "default",
+      providers: [{
+        id: "default",
+        kind: "openai",
+        activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        defaultModel: "",
+        activeModelId: "",
+        defaultSize: "auto",
+        defaultQuality: "max",
+        timeoutMs: 120000,
+        updatedAt: "2026-09-10T02:00:00.000Z",
+        encryption: "none"
+      }],
+      history: []
+    });
+
+    expect(migrated.providers[0]).toMatchObject({
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      defaultQuality: "max"
+    });
   });
 });

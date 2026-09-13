@@ -3,11 +3,14 @@ import {
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
+  GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID
 } from "./modelCatalog.js";
 import {
   DEFAULT_IMAGE_PARAMS,
+  GPT_IMAGE_2_5_QUALITY_OPTIONS,
   IMAGE_QUALITY_OPTIONS,
   validateApiKey
 } from "./validation.js";
@@ -36,7 +39,7 @@ function parseProviderKind(value: string | undefined): ProviderKind | undefined 
 }
 
 function parseLaunchId(value: string | undefined): FocusedLaunchId | undefined {
-  if (value === GPT_IMAGE_2_LAUNCH_ID || value === NANO_BANANA_3_LAUNCH_ID || value === GENERAL_LAUNCH_ID) {
+  if (value === GPT_IMAGE_2_LAUNCH_ID || value === GPT_IMAGE_2_5_LAUNCH_ID || value === NANO_BANANA_3_LAUNCH_ID || value === GENERAL_LAUNCH_ID) {
     return value;
   }
   return undefined;
@@ -57,6 +60,7 @@ function hasControlCharacters(value: string): boolean {
 
 function inferLaunchId(kind: ProviderKind, model: string | undefined): FocusedLaunchId {
   const normalizedModel = model?.toLowerCase() ?? "";
+  if (normalizedModel.includes("gpt-image-2.5")) return GPT_IMAGE_2_5_LAUNCH_ID;
   if (normalizedModel === GPT_IMAGE_2_MODEL_ID || normalizedModel.includes("gpt-image")) return GPT_IMAGE_2_LAUNCH_ID;
   if (normalizedModel.includes("gemini") || normalizedModel.includes("nano-banana")) return NANO_BANANA_3_LAUNCH_ID;
   if (kind === "gemini") return NANO_BANANA_3_LAUNCH_ID;
@@ -144,12 +148,15 @@ export function parseAppLink(value: string): AppLinkProviderConfig {
   const defaultModel = model ?? (
     launchId === GPT_IMAGE_2_LAUNCH_ID
       ? GPT_IMAGE_2_MODEL_ID
+      : launchId === GPT_IMAGE_2_5_LAUNCH_ID
+        ? GPT_IMAGE_2_5_DEFAULT_MODEL_ID
       : launchId === NANO_BANANA_3_LAUNCH_ID
         ? NANO_BANANA_3_MODEL_ID
         : ""
   );
   const qualityValue = firstParam(url.searchParams, ["quality", "default_quality", "defaultQuality"]);
-  const defaultQuality: ImageQuality = qualityValue && IMAGE_QUALITY_OPTIONS.includes(qualityValue as ImageQuality)
+  const qualityOptions = launchId === GPT_IMAGE_2_5_LAUNCH_ID ? GPT_IMAGE_2_5_QUALITY_OPTIONS : IMAGE_QUALITY_OPTIONS;
+  const defaultQuality: ImageQuality = qualityValue && (qualityOptions as readonly string[]).includes(qualityValue)
     ? qualityValue as ImageQuality
     : DEFAULT_IMAGE_PARAMS.quality;
   const timeoutValue = firstParam(url.searchParams, ["timeout_ms", "timeoutMs"]);

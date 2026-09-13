@@ -14,7 +14,8 @@ import type {
   QueueSource,
   QueueRuntimeConfig,
   StorageSettings,
-  WorkspaceDraft
+  WorkspaceDraft,
+  ImageWorkflow
 } from "../../shared/types.js";
 import { mediaKindForFileName, normalizeOutputAssetValue } from "../../core/mediaTypes.js";
 import { DEFAULT_QUEUE_RUNTIME_CONFIG, normalizeQueueRuntimeConfig } from "../../core/queueConfig.js";
@@ -29,8 +30,11 @@ import {
   DEFAULT_IMAGE_PARAMS,
   IMAGE_BACKGROUND_OPTIONS,
   IMAGE_FORMAT_OPTIONS,
+  GPT_IMAGE_2_5_QUALITY_OPTIONS,
   IMAGE_QUALITY_OPTIONS,
   MODERATION_MODE_OPTIONS,
+  RESPONSES_INPUT_IMAGE_DETAIL_OPTIONS,
+  RESPONSES_IMAGE_ACTION_OPTIONS,
   REFERENCE_IMAGE_MODE_OPTIONS,
   defaultStreamingPartialsEnabled,
   normalizeBaseURL
@@ -39,11 +43,16 @@ import {
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
+  GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
-  getModelDisplayName
+  getModelDisplayName,
+  isGptImage25ModelId,
+  normalizeModelId
 } from "../../shared/modelCatalog.js";
+import { normalizeSketchDocument, normalizeSketchGuidance, normalizeSketchTaskMetadata } from "../../shared/sketch.js";
 
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 export const DEFAULT_OPENAI_PROVIDER_ID = "default";
 
 export interface StoredProviderConfig {
@@ -160,9 +169,13 @@ export function normalizeState(parsed: unknown): AppStateFile {
 function normalizeStoredConfig(value: unknown): StoredProviderConfig {
   const input = isRecord(value) ? value : {};
   const kind = normalizeProviderKind(input.kind, "openai");
-  const defaultModel = nonEmptyString(input.defaultModel, DEFAULT_IMAGE_PARAMS.model);
+  const requestedModelForLaunch = nonEmptyString(input.activeModelId, nonEmptyString(input.defaultModel, ""));
+  const activeLaunchId = normalizeStoredLaunchId(input.activeLaunchId, requestedModelForLaunch);
+  const defaultModel = normalizeModelForLaunch(
+    activeLaunchId,
+    nonEmptyString(input.defaultModel, getDefaultModelForLaunch(activeLaunchId))
+  );
   const defaultSize = nonEmptyString(input.defaultSize, DEFAULT_IMAGE_PARAMS.size);
-  const activeLaunchId = normalizeFocusedLaunchId(input.activeLaunchId, GPT_IMAGE_2_LAUNCH_ID);
   const defaultBaseURL = kind === "gemini" ? DEFAULT_GEMINI_BASE_URL : DEFAULT_BASE_URL;
   const baseURL = typeof input.baseURL === "string" && input.baseURL.trim() ? input.baseURL : defaultBaseURL;
   const normalizedBaseURL = normalizeBaseURL(baseURL);
@@ -175,7 +188,11 @@ function normalizeStoredConfig(value: unknown): StoredProviderConfig {
     enabled: typeof input.enabled === "boolean" ? input.enabled : true,
     defaultModel,
     defaultSize,
-    defaultQuality: oneOf(input.defaultQuality, IMAGE_QUALITY_OPTIONS, DEFAULT_IMAGE_PARAMS.quality),
+    defaultQuality: oneOf(
+      input.defaultQuality,
+      activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID ? GPT_IMAGE_2_5_QUALITY_OPTIONS : IMAGE_QUALITY_OPTIONS,
+      DEFAULT_IMAGE_PARAMS.quality
+    ),
     timeoutMs: boundedInteger(input.timeoutMs, 30000, 600000, DEFAULT_IMAGE_PARAMS.timeoutMs),
     streamingPartialsEnabled: typeof input.streamingPartialsEnabled === "boolean"
       ? input.streamingPartialsEnabled
@@ -184,7 +201,10 @@ function normalizeStoredConfig(value: unknown): StoredProviderConfig {
     lastModelDiscoveryAt: optionalString(input.lastModelDiscoveryAt),
     lastModelDiscoveryError: optionalString(input.lastModelDiscoveryError),
     activeLaunchId,
-    activeModelId: nonEmptyString(input.activeModelId, activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ? defaultModel : getDefaultModelForLaunch(activeLaunchId)),
+    activeModelId: normalizeModelForLaunch(
+      activeLaunchId,
+      nonEmptyString(input.activeModelId, defaultModel || getDefaultModelForLaunch(activeLaunchId))
+    ),
     openAIImageRouting: normalizeOpenAIImageRouting(input.openAIImageRouting),
     updatedAt: nonEmptyString(input.updatedAt, new Date(0).toISOString()),
     encryptedApiKey: optionalString(input.encryptedApiKey),
@@ -441,6 +461,8 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
     launchId,
     modelId,
     modelDisplayName: nonEmptyString(input.modelDisplayName, getModelDisplayName(launchId, modelId)),
+    workflow: input.workflow === "sketch" ? "sketch" : input.workflow === "standard" ? "standard" : undefined,
+    sketch: normalizeSketchTaskMetadata(input.sketch),
     params,
     outputs: normalizedOutputs,
     diagnostic: normalizeTaskDiagnosticValue(input.diagnostic),
@@ -451,10 +473,18 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
 function normalizeWorkspaceDraft(value: unknown): WorkspaceDraft | undefined {
   if (!isRecord(value)) return undefined;
   const params = normalizeImageParams(value.params);
+  const workflow: ImageWorkflow | undefined = value.workflow === "sketch"
+    ? "sketch"
+    : value.workflow === "standard"
+      ? "standard"
+      : undefined;
   return {
     ...(value as unknown as WorkspaceDraft),
     activeLaunchId: normalizeFocusedLaunchId(value.activeLaunchId, params.launchId),
     activeModelId: nonEmptyString(value.activeModelId, params.model),
+    workflow: workflow ?? (value.sketch ? "sketch" : undefined),
+    sketch: normalizeSketchDocument(value.sketch),
+    ...(Array.isArray(value.sketchGuidance) ? { sketchGuidance: normalizeSketchGuidance(value.sketchGuidance) } : {}),
     params
   };
 }
@@ -498,18 +528,58 @@ export function normalizeImageParams(value: unknown): ImageParams {
 }
 
 function normalizeOpenAIImageParams(input: Record<string, unknown>): OpenAIImageParams {
+  const requestedModel = nonEmptyString(input.model, "");
+  const modelIsGptImage25 = isGptImage25ModelId(requestedModel);
+  const launchId = input.launchId === GPT_IMAGE_2_5_LAUNCH_ID || modelIsGptImage25
+    ? GPT_IMAGE_2_5_LAUNCH_ID
+    : GPT_IMAGE_2_LAUNCH_ID;
+  const model = launchId === GPT_IMAGE_2_5_LAUNCH_ID
+    ? modelIsGptImage25
+      ? normalizeModelId(requestedModel)
+      : GPT_IMAGE_2_5_DEFAULT_MODEL_ID
+    : requestedModel || GPT_IMAGE_2_MODEL_ID;
+  const imageRoute = oneOf(input.imageRoute, ["auto", "image-api", "responses", "chat-completions"] as const, DEFAULT_IMAGE_PARAMS.imageRoute);
   return {
     ...DEFAULT_IMAGE_PARAMS,
     providerKind: "openai",
-    launchId: GPT_IMAGE_2_LAUNCH_ID,
-    model: nonEmptyString(input.model, GPT_IMAGE_2_MODEL_ID),
-    imageRoute: oneOf(input.imageRoute, ["auto", "image-api", "responses", "chat-completions"] as const, DEFAULT_IMAGE_PARAMS.imageRoute),
+    launchId,
+    model,
+    imageRoute: launchId === GPT_IMAGE_2_5_LAUNCH_ID && imageRoute === "chat-completions" ? "auto" : imageRoute,
+    ...(typeof input.user === "string" && input.user.trim()
+      ? { user: input.user.trim() }
+      : {}),
+    ...(launchId === GPT_IMAGE_2_5_LAUNCH_ID && typeof input.responsesModel === "string" && input.responsesModel.trim()
+      ? { responsesModel: input.responsesModel.trim() }
+      : {}),
+    ...(launchId === GPT_IMAGE_2_5_LAUNCH_ID
+      ? { responsesAction: oneOf(input.responsesAction, RESPONSES_IMAGE_ACTION_OPTIONS, "auto") }
+      : {}),
+    ...(launchId === GPT_IMAGE_2_5_LAUNCH_ID && typeof input.previousResponseId === "string" && input.previousResponseId.trim()
+      ? { previousResponseId: input.previousResponseId.trim() }
+      : {}),
+    ...(launchId === GPT_IMAGE_2_5_LAUNCH_ID && typeof input.previousImageGenerationCallId === "string" && input.previousImageGenerationCallId.trim()
+      ? { previousImageGenerationCallId: input.previousImageGenerationCallId.trim() }
+      : {}),
+    ...(launchId === GPT_IMAGE_2_5_LAUNCH_ID && typeof input.inputImageDetail === "string" && (RESPONSES_INPUT_IMAGE_DETAIL_OPTIONS as readonly string[]).includes(input.inputImageDetail)
+      ? { inputImageDetail: input.inputImageDetail as OpenAIImageParams["inputImageDetail"] }
+      : {}),
     referenceImageMode: oneOf(input.referenceImageMode, REFERENCE_IMAGE_MODE_OPTIONS, DEFAULT_IMAGE_PARAMS.referenceImageMode ?? "original"),
     size: nonEmptyString(input.size, DEFAULT_IMAGE_PARAMS.size),
-    quality: oneOf(input.quality, IMAGE_QUALITY_OPTIONS, DEFAULT_IMAGE_PARAMS.quality),
+    quality: oneOf(
+      input.quality,
+      launchId === GPT_IMAGE_2_5_LAUNCH_ID ? GPT_IMAGE_2_5_QUALITY_OPTIONS : IMAGE_QUALITY_OPTIONS,
+      DEFAULT_IMAGE_PARAMS.quality
+    ),
     outputFormat: oneOf(input.outputFormat, IMAGE_FORMAT_OPTIONS, DEFAULT_IMAGE_PARAMS.outputFormat),
     outputCompression: boundedInteger(input.outputCompression, 0, 100, DEFAULT_IMAGE_PARAMS.outputCompression),
-    background: oneOf(input.background, IMAGE_BACKGROUND_OPTIONS, DEFAULT_IMAGE_PARAMS.background),
+    background: oneOf(
+      input.background,
+      launchId === GPT_IMAGE_2_5_LAUNCH_ID ? IMAGE_BACKGROUND_OPTIONS : ["auto", "opaque"] as const,
+      DEFAULT_IMAGE_PARAMS.background
+    ),
+    ...(launchId === GPT_IMAGE_2_5_LAUNCH_ID && (input.inputFidelity === "low" || input.inputFidelity === "high")
+      ? { inputFidelity: input.inputFidelity }
+      : {}),
     n: boundedInteger(input.n, 1, 10, DEFAULT_IMAGE_PARAMS.n),
     stream: typeof input.stream === "boolean" ? input.stream : DEFAULT_IMAGE_PARAMS.stream,
     partialImages: boundedInteger(input.partialImages, 0, 3, DEFAULT_IMAGE_PARAMS.partialImages),
@@ -521,7 +591,19 @@ function normalizeOpenAIImageParams(input: Record<string, unknown>): OpenAIImage
 function getDefaultModelForLaunch(launchId: FocusedLaunchId): string {
   if (launchId === NANO_BANANA_3_LAUNCH_ID) return DEFAULT_GEMINI_IMAGE_PARAMS.model;
   if (launchId === GENERAL_LAUNCH_ID) return DEFAULT_GENERAL_IMAGE_PARAMS.model;
+  if (launchId === GPT_IMAGE_2_5_LAUNCH_ID) return GPT_IMAGE_2_5_DEFAULT_MODEL_ID;
   return GPT_IMAGE_2_MODEL_ID;
+}
+
+function normalizeModelForLaunch(launchId: FocusedLaunchId, value: string): string {
+  if (launchId === GPT_IMAGE_2_5_LAUNCH_ID) {
+    const normalized = normalizeModelId(value);
+    return isGptImage25ModelId(normalized) ? normalized : GPT_IMAGE_2_5_DEFAULT_MODEL_ID;
+  }
+  if (launchId === GPT_IMAGE_2_LAUNCH_ID) {
+    return value;
+  }
+  return value;
 }
 
 function normalizeProviderKind(value: unknown, fallback: ProviderKind): ProviderKind {
@@ -530,8 +612,13 @@ function normalizeProviderKind(value: unknown, fallback: ProviderKind): Provider
 }
 
 function normalizeFocusedLaunchId(value: unknown, fallback: FocusedLaunchId): FocusedLaunchId {
-  if (value === GPT_IMAGE_2_LAUNCH_ID || value === NANO_BANANA_3_LAUNCH_ID || value === GENERAL_LAUNCH_ID) return value;
+  if (value === GPT_IMAGE_2_LAUNCH_ID || value === GPT_IMAGE_2_5_LAUNCH_ID || value === NANO_BANANA_3_LAUNCH_ID || value === GENERAL_LAUNCH_ID) return value;
   return fallback;
+}
+
+function normalizeStoredLaunchId(value: unknown, model: string): FocusedLaunchId {
+  if (isGptImage25ModelId(model)) return GPT_IMAGE_2_5_LAUNCH_ID;
+  return normalizeFocusedLaunchId(value, GPT_IMAGE_2_LAUNCH_ID);
 }
 
 function normalizeEncryption(value: unknown): StoredProviderConfig["encryption"] {

@@ -155,6 +155,16 @@ function publicQueueJob(item: GenerationQueueItem, options: BuildQueueSnapshotOp
     chargedRetryRisk: summary.chargedRetryRisk,
     canCancel: summary.canCancel,
     mode: item.request.mode,
+    workflow: item.request.workflow,
+    sketch: item.request.sketch ? {
+      artifactId: item.request.sketch.artifactId,
+      width: item.request.sketch.width,
+      height: item.request.sketch.height,
+      background: item.request.sketch.background,
+      strokeCount: item.request.sketch.strokeCount,
+      pointCount: item.request.sketch.pointCount,
+      documentHash: item.request.sketch.documentHash
+    } : undefined,
     promptPreview: promptPreview(item.request.prompt),
     inputCount: item.request.inputPaths.length,
     hasMask: Boolean(item.request.maskPath || item.request.maskDataUrl),
@@ -203,6 +213,16 @@ function publicHistoryJob(job: GenerationJob) {
     modelId: job.modelId,
     modelDisplayName: job.modelDisplayName,
     mode: job.mode,
+    workflow: job.workflow,
+    sketch: job.sketch ? {
+      artifactId: job.sketch.artifactId,
+      width: job.sketch.width,
+      height: job.sketch.height,
+      background: job.sketch.background,
+      strokeCount: job.sketch.strokeCount,
+      pointCount: job.sketch.pointCount,
+      documentHash: job.sketch.documentHash
+    } : undefined,
     promptPreview: promptPreview(job.prompt),
     inputCount: job.inputAssets.length,
     hasMask: Boolean(job.maskAsset),

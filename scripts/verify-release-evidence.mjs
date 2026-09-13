@@ -50,6 +50,13 @@ const v034GateIds = [
   "cli-mcp-media-contract"
 ];
 
+const v034SketchGateIds = [
+  "sketch-workspace-contract",
+  "sketch-packaged-electron",
+  "sketch-feature-flag-rollback",
+  "sketch-real-aihub-matrix"
+];
+
 const v034ChecklistGuards = [
   {
     file: "docs/release/v0.3.4-preflight.md",
@@ -75,6 +82,26 @@ const v034ChecklistGuards = [
     file: "docs/release/v0.3.4-preflight.md",
     text: "完成 CLI/MCP 媒体 metadata 契约与路径脱敏验证。",
     gateIds: ["cli-mcp-media-contract"]
+  },
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "完成 Sketch 图生图融合的确定性测试和工作区契约验证。",
+    gateIds: ["sketch-workspace-contract"]
+  },
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "在同一候选 Electron 包完成 Sketch 输入/结果、Mask 互斥、模型切换和窄窗口矩阵。",
+    gateIds: ["sketch-packaged-electron"]
+  },
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "完成 CROSSGEN_SKETCH_ENABLED packaged 回滚实测。",
+    gateIds: ["sketch-feature-flag-rollback"]
+  },
+  {
+    file: "docs/release/v0.3.4-preflight.md",
+    text: "完成 AIHub 真实 GPT Image 2.5 / Nano Banana 3 Sketch 矩阵。",
+    gateIds: ["sketch-real-aihub-matrix"]
   },
   {
     file: "docs/release/v0.3.4-preflight.md",
@@ -470,7 +497,7 @@ function isAtLeastVersion(value, minimum) {
 
 function knownGateIdsForRelease(releaseVersion) {
   if (isAtLeastVersion(releaseVersion, "0.3.4")) {
-    return [...baseGateIds, ...v031GateIds, ...v032GateIds, ...v033GateIds, ...v034GateIds];
+    return [...baseGateIds, ...v031GateIds, ...v032GateIds, ...v033GateIds, ...v034GateIds, ...v034SketchGateIds];
   }
   if (isAtLeastVersion(releaseVersion, "0.3.3")) {
     return [...baseGateIds, ...v031GateIds, ...v032GateIds, ...v033GateIds];

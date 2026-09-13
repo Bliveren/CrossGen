@@ -4,8 +4,13 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { GenerationJob, InputAsset, JobProgressEvent, OpenAIImageParams, OpenAIImageRouting } from "../../shared/types";
 import { DEFAULT_BASE_URL, DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
+import {
+  GPT_IMAGE_2_5_FLARE_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
+  GPT_IMAGE_2_5_SUNBURST_MODEL_ID
+} from "../../shared/modelCatalog";
 import type { StoredProviderConfig } from "./stateMigration";
-import { baseRequestBody, buildEndpoint, normalizeOpenAIJobParams, normalizeOpenAIRequestParams, openaiImageAdapter, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImageAdapter";
+import { baseRequestBody, buildEndpoint, handleStreamResponse, normalizeOpenAIJobParams, normalizeOpenAIRequestParams, openaiImageAdapter, parseSSE, runOpenAIImageJob, type OpenAIImageJob } from "./openaiImageAdapter";
 
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
 
@@ -115,6 +120,585 @@ describe("OpenAI image service", () => {
       stream: false,
       partialImages: 0
     });
+    expect(baseRequestBody(params({ user: "user_hash_123", stream: false }), "prompt")).toMatchObject({
+      user: "user_hash_123"
+    });
+  });
+
+  it("builds GPT Image 2.5 Image API requests with advanced controls", async () => {
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }], id: "imgreq_mock_25" });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          quality: "xhigh",
+          background: "transparent",
+          outputFormat: "webp",
+          outputCompression: 42,
+          moderation: "low",
+          inputFidelity: "high",
+          stream: false,
+          imageRoute: "image-api"
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requestBody).toMatchObject({
+      model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      quality: "xhigh",
+      background: "transparent",
+      output_format: "webp",
+      output_compression: 42,
+      moderation: "low"
+    });
+    expect(requestBody).not.toHaveProperty("input_fidelity");
+    expect(result.providerMetadata?.responsesResponseId).toBeUndefined();
+  });
+
+  it("persists revised_prompt returned by the Images API", async () => {
+    const fetchImpl = (async () => Response.json({
+      id: "imgreq_revised",
+      data: [{ b64_json: tinyPngBase64, revised_prompt: "A refined product render" }]
+    })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "image-api",
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(result.providerMetadata).toMatchObject({
+      responsesRevisedPrompt: "A refined product render"
+    });
+    expect(result.providerMetadata).not.toHaveProperty("responsesResponseId");
+  });
+
+  it("uses Responses image_generation for GPT Image 2.5 multi-turn edits", async () => {
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      requests.push({ url: String(url), body });
+      return Response.json({
+        id: "resp_mock_25",
+        output: [{ type: "image_generation_call", result: tinyPngBase64 }],
+        usage: { total_tokens: 17 }
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_FLARE_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Flare",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_FLARE_MODEL_ID,
+          imageRoute: "responses",
+          responsesModel: "gpt-6-astra",
+          previousResponseId: "resp_previous",
+          quality: "max",
+          partialImages: 0,
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      url: "https://api.test/v1/responses",
+      body: {
+        model: "gpt-6-astra",
+        previous_response_id: "resp_previous",
+        input: [{
+          role: "user",
+          content: [{ type: "input_text", text: "Make a clean product render" }]
+        }],
+        tools: [{
+          type: "image_generation",
+          model: GPT_IMAGE_2_5_FLARE_MODEL_ID,
+          action: "auto",
+          quality: "max"
+        }],
+        tool_choice: { type: "image_generation" }
+      }
+    });
+    expect(requests[0].body).not.toHaveProperty("stream");
+    expect((requests[0].body.tools as Array<Record<string, unknown>>)[0]).not.toHaveProperty("partial_images");
+    expect(result.providerMetadata).toMatchObject({ responsesResponseId: "resp_mock_25" });
+  });
+
+  it("continues from an image_generation_call and forwards original input detail", async () => {
+    const source = await sourceAsset();
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({
+        id: "resp_call_continuation",
+        output: [{
+          type: "image_generation_call",
+          id: "ig_call_continuation",
+          result: tinyPngBase64,
+          revised_prompt: "A refined continuation prompt"
+        }]
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        inputAssets: [source],
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "auto",
+          responsesModel: "gpt-6-astra",
+          responsesAction: "edit",
+          previousImageGenerationCallId: "ig_previous",
+          inputImageDetail: "original",
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requestBody).toMatchObject({
+      model: "gpt-6-astra",
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: expect.stringContaining("Make a clean product render") },
+            { type: "input_image", detail: "original" }
+          ]
+        },
+        { type: "image_generation_call", id: "ig_previous" }
+      ],
+      tools: [{
+        type: "image_generation",
+        model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        action: "edit"
+      }],
+      tool_choice: { type: "image_generation" }
+    });
+    expect(requestBody).not.toHaveProperty("previous_response_id");
+    expect(result.providerMetadata).toMatchObject({
+      responsesResponseId: "resp_call_continuation",
+      responsesImageGenerationCallId: "ig_call_continuation",
+      responsesRevisedPrompt: "A refined continuation prompt"
+    });
+  });
+
+  it("forwards the safety identifier on Responses requests", async () => {
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({
+        id: "resp_user",
+        output: [{ type: "image_generation_call", result: tinyPngBase64 }]
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await runOpenAIImageJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "responses",
+          user: "user_hash_123",
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requestBody).toMatchObject({ safety_identifier: "user_hash_123" });
+  });
+
+  it("surfaces coarse moderation details without exposing classifier scores", async () => {
+    const fetchImpl = (async () => Response.json({
+      error: {
+        type: "image_generation_user_error",
+        code: "moderation_blocked",
+        message: "The request was blocked by moderation.",
+        moderation_details: {
+          moderation_stage: "input",
+          categories: ["harassment", "violence"],
+          scores: { harassment: 0.99 }
+        }
+      }
+    }, { status: 400 })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "image-api",
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    )).rejects.toThrow("moderation_stage=input categories=harassment,violence");
+  });
+
+  it("auto-routes GPT Image 2.5 Responses-only controls to the Responses API", async () => {
+    const requests: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requests.push(String(url));
+      expect(init?.body).toBeTruthy();
+      return Response.json({
+        id: "resp_auto_25",
+        output: [{ type: "image_generation_call", result: tinyPngBase64 }]
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await runOpenAIImageJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "auto",
+          responsesModel: "gpt-6-astra",
+          responsesAction: "edit",
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests).toEqual(["https://api.test/v1/responses"]);
+  });
+
+  it("does not fall back to Images API when an explicit Responses request fails", async () => {
+    const requests: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request) => {
+      requests.push(String(url));
+      return Response.json({ error: { message: "Responses route unavailable" } }, { status: 503 });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "responses",
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    )).rejects.toThrow("Responses route unavailable");
+
+    expect(requests).toEqual(["https://api.test/v1/responses"]);
+  });
+
+  it("does not fall back when auto mode is carrying Responses-only context", async () => {
+    const requests: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request) => {
+      requests.push(String(url));
+      return Response.json({ error: { message: "conversation continuation rejected" } }, { status: 400 });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_FLARE_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Flare",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_FLARE_MODEL_ID,
+          imageRoute: "auto",
+          previousResponseId: "resp_previous",
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    )).rejects.toThrow("conversation continuation rejected");
+
+    expect(requests).toEqual(["https://api.test/v1/responses"]);
+  });
+
+  it("omits zero Responses partial images and keeps nested completion metadata", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: response.completed
+data: ${JSON.stringify({
+            id: "evt_only_should_not_be_saved",
+            response: {
+              id: "resp_stream_25",
+              output: [{
+                type: "image_generation_call",
+                id: "ig_stream_25",
+                revised_prompt: "A refined prompt",
+                result: tinyPngBase64
+              }],
+              usage: { total_tokens: 41 }
+            }
+          })}
+
+`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "responses",
+          stream: true,
+          partialImages: 0
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    const tool = (requestBody?.tools as Array<Record<string, unknown>>)?.[0];
+    expect(tool).toMatchObject({
+      type: "image_generation"
+    });
+    expect(tool).not.toHaveProperty("partial_images");
+    expect(result.providerMetadata).toMatchObject({
+      responsesResponseId: "resp_stream_25",
+      responsesImageGenerationCallId: "ig_stream_25",
+      responsesRevisedPrompt: "A refined prompt"
+    });
+    expect(result.providerMetadata).not.toHaveProperty("id");
+    expect(result.usage?.total_tokens).toBe(41);
+  });
+
+  it("keeps GPT Image 2.5 batch generation on the Images API in auto mode", async () => {
+    const requests: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request) => {
+      requests.push(String(url));
+      return Response.json({
+        data: [
+          { b64_json: tinyPngBase64 },
+          { b64_json: tinyPngBase64 }
+        ]
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "auto",
+          n: 2,
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requests).toEqual(["https://api.test/v1/images/generations"]);
+    expect(result.outputs.filter((asset) => asset.sourceType === "result")).toHaveLength(2);
+  });
+
+  it("passes GPT Image 2.5 edit fidelity and masks through the Responses tool", async () => {
+    const source = await sourceAsset();
+    const mask = await sourceAsset("mask.png");
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({
+        id: "resp_edit_25",
+        output: [{ type: "image_generation_call", result: tinyPngBase64 }]
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await runOpenAIImageJob(
+      job({
+        mode: "inpaint",
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        inputAssets: [source],
+        maskAsset: mask,
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "responses",
+          inputFidelity: "low",
+          background: "transparent",
+          outputFormat: "png",
+          partialImages: 0,
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(requestBody).toMatchObject({
+      model: "gpt-6-astra",
+      tools: [{
+        type: "image_generation",
+        model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        action: "auto",
+        input_fidelity: "low",
+        background: "transparent",
+        input_image_mask: {
+          image_url: `data:image/png;base64,${tinyPngBase64}`
+        }
+      }]
+    });
+    expect(result.providerMetadata).toMatchObject({ responsesResponseId: "resp_edit_25" });
+  });
+
+  it("sends Sketch as the first Responses input image without an input image mask", async () => {
+    const sketch = await sourceAsset("sketch.png");
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({
+        id: "resp_sketch_25",
+        output: [{ type: "image_generation_call", result: tinyPngBase64 }]
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        workflow: "sketch",
+        sketch: { guidance: ["pose"] } as GenerationJob["sketch"],
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_FLARE_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Flare",
+        inputAssets: [{ ...sketch, role: "sketch" }],
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_FLARE_MODEL_ID,
+          imageRoute: "responses",
+          responsesAction: "edit",
+          inputImageDetail: "original",
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    const input = requestBody.input as Array<{ content?: Array<Record<string, unknown>> }>;
+    const content = input[0]?.content ?? [];
+    expect(content[0]?.type).toBe("input_text");
+    expect(content[0]?.text).toContain("hand-drawn sketch");
+    expect(content[0]?.text).toContain("Preserve the sketch's pose, gesture, and silhouette.");
+    expect(content[1]?.type).toBe("input_image");
+    expect(content[1]?.detail).toBe("original");
+    expect(requestBody.tools).toEqual([expect.objectContaining({
+      type: "image_generation",
+      action: "edit"
+    })]);
+    expect(requestBody.tools).not.toEqual([expect.objectContaining({ input_image_mask: expect.anything() })]);
+  });
+
+  it("rejects a mask without alpha metadata before a paid request", async () => {
+    const source = await sourceAsset();
+    const mask = await sourceAsset("mask.png");
+    const { runtime } = await createRuntime((async () => {
+      throw new Error("request must not be sent");
+    }) as typeof fetch);
+
+    await expect(runOpenAIImageJob(
+      job({
+        mode: "inpaint",
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        inputAssets: [{ ...source, width: 1024, height: 1024 }],
+        maskAsset: { ...mask, width: 1024, height: 1024, hasAlpha: false },
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "image-api"
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    )).rejects.toThrow("alpha channel");
   });
 
   it("enables streaming for supported GPT Image 2 jobs", () => {
@@ -178,6 +762,47 @@ describe("OpenAI image service", () => {
 
     expect(openaiImageAdapter.kind).toBe("openai");
     expect(requestUrl).toBe("https://api.test/v1/images/generations");
+    expect(result.status).toBe("succeeded");
+  });
+
+  it("runs GPT Image 2.5 through an OpenAI-compatible provider adapter", async () => {
+    let requestUrl = "";
+    let requestBody: Record<string, unknown> = {};
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requestUrl = String(url);
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    const result = await openaiImageAdapter.runJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          imageRoute: "auto",
+          quality: "max",
+          stream: false
+        })
+      }),
+      "sk-test-key",
+      config({
+        baseURL: "https://gateway.test/v1",
+        defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID
+      }),
+      runtime
+    );
+
+    expect(requestUrl).toBe("https://gateway.test/v1/images/generations");
+    expect(requestBody).toMatchObject({
+      model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      quality: "max"
+    });
     expect(result.status).toBe("succeeded");
   });
 
@@ -275,6 +900,45 @@ describe("OpenAI image service", () => {
     ]);
   });
 
+  it("does not fall back to the single-image Responses tool for GPT Image 2.5 batches", async () => {
+    const requests: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request) => {
+      requests.push(String(url));
+      return Response.json({
+        model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        data: null,
+        usage: { num_input_images: 0 },
+        extra_fields: {
+          request_type: "image_generation",
+          provider: "right-image",
+          resolved_model_used: GPT_IMAGE_2_5_SUNBURST_MODEL_ID
+        }
+      });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(runOpenAIImageJob(
+      job({
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        modelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        modelDisplayName: "GPT Image 2.5 · Sunburst",
+        params: params({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          n: 2,
+          stream: false,
+          imageRoute: "image-api"
+        })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    )).rejects.toThrow("没有返回可保存的图片");
+
+    expect(requests.every((url) => url.endsWith("/images/generations"))).toBe(true);
+    expect(requests).not.toContain("https://api.test/v1/responses");
+  });
+
   it("honors explicit streaming on direct OpenAI and compatible gateways", async () => {
     const directBodies: Array<Record<string, unknown>> = [];
     const directFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
@@ -368,9 +1032,23 @@ describe("OpenAI image service", () => {
     const requestBodies: Array<Record<string, unknown>> = [];
     const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
       requestBodies.push(JSON.parse(String(init?.body)));
+      const attempt = requestBodies.length;
       return Response.json({
         data: [{ b64_json: tinyPngBase64 }],
-        usage: { total_tokens: requestBodies.length }
+        usage: {
+          total_tokens: attempt,
+          input_tokens: attempt * 10,
+          output_tokens: attempt,
+          input_tokens_details: {
+            text_tokens: attempt,
+            image_tokens: attempt * 2,
+            cached_tokens: attempt * 3,
+            cache_write_tokens: attempt * 4
+          },
+          output_tokens_details: {
+            reasoning_tokens: attempt * 5
+          }
+        }
       });
     }) as typeof fetch;
     const { runtime } = await createRuntime(fetchImpl);
@@ -381,6 +1059,19 @@ describe("OpenAI image service", () => {
     expect(requestBodies.every((body) => body.stream === false)).toBe(true);
     expect(result.params).toMatchObject({ n: 3, stream: false, partialImages: 0 });
     expect(result.usage?.total_tokens).toBe(6);
+    expect(result.usage).toMatchObject({
+      input_tokens: 60,
+      output_tokens: 6,
+      input_tokens_details: {
+        text_tokens: 6,
+        image_tokens: 12,
+        cached_tokens: 18,
+        cache_write_tokens: 24
+      },
+      output_tokens_details: {
+        reasoning_tokens: 30
+      }
+    });
     expect(result.outputs.map((asset) => asset.fileName)).toEqual([
       "job_test-result-0.png",
       "job_test-result-1.png",
@@ -428,6 +1119,33 @@ describe("OpenAI image service", () => {
     expect(form?.get("moderation")).toBeNull();
     expect(form?.get("stream")).toBeNull();
     expect(form?.get("mask")).toBeInstanceOf(File);
+  });
+
+  it("sends Sketch as the first Image API edit input without a mask", async () => {
+    const sketch = await sourceAsset("sketch.png");
+    let form: FormData | undefined;
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      form = init?.body as FormData;
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await runOpenAIImageJob(
+      job({
+        mode: "edit",
+        workflow: "sketch",
+        inputAssets: [{ ...sketch, role: "sketch" }],
+        params: params({ stream: false, imageRoute: "image-api" })
+      }),
+      "sk-test-key",
+      "https://api.test/v1",
+      runtime
+    );
+
+    expect(form?.getAll("image")).toHaveLength(1);
+    expect(form?.get("mask")).toBeNull();
+    expect(String(form?.get("prompt"))).toContain("hand-drawn sketch");
+    expect(String(form?.get("prompt"))).toContain("composition, pose, spatial layout");
   });
 
   it("uses chat-completions for masked inpaint when guided routes prefer chat", async () => {
@@ -862,7 +1580,7 @@ describe("OpenAI image service", () => {
       bodyType: "json",
       body: {
         model: "gpt-image-2",
-        tools: [{ type: "image_generation", action: "edit" }]
+        tools: [{ type: "image_generation", action: "auto" }]
       }
     });
     const responseBody = requests.at(-1)?.body as { input?: Array<{ content?: Array<{ type: string; image_url?: string }> }> };
@@ -1551,6 +2269,56 @@ describe("OpenAI image service", () => {
     expect(result.usage?.total_tokens).toBe(5);
   });
 
+  it("rejects a streaming response that contains only partial images", async () => {
+    const fetchImpl = (async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: image_generation.partial_image
+data: ${JSON.stringify({ type: "image_generation.partial_image", partial_image_index: 0, b64_json: tinyPngBase64 })}
+
+`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+
+    await expect(
+      runOpenAIImageJob(job({ params: params({ stream: true, partialImages: 1 }) }), "sk-test-key", DEFAULT_BASE_URL, runtime, {
+        streamingPartialsEnabled: true
+      })
+    ).rejects.toThrow("没有返回最终图片");
+  });
+
+  it("rejects a streaming response when fewer final images arrive than requested", async () => {
+    const fetchImpl = (async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: image_generation.completed
+data: ${JSON.stringify({ type: "image_generation.completed", b64_json: tinyPngBase64 })}
+
+`));
+          controller.close();
+        }
+      });
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+    const response = await fetchImpl("https://api.test/v1/images/generations");
+
+    await expect(
+      handleStreamResponse(
+        response,
+        job({ params: params({ stream: true, n: 2, partialImages: 1 }) }),
+        "image_generation",
+        runtime,
+      )
+    ).rejects.toThrow("请求 2 张，实际收到 1 张");
+  });
+
   it("retains only the latest partial preview data URLs", async () => {
     const fetchImpl = (async () => {
       const encoder = new TextEncoder();
@@ -1921,11 +2689,11 @@ describe("OpenAI image service", () => {
   });
 });
 
-async function sourceAsset(): Promise<InputAsset> {
+async function sourceAsset(name = "source.png"): Promise<InputAsset> {
   if (!tmpDir) {
     tmpDir = await mkdtemp(path.join(os.tmpdir(), "image2tools-inputs-"));
   }
-  const sourcePath = path.join(tmpDir, "source.png");
+  const sourcePath = path.join(tmpDir, name);
   await writeFile(sourcePath, Buffer.from(tinyPngBase64, "base64"));
-  return { id: "source", name: "source.png", path: sourcePath, mimeType: "image/png", sizeBytes: 1 };
+  return { id: name.replace(/\W+/g, "-"), name, path: sourcePath, mimeType: "image/png", sizeBytes: 1 };
 }

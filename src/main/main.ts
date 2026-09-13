@@ -44,10 +44,17 @@ import type {
   OutputAsset,
   InputAsset,
   ImageParams,
+  ImageBackground,
+  ImageFormat,
+  ModerationMode,
   ImageQuality,
   JobStatus,
   JobProgressEvent,
   OpenAIImageRoute,
+  OpenAIImageRouteSelection,
+  OpenAIImageParams,
+  ResponsesInputImageDetail,
+  ResponsesImageAction,
   PromptTemplate,
   PromptTemplateInput,
   ProviderConfig,
@@ -57,6 +64,9 @@ import type {
   ReferenceImageMode,
   ReferencePreflightSummary,
   RunJobRequest,
+  SketchDocument,
+  SketchExportRequest,
+  SketchExportResult,
   StorageKind,
   StorageFolderOptions,
   StorageSettings,
@@ -84,14 +94,31 @@ import {
   validateWorkspaceDraftInput
 } from "../shared/validation.js";
 import {
+  MAX_SKETCH_PNG_BYTES,
+  SKETCH_GUIDANCE_KEYS,
+  normalizeSketchDocument,
+  normalizeSketchGuidance,
+  sketchDocumentHash,
+  validateSketchDocument,
+  validateSketchTaskMetadata
+} from "../shared/sketch.js";
+import {
+  readSketchArtifact,
+  writeSketchArtifact
+} from "./services/sketchAssetStore.js";
+import {
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
+  GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
   getProviderKindForFocusedModelId,
   getFocusedModelDefinition,
   getModelDisplayName,
   isGeneralFallbackProvider,
+  isGptImage25ModelId,
+  isGptImageModelId,
   isPotentialGeneralImageModel,
   normalizeModelId
 } from "../shared/modelCatalog.js";
@@ -252,6 +279,7 @@ const RENDERER_SCREENSHOT_DIR_ENV = "CROSSGEN_RENDERER_SCREENSHOT_DIR";
 const CLI_SCHEMA_VERSION = 1;
 const MCP_IDLE_TIMEOUT_MS_ENV = "CROSSGEN_MCP_IDLE_TIMEOUT_MS";
 const DEFAULT_MCP_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const SKETCH_ENABLED_ENV = "CROSSGEN_SKETCH_ENABLED";
 const DESKTOP_QUEUE_WORKER_INTERVAL_MS = 5000;
 const DESKTOP_QUEUE_WORKER_RECHECK_MS = 250;
 const DESKTOP_QUEUE_WORKER_LEASE_MS = 30000;
@@ -560,7 +588,17 @@ function registerAssetProtocol(): void {
         galleryRelPath = normalizeGalleryRelativePath(galleryFileName);
         normalized = resolveManagedFileName(galleryDir, galleryRelPath);
       } else {
-        normalized = assertKnownHistoryAssetPath(state, assetPath);
+        try {
+          normalized = assertKnownHistoryAssetPath(state, assetPath);
+        } catch {
+          const sketchRoot = path.resolve(getSketchOriginalsDir(state));
+          const candidate = path.resolve(assetPath);
+          const relative = path.relative(sketchRoot, candidate);
+          if (!relative || relative.startsWith("..") || path.isAbsolute(relative) || path.extname(candidate).toLowerCase() !== ".png") {
+            throw new Error("资源不属于 CrossGen 管理目录。");
+          }
+          normalized = candidate;
+        }
       }
     } catch {
       return new Response("Forbidden", { status: 403 });
@@ -573,18 +611,29 @@ function registerAssetProtocol(): void {
     try {
       const state = await readState();
       const galleryDir = getGalleryDir(state);
+      const sketchRoot = path.resolve(getSketchOriginalsDir(state));
+      const sketchRelative = path.relative(sketchRoot, normalized);
+      const isSketchPath = !galleryFileName &&
+        Boolean(sketchRelative) &&
+        !sketchRelative.startsWith("..") &&
+        !path.isAbsolute(sketchRelative) &&
+        path.extname(normalized).toLowerCase() === ".png";
       const safePath = galleryFileName
         ? await assertManagedRegularFile(galleryDir, normalized)
-        : await assertKnownHistoryRegularAsset(state, normalized);
+        : isSketchPath
+          ? await assertManagedRegularFile(sketchRoot, normalized)
+          : await assertKnownHistoryRegularAsset(state, normalized);
       const served = galleryThumbnail && galleryRelPath
         ? await getOrCreateGalleryThumbnail(galleryRelPath, safePath)
         : { filePath: safePath, mimeType: mimeTypeForFile(safePath), cacheable: false, cacheHit: false, fallback: false };
       const content = await fs.readFile(served.filePath);
-      recordAssetProtocolResponse(
-        galleryFileName ? (galleryThumbnail ? "gallery-thumbnail" : "gallery-original") : "history",
-        content.byteLength,
-        served
-      );
+      if (galleryFileName || !assetPath.includes(`${path.sep}originals${path.sep}sketches${path.sep}`)) {
+        recordAssetProtocolResponse(
+          galleryFileName ? (galleryThumbnail ? "gallery-thumbnail" : "gallery-original") : "history",
+          content.byteLength,
+          served
+        );
+      }
       return new Response(new Blob([content], { type: served.mimeType }), {
         headers: {
           "access-control-allow-origin": "*",
@@ -629,6 +678,31 @@ function getDefaultGalleryDir(): string {
 
 function getDefaultMediaRoot(): string {
   return resolveDataDirs({ appDataDir: app.getPath("appData"), userDataDir: app.getPath("userData") }).mediaRoot;
+}
+
+function getSketchOriginalsDir(state?: AppStateFile | null): string {
+  return path.join(getStorageSettings(state ?? stateCache).mediaRoot ?? getDefaultMediaRoot(), "originals", "sketches");
+}
+
+function sketchArtifactIdIsSafe(value: string): boolean {
+  return /^[a-zA-Z0-9_-]{8,120}$/.test(value);
+}
+
+function isSketchFeatureEnabled(): boolean {
+  const value = process.env[SKETCH_ENABLED_ENV]?.trim().toLowerCase();
+  return value !== "0" && value !== "false" && value !== "off" && value !== "no";
+}
+
+function sketchPngIsValid(bytes: Uint8Array): boolean {
+  return bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a;
 }
 
 function getStorageSettings(state?: AppStateFile | null): StorageSettings {
@@ -1368,8 +1442,38 @@ async function selectedFilesToAssets(paths: string[]): Promise<InputAsset[]> {
   return Promise.all(imagePaths.map((filePath) => toInputAsset(filePath, true)));
 }
 
-async function resolveRequestInputs(request: RunJobRequest, imagesDir: string): Promise<{ inputs: InputAsset[]; mask?: InputAsset }> {
+async function resolveRequestInputs(request: RunJobRequest, imagesDir: string, state?: AppStateFile): Promise<{ inputs: InputAsset[]; mask?: InputAsset }> {
   const inputs = await Promise.all(request.inputPaths.filter(isImagePath).map((filePath) => toInputAsset(filePath, false)));
+
+  if (request.workflow === "sketch") {
+    if (!isSketchFeatureEnabled()) {
+      throw new Error("Sketch 当前已由 feature flag 关闭。");
+    }
+    const metadataValidation = validateSketchTaskMetadata(request.sketch);
+    if (!metadataValidation.ok || !request.sketch) {
+      throw new Error(metadataValidation.message ?? "Sketch 任务 metadata 无效。");
+    }
+    const first = inputs[0];
+    const expectedPath = path.join(getSketchOriginalsDir(state), `${request.sketch.artifactId}.png`);
+    if (!first || !sameResolvedPath(first.path, expectedPath)) {
+      throw new Error("Sketch 输入必须来自 CrossGen 管理的草图资产。");
+    }
+    if (first.mimeType !== "image/png") {
+      throw new Error("Sketch 输入必须是 PNG。");
+    }
+    await readSketchArtifact({
+      root: getStorageSettings(state).mediaRoot ?? getDefaultMediaRoot(),
+      artifactId: request.sketch.artifactId,
+      expectedDocumentHash: request.sketch.documentHash
+    });
+    inputs[0] = {
+      ...first,
+      role: "sketch",
+      artifactId: request.sketch.artifactId,
+      documentHash: request.sketch.documentHash,
+      previewUrl: `image2tools-asset://image?path=${encodeURIComponent(first.path)}`
+    };
+  }
 
   let mask: InputAsset | undefined;
   if (request.maskPath) {
@@ -1596,6 +1700,8 @@ function createJob(
     modelId,
     modelDisplayName: getModelDisplayName(launchId, modelId),
     mode: request.mode,
+    workflow: request.workflow,
+    sketch: request.sketch,
     prompt: request.prompt.trim(),
     inputAssets,
     maskAsset,
@@ -1793,6 +1899,9 @@ function snapshotFromState(state: AppStateFile): AppSnapshot {
   const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
   return {
     appVersion: getAppVersion(),
+    features: {
+      sketchEnabled: isSketchFeatureEnabled()
+    },
     providers: state.providers.map(toPublicConfig),
     activeProviderId: activeProvider.id,
     history: state.history,
@@ -1922,6 +2031,100 @@ async function handleDeleteProvider(_event: IpcMainInvokeEvent, providerId: stri
   return snapshotFromState(nextState);
 }
 
+async function handleSaveSketchAsset(_event: IpcMainInvokeEvent, input: SketchExportRequest): Promise<SketchExportResult> {
+  if (!isSketchFeatureEnabled()) {
+    throw new Error("Sketch 当前已由 feature flag 关闭。");
+  }
+  if (!input || typeof input !== "object") {
+    throw new Error("Sketch 导出请求无效。");
+  }
+  const document = normalizeSketchDocument(input.document);
+  if (!document) {
+    throw new Error("Sketch 文档格式无效。");
+  }
+  if (!validateSketchDocument(document).ok) {
+    throw new Error("Sketch 文档格式无效。");
+  }
+  if (typeof input.documentHash !== "string" || input.documentHash !== sketchDocumentHash(document)) {
+    throw new Error("Sketch 文档 hash 校验失败。");
+  }
+  if (!(input.pngBytes instanceof Uint8Array) || input.pngBytes.byteLength === 0) {
+    throw new Error("Sketch PNG 为空。");
+  }
+  if (input.guidance !== undefined && (
+    !Array.isArray(input.guidance) ||
+    input.guidance.some((item) => !SKETCH_GUIDANCE_KEYS.includes(item))
+  )) {
+    throw new Error("Sketch 引导设置无效。");
+  }
+  const guidance = normalizeSketchGuidance(input.guidance);
+  if (input.pngBytes.byteLength > MAX_SKETCH_PNG_BYTES) {
+    throw new Error("Sketch PNG 超过 50 MB 限制。");
+  }
+  if (!sketchPngIsValid(input.pngBytes)) {
+    throw new Error("Sketch 导出文件必须是有效 PNG。");
+  }
+
+  const image = nativeImage.createFromBuffer(Buffer.from(input.pngBytes));
+  if (image.isEmpty()) {
+    throw new Error("Sketch PNG 无法读取。");
+  }
+  const size = image.getSize();
+  if (size.width !== document.width || size.height !== document.height) {
+    throw new Error("Sketch PNG 尺寸与画布不一致。");
+  }
+
+  const state = await readState();
+  const artifactRoot = getStorageSettings(state).mediaRoot ?? getDefaultMediaRoot();
+  const record = await writeSketchArtifact({
+    root: artifactRoot,
+    document,
+    pngBytes: input.pngBytes,
+    documentHash: input.documentHash,
+    underlayIncluded: input.underlayIncluded,
+    underlayAssetId: input.underlayAssetId,
+    guidance
+  });
+  const { artifactId, paths } = record;
+  try {
+    const asset = await toInputAsset(paths.pngPath, false);
+    const resultAsset: InputAsset = {
+      ...asset,
+      role: "sketch",
+      artifactId,
+      documentHash: input.documentHash,
+      ...(input.underlayIncluded ? { underlayIncluded: true } : {}),
+      ...(input.underlayAssetId ? { underlayAssetId: input.underlayAssetId } : {}),
+      ...(guidance.length > 0 ? { guidance } : {}),
+      previewUrl: `image2tools-asset://image?path=${encodeURIComponent(paths.pngPath)}`
+    };
+    return {
+      artifactId,
+      asset: resultAsset,
+      documentHash: input.documentHash
+    };
+  } catch (error) {
+    await fs.rm(paths.pngPath, { force: true }).catch(() => undefined);
+    await fs.rm(paths.sidecarPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function handleLoadSketchDocument(_event: IpcMainInvokeEvent, artifactId: string): Promise<SketchDocument> {
+  if (!isSketchFeatureEnabled()) {
+    throw new Error("Sketch 当前已由 feature flag 关闭。");
+  }
+  if (typeof artifactId !== "string" || !sketchArtifactIdIsSafe(artifactId)) {
+    throw new Error("Sketch artifact ID 无效。");
+  }
+  const state = await readState();
+  const record = await readSketchArtifact({
+    root: getStorageSettings(state).mediaRoot ?? getDefaultMediaRoot(),
+    artifactId
+  });
+  return record.document;
+}
+
 async function handleClearApiKey(_event: IpcMainInvokeEvent, providerId?: string): Promise<ProviderConfig> {
   const state = await readState();
   const targetProviderId = typeof providerId === "string" && providerId.trim() ? providerId.trim() : state.activeProviderId;
@@ -1948,6 +2151,9 @@ async function handleSaveDraft(_event: IpcMainInvokeEvent, input: WorkspaceDraft
   if (!validation.ok) {
     throw new Error(validation.message ?? "草稿参数无效。");
   }
+  if (!isSketchFeatureEnabled() && (input.workflow === "sketch" || input.sketch !== undefined)) {
+    throw new Error("Sketch 当前已由 feature flag 关闭。");
+  }
   const state = await readState();
   const params = normalizeImageParams(input.params);
   // Drafts are restored from file metadata; never persist full reference image
@@ -1959,6 +2165,9 @@ async function handleSaveDraft(_event: IpcMainInvokeEvent, input: WorkspaceDraft
   const draft: WorkspaceDraft = {
     ...input,
     params,
+    workflow: input.workflow ?? (input.sketch ? "sketch" : undefined),
+    sketch: input.sketch ? normalizeSketchDocument(input.sketch) : undefined,
+    sketchGuidance: input.sketchGuidance ? [...input.sketchGuidance] : undefined,
     inputAssets,
     maskAsset,
     activeLaunchId: input.activeLaunchId ?? params.launchId,
@@ -2770,13 +2979,11 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
   try {
     const discovery = await discoverModelsAcrossProviders(config.kind, config.baseURL, apiKey, Math.min(config.timeoutMs, 30000), { fetch });
     const kind = discovery.inferredProviderKind ?? config.kind;
-    const activeSelection = discovery.inferredProviderKind
-      ? selectActiveLaunchForDiscovery(config, discovery.models, discovery.inferredProviderKind)
-      : {
-          activeLaunchId: config.activeLaunchId,
-          activeModelId: config.activeModelId,
-          defaultModel: config.defaultModel
-        };
+    const activeSelection = selectActiveLaunchForDiscovery(
+      config,
+      discovery.models,
+      discovery.inferredProviderKind ?? kind
+    );
     return {
       ...config,
       kind,
@@ -2851,6 +3058,22 @@ function selectActiveLaunchForDiscovery(
   }
 
   if (inferredProviderKind === "openai") {
+    const currentModel = models.find((model) => normalizeModelId(model.id) === normalizeModelId(config.activeModelId || config.defaultModel));
+    if (currentModel && isGptImageModelId(currentModel.id)) {
+      return {
+        activeLaunchId: isGptImage25ModelId(currentModel.id) ? GPT_IMAGE_2_5_LAUNCH_ID : GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: currentModel.id,
+        defaultModel: currentModel.id
+      };
+    }
+    const gpt25Model = models.find((model) => model.providerKind === "openai" && isGptImage25ModelId(model.id));
+    if (gpt25Model) {
+      return {
+        activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        activeModelId: gpt25Model.id,
+        defaultModel: gpt25Model.id
+      };
+    }
     const gptModel = models.find((model) => model.providerKind === "openai" && normalizeModelId(model.id) === normalizeModelId(GPT_IMAGE_2_MODEL_ID));
     if (gptModel) {
       return {
@@ -2968,11 +3191,14 @@ async function getOrCreateHistoryJobForQueueItem(
       ...existing,
       prompt: request.prompt,
       params: request.params,
+      mode: request.mode,
+      workflow: request.workflow,
+      sketch: request.sketch,
       referencePreflight: item.referencePreflight ?? existing.referencePreflight
     };
   }
 
-  const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
+  const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state), state);
   const referencePreflight = item.referencePreflight ?? buildReferencePreflightOrThrow(inputs, mask, request);
   const job = createJob(request, provider, inputs, mask, item.source, referencePreflight);
   await upsertJob(job);
@@ -3166,7 +3392,12 @@ function storedOpenAIImageRouteProbeVerified(provider: StoredProviderConfig, mod
 }
 
 function routeVerifiedForQueueDiagnostic(provider: StoredProviderConfig | undefined, request: RunJobRequest, route: string | undefined): boolean | undefined {
-  if (!provider || provider.kind !== "openai" || !isOpenAIImageParams(request.params) || request.params.launchId !== GPT_IMAGE_2_LAUNCH_ID) {
+  if (
+    !provider ||
+    provider.kind !== "openai" ||
+    !isOpenAIImageParams(request.params) ||
+    (request.params.launchId !== GPT_IMAGE_2_LAUNCH_ID && request.params.launchId !== GPT_IMAGE_2_5_LAUNCH_ID)
+  ) {
     return undefined;
   }
 
@@ -3680,6 +3911,9 @@ async function hasLiveGenerationWorkerHost(now = Date.now()): Promise<boolean> {
 }
 
 async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest): Promise<GenerationJob> {
+  if (request?.workflow === "sketch" && !isSketchFeatureEnabled()) {
+    throw new Error("Sketch 当前已由 feature flag 关闭。");
+  }
   const validation = validateRunJobRequest(request);
   if (!validation.ok) {
     throw new Error(validation.message ?? "任务请求无效。");
@@ -3708,7 +3942,7 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   }
   getApiKeyForConfigOrThrow(activeProvider);
   const imagesDir = getImagesDir(state);
-  const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir);
+  const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir, state);
   const referencePreflight = buildReferencePreflightOrThrow(inputs, mask, normalizedRequest);
   const queuedAt = Date.now();
   let job!: GenerationJob;
@@ -4175,7 +4409,8 @@ async function handleDeleteJob(_event: IpcMainInvokeEvent, jobId: string): Promi
   const state = await readState();
   const job = state.history.find((item) => item.id === jobId);
   const history = state.history.filter((item) => item.id !== jobId);
-  await writeState({ ...state, history });
+  const nextState = { ...state, history };
+  await writeState(nextState);
   if (job) {
     await Promise.all(pathsOwnedByJob(state, job).map((assetPath) => fs.unlink(assetPath).catch(() => undefined)));
   }
@@ -4205,7 +4440,8 @@ async function handleUpdateHistoryJob(_event: IpcMainInvokeEvent, jobId: string,
 async function handleClearHistory(): Promise<GenerationJob[]> {
   const state = await readState();
   const paths = state.history.flatMap((job) => pathsOwnedByJob(state, job));
-  await writeState({ ...state, history: [] });
+  const nextState = { ...state, history: [] };
+  await writeState(nextState);
   await Promise.all(paths.map((assetPath) => fs.unlink(assetPath).catch(() => undefined)));
   return [];
 }
@@ -4740,6 +4976,7 @@ function getCliPositionalsAfter(args: string[], token: string): string[] {
   const valueFlags = new Set([
     "--asset-id",
     "--aspect-ratio",
+    "--background",
     "--client",
     "--clear-provider-concurrency",
     "--correlation-id",
@@ -4747,26 +4984,41 @@ function getCliPositionalsAfter(args: string[], token: string): string[] {
     "--folder",
     "--idempotency-key",
     "--input",
+    "--image-route",
+    "--input-fidelity",
+    "--input-image-detail",
     "--mask",
     "--max-attempts",
     "--max-global-running",
     "--mode",
     "--model",
     "--name",
+    "--n",
     "--parent",
+    "--output-compression",
+    "--output-format",
+    "--partial-images",
+    "--previous-image-generation-call-id",
+    "--previous-response-id",
+    "--image-generation-call-id",
     "--prompt",
     "--prompt-file",
     "--provider",
     "--provider-concurrency",
     "--quality",
     "--query",
+    "--reference-image-mode",
     "--request-id",
+    "--moderation",
+    "--responses-model",
+    "--responses-action",
     "--resolution",
     "--size",
     "--status",
     "--tag",
     "--timeout-ms",
     "--to",
+    "--user",
     "--wait-ms"
   ]);
   const result: string[] = [];
@@ -5022,6 +5274,7 @@ interface AgentGenerationEnqueueInput {
   targetGalleryFolderId?: string | null;
   providerId?: string;
   model?: string;
+  user?: string;
   costConfirmed: boolean;
   idempotencyKey?: string;
   requestId?: string;
@@ -5030,6 +5283,20 @@ interface AgentGenerationEnqueueInput {
   timeoutMs?: number;
   size?: string;
   quality?: string;
+  n?: number;
+  outputFormat?: string;
+  outputCompression?: number;
+  background?: string;
+  moderation?: string;
+  inputFidelity?: string;
+  inputImageDetail?: string;
+  responsesModel?: string;
+  responsesAction?: string;
+  previousResponseId?: string;
+  previousImageGenerationCallId?: string;
+  partialImages?: number;
+  stream?: boolean;
+  imageRoute?: string;
   aspectRatio?: string;
   resolution?: string;
   referenceImageMode?: string;
@@ -5052,6 +5319,74 @@ function parsePositiveIntegerOption(value: string | undefined, name: string): nu
     throwCliCommandError("INVALID_ARGUMENT", `${name} must be a positive integer.`, [`Use ${name} <number>.`]);
   }
   return parsed;
+}
+
+function parseNonNegativeIntegerOption(value: string | undefined, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throwCliCommandError("INVALID_ARGUMENT", `${name} must be a non-negative integer.`, [`Use ${name} <number>.`]);
+  }
+  return parsed;
+}
+
+function parseCliImageCountOption(value: string | undefined): number | undefined {
+  const parsed = parsePositiveIntegerOption(value, "--n");
+  if (parsed !== undefined && parsed > 10) {
+    throwCliCommandError("INVALID_ARGUMENT", "--n must be an integer from 1 to 10.", ["Use --n <number> within 1-10."]);
+  }
+  return parsed;
+}
+
+function parseCliPartialImagesOption(value: string | undefined): number | undefined {
+  const parsed = parseNonNegativeIntegerOption(value, "--partial-images");
+  if (parsed !== undefined && parsed > 3) {
+    throwCliCommandError("INVALID_ARGUMENT", "--partial-images must be an integer from 0 to 3.", ["Use --partial-images <number> within 0-3."]);
+  }
+  return parsed;
+}
+
+function parseCliCompressionOption(value: string | undefined): number | undefined {
+  const parsed = parseNonNegativeIntegerOption(value, "--output-compression");
+  if (parsed !== undefined && parsed > 100) {
+    throwCliCommandError("INVALID_ARGUMENT", "--output-compression must be an integer from 0 to 100.", ["Use --output-compression <number> within 0-100."]);
+  }
+  return parsed;
+}
+
+function parseCliImageRouteOption(value: string | undefined): OpenAIImageRouteSelection | undefined {
+  if (value === undefined) return undefined;
+  if (value === "auto" || value === "image-api" || value === "responses" || value === "chat-completions") return value;
+  throwCliCommandError("INVALID_ARGUMENT", "--image-route must be auto, image-api, responses, or chat-completions.", [
+    "Use --image-route <auto|image-api|responses|chat-completions>."
+  ]);
+}
+
+function parseCliResponsesActionOption(value: string | undefined): ResponsesImageAction | undefined {
+  if (value === undefined) return undefined;
+  if (value === "auto" || value === "generate" || value === "edit") return value;
+  throwCliCommandError("INVALID_ARGUMENT", "--responses-action must be auto, generate, or edit.", [
+    "Use --responses-action <auto|generate|edit>."
+  ]);
+}
+
+function parseCliResponsesInputImageDetailOption(value: string | undefined): ResponsesInputImageDetail | undefined {
+  if (value === undefined) return undefined;
+  if (value === "auto" || value === "low" || value === "high" || value === "original") return value;
+  throwCliCommandError("INVALID_ARGUMENT", "--input-image-detail must be auto, low, high, or original.", [
+    "Use --input-image-detail <auto|low|high|original>."
+  ]);
+}
+
+function parseCliStreamOption(args: string[]): boolean | undefined {
+  const stream = hasCliFlag(args, "--stream");
+  const noStream = hasCliFlag(args, "--no-stream");
+  if (stream && noStream) {
+    throwCliCommandError("INVALID_ARGUMENT", "Use either --stream or --no-stream, not both.");
+  }
+  if (stream) return true;
+  if (noStream) return false;
+  return undefined;
 }
 
 function normalizeReferenceImageModeOption(value: string | undefined): ReferenceImageMode | undefined {
@@ -5098,7 +5433,7 @@ function agentModelProviderKind(provider: StoredProviderConfig, model: string, o
     return focusedProviderKind ?? discoveredModel?.providerKind ?? provider.kind;
   }
 
-  if (provider.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID) return "openai";
+  if (provider.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID || provider.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID) return "openai";
   if (provider.activeLaunchId === NANO_BANANA_3_LAUNCH_ID) return "gemini";
   return focusedProviderKind ?? discoveredModel?.providerKind ?? provider.kind;
 }
@@ -5112,7 +5447,7 @@ function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGener
     ? modelProviderKind === "gemini"
       ? NANO_BANANA_3_LAUNCH_ID
       : modelProviderKind === "openai"
-        ? GPT_IMAGE_2_LAUNCH_ID
+        ? isGptImage25ModelId(model) ? GPT_IMAGE_2_5_LAUNCH_ID : GPT_IMAGE_2_LAUNCH_ID
         : GENERAL_LAUNCH_ID
     : provider.activeLaunchId;
 
@@ -5139,19 +5474,36 @@ function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGener
   return {
     ...DEFAULT_IMAGE_PARAMS,
     providerKind: "openai",
-    launchId: GPT_IMAGE_2_LAUNCH_ID,
-    model,
+    launchId: activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID ? GPT_IMAGE_2_5_LAUNCH_ID : GPT_IMAGE_2_LAUNCH_ID,
+    model: model || (activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID ? GPT_IMAGE_2_5_DEFAULT_MODEL_ID : GPT_IMAGE_2_MODEL_ID),
     ...(referenceImageMode ? { referenceImageMode } : {}),
-    imageRoute:
-      input.mode === "generate"
-        ? provider.openAIImageRouting?.preferredGenerateRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute
-        : input.mode === "inpaint"
-          ? provider.openAIImageRouting?.preferredGuidedEditRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute
-          : provider.openAIImageRouting?.preferredEditRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute,
+    ...(input.user?.trim() ? { user: input.user.trim() } : {}),
+    imageRoute: (() => {
+      const candidate = (input.imageRoute as OpenAIImageRouteSelection | undefined) ??
+        (activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID
+          ? "auto"
+          : input.mode === "generate"
+            ? provider.openAIImageRouting?.preferredGenerateRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute
+            : input.mode === "inpaint"
+              ? provider.openAIImageRouting?.preferredGuidedEditRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute
+              : provider.openAIImageRouting?.preferredEditRoute ?? DEFAULT_IMAGE_PARAMS.imageRoute);
+      return activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID && candidate === "chat-completions" ? "auto" : candidate;
+    })(),
     size: input.size ?? (provider.defaultSize || DEFAULT_IMAGE_PARAMS.size),
     quality: (input.quality as ImageQuality | undefined) ?? provider.defaultQuality,
-    stream: false,
-    partialImages: 0,
+    ...(input.n === undefined ? {} : { n: input.n }),
+    ...(input.outputFormat === undefined ? {} : { outputFormat: input.outputFormat as ImageFormat }),
+    ...(input.outputCompression === undefined ? {} : { outputCompression: input.outputCompression }),
+    ...(input.background === undefined ? {} : { background: input.background as ImageBackground }),
+    ...(input.moderation === undefined ? {} : { moderation: input.moderation as ModerationMode }),
+    ...(input.inputFidelity === undefined ? {} : { inputFidelity: input.inputFidelity as OpenAIImageParams["inputFidelity"] }),
+    ...(input.inputImageDetail === undefined ? {} : { inputImageDetail: parseCliResponsesInputImageDetailOption(input.inputImageDetail) }),
+    ...(input.responsesModel === undefined ? {} : { responsesModel: input.responsesModel }),
+    ...(input.responsesAction === undefined ? {} : { responsesAction: parseCliResponsesActionOption(input.responsesAction) }),
+    ...(input.previousResponseId === undefined ? {} : { previousResponseId: input.previousResponseId }),
+    ...(input.previousImageGenerationCallId === undefined ? {} : { previousImageGenerationCallId: input.previousImageGenerationCallId }),
+    stream: input.stream ?? false,
+    partialImages: input.partialImages ?? 0,
     timeoutMs
   };
 }
@@ -5167,6 +5519,14 @@ function buildAgentRunJobRequest(provider: StoredProviderConfig, input: AgentGen
 }
 
 function validateAgentRunJobRequest(request: RunJobRequest, provider: StoredProviderConfig): RunJobRequest {
+  if (request.workflow === "sketch" && !isSketchFeatureEnabled()) {
+    throwCliCommandError(
+      "CAPABILITY_UNSUPPORTED",
+      "Sketch is currently disabled by feature flag.",
+      ["Enable Sketch in the CrossGen desktop environment before submitting Sketch workflows."],
+      4
+    );
+  }
   const validation = validateRunJobRequest(request);
   if (!validation.ok) {
     throwCliCommandError("INVALID_ARGUMENT", validation.message ?? "Generation request is invalid.");
@@ -5218,7 +5578,7 @@ async function enqueueGenerationForAgent(input: AgentGenerationEnqueueInput) {
   const provider = selectProviderForAgent(state, input.providerId);
   const targetGalleryFolderId = normalizeTargetGalleryFolderId(state, input.targetGalleryFolderId);
   const request = validateAgentRunJobRequest(buildAgentRunJobRequest(provider, input), provider);
-  const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state));
+  const { inputs, mask } = await resolveRequestInputs(request, getImagesDir(state), state);
   const referencePreflight = buildReferencePreflightOrThrow(inputs, mask, request);
   const job = createJob(request, provider, inputs, mask, input.source, referencePreflight);
   const queueItem = createGenerationQueueItem({
@@ -5372,9 +5732,26 @@ async function runCliGeneratePromptFileBatch(input: {
 }) {
   const providerId = getCliOption(input.args, "--provider");
   const model = getCliOption(input.args, "--model");
+  const user = getCliOption(input.args, "--user");
   const globalIdempotencyKey = getCliOption(input.args, "--idempotency-key");
   const size = getCliOption(input.args, "--size");
   const quality = getCliOption(input.args, "--quality");
+  const n = parseCliImageCountOption(getCliOption(input.args, "--n"));
+  const outputFormat = getCliOption(input.args, "--output-format");
+  const outputCompression = parseCliCompressionOption(getCliOption(input.args, "--output-compression"));
+  const background = getCliOption(input.args, "--background");
+  const moderation = getCliOption(input.args, "--moderation");
+  const inputFidelity = getCliOption(input.args, "--input-fidelity");
+  const inputImageDetail = getCliOption(input.args, "--input-image-detail");
+  const responsesModel = getCliOption(input.args, "--responses-model");
+  const responsesAction = parseCliResponsesActionOption(getCliOption(input.args, "--responses-action"));
+  const previousResponseId = getCliOption(input.args, "--previous-response-id");
+  const previousImageGenerationCallId =
+    getCliOption(input.args, "--previous-image-generation-call-id") ??
+    getCliOption(input.args, "--image-generation-call-id");
+  const partialImages = parseCliPartialImagesOption(getCliOption(input.args, "--partial-images"));
+  const stream = parseCliStreamOption(input.args);
+  const imageRoute = parseCliImageRouteOption(getCliOption(input.args, "--image-route"));
   const aspectRatio = getCliOption(input.args, "--aspect-ratio");
   const resolution = getCliOption(input.args, "--resolution");
   const referenceImageMode = getCliOption(input.args, "--reference-image-mode");
@@ -5392,6 +5769,7 @@ async function runCliGeneratePromptFileBatch(input: {
         targetGalleryFolderId: entry.folderId ?? targetGalleryFolderId,
         providerId: entry.providerId ?? providerId,
         model: entry.model ?? model,
+        user: entry.user ?? user,
         costConfirmed: true,
         idempotencyKey: batchIdempotencyKey(globalIdempotencyKey, entry, index),
         requestId: `${input.requestId}:${index + 1}`,
@@ -5400,6 +5778,20 @@ async function runCliGeneratePromptFileBatch(input: {
         timeoutMs: entry.timeoutMs ?? input.globalTimeoutMs,
         size: entry.size ?? size,
         quality: entry.quality ?? quality,
+        n: entry.n ?? n,
+        outputFormat: entry.outputFormat ?? outputFormat,
+        outputCompression: entry.outputCompression ?? outputCompression,
+        background: entry.background ?? background,
+        moderation: entry.moderation ?? moderation,
+        inputFidelity: entry.inputFidelity ?? inputFidelity,
+        inputImageDetail: entry.inputImageDetail ?? inputImageDetail,
+        responsesModel: entry.responsesModel ?? responsesModel,
+        responsesAction: entry.responsesAction ?? responsesAction,
+        previousResponseId: entry.previousResponseId ?? previousResponseId,
+        previousImageGenerationCallId: entry.previousImageGenerationCallId ?? previousImageGenerationCallId,
+        partialImages: entry.partialImages ?? partialImages,
+        stream: entry.stream ?? stream,
+        imageRoute: entry.imageRoute ?? imageRoute,
         aspectRatio: entry.aspectRatio ?? aspectRatio,
         resolution: entry.resolution ?? resolution,
         referenceImageMode: entry.referenceImageMode ?? referenceImageMode
@@ -5609,12 +6001,27 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
         folderId,
         providerId,
         model,
+        user,
         idempotencyKey,
         confirm,
         waitMs,
         timeoutMs,
         size,
         quality,
+        n,
+        outputFormat,
+        outputCompression,
+        background,
+        moderation,
+        inputFidelity,
+        inputImageDetail,
+        responsesModel,
+        responsesAction,
+        previousResponseId,
+        previousImageGenerationCallId,
+        partialImages,
+        stream,
+        imageRoute,
         aspectRatio,
         resolution,
         referenceImageMode
@@ -5629,11 +6036,26 @@ async function runMcpCommandMode(args: string[]): Promise<number> {
             targetGalleryFolderId: folderId,
             providerId,
             model,
+            user,
             costConfirmed: confirm,
             idempotencyKey,
             timeoutMs,
             size,
             quality,
+            n,
+            outputFormat,
+            outputCompression,
+            background,
+            moderation,
+            inputFidelity,
+            inputImageDetail,
+            responsesModel,
+            responsesAction,
+            previousResponseId,
+            previousImageGenerationCallId,
+            partialImages,
+            stream,
+            imageRoute,
             aspectRatio,
             resolution,
             referenceImageMode
@@ -5819,6 +6241,7 @@ async function runCliCommandMode(args: string[]): Promise<number> {
         targetGalleryFolderId: getCliOption(args, "--folder"),
         providerId: getCliOption(args, "--provider"),
         model: getCliOption(args, "--model"),
+        user: getCliOption(args, "--user"),
         costConfirmed: true,
         idempotencyKey: getCliOption(args, "--idempotency-key"),
         requestId,
@@ -5827,6 +6250,20 @@ async function runCliCommandMode(args: string[]): Promise<number> {
         timeoutMs,
         size: getCliOption(args, "--size"),
         quality: getCliOption(args, "--quality"),
+        n: parseCliImageCountOption(getCliOption(args, "--n")),
+        outputFormat: getCliOption(args, "--output-format"),
+        outputCompression: parseCliCompressionOption(getCliOption(args, "--output-compression")),
+        background: getCliOption(args, "--background"),
+        moderation: getCliOption(args, "--moderation"),
+        inputFidelity: getCliOption(args, "--input-fidelity"),
+        inputImageDetail: getCliOption(args, "--input-image-detail"),
+        responsesModel: getCliOption(args, "--responses-model"),
+        responsesAction: parseCliResponsesActionOption(getCliOption(args, "--responses-action")),
+        previousResponseId: getCliOption(args, "--previous-response-id"),
+        previousImageGenerationCallId: getCliOption(args, "--previous-image-generation-call-id") ?? getCliOption(args, "--image-generation-call-id"),
+        partialImages: parseCliPartialImagesOption(getCliOption(args, "--partial-images")),
+        stream: parseCliStreamOption(args),
+        imageRoute: parseCliImageRouteOption(getCliOption(args, "--image-route")),
         aspectRatio: getCliOption(args, "--aspect-ratio"),
         resolution: getCliOption(args, "--resolution"),
         referenceImageMode: getCliOption(args, "--reference-image-mode")
@@ -6230,6 +6667,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle("config:testConnection", handleTestConnection);
   ipcMain.handle("draft:save", handleSaveDraft);
   ipcMain.handle("draft:clear", handleClearDraft);
+  ipcMain.handle("sketch:saveAsset", handleSaveSketchAsset);
+  ipcMain.handle("sketch:loadDocument", handleLoadSketchDocument);
   ipcMain.handle("templates:list", handleListTemplates);
   ipcMain.handle("templates:save", handleSaveTemplate);
   ipcMain.handle("templates:delete", handleDeleteTemplate);

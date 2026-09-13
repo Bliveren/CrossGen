@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-04T18:58:39.185Z",
+  "lastUpdated": "2026-09-06T11:21:04.177Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
       "title": "Product-owner exact-package acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The product owner installs and tests the exact v0.3.4 release-candidate package before publication.",
         "Testing covers launch, API configuration, text-to-image, image-to-image, mask/guided edit, queue visibility, cancel/retry, restart recovery, reference preflight, Gallery/History reuse, CLI, and MCP.",
@@ -16,13 +16,44 @@
         "GitHub Release publication, Latest marking, and update manifest promotion happen only after this approval is recorded."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Product-owner exact-package acceptance."
+        "verifiedAt": "2026-09-06T11:21:04.177Z",
+        "commit": "b757b6f97c29537ff2d5e7995157e99c62d69ae8",
+        "environment": "macOS 25.5.0 arm64 local release shell. The product owner confirmed acceptance of the exact v0.3.4 candidate after hands-on launch and workflow verification. The signed/notarized rebuild was subsequently reverified without runtime source changes.",
+        "commands": [
+          "pnpm verify:release:mac",
+          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
+          "pnpm verify:release:mac",
+          "codesign --verify --deep --strict --verbose=2 release/mac-arm64/CrossGen.app",
+          "xcrun stapler validate release/mac-arm64/CrossGen.app",
+          "spctl --assess --type execute --verbose=4 release/mac-arm64/CrossGen.app"
+        ],
+        "references": [
+          {
+            "label": "v0.3.4 release preflight",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.4-preflight.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.4-mac-arm64.dmg",
+            "public": false,
+            "description": "Exact v0.3.4 macOS arm64 DMG accepted for release progression after product-owner verification and reverified after Developer ID signing/notarization. SHA256 46462e3ee473edfaabe92f1b0b66e06988e4f4aae94b245f40154449adda707b; size 104018744 bytes."
+          },
+          {
+            "kind": "local-package",
+            "path": "release/CrossGen-0.3.4-mac-arm64.zip",
+            "public": false,
+            "description": "Exact v0.3.4 macOS arm64 ZIP accepted for release progression after product-owner verification and reverified after Developer ID signing/notarization. SHA256 a224aa3bbb51bb391017c18041bbb924da6d1b11cb8c6af0e5498239a67188c8; size 99725632 bytes."
+          },
+          {
+            "kind": "local-directory",
+            "path": "release/mac-arm64/CrossGen.app",
+            "public": false,
+            "description": "Exact v0.3.4 macOS arm64 app launched successfully in the two-cycle release verification."
+          }
+        ],
+        "summary": "Product owner confirmed the exact v0.3.4 candidate passed local installation, launch, API/configuration and image workflow acceptance and explicitly approved release progression. No release-blocking issue was reported."
       }
     },
     {
@@ -118,13 +149,12 @@
         "Apple notarization status is tracked separately in the macos-notarized gate."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T17:58:18.000Z",
-        "commit": "0c96763334b5fc1556428836cbaffc7770c95cad",
-        "environment": "macOS 25.5.0 arm64 in detached exact-candidate worktree 0c96763334b5fc1556428836cbaffc7770c95cad. Developer ID Application identity hash C5A5172145291B971D3ACB7FB51FE5D4321D6691; TeamIdentifier RPX587R2R7. Notarization was explicitly disabled and is tracked separately.",
+        "verifiedAt": "2026-09-06T11:40:21.000Z",
+        "commit": "b757b6f97c29537ff2d5e7995157e99c62d69ae8",
+        "environment": "macOS 25.5.0 arm64 local release shell with .env.local loaded. Developer ID Application identity hash C5A5172145291B971D3ACB7FB51FE5D4321D6691; TeamIdentifier RPX587R2R7.",
         "commands": [
-          "git worktree add --detach /tmp/crossgen-v034-exact-0c967 0c96763334b5fc1556428836cbaffc7770c95cad",
+          "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
           "pnpm build",
-          "pnpm exec node scripts/electron-builder-pnpm.mjs --mac '-c.mac.identity=Developer ID Application: Xiamen Corgnitor Technology Co.,Ltd (RPX587R2R7)' -c.mac.notarize=false",
           "pnpm verify:release:mac",
           "codesign --verify --deep --strict --verbose=2 release/mac-arm64/CrossGen.app",
           "codesign -dv --verbose=4 release/mac-arm64/CrossGen.app"
@@ -135,28 +165,28 @@
             "kind": "macOS arm64 signed DMG",
             "path": "release/CrossGen-0.3.4-mac-arm64.dmg",
             "public": false,
-            "description": "Size 104015559 bytes; SHA256 99bca07db3aeeee434cd84cb0b12b77977f1630589ded973b2ec30329909cf12."
+            "description": "Size 104018744 bytes; SHA256 46462e3ee473edfaabe92f1b0b66e06988e4f4aae94b245f40154449adda707b."
           },
           {
             "kind": "macOS arm64 signed ZIP",
             "path": "release/CrossGen-0.3.4-mac-arm64.zip",
             "public": false,
-            "description": "Size 99723993 bytes; SHA256 f5c2321e1499891988d6e5677e4427a935a58fa3f7cde75a1fd34cc9df1933ed."
+            "description": "Size 99725632 bytes; SHA256 a224aa3bbb51bb391017c18041bbb924da6d1b11cb8c6af0e5498239a67188c8."
           },
           {
             "kind": "macOS DMG blockmap",
             "path": "release/CrossGen-0.3.4-mac-arm64.dmg.blockmap",
             "public": false,
-            "description": "Size 110152 bytes; SHA256 311f3cb98d52ea792a8b621d7fbe8461e8ea5a01535c2552731967ad256aa196."
+            "description": "Size 109546 bytes; SHA256 d3b6e252834877f30b08cb18513d1dd5e95f59d0766b92efb7610072c70bb2c2."
           },
           {
             "kind": "macOS ZIP blockmap",
             "path": "release/CrossGen-0.3.4-mac-arm64.zip.blockmap",
             "public": false,
-            "description": "Size 105043 bytes; SHA256 61059924da15a62f59c768bbd44bc790f769c88c2fe2319b421286bf5675aa94."
+            "description": "Size 105062 bytes; SHA256 d260826e7eedaeafa5a8d8fd8d5a07349feb54912acd855cb371e434fb530459."
           }
         ],
-        "summary": "The exact 0c967633 candidate was rebuilt in a detached worktree, signed with the Developer ID Application identity, verified with codesign --deep --strict, and launched twice from the signed DMG with a visible main window. Apple notarization remains a separate pending gate."
+        "summary": "The v0.3.4 macOS release package was rebuilt from the current release head, signed with the Developer ID Application identity, verified with codesign --deep --strict, and launched twice from the signed DMG with a visible main window."
       }
     },
     {
@@ -172,9 +202,9 @@
         "The evidence records the exact artifact identity, SHA256, and validation command results."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T18:58:39.185Z",
-        "commit": "67d8616286ec405d409f25f60d1fcba8a4705aed",
-        "environment": "macOS 25.5.0 arm64 local release shell. The exact v0.3.4 app bundle was signed with Developer ID Application identity hash C5A5172145291B971D3ACB7FB51FE5D4321D6691 and submitted to Apple without recording credentials.",
+        "verifiedAt": "2026-09-06T11:40:21.000Z",
+        "commit": "b757b6f97c29537ff2d5e7995157e99c62d69ae8",
+        "environment": "macOS 25.5.0 arm64 local release shell with .env.local loaded. The v0.3.4 app bundle was signed with Developer ID Application identity hash C5A5172145291B971D3ACB7FB51FE5D4321D6691, notarized by Apple, stapled, and revalidated from the build directory.",
         "commands": [
           "set -a; . ./.env.local; set +a; pnpm package:mac:signed",
           "pnpm verify:release:mac",
@@ -197,34 +227,34 @@
             "kind": "macOS arm64 notarized app in DMG",
             "path": "release/CrossGen-0.3.4-mac-arm64.dmg",
             "public": false,
-            "description": "DMG size 104018690 bytes; SHA256 30d42c202729b78e4dbea55115bb56b2a8c5c72a4fdef0b4fcb0e37fd603e9fc. Mounted app passed codesign verification, stapler validation, and spctl with source=Notarized Developer ID."
+            "description": "DMG size 104018744 bytes; SHA256 46462e3ee473edfaabe92f1b0b66e06988e4f4aae94b245f40154449adda707b. Mounted app passed codesign verification, stapler validation, and spctl with source=Notarized Developer ID."
           },
           {
             "kind": "macOS arm64 notarized app ZIP",
             "path": "release/CrossGen-0.3.4-mac-arm64.zip",
             "public": false,
-            "description": "ZIP size 99725636 bytes; SHA256 17146aa5fe0df6917a72413c9f79a57568d94597c24da6bd5b944bdf2208416e. Generated from the same notarized app bundle."
+            "description": "ZIP size 99725632 bytes; SHA256 a224aa3bbb51bb391017c18041bbb924da6d1b11cb8c6af0e5498239a67188c8. Generated from the same notarized app bundle."
           },
           {
             "kind": "Apple notarization submission",
             "path": "notarytool history",
             "public": false,
-            "description": "Submission 9e79c132-f82e-465f-a570-92615c9c1741 reported status Accepted at 2026-09-04T18:58:39.185Z."
+            "description": "Submission 62439bff-1940-4460-a2f7-f80adcb0108a reported status Accepted at 2026-09-06T11:16:02.585Z."
           },
           {
             "kind": "macOS DMG blockmap",
             "path": "release/CrossGen-0.3.4-mac-arm64.dmg.blockmap",
             "public": false,
-            "description": "Size 109725 bytes; SHA256 a152e4a0a1b6d5b30523b9cb9f2ab36f9aa41edb85ab70ddcc3b20c6438c7151."
+            "description": "Size 109546 bytes; SHA256 d3b6e252834877f30b08cb18513d1dd5e95f59d0766b92efb7610072c70bb2c2."
           },
           {
             "kind": "macOS ZIP blockmap",
             "path": "release/CrossGen-0.3.4-mac-arm64.zip.blockmap",
             "public": false,
-            "description": "Size 105071 bytes; SHA256 57afe0c2e014cd809e636d2ffe2441eeb4ab48c410fd9e345f330d0cf44e5497."
+            "description": "Size 105062 bytes; SHA256 d260826e7eedaeafa5a8d8fd8d5a07349feb54912acd855cb371e434fb530459."
           }
         ],
-        "summary": "Apple accepted the exact v0.3.4 macOS notarization submission. The app bundle was stapled, validated with stapler, accepted by Gatekeeper as Notarized Developer ID both from the build directory and after mounting the DMG, and launched successfully in the two-cycle release smoke."
+        "summary": "Apple accepted the v0.3.4 macOS notarization submission. The app bundle was stapled, validated with stapler, accepted by Gatekeeper as Notarized Developer ID both from the build directory and after mounting the DMG, and launched successfully in the two-cycle release smoke."
       }
     },
     {
@@ -340,7 +370,7 @@
       "id": "update-manifest-assets",
       "title": "Formal update manifest distribution assets",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The final v0.3.4 release assets are uploaded to GitHub Releases.",
         "docs/updates/latest.json is updated only after product-owner exact-package approval.",
@@ -349,13 +379,40 @@
         "The release evidence verifier passes with --require-complete before publication."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Pending v0.3.4 candidate evidence: Formal update manifest distribution assets."
+        "verifiedAt": "2026-09-06T11:51:39.806Z",
+        "commit": "b757b6f97c29537ff2d5e7995157e99c62d69ae8",
+        "environment": "Local release shell with GitHub CLI authenticated against Bliveren/CrossGen. The exact v0.3.4 GitHub Release was published from the approved candidate artifacts and docs/updates/latest.json now points at the public v0.3.4 downloads.",
+        "commands": [
+          "gh release create v0.3.4 --draft --title \"CrossGen v0.3.4\" --notes \"CrossGen 0.3.4 adds AppLink provider import and media-aware release foundations, with refreshed macOS, Windows, and Linux release assets.\" release/CrossGen-0.3.4-mac-arm64.dmg release/CrossGen-0.3.4-mac-arm64.dmg.blockmap release/CrossGen-0.3.4-mac-arm64.zip release/CrossGen-0.3.4-mac-arm64.zip.blockmap /tmp/crossgen-release-artifacts/windows/CrossGen-Setup.exe /tmp/crossgen-release-artifacts/windows/CrossGen-Setup.exe.blockmap /tmp/crossgen-release-artifacts/linux/CrossGen-0.3.4-linux-x86_64.AppImage",
+          "gh api -X POST repos/Bliveren/CrossGen/git/refs -f ref=refs/tags/v0.3.4 -f sha=b757b6f97c29537ff2d5e7995157e99c62d69ae8",
+          "gh release edit v0.3.4 --repo Bliveren/CrossGen --tag v0.3.4 --title \"CrossGen v0.3.4\" --notes \"CrossGen 0.3.4 adds AppLink provider import and media-aware release foundations, with refreshed macOS, Windows, and Linux release assets.\" --draft=false --prerelease=false --latest --verify-tag",
+          "pnpm verify:release-evidence:v0.3.4 -- --require-complete"
+        ],
+        "references": [
+          {
+            "label": "CrossGen v0.3.4 GitHub Release",
+            "url": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.4"
+          },
+          {
+            "label": "Update manifest rules",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/updates/README.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "public-manifest",
+            "path": "docs/updates/latest.json",
+            "public": true,
+            "description": "Update manifest promoted to v0.3.4 with public GitHub Release URLs, SHA256 digests, and sizeBytes for darwin arm64 DMG, win32 x64 installer, and linux x64 AppImage."
+          },
+          {
+            "kind": "public-release",
+            "path": "https://github.com/Bliveren/CrossGen/releases/tag/v0.3.4",
+            "public": true,
+            "description": "Final v0.3.4 GitHub Release marked Latest and containing macOS, Windows, and Linux assets."
+          }
+        ],
+        "summary": "Final v0.3.4 GitHub Release assets were published and docs/updates/latest.json now points at the public v0.3.4 release downloads with their published SHA256 digests and byte sizes."
       }
     },
     {
@@ -872,6 +929,88 @@
         "references": [],
         "artifacts": [],
         "summary": "CLI/MCP media metadata and path-redaction tests passed, with packaged command-mode smoke also passing."
+      }
+    },
+    {
+      "id": "sketch-workspace-contract",
+      "title": "Sketch workspace contract, deterministic validation, and performance",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "The v0.3.4 candidate satisfies the Sketch input, asset, provider, and view-layer separation contract.",
+        "Deterministic renderer, provider, IPC/sidecar, migration, memory, and regression checks pass on the exact candidate.",
+        "View-only underlay, grid, center line, safe area, and guidance state do not silently enter the durable Sketch artifact or provider payload.",
+        "No API key, bearer token, private home-directory path, or unconfirmed local asset path is disclosed."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Sketch deterministic and performance evidence is pending final candidate verification."
+      }
+    },
+    {
+      "id": "sketch-packaged-electron",
+      "title": "Packaged Electron Sketch input/result workspace acceptance",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "The exact candidate package opens Sketch from the image-to-image reference area without adding a top-level mode.",
+        "The same package verifies drawing, undo/redo, input/result switching, reference underlay, Mask separation, model switching, restart recovery, and constrained narrow-window layout.",
+        "The evidence records the exact package identity and screenshots without exposing secrets or private paths."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Packaged Electron Sketch workspace acceptance is pending final candidate verification."
+      }
+    },
+    {
+      "id": "sketch-feature-flag-rollback",
+      "title": "Packaged Sketch feature-flag rollback",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "CROSSGEN_SKETCH_ENABLED=0 disables the Sketch entry and rejects new Sketch IPC, draft, request, and queue operations.",
+        "The same packaged app continues to support ordinary text-to-image, image-to-image, Mask, History, and Gallery workflows.",
+        "The evidence records the flag value, exact candidate, and observed ordinary-workflow recovery."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Packaged feature-flag rollback evidence is pending final candidate verification."
+      }
+    },
+    {
+      "id": "sketch-real-aihub-matrix",
+      "title": "AIHub real GPT Image 2.5 and Nano Banana 3 Sketch matrix",
+      "required": true,
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Only the approved AIHub aggregation API is used for real image calls.",
+        "GPT Image 2.5 and Nano Banana 3 Sketch workflows are exercised for composition, pose, reference handling, speed, quality, and failure recovery.",
+        "The evidence records redacted model, route, elapsed time, retry, output, and artifact metadata; no API key or private path is recorded.",
+        "Mock tests and provider success responses are not treated as a substitute for product-owner quality review."
+      ],
+      "evidence": {
+        "verifiedAt": null,
+        "commit": null,
+        "environment": null,
+        "commands": [],
+        "references": [],
+        "artifacts": [],
+        "summary": "Real AIHub Sketch quality and recovery matrix is pending explicit authorized execution and human review."
       }
     }
   ]

@@ -27,9 +27,25 @@ Use this skill when an agent needs to create or modify images through a local Cr
 ## Model-aware behavior
 
 - Inspect capabilities before presenting controls. A disabled or missing model is unavailable for the current provider/key; do not silently substitute another model.
-- Keep provider-specific options namespaced to their adapter: OpenAI commonly uses `size` and `quality`; Gemini commonly uses `aspectRatio` and `resolution`. Omit unsupported fields rather than guessing.
+- Keep provider-specific options namespaced to their adapter: OpenAI commonly uses `size`, `quality`, `background`, `outputFormat`, and `outputCompression`; Gemini commonly uses `aspectRatio` and `resolution`. Omit unsupported fields rather than guessing.
+- For GPT Image 2.5, choose `gpt-image-2.5-sunburst` when precise editing, structure preservation, or high-fidelity references matter; choose `gpt-image-2.5-flare` for fast everyday generation. Dated `-YYYY-MM-DD` snapshots are valid when model discovery reports them.
+- GPT Image 2.5 supports quality `auto|low|medium|high|xhigh|max`, transparent backgrounds with PNG/WebP, custom 16-multiple dimensions inside the documented 4K envelope, `n` up to 10, and Images API streaming `partialImages` from 0 to 3. Responses streaming sends `partialImages` only when it is 1 to 3; `0` means omit partial previews.
+- Use the Responses route for GPT Image 2.5 multi-turn work: pass a supported mainline `responsesModel`, `responsesAction` (`auto`, `generate`, or `edit`), and `previousResponseId` when continuing a prior response. The GPT Image 2.5 model belongs in the image-generation tool, not as the top-level Responses model.
+- In `imageRoute: "auto"`, keep batch requests (`n > 1`) on Images API. GPT Image 2.5 must never be sent through the legacy Chat Completions image route.
 - When the user asks for multiple concepts, prefer one durable request per concept with distinct idempotency keys unless the selected model explicitly supports batching.
-- For edits, verify that every input path exists and is readable before submitting. Keep the original reference unchanged and describe the requested transformation separately from preservation constraints.
+- For edits, verify that every input path exists and is readable before submitting. Keep the original reference unchanged and describe the requested transformation separately from preservation constraints. For mask edits, verify matching source/mask dimensions and format, alpha presence, and a mask size below 50 MB.
+
+## GPT Image 2.5 transport notes
+
+- Images API generation uses `/v1/images/generations`; edits and inpainting use
+  `/v1/images/edits` multipart requests.
+- Responses API uses a supported mainline model at the top level and
+  `tools: [{ type: "image_generation", model: "gpt-image-2.5-..." }]`.
+- Responses output may include `image_generation_call.result` and
+  `revised_prompt`; CrossGen persists the response ID and revised prompt in job
+  metadata for follow-up editing.
+- CrossGen v0.3.4 sends local Responses inputs as base64 data URLs. It does not
+  upload or persist OpenAI Files API IDs.
 
 ## Media-aware behavior in v0.3.4
 

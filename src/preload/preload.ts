@@ -15,6 +15,8 @@ import type {
   ProviderConfigInput,
   QueueSnapshot,
   RunJobRequest,
+  SketchExportRequest,
+  SketchExportResult,
   WorkspaceDraftInput
 } from "../shared/types.js";
 
@@ -33,6 +35,8 @@ const bridge: AppBridge = {
   testConnection: () => ipcRenderer.invoke("config:testConnection"),
   saveDraft: (input: WorkspaceDraftInput) => ipcRenderer.invoke("draft:save", input),
   clearDraft: () => ipcRenderer.invoke("draft:clear"),
+  saveSketchAsset: (input: SketchExportRequest) => ipcRenderer.invoke("sketch:saveAsset", input) as Promise<SketchExportResult>,
+  loadSketchDocument: (artifactId: string) => ipcRenderer.invoke("sketch:loadDocument", artifactId),
   listTemplates: () => ipcRenderer.invoke("templates:list"),
   saveTemplate: (input: PromptTemplateInput, templateId?: string) => ipcRenderer.invoke("templates:save", input, templateId),
   deleteTemplate: (id: string) => ipcRenderer.invoke("templates:delete", id),
