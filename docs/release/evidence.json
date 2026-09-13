@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-13T19:08:24.000Z",
+  "lastUpdated": "2026-09-13T19:45:05.358Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -1065,13 +1065,18 @@
         "Mock tests and provider success responses are not treated as a substitute for product-owner quality review."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T19:08:24.000Z",
-        "commit": "6c34d40d9717d44732b80459b5c5ec972aab83d9",
-        "environment": "Approved AIHub aggregation API /models probe returned HTTP 200 from https://aihub.nowosoft.cn/v1. The configured key exposed gemini-3.1-flash-image, gemini-3.1-flash-lite-image, gemini-3-pro-image, and gpt-image-2; GPT Image 2.5 variants and Nano Banana 3 were not present. Credentials were loaded from the ignored local environment file and were not recorded.",
+        "verifiedAt": "2026-09-13T19:45:05.358Z",
+        "commit": "751b93e296105869338bb1786d473a64557586b5",
+        "environment": "Approved AIHub aggregation API /models probe returned HTTP 200 from https://aihub.nowosoft.cn/v1 after PR #214 merged to origin/main. The configured key exposed gemini-3.1-flash-image, gemini-3.1-flash-lite-image, gemini-3-pro-image, and gpt-image-2; GPT Image 2.5 variants and Nano Banana 3 were not present. Credentials were loaded from the ignored local environment file and were not recorded.",
         "commands": [
           "AIHub /models probe using the approved aggregation endpoint (credentials redacted)"
         ],
-        "references": [],
+        "references": [
+          {
+            "label": "v0.3.4 Sketch implementation merge",
+            "url": "https://github.com/Bliveren/CrossGen/pull/214"
+          }
+        ],
         "artifacts": [],
         "summary": "Real AIHub Sketch quality and recovery matrix remains pending because the approved AIHub /models response still does not expose GPT Image 2.5 or Nano Banana 3. No mock, legacy model, or compatible model is used as a substitute; human quality review remains required."
       }
