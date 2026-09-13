@@ -944,8 +944,8 @@
       ],
       "evidence": {
         "verifiedAt": "2026-09-13T09:53:43.000Z",
-        "commit": "680c241aa9779a56056fa4a82843f1d1845d7e8f",
-        "environment": "macOS 25.5.0 arm64 local release shell. The exact 680c241 v0.3.4 Sketch candidate was checked with deterministic renderer/provider/IPC/sidecar/state tests, memory smoke, lint, and whitespace validation. No API key, bearer token, or private absolute path was recorded in the evidence.",
+        "commit": "ff3fc356b5b8f134528e0c82d2d9c187a2e303ca",
+        "environment": "macOS 25.5.0 arm64 local release shell. The exact ff3fc35 v0.3.4 Sketch candidate was checked with deterministic renderer/provider/IPC/sidecar/state tests, memory smoke, lint, and whitespace validation. No API key, bearer token, or private absolute path was recorded in the evidence.",
         "commands": [
           "pnpm package:mac",
           "pnpm lint",
@@ -956,7 +956,7 @@
         ],
         "references": [
           {
-            "label": "CrossGen v0.3.4 Sketch 融合方案 r8",
+            "label": "CrossGen v0.3.4 Sketch 融合方案 r10",
             "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/plans/v0.3.4/README.md"
           },
           {
@@ -969,16 +969,16 @@
             "kind": "local-file",
             "path": "output/playwright/v034-sketch-packaged/1440x900.png",
             "public": false,
-            "description": "Packaged Sketch workspace screenshot from the 680c241 test package; SHA256 6c11e669713734da289d0bf2545c30e03cdd5d3b91a08668ed709c95bd7c2e22."
+            "description": "Packaged Sketch workspace screenshot from the ff3fc35 macOS arm64 test package; SHA256 48acaae2a8b95114bb8339e8a211420cb98104d06769119d3ecd5e4554ff179d."
           },
           {
             "kind": "local-file",
             "path": "output/playwright/v034-sketch-packaged/760x640.png",
             "public": false,
-            "description": "Constrained packaged Sketch workspace screenshot from the 680c241 test package; SHA256 75ffe9f178087919f052a2fef6d5784d3ea7e414006604c64060d3b20fa4bfd4."
+            "description": "Constrained packaged Sketch workspace screenshot from the ff3fc35 macOS arm64 test package; SHA256 54bdd75ed64cb498029a2dc004c1dfb6b16841ade28317c3138fd2213a6d7fa1."
           }
         ],
-        "summary": "The exact 680c241 Sketch candidate passed the package build (including type checking, 51-file/516-test regression, renderer/main builds), lint with zero errors, deterministic Sketch smoke (224 tests), IPC smoke (46 tests), memory smoke (2048x2048, 500 strokes, 32000 points, 0.83 MB post-GC heap growth), and whitespace validation."
+        "summary": "The exact ff3fc35 Sketch candidate passed the package build (including type checking, 51-file/518-test regression, renderer/main builds), lint with zero errors, deterministic Sketch smoke (226 tests), IPC smoke (46 tests), memory smoke (2048x2048, 500 strokes, 32000 points, 0.83 MB post-GC heap growth), and whitespace validation."
       }
     },
     {
@@ -993,8 +993,8 @@
       ],
       "evidence": {
         "verifiedAt": "2026-09-13T09:53:43.000Z",
-        "commit": "680c241aa9779a56056fa4a82843f1d1845d7e8f",
-        "environment": "macOS 25.5.0 arm64 packaged Electron candidate from 680c241, Electron 39.8.10, Chromium 142. Candidate app bundle: release/mac-arm64/CrossGen.app; app.asar SHA256 741b730b37578151352f74f9247e2a5f17f190386a395a764aa84bc23c928048; main executable SHA256 ac32d8d04c4d1ba99af5a17a67da0a04c4c92fc67c046d5cf731be1dd307d420.",
+        "commit": "ff3fc356b5b8f134528e0c82d2d9c187a2e303ca",
+        "environment": "macOS 25.5.0 arm64 packaged Electron candidate from ff3fc35, Electron 39.8.10, Chromium 142. Candidate app bundle: release/mac-arm64/CrossGen.app; app.asar SHA256 fee6a506023719b8538fd7f7eeac375c2e9b2eca957bf6eb8ba9a5cea50027f3; main executable SHA256 458594e4285585d239731aff28a5bde12a035339b4cc505f2e7b4953d05cbff3.",
         "commands": [
           "pnpm package:dir",
           "pnpm verify:sketch-packaged-smoke"
@@ -1014,16 +1014,16 @@
             "kind": "local-directory",
             "path": "release/mac-arm64/CrossGen.app",
             "public": false,
-            "description": "Current 680c241 macOS arm64 test package, 252424 KiB, launched successfully for manual inspection and automated CDP smoke."
+            "description": "Current ff3fc35 macOS arm64 test package, launched successfully for manual inspection and automated CDP smoke; DMG SHA256 de9049b4629126ebe05e3f2bb24d99b4b22d12c332c7272362cf400678e305df, ZIP SHA256 f11765714e4d1032811452513f069a453ec3c9da6833b92df1ecf2dc4da8857e."
           },
           {
             "kind": "local-file",
             "path": "output/playwright/v034-sketch-packaged/compact-sidebar.png",
             "public": false,
-            "description": "Compact-sidebar layout screenshot from the 680c241 test package; SHA256 c2fa4b012df5a9bbb966cfd5b7f60d3ddbb2cd60ed22eb7e9f8a1374735a850e."
+            "description": "Compact-sidebar layout screenshot from the ff3fc35 test package; SHA256 6e8f9a7136d0c9c4a304365b1d1c028d1002ec8684fef98fce82a7abc9a139a1."
           }
         ],
-        "summary": "The exact 680c241 packaged candidate opened Sketch from the image-to-image reference area without adding a top-level mode, verified drawing, undo/redo/clear, underlay, save-and-use, restart recovery of the Sketch artifact and draft, mock generation, input/result switching, Sketch removal followed by ordinary reference Mask recovery, model switching, constrained viewports, and compact sidebar layout."
+        "summary": "The exact ff3fc35 packaged candidate opened Sketch from the image-to-image reference area without adding a top-level mode, verified drawing, undo/redo/clear, underlay, save-and-use, restart recovery of the Sketch artifact and draft, mock generation, input/result switching, Sketch removal followed by ordinary reference Mask recovery, model switching, constrained viewports, and compact sidebar layout."
       }
     },
     {
@@ -1038,8 +1038,8 @@
       ],
       "evidence": {
         "verifiedAt": "2026-09-13T09:53:43.000Z",
-        "commit": "680c241aa9779a56056fa4a82843f1d1845d7e8f",
-        "environment": "macOS 25.5.0 arm64 packaged Electron candidate from 680c241 with CROSSGEN_SKETCH_ENABLED=0 and an isolated temporary user-data directory. No provider credential was used.",
+        "commit": "ff3fc356b5b8f134528e0c82d2d9c187a2e303ca",
+        "environment": "macOS 25.5.0 arm64 packaged Electron candidate from ff3fc35 with CROSSGEN_SKETCH_ENABLED=0 and an isolated temporary user-data directory. No provider credential was used.",
         "commands": [
           "pnpm verify:sketch-feature-flag-smoke"
         ],
@@ -1050,7 +1050,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "With CROSSGEN_SKETCH_ENABLED=0, the renderer entry disappeared and Sketch asset/document IPC, Sketch draft, Sketch queue requests were explicitly rejected, while ordinary text-to-image, image-to-image, Mask, History, Gallery, and Queue read surfaces remained available on the 680c241 packaged candidate."
+        "summary": "With CROSSGEN_SKETCH_ENABLED=0, the renderer entry disappeared and Sketch asset/document IPC, Sketch draft, Sketch queue requests were explicitly rejected, while ordinary text-to-image, image-to-image, Mask, History, Gallery, and Queue read surfaces remained available on the ff3fc35 packaged candidate."
       }
     },
     {
@@ -1066,7 +1066,7 @@
       ],
       "evidence": {
         "verifiedAt": "2026-09-13T09:53:43.000Z",
-        "commit": "680c241aa9779a56056fa4a82843f1d1845d7e8f",
+        "commit": "ff3fc356b5b8f134528e0c82d2d9c187a2e303ca",
         "environment": "Approved AIHub aggregation API model discovery returned HTTP 200. The configured key exposed gemini-3-pro-image, gemini-3.1-flash-image, gemini-3.1-flash-lite-image, and gpt-image-2; GPT Image 2.5 variants and Nano Banana 3 were not present. Credentials were loaded from the ignored local environment file and were not recorded.",
         "commands": [
           "set -a; . ./.env.local; set +a; node <redacted model-discovery probe>"
