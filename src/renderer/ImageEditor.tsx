@@ -53,6 +53,8 @@ interface ImageEditorProps {
   inputStudioView?: "input" | "result";
   inputStudioInputLabel?: string;
   inputStudioResultLabel?: string;
+  inputStudioEditorLabel?: string;
+  inputStudioEditorMode?: "reference" | "sketch" | "mask";
   inputStudioEditLabel?: string;
   onInputStudioViewChange?: (view: "input" | "result") => void;
   onEditInput?: () => void;
@@ -155,6 +157,8 @@ export function ImageEditor({
   inputStudioView = "result",
   inputStudioInputLabel = "Input",
   inputStudioResultLabel = "Result",
+  inputStudioEditorLabel,
+  inputStudioEditorMode,
   inputStudioEditLabel,
   onInputStudioViewChange,
   onEditInput,
@@ -261,7 +265,42 @@ export function ImageEditor({
     <section className="result-stage">
       <div className={embeddedInputEditor ? "result-canvas has-embedded-input-editor" : "result-canvas"} ref={resultCanvasRef}>
         {embeddedInputEditor ? (
-          <div className="embedded-input-editor">{embeddedInputEditor}</div>
+          <div className="input-studio-host">
+            {(showInputStudioToggle && onInputStudioViewChange) || inputStudioEditorLabel ? (
+              <div className="input-studio-hostbar">
+                {showInputStudioToggle && onInputStudioViewChange ? (
+                  <div className="preview-view-switch" role="tablist" aria-label={copy.resultViewer}>
+                    <button
+                      type="button"
+                      role="tab"
+                      className={inputStudioView === "input" ? "active" : undefined}
+                      aria-selected={inputStudioView === "input"}
+                      onClick={() => onInputStudioViewChange("input")}
+                    >
+                      {inputStudioInputLabel}
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      className={inputStudioView === "result" ? "active" : undefined}
+                      aria-selected={inputStudioView === "result"}
+                      onClick={() => onInputStudioViewChange("result")}
+                    >
+                      {inputStudioResultLabel}
+                    </button>
+                  </div>
+                ) : null}
+                {inputStudioEditorLabel ? (
+                  <span className="input-studio-host-badge" data-editor={inputStudioEditorMode ?? "input"}>
+                    {inputStudioEditorLabel}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+            <div className={`embedded-input-editor ${inputStudioEditorMode ? `mode-${inputStudioEditorMode}` : ""}`}>
+              {embeddedInputEditor}
+            </div>
+          </div>
         ) : activePreviewSource ? (
           <>
             <div

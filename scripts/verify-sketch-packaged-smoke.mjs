@@ -548,19 +548,21 @@ async function main() {
     })()`);
     assert(remainingReference, "ordinary reference tile disappeared after Sketch removal");
     await waitFor(
-      async () => cdp.evaluate("Boolean(document.querySelector('.reference-preview-dialog'))"),
-      "reference preview after Sketch removal"
+      async () => cdp.evaluate("Boolean(document.querySelector('.input-studio-editor[data-input-studio-editor=\"reference\"]'))"),
+      "reference Input Studio after Sketch removal"
     );
+    await cdp.screenshot(path.join(OUTPUT_DIR, "reference-input-studio.png"));
     await clickButton(cdp, "(button) => button.getAttribute('aria-label') === '添加蒙版'", "open reference Mask tools");
-    if ((await bodyText(cdp)).includes("将此图设为首张参考图")) {
-      await clickButton(cdp, "(button) => button.innerText.trim() === '设为首张并编辑'", "promote reference for Mask");
+    if ((await bodyText(cdp)).includes("将该图作为蒙版源图？")) {
+      await clickButton(cdp, "(button) => button.innerText.trim() === '确认并添加蒙版'", "promote reference for Mask");
     }
     await waitFor(
-      async () => cdp.evaluate("Boolean(document.querySelector('.reference-preview-stage.masking'))"),
+      async () => cdp.evaluate("Boolean(document.querySelector('.input-studio-editor[data-input-studio-editor=\"mask\"]'))"),
       "ordinary reference Mask editor after Sketch removal"
     );
+    await cdp.screenshot(path.join(OUTPUT_DIR, "mask-input-studio.png"));
     assert(!(await cdp.evaluate("Boolean(document.querySelector('.sketch-reference-tile'))")), "Sketch tile remained after explicit removal");
-    await cdp.evaluate("document.querySelector('.preview-modal-close')?.click()");
+    await cdp.evaluate("document.querySelector('.input-studio-editor[data-input-studio-editor=\"mask\"] button[aria-label=\"取消\"]')?.click()");
     await wait(120);
 
     await clickButton(cdp, "(button) => button.getAttribute('aria-label')?.startsWith('启动模型')", "model picker");
@@ -615,7 +617,11 @@ async function main() {
       app: APP_EXECUTABLE,
       userDataDir: "[temporary]",
       cdpPort: CDP_PORT,
-      screenshots: VIEWPORTS.map((viewport) => `${viewport.name}.png`).concat(["compact-sidebar.png"]),
+      screenshots: VIEWPORTS.map((viewport) => `${viewport.name}.png`).concat([
+        "reference-input-studio.png",
+        "mask-input-studio.png",
+        "compact-sidebar.png"
+      ]),
       checks: [
         "image-to-image Sketch entry",
         "pointer drawing",

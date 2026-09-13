@@ -12,7 +12,6 @@ import {
   Download,
   FileDown,
   FileUp,
-  Eraser,
   Folder,
   FolderCog,
   FolderInput,
@@ -25,13 +24,10 @@ import {
   Layers,
   List,
   Loader2,
-  LibraryBig,
   Monitor,
   Moon,
   MoreHorizontal,
-  Paintbrush,
   Pencil,
-  Radar,
   RefreshCw,
   Rocket,
   Save,
@@ -138,6 +134,7 @@ import { isImageAsset, mediaKindForFileName, mediaKindForMimeType } from "../cor
 import { preflightSketchCapability } from "../core/modelCapabilities";
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
+import { InputStudioEditor, type InputStudioEditorMode } from "./InputStudioEditor";
 import { DialogShell } from "./DialogShell";
 import { AgentAccessDialog } from "./AgentAccessPanel";
 import { ConfigurationMenu, StatusSummarySection } from "./SidebarPanel";
@@ -1381,6 +1378,11 @@ export function App() {
   const [activeJob, setActiveJob] = useState<GenerationJob | null>(null);
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   const [inputStudioView, setInputStudioView] = useState<"input" | "result">("result");
+  const [inputStudioEditor, setInputStudioEditor] = useState<"none" | "reference" | "sketch" | "mask" | "result">("none");
+  const [maskTool, setMaskTool] = useState<"brush" | "eraser">("brush");
+  const [maskDraftDataUrl, setMaskDraftDataUrl] = useState<string | null>(null);
+  const [maskDraftAsset, setMaskDraftAsset] = useState<InputAsset | null>(null);
+  const [pendingSketchUnderlayAssetId, setPendingSketchUnderlayAssetId] = useState<string | null>(null);
   const [partialImages, setPartialImages] = useState<ImageAsset[]>([]);
   const [notice, setNotice] = useState<Notice>({
     kind: bridge ? "info" : "error",
@@ -1547,7 +1549,6 @@ export function App() {
   const [isEditorFocusMode, setIsEditorFocusMode] = useState(false);
   const [referencePreviewAssetId, setReferencePreviewAssetId] = useState<string | null>(null);
   const [isReferenceMaskToolsOpen, setIsReferenceMaskToolsOpen] = useState(false);
-  const [referenceMaskConfirmAssetId, setReferenceMaskConfirmAssetId] = useState<string | null>(null);
   const [isReferenceDragOver, setIsReferenceDragOver] = useState(false);
   const [referenceLimitToast, setReferenceLimitToast] = useState<{ id: number; text: string } | null>(null);
   const [buttonFeedback, setButtonFeedback] = useState<Record<string, number>>({});
@@ -1591,7 +1592,9 @@ export function App() {
 
   const activeConfig = snapshot.providers.find(p => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
   const sketchEnabled = snapshot.features?.sketchEnabled !== false;
-  const shouldEmbedSketchEditor = isSketchEditorOpen && viewportWidth >= SKETCH_EMBED_BREAKPOINT;
+  const shouldEmbedSketchEditor = isSketchEditorOpen && inputStudioEditor === "sketch" && viewportWidth >= SKETCH_EMBED_BREAKPOINT;
+  const shouldEmbedReferenceEditor = inputStudioView === "input" && inputStudioEditor === "reference" && Boolean(referencePreviewAssetId);
+  const shouldEmbedMaskEditor = inputStudioView === "input" && inputStudioEditor === "mask" && Boolean(referencePreviewAssetId);
   const isSidebarCompact = isSidebarCollapsed || isAutoSidebarCollapsed;
   const selectedApiConfig = snapshot.providers.find(p => p.id === selectedApiConfigId) ?? activeConfig;
   const isDiscoveringModels = discoveringProviderId !== null;
@@ -1636,11 +1639,10 @@ export function App() {
     [inputAssets]
   );
   const referencePreviewAsset = referencePreviewAssetId ? inputAssets.find((asset) => asset.id === referencePreviewAssetId) ?? null : null;
-  const referencePreviewSource = referencePreviewAsset ? assetSource(referencePreviewAsset) : undefined;
-  const referenceMaskConfirmAsset = referenceMaskConfirmAssetId
-    ? inputAssets.find((asset) => asset.id === referenceMaskConfirmAssetId) ?? null
-    : null;
   const maskPreview = maskDataUrl ?? assetSource(maskAsset);
+  const activeInputStudioAsset = inputStudioEditor === "sketch"
+    ? activeSketchAsset ?? null
+    : referencePreviewAsset;
   const activeResults = getResultAssets(activeJob);
   const selectedResult = activeResults.find((asset) => asset.id === selectedResultId);
   const activeGalleryAsset = activeGalleryAssetId ? snapshot.galleryAssets.find((asset) => asset.id === activeGalleryAssetId) : undefined;
@@ -1657,7 +1659,8 @@ export function App() {
     createdAt: activeGalleryAsset.createdAt
   } : undefined;
   const activeMedia = activeGalleryPreviewMedia ?? selectedResult ?? getBestMediaResult(activeJob) ?? partialImages[partialImages.length - 1];
-  const isInputStudioInputView = Boolean(sketchPreviewSource) && inputStudioView === "input";
+  const hasActiveInputStudioEditor = inputStudioEditor === "reference" || inputStudioEditor === "sketch" || inputStudioEditor === "mask";
+  const isInputStudioInputView = inputStudioView === "input" && (Boolean(sketchPreviewSource) || hasActiveInputStudioEditor);
   const previewMedia = isInputStudioInputView ? undefined : activeMedia;
   const previewImage = previewMedia && isImageAsset(previewMedia) ? previewMedia : undefined;
   const previewMediaSource = isInputStudioInputView
@@ -2619,6 +2622,7 @@ export function App() {
   }, [activeJob?.id, activeJob?.outputs]);
 
   useEffect(() => {
+    if (hasActiveInputStudioEditor) return;
     if (!sketchPreviewSource) {
       setInputStudioView("result");
       return;
@@ -2626,7 +2630,7 @@ export function App() {
     if (!activeMedia) {
       setInputStudioView("input");
     }
-  }, [activeMedia?.id, sketchPreviewSource]);
+  }, [activeMedia?.id, hasActiveInputStudioEditor, sketchPreviewSource]);
 
   useEffect(() => {
     setPreviewZoom(1);
@@ -2660,8 +2664,10 @@ export function App() {
     if (inputAssets.some((asset) => asset.id === referencePreviewAssetId)) return;
     setReferencePreviewAssetId(null);
     setIsReferenceMaskToolsOpen(false);
-    setReferenceMaskConfirmAssetId(null);
-  }, [inputAssets, referencePreviewAssetId]);
+    if (inputStudioEditor === "reference" || inputStudioEditor === "mask") {
+      setInputStudioEditor("none");
+    }
+  }, [inputAssets, inputStudioEditor, referencePreviewAssetId]);
 
   useEffect(() => {
     setSelectedInputAssetId((current) => {
@@ -2747,9 +2753,7 @@ export function App() {
       if (event.type === "failed") {
         setRunningJobId(null);
         setRunningQueueId(null);
-        if (activeGenerationWorkflowRef.current === "sketch") {
-          setInputStudioView("input");
-        }
+        restoreInputStudioAfterFailure();
         activeGenerationWorkflowRef.current = undefined;
         setNotice({ kind: "error", text: event.error ?? copy.jobFailed });
       }
@@ -4097,6 +4101,11 @@ export function App() {
     if (!selectedInputAssetId && cappedNext[0]) {
       setSelectedInputAssetId(cappedNext[0].id);
     }
+    if (cappedNext[0] && cappedNext[0].role !== "sketch") {
+      setReferencePreviewAssetId(cappedNext[0].id);
+      setInputStudioEditor("reference");
+      setInputStudioView("input");
+    }
     if (tabMode === "text2img") setTabMode("img2img");
     if (capped) showReferenceLimitHint(referenceLimit);
     if (addedCount > 0) {
@@ -4107,7 +4116,7 @@ export function App() {
     }
   }
 
-  async function openSketchEditorNow(asset?: InputAsset, options: { clearMask?: boolean } = {}) {
+  async function openSketchEditorNow(asset?: InputAsset, options: { clearMask?: boolean; underlayAssetId?: string | null } = {}) {
     if (isSavingSketch) return;
     if (isGeneralMode) {
       setNotice({ kind: "error", text: copy.sketchGeneralUnsupported });
@@ -4140,7 +4149,9 @@ export function App() {
       setMaskDataUrl(null);
       setMaskCheck(null);
     }
+    setPendingSketchUnderlayAssetId(options.underlayAssetId ?? null);
     setInputStudioView("input");
+    setInputStudioEditor("sketch");
     setSketchEditorSessionKey((current) => current + 1);
     setIsSketchEditorOpen(true);
   }
@@ -4161,11 +4172,23 @@ export function App() {
 
   function closeSketchEditor() {
     setIsSketchEditorOpen(false);
+    setPendingSketchUnderlayAssetId(null);
+    if (inputStudioEditor === "sketch") {
+      setInputStudioEditor("none");
+    }
   }
 
   function handleInputStudioViewChange(view: "input" | "result") {
-    if (view === "result" && isSketchEditorOpen) {
+    if (view === "result" && inputStudioEditor === "mask") {
+      cancelMaskEditing();
+      setInputStudioEditor("result");
+    } else if (view === "result" && isSketchEditorOpen) {
       setIsSketchEditorOpen(false);
+      setInputStudioEditor("result");
+    } else if (view === "result") {
+      setInputStudioEditor("result");
+    } else if (view === "input") {
+      setInputStudioEditor(referencePreviewAssetId ? "reference" : "none");
     }
     setInputStudioView(view);
   }
@@ -4196,6 +4219,8 @@ export function App() {
       setMaskDataUrl(null);
       setMaskCheck(null);
       setInputStudioView("input");
+      setInputStudioEditor("none");
+      setPendingSketchUnderlayAssetId(null);
       markDraftChanged();
       setIsSketchEditorOpen(false);
       setNotice({ kind: "success", text: copy.sketchSaved });
@@ -4227,6 +4252,7 @@ export function App() {
         whiteLabel={copy.sketchWhite}
         transparentLabel={copy.sketchTransparent}
         emptyHint={copy.sketchEmptyHint}
+        initialUnderlayAssetId={pendingSketchUnderlayAssetId}
         underlayOptions={sketchUnderlayOptions}
         underlayLabel={copy.sketchUnderlay}
         underlayNoneLabel={copy.sketchUnderlayNone}
@@ -4263,6 +4289,48 @@ export function App() {
     );
   }
 
+  function renderInputStudioEditor(): ReactNode {
+    if (inputStudioEditor === "sketch") {
+      return shouldEmbedSketchEditor ? renderSketchCanvas(true) : null;
+    }
+    if ((inputStudioEditor !== "reference" && inputStudioEditor !== "mask") || !activeInputStudioAsset) {
+      return null;
+    }
+    const source = assetSource(activeInputStudioAsset);
+    if (!source) return null;
+    const mode: InputStudioEditorMode = inputStudioEditor;
+    return (
+      <InputStudioEditor
+        copy={copy}
+        mode={mode}
+        asset={activeInputStudioAsset}
+        source={source}
+        maskSource={mode === "mask" ? maskPreview : undefined}
+        sourceImageRef={sourceImageRef}
+        maskCanvasRef={maskCanvasRef}
+        brushSize={brushSize}
+        maskTool={maskTool}
+        maskCheck={maskCheck}
+        onSourceImageLoad={handleSourceImageLoad}
+        onStartMaskPaint={startPaint}
+        onContinueMaskPaint={continuePaint}
+        onFinishMaskPaint={finishPaint}
+        onBrushSizeChange={(size) => {
+          markDraftChanged();
+          setBrushSize(size);
+        }}
+        onMaskToolChange={setMaskTool}
+        onSetPrimary={() => promoteReferenceAssetToFirst(activeInputStudioAsset.id)}
+        onUseAsUnderlay={() => applyReferenceAsSketchUnderlay(activeInputStudioAsset)}
+        onOpenMask={() => requestReferenceMaskEditor(activeInputStudioAsset)}
+        onClearMask={clearPaintedMask}
+        onApplyMask={addPaintedMask}
+        onCancelMask={cancelMaskEditing}
+        onClose={closeReferencePreview}
+      />
+    );
+  }
+
   function clearReferenceClickTimer() {
     if (!referenceClickTimerRef.current) return;
     window.clearTimeout(referenceClickTimerRef.current);
@@ -4288,6 +4356,20 @@ export function App() {
   function handleReferenceTileClick(assetId: string) {
     clearReferenceClickTimer();
     setSelectedInputAssetId(assetId);
+    const asset = inputAssets.find((item) => item.id === assetId);
+    if (asset?.role === "sketch") {
+      setReferencePreviewAssetId(null);
+      setIsReferenceMaskToolsOpen(false);
+      setInputStudioEditor("none");
+      setInputStudioView("input");
+      return;
+    }
+    if (asset) {
+      setReferencePreviewAssetId(asset.id);
+      setIsReferenceMaskToolsOpen(false);
+      setInputStudioEditor("reference");
+      setInputStudioView("input");
+    }
   }
 
   function openReferencePreview(assetId: string) {
@@ -4297,17 +4379,22 @@ export function App() {
       void openSketchEditor(asset);
       return;
     }
+    if (!asset) return;
+    setSelectedInputAssetId(asset.id);
     setReferencePreviewAssetId(assetId);
     setIsReferenceMaskToolsOpen(false);
-    setReferenceMaskConfirmAssetId(null);
+    setInputStudioEditor("reference");
+    setInputStudioView("input");
   }
 
   function closeReferencePreview() {
     clearReferenceClickTimer();
     setReferencePreviewAssetId(null);
     setIsReferenceMaskToolsOpen(false);
-    setReferenceMaskConfirmAssetId(null);
     setIsPainting(false);
+    if (inputStudioEditor === "reference" || inputStudioEditor === "mask") {
+      setInputStudioEditor("none");
+    }
   }
 
   function requestReferenceMaskEditor(asset: InputAsset) {
@@ -4320,18 +4407,34 @@ export function App() {
       return;
     }
     if (inputAssets[0]?.id !== asset.id) {
-      setReferenceMaskConfirmAssetId(asset.id);
+      setConfirmDialog({
+        title: copy.referenceMaskConfirmTitle,
+        body: copy.referenceMaskConfirmBody(asset.name),
+        confirmLabel: copy.referenceMaskConfirmAction,
+        onConfirm: () => confirmReferenceMaskEditor(asset.id)
+      });
       return;
     }
     setTabMode("img2img");
+    setSelectedInputAssetId(asset.id);
+    setReferencePreviewAssetId(asset.id);
+    setMaskDraftAsset(maskAsset);
+    setMaskDraftDataUrl(maskDataUrl);
+    setMaskTool("brush");
     setIsReferenceMaskToolsOpen((current) => !current);
+    setInputStudioEditor(isReferenceMaskToolsOpen ? "reference" : "mask");
+    setInputStudioView("input");
   }
 
   function confirmReferenceMaskEditor(assetId: string) {
     promoteReferenceAssetToFirst(assetId, { clearMask: true });
     setReferencePreviewAssetId(assetId);
-    setReferenceMaskConfirmAssetId(null);
     setIsReferenceMaskToolsOpen(true);
+    setMaskDraftAsset(null);
+    setMaskDraftDataUrl(null);
+    setMaskTool("brush");
+    setInputStudioEditor("mask");
+    setInputStudioView("input");
   }
 
   async function selectImages() {
@@ -4390,14 +4493,45 @@ export function App() {
       setNotice({ kind: "error", text: copy.validation.generalNoMask });
       return;
     }
-    if (!maskDataUrl) {
+    if (!maskDataUrl && !maskAsset) {
       setNotice({ kind: "error", text: copy.validation.paintOrUploadMask });
       return;
     }
     markDraftChanged();
     setMaskAsset(null);
     setTabMode("img2img");
+    setMaskDraftAsset(null);
+    setMaskDraftDataUrl(null);
+    setIsReferenceMaskToolsOpen(false);
+    setInputStudioEditor("none");
+    setReferencePreviewAssetId(null);
     setNotice({ kind: "success", text: copy.notices.maskAdded });
+  }
+
+  function cancelMaskEditing() {
+    setMaskAsset(maskDraftAsset);
+    setMaskDataUrl(maskDraftDataUrl);
+    setMaskDraftAsset(null);
+    setMaskDraftDataUrl(null);
+    setIsReferenceMaskToolsOpen(false);
+    setInputStudioEditor("none");
+    setReferencePreviewAssetId(null);
+    setIsPainting(false);
+  }
+
+  function applyReferenceAsSketchUnderlay(asset: InputAsset) {
+    if (isGeneralMode) {
+      setNotice({ kind: "error", text: copy.sketchGeneralUnsupported });
+      return;
+    }
+    void openSketchEditorNow(undefined, { underlayAssetId: asset.id });
+  }
+
+  function restoreInputStudioAfterFailure() {
+    setInputStudioView("input");
+    setInputStudioEditor(activeSketchAsset ? "none" : referencePreviewAssetId ? "reference" : "none");
+    setIsReferenceMaskToolsOpen(false);
+    setIsPainting(false);
   }
 
   async function runJob() {
@@ -4415,6 +4549,7 @@ export function App() {
     if (requestWorkflow === "sketch") {
       setIsSketchEditorOpen(false);
     }
+    setInputStudioEditor("result");
     setInputStudioView("result");
     setRunningJobId(null);
     setRunningQueueId(null);
@@ -4445,8 +4580,8 @@ export function App() {
         history: [historyJob, ...current.history.filter((item) => item.id !== historyJob.id)]
       }));
       setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? copy.notices.actionFinished(modeLabels[requestMode].action) });
-      if (job.status !== "succeeded" && requestWorkflow === "sketch") {
-        setInputStudioView("input");
+      if (job.status !== "succeeded") {
+        restoreInputStudioAfterFailure();
       }
       if (job.status === "succeeded") {
         await bridge.clearDraft();
@@ -4456,9 +4591,7 @@ export function App() {
         setSnapshot((current) => ({ ...current, draft: undefined }));
       }
     } catch (error) {
-      if (requestWorkflow === "sketch") {
-        setInputStudioView("input");
-      }
+      restoreInputStudioAfterFailure();
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
       activeGenerationWorkflowRef.current = undefined;
@@ -4530,6 +4663,8 @@ export function App() {
     if (job.workflow === "sketch") {
       setIsSketchEditorOpen(false);
     }
+    setInputStudioEditor("result");
+    setInputStudioView("result");
     setRunningJobId(null);
     setRunningQueueId(null);
     resetPartialImages();
@@ -4558,13 +4693,11 @@ export function App() {
         history: [historyJob, ...current.history.filter((item) => item.id !== historyJob.id)]
       }));
       setNotice({ kind: retriedJob.status === "succeeded" ? "success" : "error", text: retriedJob.error ?? copy.notices.actionFinished(modeLabels[job.mode].action) });
-      if (retriedJob.status !== "succeeded" && job.workflow === "sketch") {
-        setInputStudioView("input");
+      if (retriedJob.status !== "succeeded") {
+        restoreInputStudioAfterFailure();
       }
     } catch (error) {
-      if (job.workflow === "sketch") {
-        setInputStudioView("input");
-      }
+      restoreInputStudioAfterFailure();
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
       activeGenerationWorkflowRef.current = undefined;
@@ -4898,6 +5031,18 @@ export function App() {
     if (removed?.role === "sketch") {
       setSketchDocument(null);
       setSketchGuidance([]);
+      if (inputStudioEditor === "sketch") {
+        setIsSketchEditorOpen(false);
+        setInputStudioEditor("none");
+      }
+    }
+    if (referencePreviewAssetId === assetId) {
+      setReferencePreviewAssetId(null);
+      setIsReferenceMaskToolsOpen(false);
+      setIsPainting(false);
+      if (inputStudioEditor === "reference" || inputStudioEditor === "mask") {
+        setInputStudioEditor("none");
+      }
     }
     if (inputAssets[0]?.id === assetId) {
       clearPaintedMask();
@@ -6015,7 +6160,7 @@ export function App() {
     const image = sourceImageRef.current;
     const canvas = maskCanvasRef.current;
     if (!image || !canvas) return;
-    const previousMask = maskDataUrl;
+    const previousMask = maskDataUrl ?? assetSource(maskAsset);
     canvas.width = image.naturalWidth;
     canvas.height = image.naturalHeight;
     const context = canvas.getContext("2d");
@@ -6079,7 +6224,8 @@ export function App() {
     const context = canvas.getContext("2d");
     if (!context) return;
     context.save();
-    context.globalCompositeOperation = "source-over";
+    const erasing = maskTool === "eraser";
+    context.globalCompositeOperation = erasing ? "destination-out" : "source-over";
     context.fillStyle = "rgba(255,255,255,0.9)";
     context.strokeStyle = "rgba(255,255,255,0.9)";
     context.lineCap = "round";
@@ -6115,7 +6261,6 @@ export function App() {
   }
 
   const sizeValidation = openAIParams ? validateGptImage2Size(openAIParams.size) : null;
-  const maskDescription = activeInpaintCapability === "guided-region" ? copy.guidedRegionDescription : copy.maskDescription;
   const effectiveOpenAIImageRoute = openAIParams ? selectedOpenAIImageRoute(openAIParams, activeConfig, requestMode) : null;
   const imageRouteStatusText = openAIParams ? openAIImageRouteStatusText(copy, openAIParams, activeConfig, requestMode) : undefined;
   const imageRouteTitle = requestMode === "inpaint" && openAIParams?.launchId !== GPT_IMAGE_2_5_LAUNCH_ID
@@ -7189,10 +7334,22 @@ export function App() {
             annotationImageRef={annotationImageRef}
             annotationCanvasRef={annotationCanvasRef}
             activePreviewSource={activePreviewSource}
-            embeddedInputEditor={shouldEmbedSketchEditor ? renderSketchCanvas(true) : undefined}
-            inputPreview={isSketchInputPreview}
+            embeddedInputEditor={(shouldEmbedSketchEditor || shouldEmbedReferenceEditor || shouldEmbedMaskEditor)
+              ? renderInputStudioEditor()
+              : undefined}
+            inputPreview={isSketchInputPreview || shouldEmbedReferenceEditor || shouldEmbedMaskEditor}
             inputPreviewLabel={copy.sketchInputPreview}
-            showInputStudioToggle={Boolean(sketchPreviewSource && activeMedia)}
+            inputStudioEditorLabel={
+              inputStudioEditor === "sketch"
+                ? copy.sketchTitle
+                : inputStudioEditor === "mask"
+                  ? copy.mask
+                  : inputStudioEditor === "reference"
+                    ? copy.reference
+                    : undefined
+            }
+            inputStudioEditorMode={inputStudioEditor === "none" || inputStudioEditor === "result" ? undefined : inputStudioEditor}
+            showInputStudioToggle={Boolean((sketchPreviewSource || inputStudioEditor !== "none") && activeMedia)}
             inputStudioView={inputStudioView}
             inputStudioInputLabel={language === "zh" ? "输入" : "Input"}
             inputStudioResultLabel={language === "zh" ? "结果" : "Result"}
@@ -8317,106 +8474,6 @@ export function App() {
       {isSketchEditorOpen && !shouldEmbedSketchEditor && sketchDocument && (
         <DialogShell className="preview-modal-dialog sketch-editor-dialog" backdropClassName="preview-modal-backdrop" labelledBy="sketch-editor-title" onClose={closeSketchEditor}>
           {renderSketchCanvas(false)}
-        </DialogShell>
-      )}
-      {referencePreviewAsset && referencePreviewSource && (
-        <DialogShell className="preview-modal-dialog reference-preview-dialog" backdropClassName="preview-modal-backdrop" labelledBy="reference-preview-modal-title" onClose={closeReferencePreview}>
-          <h2 id="reference-preview-modal-title" className="visually-hidden">{referencePreviewAsset.name}</h2>
-          <button type="button" className="preview-modal-close icon-button tooltip-below" onClick={closeReferencePreview} aria-label={copy.cancel} data-tooltip={copy.cancel}>
-            <X size={18} />
-          </button>
-          <div
-            className="preview-control-strip reference-preview-tools"
-            onMouseMove={movePreviewToolbarTowardPointer}
-            onMouseLeave={resetPreviewToolbarDrift}
-          >
-            <div className="preview-primary-actions" aria-label={copy.referenceMaskTools}>
-              <button
-                type="button"
-                className={isReferenceMaskToolsOpen ? "icon-button active" : "icon-button"}
-                disabled={isGeneralMode}
-                onClick={() => requestReferenceMaskEditor(referencePreviewAsset)}
-                aria-label={copy.addReferenceMask}
-                data-tooltip={copy.addReferenceMask}
-                aria-pressed={isReferenceMaskToolsOpen}
-              >
-                <Paintbrush size={16} />
-              </button>
-            </div>
-            {isReferenceMaskToolsOpen && sourcePreview && (
-              <div className="preview-secondary-actions reference-mask-tools" data-drift="subtle">
-                <Eraser size={15} />
-                <span className="range-tooltip" data-tooltip={copy.maskBrushSize}>
-                  <input
-                    type="range"
-                    min="16"
-                    max="180"
-                    value={brushSize}
-                    aria-label={copy.maskBrushSize}
-                    onChange={(event) => {
-                      markDraftChanged();
-                      setBrushSize(Number(event.target.value));
-                    }}
-                  />
-                </span>
-                <button
-                  type="button"
-                  className="icon-button secondary compact-mask-button"
-                  onClick={addPaintedMask}
-                  disabled={!maskDataUrl}
-                  aria-label={copy.addPaintedMask}
-                  data-tooltip={copy.addPaintedMaskTooltip}
-                >
-                  <Paintbrush size={15} />
-                </button>
-                <button type="button" className="icon-button" onClick={clearPaintedMask} aria-label={copy.clearPaintedMask} data-tooltip={copy.clearPaintedMask}>
-                  <X size={15} />
-                </button>
-              </div>
-            )}
-          </div>
-          <div className={isReferenceMaskToolsOpen && sourcePreview ? "reference-preview-stage masking" : "reference-preview-stage"}>
-            <div className="reference-preview-canvas-wrap">
-              <img
-                ref={sourceImageRef}
-                src={referencePreviewSource}
-                alt={referencePreviewAsset.name}
-                className="preview-modal-image"
-                onLoad={handleSourceImageLoad}
-              />
-              {isReferenceMaskToolsOpen && sourcePreview && (
-                <canvas
-                  ref={maskCanvasRef}
-                  className="reference-preview-mask-canvas"
-                  aria-label={maskDescription}
-                  onPointerDown={startPaint}
-                  onPointerMove={continuePaint}
-                  onPointerUp={finishPaint}
-                  onPointerCancel={finishPaint}
-                />
-              )}
-            </div>
-            {isReferenceMaskToolsOpen && maskPreview && (
-              <div className="mask-status reference-preview-mask-status">
-                {maskCheck?.ok ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
-                <span>{maskCheck?.message ?? copy.checkingMask}</span>
-              </div>
-            )}
-          </div>
-          {referenceMaskConfirmAsset && (
-            <div className="reference-mask-confirm" role="alertdialog" aria-labelledby="reference-mask-confirm-title" aria-modal="true">
-              <h3 id="reference-mask-confirm-title">{copy.referenceMaskConfirmTitle}</h3>
-              <p>{copy.referenceMaskConfirmBody(referenceMaskConfirmAsset.name)}</p>
-              <div className="dialog-actions">
-                <button type="button" className="secondary" onClick={() => setReferenceMaskConfirmAssetId(null)}>
-                  {copy.cancel}
-                </button>
-                <button type="button" onClick={() => confirmReferenceMaskEditor(referenceMaskConfirmAsset.id)}>
-                  {copy.referenceMaskConfirmAction}
-                </button>
-              </div>
-            </div>
-          )}
         </DialogShell>
       )}
       {contextMenu && (

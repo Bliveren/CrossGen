@@ -77,6 +77,43 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Sketch input");
   });
 
+  it("uses the main Input Studio for reference previews instead of a modal", async () => {
+    const reference = inputAsset("reference-main-canvas.png");
+    const bridge = await renderApp(snapshot({
+      draft: undefined,
+      history: [geminiJob(0)],
+      galleryAssets: [],
+      providers: [providerConfig()],
+      activeProviderId: "test-provider"
+    }));
+    vi.mocked(bridge.selectImages).mockResolvedValueOnce([reference]);
+
+    await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
+    await click(buttonByText("Image to image", ".mode-tab"));
+    await click(document.querySelector<HTMLButtonElement>(".reference-add-button")!);
+    await flushAsync();
+
+    expect(document.querySelector(".input-studio-editor[data-input-studio-editor='reference']")).not.toBeNull();
+    expect(document.querySelector<HTMLButtonElement>(".preview-view-switch button.active")?.textContent).toContain("Input");
+    expect(document.querySelector(".reference-preview-dialog")).toBeNull();
+    expect(document.querySelector(".input-studio-editor-toolbar")).not.toBeNull();
+  });
+
+  it("moves a reference from the main Input Studio into the mask editor", async () => {
+    const reference = inputAsset("reference-mask-main-canvas.png");
+    const bridge = await renderApp(snapshot());
+    vi.mocked(bridge.selectImages).mockResolvedValueOnce([reference]);
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    await click(document.querySelector<HTMLButtonElement>(".reference-add-button")!);
+    await flushAsync();
+    await click(buttonByText("Add mask", ".input-studio-editor button"));
+
+    expect(document.querySelector(".input-studio-editor[data-input-studio-editor='mask']")).not.toBeNull();
+    expect(document.querySelector(".input-studio-mask-canvas")).not.toBeNull();
+    expect(document.querySelector(".reference-preview-dialog")).toBeNull();
+  });
+
   it("starts a new Sketch blank instead of reusing a stale workspace draft", async () => {
     const staleSketch: SketchDocument = {
       schemaVersion: 1,

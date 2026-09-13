@@ -45,6 +45,7 @@ interface SketchCanvasProps {
   whiteLabel: string;
   transparentLabel: string;
   emptyHint: string;
+  initialUnderlayAssetId?: string | null;
   underlayLabel?: string;
   underlayNoneLabel?: string;
   underlayOpacityLabel?: string;
@@ -223,6 +224,7 @@ export function SketchCanvas({
   whiteLabel,
   transparentLabel,
   emptyHint,
+  initialUnderlayAssetId = null,
   underlayOptions = [],
   underlayLabel = "Reference underlay",
   underlayNoneLabel = "None",
@@ -448,6 +450,12 @@ export function SketchCanvas({
     setIncludeUnderlay(false);
     underlayImageRef.current = null;
   }, [selectedUnderlay?.id, selectedUnderlay?.source]);
+
+  useEffect(() => {
+    if (!initialUnderlayAssetId) return;
+    if (!underlayOptions.some((option) => option.id === initialUnderlayAssetId)) return;
+    setUnderlayAssetId(initialUnderlayAssetId);
+  }, [initialUnderlayAssetId, underlayOptions]);
 
   const toggleGuidance = (key: SketchGuidanceKey) => {
     const next = selectedGuidance.includes(key)
