@@ -1,7 +1,25 @@
 #!/bin/sh
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# Resolve the launcher before deriving the app-relative executable path. The
+# desktop UI may be installed outside /Applications and users commonly expose
+# this launcher through ~/.local/bin/crossgen as a symlink.
+script_path=$0
+case "$script_path" in
+  */*) ;;
+  *)
+    resolved_path=$(command -v "$script_path" 2>/dev/null || true)
+    script_path=${resolved_path:-"$PWD/$script_path"}
+    ;;
+esac
+while [ -L "$script_path" ]; do
+  link_target=$(readlink "$script_path")
+  case "$link_target" in
+    /*) script_path=$link_target ;;
+    *) script_path="$(dirname -- "$script_path")/$link_target" ;;
+  esac
+done
+script_dir=$(CDPATH= cd -- "$(dirname -- "$script_path")" && pwd)
 
 if [ -z "${CROSSGEN_APP_EXECUTABLE:-}" ]; then
   if [ -x "$script_dir/../../MacOS/CrossGen" ]; then

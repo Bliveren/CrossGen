@@ -65,6 +65,9 @@ describe("package release configuration", () => {
     expect(shellLauncher).toContain('nc -U "$mcp_socket"');
     expect(shellLauncher).toContain('crossgenMcpBroker');
     expect(shellLauncher).toContain("CROSSGEN_DATA_DIR");
+    expect(shellLauncher).toContain("while [ -L \"$script_path\" ]");
+    expect(shellLauncher).toContain("link_target=$(readlink \"$script_path\")");
+    expect(shellLauncher).not.toContain('script_dir=$(CDPATH= cd -- "$(dirname -- "$0")"');
     expect(shellLauncher).not.toMatch(/\bnode\b/);
     expect(shellLauncher).not.toContain("dist/cli/crossgen.js");
 
