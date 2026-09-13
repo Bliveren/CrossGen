@@ -62,7 +62,7 @@ import {
   REFERENCE_IMAGE_MODE_OPTIONS,
   maskMimeTypeForSource,
   mimeTypeFromDataUrl,
-  stripTransientPreviewsFromJob,
+  stripTransientOutputsFromJob,
   validateMaskMimeType,
   validateMaskSourceFormat,
   getValidationError,
@@ -135,6 +135,7 @@ import {
   normalizeModelId
 } from "../shared/modelCatalog";
 import { isImageAsset, mediaKindForFileName, mediaKindForMimeType } from "../core/mediaTypes";
+import { preflightSketchCapability } from "../core/modelCapabilities";
 import { PromptComposer } from "./PromptComposer";
 import { ImageEditor } from "./ImageEditor";
 import { DialogShell } from "./DialogShell";
@@ -1574,6 +1575,7 @@ export function App() {
   const lastMaskPointRef = useRef<{ x: number; y: number } | null>(null);
   const hasAutoTestedConnectionRef = useRef(false);
   const partialImageCountRef = useRef(0);
+  const activeGenerationWorkflowRef = useRef<ImageWorkflow | undefined>(undefined);
   const editorFocusRestoreRef = useRef<{ sidebarCollapsed: boolean; rightRailWidth: number; rightRailCollapsed: boolean } | null>(null);
   const previewLayoutRef = useRef<HTMLDivElement | null>(null);
   const promptActionsRef = useRef<HTMLDivElement | null>(null);
@@ -2141,6 +2143,9 @@ export function App() {
 
   const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, effectivePrompt), copy) ?? modeError;
+  const discoveredSketchPreflight = activeSketchAsset
+    ? preflightSketchCapability(activeConfig, params.model)
+    : undefined;
   const sketchPreflight = activeSketchAsset ? {
     model: modelLabelFromId(params.model),
     canvas: openAIParams
@@ -2150,10 +2155,10 @@ export function App() {
         : copy.generalFallback,
     background: openAIParams ? openAIParams.background : copy.generalFallback,
     references: `${effectiveInputAssets.length}/${activeReferenceImageLimit > 0 ? activeReferenceImageLimit : "—"}`,
-    reason: validationError ?? copy.sketchPreflightReady,
-    ready: !validationError
+    reason: validationError ?? discoveredSketchPreflight?.reason ?? copy.sketchPreflightReady,
+    ready: !validationError && Boolean(discoveredSketchPreflight?.ok)
   } : null;
-  const canRun = !validationError && !isRunning;
+  const canRun = !validationError && (!activeSketchAsset || Boolean(discoveredSketchPreflight?.ok)) && !isRunning;
   const canCancelRun = isRunning && Boolean(runningJobId);
   const primaryRunActionLabel = isRunning ? copy.cancelGeneration : requestWorkflow === "sketch" ? copy.useSketchToGenerate : modeLabels[requestMode].action;
   const promptCopyActionLabel = buttonFeedback["copy:prompt"] ? copy.clicked : copy.copyPrompt;
@@ -2736,11 +2741,16 @@ export function App() {
         // Final outputs are delivered through the queue snapshot/history. Drop
         // transient progress frames as soon as the task completes.
         resetPartialImages();
+        activeGenerationWorkflowRef.current = undefined;
         setNotice({ kind: "success", text: copy.notices.imageCompleted });
       }
       if (event.type === "failed") {
         setRunningJobId(null);
         setRunningQueueId(null);
+        if (activeGenerationWorkflowRef.current === "sketch") {
+          setInputStudioView("input");
+        }
+        activeGenerationWorkflowRef.current = undefined;
         setNotice({ kind: "error", text: event.error ?? copy.jobFailed });
       }
     });
@@ -4400,7 +4410,11 @@ export function App() {
       return;
     }
 
+    activeGenerationWorkflowRef.current = requestWorkflow;
     setIsRunning(true);
+    if (requestWorkflow === "sketch") {
+      setIsSketchEditorOpen(false);
+    }
     setInputStudioView("result");
     setRunningJobId(null);
     setRunningQueueId(null);
@@ -4424,13 +4438,16 @@ export function App() {
         maskDataUrl: requestMode === "inpaint" && maskDataUrl ? maskDataUrl : undefined,
         params: requestParams
       });
-      const historyJob = stripTransientPreviewsFromJob(job);
+      const historyJob = stripTransientOutputsFromJob(job);
       setActiveJob(job);
       setSnapshot((current) => ({
         ...current,
         history: [historyJob, ...current.history.filter((item) => item.id !== historyJob.id)]
       }));
       setNotice({ kind: job.status === "succeeded" ? "success" : "error", text: job.error ?? copy.notices.actionFinished(modeLabels[requestMode].action) });
+      if (job.status !== "succeeded" && requestWorkflow === "sketch") {
+        setInputStudioView("input");
+      }
       if (job.status === "succeeded") {
         await bridge.clearDraft();
         clearPromptChips();
@@ -4439,8 +4456,12 @@ export function App() {
         setSnapshot((current) => ({ ...current, draft: undefined }));
       }
     } catch (error) {
+      if (requestWorkflow === "sketch") {
+        setInputStudioView("input");
+      }
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
+      activeGenerationWorkflowRef.current = undefined;
       setIsRunning(false);
       setRunningJobId(null);
       setRunningQueueId(null);
@@ -4504,7 +4525,11 @@ export function App() {
   async function retryHistoryJob(job: GenerationJob) {
     if (!bridge) return;
 
+    activeGenerationWorkflowRef.current = job.workflow;
     setIsRunning(true);
+    if (job.workflow === "sketch") {
+      setIsSketchEditorOpen(false);
+    }
     setRunningJobId(null);
     setRunningQueueId(null);
     resetPartialImages();
@@ -4526,16 +4551,23 @@ export function App() {
         maskPath: job.mode === "inpaint" ? job.maskAsset?.path : undefined,
         params: requestParams
       });
-      const historyJob = stripTransientPreviewsFromJob(retriedJob);
+      const historyJob = stripTransientOutputsFromJob(retriedJob);
       setActiveJob(retriedJob);
       setSnapshot((current) => ({
         ...current,
         history: [historyJob, ...current.history.filter((item) => item.id !== historyJob.id)]
       }));
       setNotice({ kind: retriedJob.status === "succeeded" ? "success" : "error", text: retriedJob.error ?? copy.notices.actionFinished(modeLabels[job.mode].action) });
+      if (retriedJob.status !== "succeeded" && job.workflow === "sketch") {
+        setInputStudioView("input");
+      }
     } catch (error) {
+      if (job.workflow === "sketch") {
+        setInputStudioView("input");
+      }
       setNotice({ kind: "error", text: normalizeNotice(error) });
     } finally {
+      activeGenerationWorkflowRef.current = undefined;
       setIsRunning(false);
       setRunningJobId(null);
       setRunningQueueId(null);

@@ -942,6 +942,25 @@ export function stripTransientPreviewsFromJob(job: GenerationJob): GenerationJob
   };
 }
 
+/**
+ * History and Gallery persist only provider-final outputs. Partial frames are
+ * progress artifacts owned by the queue and renderer; keeping them in the
+ * durable job would make history grow with every streamed preview.
+ */
+export function stripTransientOutputsFromJob(job: GenerationJob): GenerationJob {
+  const withoutTransientPreviews = stripTransientPreviewsFromJob(job);
+  if (
+    withoutTransientPreviews === job &&
+    !job.outputs.some((asset) => asset.sourceType === "partial")
+  ) {
+    return withoutTransientPreviews;
+  }
+  return {
+    ...withoutTransientPreviews,
+    outputs: withoutTransientPreviews.outputs.filter((asset) => asset.sourceType !== "partial")
+  };
+}
+
 export function getValidationError(params: ImageParams, prompt: string): string | null {
   const promptResult = validatePrompt(prompt);
   if (!promptResult.ok) return promptResult.message ?? "Prompt 无效。";

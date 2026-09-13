@@ -16,6 +16,7 @@ import {
   normalizeImageMimeType,
   redactSecret,
   stripTransientPreviewsFromJob,
+  stripTransientOutputsFromJob,
   validateApiKey,
   shouldSendCompression,
   validateGptImage2Size,
@@ -457,6 +458,54 @@ describe("gpt-image-2 validation", () => {
     expect(stripped.outputs[0]).not.toHaveProperty("transientPreview");
     expect(stripped.outputs[0].path).toBe("/tmp/result.png");
     expect(JSON.stringify(stripped)).not.toContain("data:image/png;base64");
+  });
+
+  it("keeps only final outputs in durable history while retaining result metadata", () => {
+    const job = {
+      id: "job_partial",
+      name: "result.png",
+      tags: [],
+      providerKind: "openai",
+      providerId: "default",
+      launchId: "gpt-image-2",
+      modelId: "gpt-image-2",
+      modelDisplayName: "GPT Image 2",
+      mode: "edit",
+      prompt: "prompt",
+      inputAssets: [],
+      params: DEFAULT_IMAGE_PARAMS,
+      status: "succeeded",
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+      outputs: [
+        {
+          id: "img_partial",
+          jobId: "job_partial",
+          path: "/tmp/partial.png",
+          fileName: "partial.png",
+          mimeType: "image/png",
+          sourceType: "partial",
+          createdAt: new Date(0).toISOString(),
+          transientPreview: { dataUrl: "data:image/png;base64,partial" }
+        },
+        {
+          id: "img_result",
+          jobId: "job_partial",
+          path: "/tmp/result.png",
+          fileName: "result.png",
+          mimeType: "image/png",
+          sourceType: "result",
+          createdAt: new Date(0).toISOString(),
+          transientPreview: { dataUrl: "data:image/png;base64,result" }
+        }
+      ]
+    } satisfies GenerationJob;
+
+    const persisted = stripTransientOutputsFromJob(job);
+
+    expect(persisted.outputs.map((asset) => asset.id)).toEqual(["img_result"]);
+    expect(persisted.outputs[0]).not.toHaveProperty("transientPreview");
+    expect(JSON.stringify(persisted)).not.toContain("partial.png");
   });
 
   it("validates mask MIME type and source format compatibility", () => {

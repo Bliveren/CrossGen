@@ -87,7 +87,7 @@ import {
   getValidationError,
   isOpenAIImageParams,
   stripTransientPreviewFromImageAsset,
-  stripTransientPreviewsFromJob,
+  stripTransientOutputsFromJob,
   validateApiKey,
   validateProviderConfigInput,
   validateRunJobRequest,
@@ -196,6 +196,7 @@ import {
 } from "./services/agentRuntime.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
 import { canRunRequestWithConfig } from "./services/providerRequestMatch.js";
+import { preflightSketchCapability } from "../core/modelCapabilities.js";
 import { assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, historyAssetReadRoots, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
 import {
   diskGalleryFoldersFromState,
@@ -1733,7 +1734,7 @@ async function upsertJob(job: GenerationJob): Promise<void> {
 }
 
 function upsertJobInState(state: AppStateFile, job: GenerationJob): AppStateFile {
-  const persistentJob = stripTransientPreviewsFromJob(job);
+  const persistentJob = stripTransientOutputsFromJob(job);
   const existingIndex = state.history.findIndex((item) => item.id === persistentJob.id);
   const nextHistory =
     existingIndex === -1
@@ -3940,6 +3941,12 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   if (!canRunRequestWithConfig(normalizedRequest, activeProvider)) {
     throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
   }
+  if (normalizedRequest.workflow === "sketch") {
+    const preflight = preflightSketchCapability(activeProvider, normalizedRequest.params.model);
+    if (!preflight.ok) {
+      throw new Error(preflight.reason ?? "当前 API Key 尚未确认所选模型支持 Sketch。");
+    }
+  }
   getApiKeyForConfigOrThrow(activeProvider);
   const imagesDir = getImagesDir(state);
   const { inputs, mask } = await resolveRequestInputs(normalizedRequest, imagesDir, state);
@@ -5550,6 +5557,17 @@ function validateAgentRunJobRequest(request: RunJobRequest, provider: StoredProv
   }
   if (!canRunRequestWithConfig(normalizedRequest, provider)) {
     throwCliCommandError("CAPABILITY_UNSUPPORTED", "Request provider/model does not match the selected provider configuration.", ["Switch provider or pass --provider/--model for a compatible configuration."], 4);
+  }
+  if (normalizedRequest.workflow === "sketch") {
+    const preflight = preflightSketchCapability(provider, normalizedRequest.params.model);
+    if (!preflight.ok) {
+      throwCliCommandError(
+        "CAPABILITY_UNSUPPORTED",
+        preflight.reason ?? "The selected model has not been verified for Sketch.",
+        ["Run model discovery again with the current API key, then select a discovered image-edit model."],
+        4
+      );
+    }
   }
   return normalizedRequest;
 }

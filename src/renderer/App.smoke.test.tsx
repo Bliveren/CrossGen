@@ -167,6 +167,59 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector<HTMLButtonElement>(".sketch-guidance-chip")?.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("returns to the Sketch input view when a Sketch generation fails", async () => {
+    const existingSketch: SketchDocument = {
+      schemaVersion: 1,
+      width: 1200,
+      height: 800,
+      background: "white",
+      strokes: [{
+        id: "failed-sketch-stroke",
+        tool: "brush",
+        color: "#2563eb",
+        size: 18,
+        opacity: 1,
+        points: [{ x: 140, y: 160 }, { x: 420, y: 280 }]
+      }]
+    };
+    const asset: InputAsset = {
+      ...inputAsset("failed-sketch.png"),
+      id: "sketch-failed",
+      role: "sketch",
+      artifactId: "artifact-failed"
+    };
+    const bridge = await renderApp(snapshot({
+      draft: {
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        mode: "edit",
+        workflow: "sketch",
+        prompt: "Keep the sketch visible after failure",
+        params: DEFAULT_IMAGE_PARAMS,
+        inputAssets: [asset],
+        sketch: existingSketch,
+        brushSize: 48,
+        updatedAt: now
+      }
+    }));
+    bridge.loadSketchDocument = vi.fn(async () => existingSketch);
+    vi.mocked(bridge.runJob).mockImplementationOnce(async (request) => ({
+      ...jobFromRequest(request, providerConfig()),
+      status: "failed",
+      error: "provider rejected sketch"
+    }));
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    await click(document.querySelector<HTMLButtonElement>(".reference-sketch-button")!);
+    await flushAsync();
+    await click(buttonByText("Use Sketch", ".primary-run"));
+    await flushAsync();
+
+    const activeView = document.querySelector<HTMLButtonElement>(".preview-view-switch button.active");
+    expect(activeView?.textContent).toContain("Input");
+    expect(document.body.textContent).toContain("provider rejected sketch");
+  });
+
   it("preserves Sketch undo history when the parent mirrors a drawn document", async () => {
     await renderApp(snapshot());
 
