@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 
 const files = [
   "src/main/services/sketchAssetStore.test.ts",
+  "src/main/services/inputAssetCopy.test.ts",
   "src/shared/sketch.test.ts",
   "src/shared/validation.test.ts",
   "src/main/services/stateMigration.test.ts"

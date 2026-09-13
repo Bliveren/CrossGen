@@ -1369,6 +1369,7 @@ export function App() {
   const [selectedInputAssetId, setSelectedInputAssetId] = useState<string | null>(null);
   const [sketchDocument, setSketchDocument] = useState<SketchDocument | null>(null);
   const [sketchGuidance, setSketchGuidance] = useState<SketchGuidanceKey[]>([]);
+  const [sketchParentArtifactId, setSketchParentArtifactId] = useState<string | undefined>(undefined);
   const [isSketchEditorOpen, setIsSketchEditorOpen] = useState(false);
   const [sketchEditorSessionKey, setSketchEditorSessionKey] = useState(0);
   const [isSavingSketch, setIsSavingSketch] = useState(false);
@@ -1379,6 +1380,7 @@ export function App() {
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   const [inputStudioView, setInputStudioView] = useState<"input" | "result">("result");
   const [inputStudioEditor, setInputStudioEditor] = useState<"none" | "reference" | "sketch" | "mask" | "result">("none");
+  const [inputResultCompareMode, setInputResultCompareMode] = useState<"none" | "side-by-side">("none");
   const [maskTool, setMaskTool] = useState<"brush" | "eraser">("brush");
   const [maskDraftDataUrl, setMaskDraftDataUrl] = useState<string | null>(null);
   const [maskDraftAsset, setMaskDraftAsset] = useState<InputAsset | null>(null);
@@ -1593,7 +1595,11 @@ export function App() {
   const activeConfig = snapshot.providers.find(p => p.id === snapshot.activeProviderId) ?? snapshot.providers[0];
   const sketchEnabled = snapshot.features?.sketchEnabled !== false;
   const shouldEmbedSketchEditor = isSketchEditorOpen && inputStudioEditor === "sketch" && viewportWidth >= SKETCH_EMBED_BREAKPOINT;
-  const shouldEmbedReferenceEditor = inputStudioView === "input" && inputStudioEditor === "reference" && Boolean(referencePreviewAssetId);
+  const shouldEmbedReferenceEditor = inputStudioView === "input" &&
+    inputStudioEditor === "reference" &&
+    Boolean(referencePreviewAssetId) &&
+    !isEditingPreview &&
+    !isCroppingPreview;
   const shouldEmbedMaskEditor = inputStudioView === "input" && inputStudioEditor === "mask" && Boolean(referencePreviewAssetId);
   const isSidebarCompact = isSidebarCollapsed || isAutoSidebarCollapsed;
   const selectedApiConfig = snapshot.providers.find(p => p.id === selectedApiConfigId) ?? activeConfig;
@@ -1622,7 +1628,8 @@ export function App() {
           documentHash: sketchDocumentHash(sketchDocument),
           ...(sketchGuidance.length > 0 ? { guidance: [...sketchGuidance] } : {}),
           ...(activeSketchAsset.underlayIncluded ? { underlayIncluded: true } : {}),
-          ...(activeSketchAsset.underlayAssetId ? { underlayAssetId: activeSketchAsset.underlayAssetId } : {})
+          ...(activeSketchAsset.underlayAssetId ? { underlayAssetId: activeSketchAsset.underlayAssetId } : {}),
+          ...(activeSketchAsset.parentArtifactId ? { parentArtifactId: activeSketchAsset.parentArtifactId } : {})
         }
       : undefined,
     [activeSketchAsset, sketchDocument, sketchGuidance]
@@ -1639,6 +1646,7 @@ export function App() {
     [inputAssets]
   );
   const referencePreviewAsset = referencePreviewAssetId ? inputAssets.find((asset) => asset.id === referencePreviewAssetId) ?? null : null;
+  const referencePreviewSource = assetSource(referencePreviewAsset);
   const maskPreview = maskDataUrl ?? assetSource(maskAsset);
   const activeInputStudioAsset = inputStudioEditor === "sketch"
     ? activeSketchAsset ?? null
@@ -1669,11 +1677,23 @@ export function App() {
       ? galleryAssetPath(activeGalleryAsset)
       : assetSource(previewMedia);
   const isSketchInputPreview = Boolean(sketchPreviewSource) && (isInputStudioInputView || !activeMedia);
-  const activePreviewSource = previewImage && editedImageDataUrl
+  const inputStudioPreviewSource = inputStudioEditor === "reference"
+    ? referencePreviewSource
+    : inputStudioEditor === "sketch"
+      ? sketchPreviewSource
+      : undefined;
+  const activePreviewSource = editedImageDataUrl && (previewImage || (isInputStudioInputView && inputStudioEditor === "reference"))
     ? editedImageDataUrl
-    : previewMediaSource ?? (isSketchInputPreview ? sketchPreviewSource : undefined);
+    : previewMediaSource ?? (isSketchInputPreview ? sketchPreviewSource : inputStudioPreviewSource);
   const activeImage = previewImage;
   const activeMediaSource = previewMediaSource;
+  const comparisonInputAsset = activeSketchAsset ?? referencePreviewAsset ?? sourceAsset;
+  const comparisonInputSource = comparisonInputAsset ? assetSource(comparisonInputAsset) : undefined;
+  const comparisonResultSource = previewImage
+    ? (isInputStudioInputView ? activeMediaSource : activePreviewSource ?? activeMediaSource)
+    : undefined;
+  const canCompareInputResult = Boolean(comparisonInputSource && comparisonResultSource && activeMedia && isImageAsset(activeMedia));
+  const activeInputResultCompareMode = canCompareInputResult ? inputResultCompareMode : "none";
   const activeJobError = getJobError(activeJob);
   const openAIParams = isOpenAIImageParams(params) ? params : null;
   const geminiParams = isGeminiImageParams(params) ? params : null;
@@ -4131,6 +4151,7 @@ export function App() {
         const document = await bridge.loadSketchDocument(asset.artifactId);
         setSketchDocument(document);
         setSketchGuidance(normalizeSketchGuidance(asset.guidance));
+        setSketchParentArtifactId(asset.artifactId);
       } catch (error) {
         setNotice({ kind: "error", text: `${copy.sketchLoadFailed} ${normalizeNotice(error)}` });
         return;
@@ -4141,6 +4162,7 @@ export function App() {
       // “continue editing” path may restore an existing Sketch artifact.
       setSketchDocument(newSketchDocument(params, customSize));
       setSketchGuidance([]);
+      setSketchParentArtifactId(undefined);
     }
     if (asset?.id) setSelectedInputAssetId(asset.id);
     setTabMode("img2img");
@@ -4179,6 +4201,7 @@ export function App() {
   }
 
   function handleInputStudioViewChange(view: "input" | "result") {
+    setInputResultCompareMode("none");
     if (view === "result" && inputStudioEditor === "mask") {
       cancelMaskEditing();
       setInputStudioEditor("result");
@@ -4208,10 +4231,12 @@ export function App() {
         documentHash,
         ...(options?.underlayIncluded ? { underlayIncluded: true } : {}),
         ...(options?.underlayAssetId ? { underlayAssetId: options.underlayAssetId } : {}),
-        ...(guidance.length > 0 ? { guidance } : {})
+        ...(guidance.length > 0 ? { guidance } : {}),
+        ...(sketchParentArtifactId ? { parentArtifactId: sketchParentArtifactId } : {})
       });
       setSketchDocument(document);
       setSketchGuidance(guidance);
+      setSketchParentArtifactId(result.artifactId);
       setInputAssets((current) => [result.asset, ...current.filter((asset) => asset.role !== "sketch")]);
       setSelectedInputAssetId(result.asset.id);
       setTabMode("img2img");
@@ -4323,6 +4348,13 @@ export function App() {
         onSetPrimary={() => promoteReferenceAssetToFirst(activeInputStudioAsset.id)}
         onUseAsUnderlay={() => applyReferenceAsSketchUnderlay(activeInputStudioAsset)}
         onOpenMask={() => requestReferenceMaskEditor(activeInputStudioAsset)}
+        onEditImage={() => {
+          setPreviewMode("edit");
+          setInputStudioView("input");
+          setInputStudioEditor("reference");
+          setInputResultCompareMode("none");
+          window.requestAnimationFrame(() => resizeAnnotationCanvas(true));
+        }}
         onClearMask={clearPaintedMask}
         onApplyMask={addPaintedMask}
         onCancelMask={cancelMaskEditing}
@@ -5002,6 +5034,7 @@ export function App() {
     setInputAssets(job.inputAssets);
     const isSketchJob = sketchEnabled && (job.workflow === "sketch" || job.inputAssets.some((asset) => asset.role === "sketch"));
     setSketchDocument(null);
+    setSketchParentArtifactId(undefined);
     setSketchGuidance(normalizeSketchGuidance(job.sketch?.guidance ?? job.inputAssets.find((asset) => asset.role === "sketch")?.guidance));
     setMaskAsset(isSketchJob || isGeneralImageParams(reusedParams) ? null : job.maskAsset ?? null);
     const sketchBridge = bridge;
@@ -5015,6 +5048,32 @@ export function App() {
     setActiveGalleryAssetId(null);
     setHasUserChangedDraft(true);
     setNotice({ kind: "info", text: paramsNotice(reusedParams, copy.notices.jobLoaded, copy) });
+  }
+
+  async function continueSketchJob(job: GenerationJob) {
+    if (!sketchEnabled || !(job.workflow === "sketch" || job.inputAssets.some((asset) => asset.role === "sketch"))) {
+      return;
+    }
+    reuseJob(job);
+    const asset = job.inputAssets.find((item) => item.role === "sketch");
+    if (!asset?.artifactId || !bridge?.loadSketchDocument) {
+      setNotice({ kind: "error", text: copy.sketchLoadFailed });
+      return;
+    }
+    try {
+      const document = await bridge.loadSketchDocument(asset.artifactId);
+      setSketchDocument(document);
+      setSketchGuidance(normalizeSketchGuidance(job.sketch?.guidance ?? asset.guidance));
+      setSketchParentArtifactId(asset.artifactId);
+      setTabMode("img2img");
+      setInputStudioView("input");
+      setInputStudioEditor("sketch");
+      setSketchEditorSessionKey((current) => current + 1);
+      setIsSketchEditorOpen(true);
+      setNotice({ kind: "info", text: copy.sketchContinueReady });
+    } catch (error) {
+      setNotice({ kind: "error", text: `${copy.sketchLoadFailed} ${normalizeNotice(error)}` });
+    }
   }
 
   function resolvePromptTokenAsset(galleryAssetId: string): InputAsset | undefined {
@@ -5031,6 +5090,7 @@ export function App() {
     if (removed?.role === "sketch") {
       setSketchDocument(null);
       setSketchGuidance([]);
+      setSketchParentArtifactId(undefined);
       if (inputStudioEditor === "sketch") {
         setIsSketchEditorOpen(false);
         setInputStudioEditor("none");
@@ -5718,6 +5778,61 @@ export function App() {
     }
   }
 
+  function referenceCopyFileName(suffix: "edited" | "cropped"): string {
+    const sourceName = referencePreviewAsset?.name ?? "reference.png";
+    const baseName = sourceName.replace(/\.[^.]+$/, "") || "reference";
+    return `${baseName}-${suffix}.png`;
+  }
+
+  function resetPreviewEditorState() {
+    setEditedImageDataUrl(null);
+    setPreviewMode("idle");
+    setCropSelection(null);
+    setAnnotationDrawingLayers([]);
+    setAnnotationTextBoxes([]);
+    setActiveAnnotationTextBoxId(null);
+    setDraftTextRect(null);
+    setHasAnnotationMarks(false);
+    setIsAnnotationColorSampling(false);
+    setIsAnnotationColorPickerOpen(false);
+    setEditorUndoStack([]);
+    annotationOrderRef.current = 0;
+    window.requestAnimationFrame(() => resizeAnnotationCanvas(true));
+  }
+
+  async function saveReferencePreviewCopy(operation: "annotation" | "crop") {
+    if (!bridge?.saveInputAssetCopy || !referencePreviewAsset || !activePreviewSource) {
+      setNotice({ kind: "error", text: copy.notices.bridgeRunJob });
+      return;
+    }
+    try {
+      discardEmptyAnnotationTextBoxes();
+      const output = operation === "crop"
+        ? await renderCropSelectionCanvas()
+        : await renderEditedPreviewCanvas();
+      const copied = await bridge.saveInputAssetCopy({
+        dataUrl: output.toDataURL("image/png"),
+        originalName: referenceCopyFileName(operation === "crop" ? "cropped" : "edited"),
+        sourceAssetId: referencePreviewAsset.id,
+        sourceOperation: operation
+      });
+      const sourceId = referencePreviewAsset.id;
+      setInputAssets((current) => current.map((asset) => asset.id === sourceId ? copied : asset));
+      setSelectedInputAssetId(copied.id);
+      setReferencePreviewAssetId(copied.id);
+      if (inputAssets[0]?.id === sourceId && (maskAsset || maskDataUrl)) {
+        setMaskAsset(null);
+        setMaskDataUrl(null);
+        setMaskCheck(null);
+      }
+      resetPreviewEditorState();
+      markDraftChanged();
+      setNotice({ kind: "success", text: copy.inputCopySaved });
+    } catch (error) {
+      setNotice({ kind: "error", text: normalizeNotice(error) });
+    }
+  }
+
   async function saveCurrentPreviewToGallery() {
     if (isCroppingPreview && cropSelection) {
       await saveCropSelectionToGallery();
@@ -5938,7 +6053,7 @@ export function App() {
     setHasAnnotationMarks(false);
     setIsAnnotationColorPickerOpen(false);
     annotationOrderRef.current = 0;
-  }, [activeMedia?.id, activeMediaSource]);
+  }, [activeMedia?.id, activeMediaSource, referencePreviewAssetId]);
 
   useEffect(() => {
     if (!isPreviewCanvasInteractive && !hasEditorOverlay) return;
@@ -7337,8 +7452,11 @@ export function App() {
             embeddedInputEditor={(shouldEmbedSketchEditor || shouldEmbedReferenceEditor || shouldEmbedMaskEditor)
               ? renderInputStudioEditor()
               : undefined}
-            inputPreview={isSketchInputPreview || shouldEmbedReferenceEditor || shouldEmbedMaskEditor}
-            inputPreviewLabel={copy.sketchInputPreview}
+            inputPreview={isSketchInputPreview || (inputStudioView === "input" && (inputStudioEditor === "reference" || inputStudioEditor === "mask"))}
+            inputPreviewEditable={Boolean(referencePreviewAsset && inputStudioEditor === "reference")}
+            inputPreviewLabel={inputStudioEditor === "reference" ? copy.referenceInputPreview : copy.sketchInputPreview}
+            inputPreviewSaveLabel={copy.saveReferenceCopy}
+            inputPreviewCropSaveLabel={copy.saveReferenceCropCopy}
             inputStudioEditorLabel={
               inputStudioEditor === "sketch"
                 ? copy.sketchTitle
@@ -7350,12 +7468,34 @@ export function App() {
             }
             inputStudioEditorMode={inputStudioEditor === "none" || inputStudioEditor === "result" ? undefined : inputStudioEditor}
             showInputStudioToggle={Boolean((sketchPreviewSource || inputStudioEditor !== "none") && activeMedia)}
+            compareMode={activeInputResultCompareMode}
+            compareInputSource={comparisonInputSource}
+            compareResultSource={comparisonResultSource}
+            compareInputLabel={copy.compareInput}
+            compareResultLabel={copy.compareResult}
+            compareToggleLabel={copy.compareInputResult}
             inputStudioView={inputStudioView}
             inputStudioInputLabel={language === "zh" ? "输入" : "Input"}
             inputStudioResultLabel={language === "zh" ? "结果" : "Result"}
-            inputStudioEditLabel={copy.editSketch}
+            inputStudioEditLabel={inputStudioEditor === "reference" ? copy.editReference : copy.editSketch}
             onInputStudioViewChange={handleInputStudioViewChange}
-            onEditInput={isSketchInputPreview ? () => void openSketchEditor(activeSketchAsset) : undefined}
+            onToggleCompareMode={() => {
+              if (!canCompareInputResult) return;
+              setInputResultCompareMode((current) => current === "side-by-side" ? "none" : "side-by-side");
+            }}
+            onEditInput={isSketchInputPreview
+              ? () => void openSketchEditor(activeSketchAsset)
+              : referencePreviewAsset && inputStudioEditor === "reference"
+                ? () => {
+                    setPreviewMode((current) => current === "edit" ? "idle" : "edit");
+                    setInputStudioView("input");
+                    setInputStudioEditor("reference");
+                    setInputResultCompareMode("none");
+                    window.requestAnimationFrame(() => resizeAnnotationCanvas());
+                  }
+                : undefined}
+            onSaveInputPreviewCopy={() => void saveReferencePreviewCopy("annotation")}
+            onSaveInputCropCopy={() => void saveReferencePreviewCopy("crop")}
             activeJobError={activeJobError}
             isGenerating={isRunning}
             generationElapsedSeconds={generationElapsedSeconds}
@@ -7880,8 +8020,10 @@ export function App() {
                         tagsInput={historyTagsInput}
                         reuseButtonClass={buttonFeedbackClass(`reuse:${job.id}`, "history-action-button")}
                         copyButtonClass={buttonFeedbackClass(`copy:${job.id}`, "history-action-button")}
+                        continueButtonClass={buttonFeedbackClass(`continue:${job.id}`, "history-action-button")}
                         downloadButtonClass={result ? buttonFeedbackClass(`download:${result.id}`, "history-action-button") : "history-action-button"}
                         reuseButtonLabel={buttonFeedback[`reuse:${job.id}`] ? copy.clicked : copy.reuse}
+                        continueButtonLabel={buttonFeedback[`continue:${job.id}`] ? copy.clicked : copy.sketchContinue}
                         copyButtonLabel={buttonFeedback[`copy:${job.id}`] ? copy.clicked : copy.copy}
                         downloadButtonLabel={result && buttonFeedback[`download:${result.id}`] ? copy.clicked : copy.download}
                         onToggleSelection={(checked) => toggleHistoryJobSelection(job.id, checked)}
@@ -7890,6 +8032,12 @@ export function App() {
                         onOpen={() => {
                           setActiveGalleryAssetId(null);
                           setActiveJob(job);
+                          setInputResultCompareMode("none");
+                          if (result) {
+                            setInputStudioEditor("result");
+                            setInputStudioView("result");
+                            setIsSketchEditorOpen(false);
+                          }
                         }}
                         onImageContextMenu={(event) => {
                           if (result && isImageAsset(result)) {
@@ -7910,6 +8058,10 @@ export function App() {
                         onMoveToolbarTowardPointer={movePreviewToolbarTowardPointer}
                         onResetToolbarDrift={resetPreviewToolbarDrift}
                         onReuse={() => reuseJob(job)}
+                        onContinue={() => {
+                          flashButton(`continue:${job.id}`);
+                          void continueSketchJob(job);
+                        }}
                         onCopyPrompt={() => copyPrompt(job.prompt, `copy:${job.id}`)}
                         onDownload={() => downloadAsset(result)}
                         onDetails={() => setHistoryDiagnosticJob(job)}

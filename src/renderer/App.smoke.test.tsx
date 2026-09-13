@@ -77,6 +77,58 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Sketch input");
   });
 
+  it("opens a History Sketch directly in the continue-drawing editor", async () => {
+    const sketch: SketchDocument = {
+      schemaVersion: 1,
+      width: 1024,
+      height: 1024,
+      background: "white",
+      strokes: [{
+        id: "history-continue-stroke",
+        tool: "brush",
+        color: "#1f2937",
+        size: 12,
+        opacity: 1,
+        points: [{ x: 20, y: 20 }, { x: 180, y: 180 }]
+      }]
+    };
+    const sketchAsset: InputAsset = {
+      ...inputAsset("history-continue.png"),
+      id: "history-continue-asset",
+      role: "sketch",
+      artifactId: "history-continue-artifact"
+    };
+    const job = geminiJob(0, {
+      workflow: "sketch",
+      mode: "edit",
+      inputAssets: [sketchAsset],
+      sketch: {
+        artifactId: "history-continue-artifact",
+        width: sketch.width,
+        height: sketch.height,
+        background: sketch.background,
+        strokeCount: 1,
+        pointCount: 2,
+        documentHash: "deadbeef",
+        guidance: ["composition"]
+      }
+    });
+    const bridge = await renderApp(snapshot({ history: [job] }));
+    bridge.loadSketchDocument = vi.fn(async (artifactId) => {
+      expect(artifactId).toBe("history-continue-artifact");
+      return sketch;
+    });
+
+    const continueButton = document.querySelector<HTMLButtonElement>('button[aria-label="Continue drawing"]');
+    expect(continueButton).not.toBeNull();
+    await click(continueButton!);
+    await flushAsync();
+
+    expect(document.querySelector('.sketch-editor-shell[data-sketch-editor-mode="embedded"]')).not.toBeNull();
+    expect(document.querySelector(".sketch-editor-header p")?.textContent).toContain("1 strokes");
+    expect(document.body.textContent).toContain("Sketch reopened for continued drawing");
+  });
+
   it("uses the main Input Studio for reference previews instead of a modal", async () => {
     const reference = inputAsset("reference-main-canvas.png");
     const bridge = await renderApp(snapshot({
@@ -112,6 +164,176 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector(".input-studio-editor[data-input-studio-editor='mask']")).not.toBeNull();
     expect(document.querySelector(".input-studio-mask-canvas")).not.toBeNull();
     expect(document.querySelector(".reference-preview-dialog")).toBeNull();
+  });
+
+  it("edits a reference in the shared preview and replaces it with a provenance copy", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(mockCanvasContext() as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,ZmFrZQ==");
+    const OriginalImage = window.Image;
+    class MockImage {
+      naturalWidth = 100;
+      naturalHeight = 100;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      #src = "";
+      get src() {
+        return this.#src;
+      }
+      set src(value: string) {
+        this.#src = value;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    window.Image = MockImage as unknown as typeof Image;
+    try {
+    const reference = inputAsset("reference-edit-copy.png");
+    const bridge = await renderApp(snapshot({
+      draft: undefined,
+      history: [geminiJob(0)],
+      galleryAssets: [],
+      providers: [providerConfig()],
+      activeProviderId: "test-provider"
+    }));
+    const sourceId = reference.id;
+    vi.mocked(bridge.selectImages).mockResolvedValueOnce([reference]);
+
+    await click(buttonByText("Image to image", ".mode-tab"));
+    await click(document.querySelector<HTMLButtonElement>(".reference-add-button")!);
+    await flushAsync();
+
+    const editButton = buttonByText("Edit", ".input-studio-editor button");
+    await click(editButton);
+    expect(document.querySelector(".zoom-surface")).not.toBeNull();
+    expect(document.querySelector<HTMLButtonElement>('button[aria-label="Save as input copy"]')).not.toBeNull();
+
+    await createPreviewTextAnnotation("Reference note");
+
+    const saveCopyButton = document.querySelector<HTMLButtonElement>('button[aria-label="Save as input copy"]');
+    expect(saveCopyButton?.disabled).toBe(false);
+    await click(saveCopyButton!);
+    await flushAsync();
+
+    expect(vi.mocked(bridge.saveInputAssetCopy)).toHaveBeenCalledWith(expect.objectContaining({
+      sourceAssetId: sourceId,
+      sourceOperation: "annotation"
+    }));
+    expect(document.querySelector(".input-studio-editor[data-input-studio-editor='reference']")).not.toBeNull();
+    expect(document.querySelector(".input-studio-host-badge")?.textContent).toContain("Reference");
+    } finally {
+      window.Image = OriginalImage;
+    }
+  });
+
+  it("compares the Sketch input and generated result side by side without changing either asset", async () => {
+    const sketch: SketchDocument = {
+      schemaVersion: 1,
+      width: 1200,
+      height: 800,
+      background: "white",
+      strokes: [{
+        id: "compare-stroke",
+        tool: "brush",
+        color: "#2563eb",
+        size: 18,
+        opacity: 1,
+        points: [{ x: 140, y: 160 }, { x: 420, y: 280 }]
+      }]
+    };
+    const sketchAsset: InputAsset = {
+      ...inputAsset("compare-sketch.png"),
+      id: "compare-sketch",
+      role: "sketch",
+      artifactId: "compare-artifact"
+    };
+    const resultJob = geminiJob(0, {
+      id: "compare-job",
+      outputs: [imageAsset("compare-result.png", "compare-job")]
+    });
+    const bridge = await renderApp(snapshot({
+      draft: {
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        mode: "edit",
+        workflow: "sketch",
+        prompt: "Compare the sketch with the generated result",
+        params: DEFAULT_IMAGE_PARAMS,
+        inputAssets: [sketchAsset],
+        sketch,
+        brushSize: 48,
+        updatedAt: now
+      },
+      history: [resultJob]
+    }));
+
+    await click(document.querySelector<HTMLButtonElement>(".history-preview")!);
+
+    const compareButton = document.querySelector<HTMLButtonElement>('button[aria-label="Compare input and result"]');
+    expect(compareButton).not.toBeNull();
+    expect(compareButton?.disabled).toBe(false);
+
+    await click(compareButton!);
+
+    const compare = document.querySelector<HTMLElement>(".input-result-compare");
+    expect(compare).not.toBeNull();
+    expect(compare?.querySelectorAll("figure")).toHaveLength(2);
+    expect(compare?.querySelector<HTMLImageElement>("figure:first-child img")?.alt).toBe("Input");
+    expect(compare?.querySelector<HTMLImageElement>("figure:last-child img")?.alt).toBe("Result");
+    expect(document.querySelectorAll(".zoom-surface")).toHaveLength(0);
+    expect(document.querySelector<HTMLButtonElement>('button[aria-pressed="true"][aria-label="Compare input and result"]')).not.toBeNull();
+
+    await click(buttonByText("Input", ".preview-view-switch button"));
+
+    expect(document.querySelector(".input-result-compare")).toBeNull();
+    expect(document.querySelector(".embedded-input-editor")).toBeNull();
+    expect(document.querySelector(".input-preview-badge")).not.toBeNull();
+    expect(document.querySelector<HTMLImageElement>(".zoom-surface img")?.src).toContain("compare-sketch.png");
+
+    await click(buttonByText("Result", ".preview-view-switch button"));
+
+    expect(document.querySelector(".input-result-compare")).toBeNull();
+    expect(document.querySelector<HTMLImageElement>(".zoom-surface img")?.src).toContain("compare-result.png");
+  });
+
+  it("does not expose an enabled input/result compare action when no image result exists", async () => {
+    const sketch: SketchDocument = {
+      schemaVersion: 1,
+      width: 1200,
+      height: 800,
+      background: "transparent",
+      strokes: [{
+        id: "compare-no-result-stroke",
+        tool: "brush",
+        color: "#2563eb",
+        size: 18,
+        opacity: 1,
+        points: [{ x: 140, y: 160 }, { x: 420, y: 280 }]
+      }]
+    };
+    const sketchAsset: InputAsset = {
+      ...inputAsset("compare-no-result-sketch.png"),
+      id: "compare-no-result-sketch",
+      role: "sketch",
+      artifactId: "compare-no-result-artifact"
+    };
+
+    await renderApp(snapshot({
+      draft: {
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        mode: "edit",
+        workflow: "sketch",
+        prompt: "Sketch without a result",
+        params: DEFAULT_IMAGE_PARAMS,
+        inputAssets: [sketchAsset],
+        sketch,
+        brushSize: 48,
+        updatedAt: now
+      }
+    }));
+
+    const compareButton = document.querySelector<HTMLButtonElement>('button[aria-label="Compare input and result"]');
+    expect(compareButton).not.toBeNull();
+    expect(compareButton?.disabled).toBe(true);
   });
 
   it("starts a new Sketch blank instead of reusing a stale workspace draft", async () => {
@@ -3339,6 +3561,16 @@ function createBridge(initialSnapshot: AppSnapshot, initialQueueSnapshot: QueueS
       currentSnapshot = { ...currentSnapshot, galleryAssets: [asset, ...currentSnapshot.galleryAssets] };
       return asset;
     }),
+    saveInputAssetCopy: vi.fn(async (input) => ({
+      id: `input-copy-${input.sourceAssetId}`,
+      name: input.originalName ?? "reference-copy.png",
+      path: `/tmp/media/originals/references/${input.sourceAssetId}.png`,
+      mimeType: input.dataUrl.startsWith("data:image/jpeg") ? "image/jpeg" : input.dataUrl.startsWith("data:image/webp") ? "image/webp" : "image/png",
+      sizeBytes: Math.max(1, Math.floor(input.dataUrl.length * 0.75)),
+      sourceAssetId: input.sourceAssetId,
+      sourceOperation: input.sourceOperation,
+      previewUrl: input.dataUrl
+    })),
     replaceGalleryAssetImage: vi.fn(async (id, input) => {
       const asset = currentSnapshot.galleryAssets.find((item) => item.id === id) ?? galleryAsset(input.originalName ?? "replaced.png", { id });
       const updated = {

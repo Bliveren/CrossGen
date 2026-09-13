@@ -576,6 +576,18 @@ export function validateInputAssetShape(asset: unknown): ValidationResult {
   if (asset.documentHash !== undefined && (typeof asset.documentHash !== "string" || !/^[0-9a-f]{8,128}$/i.test(asset.documentHash))) {
     return { ok: false, message: "输入资源文档 hash 无效。" };
   }
+  if (asset.sourceAssetId !== undefined && (typeof asset.sourceAssetId !== "string" || !asset.sourceAssetId.trim())) {
+    return { ok: false, message: "输入资源来源 ID 无效。" };
+  }
+  if (asset.sourceOperation !== undefined && !["sketch", "annotation", "crop", "import"].includes(asset.sourceOperation as string)) {
+    return { ok: false, message: "输入资源来源操作无效。" };
+  }
+  if (asset.parentArtifactId !== undefined && (
+    typeof asset.parentArtifactId !== "string" ||
+    !/^[a-zA-Z0-9_-]{8,120}$/.test(asset.parentArtifactId)
+  )) {
+    return { ok: false, message: "输入资源父 artifact ID 无效。" };
+  }
   if (asset.guidance !== undefined && (
     !Array.isArray(asset.guidance) ||
     asset.guidance.some((item) => !SKETCH_GUIDANCE_KEYS.includes(item as (typeof SKETCH_GUIDANCE_KEYS)[number]))

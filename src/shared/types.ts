@@ -48,6 +48,7 @@ export interface SketchTaskMetadata {
   underlayIncluded?: boolean;
   underlayAssetId?: string;
   guidance?: SketchGuidanceKey[];
+  parentArtifactId?: string;
 }
 
 export type ProviderKind = "openai" | "gemini" | "custom";
@@ -448,6 +449,9 @@ export interface InputAsset {
   underlayIncluded?: boolean;
   underlayAssetId?: string;
   guidance?: SketchGuidanceKey[];
+  sourceAssetId?: string;
+  sourceOperation?: "sketch" | "annotation" | "crop" | "import";
+  parentArtifactId?: string;
 }
 
 export type ReferencePreflightRole = "reference" | "mask";
@@ -606,6 +610,13 @@ export interface EditedGalleryImageInput {
 export interface EditedImageDownloadRequest {
   dataUrl: string;
   suggestedName?: string;
+}
+
+export interface InputAssetCopyRequest {
+  dataUrl: string;
+  originalName?: string;
+  sourceAssetId: string;
+  sourceOperation: "annotation" | "crop" | "import";
 }
 
 export interface GalleryFolderDeleteResult {
@@ -1034,6 +1045,7 @@ export interface AppBridge {
   importToGallery: (paths?: string[], folderId?: string | null) => Promise<GalleryAsset[]>;
   addHistoryAssetToGallery: (assetPath: string, folderId?: string | null, tags?: string[]) => Promise<GalleryAsset | null>;
   addEditedImageToGallery: (input: EditedGalleryImageInput) => Promise<GalleryAsset | null>;
+  saveInputAssetCopy: (input: InputAssetCopyRequest) => Promise<InputAsset>;
   replaceGalleryAssetImage: (id: string, input: EditedGalleryImageInput) => Promise<GalleryAsset>;
   updateGalleryAsset: (id: string, patch: GalleryAssetPatch) => Promise<GalleryAsset>;
   moveGalleryAsset: (id: string, folderId: string | null) => Promise<GalleryAsset>;
@@ -1071,6 +1083,7 @@ export interface SketchExportRequest {
   underlayIncluded?: boolean;
   underlayAssetId?: string;
   guidance?: SketchGuidanceKey[];
+  parentArtifactId?: string;
 }
 
 export interface SketchExportResult {

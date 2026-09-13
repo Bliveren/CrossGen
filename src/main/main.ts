@@ -43,6 +43,7 @@ import type {
   ImageAsset,
   OutputAsset,
   InputAsset,
+  InputAssetCopyRequest,
   ImageParams,
   ImageBackground,
   ImageFormat,
@@ -106,6 +107,9 @@ import {
   readSketchArtifact,
   writeSketchArtifact
 } from "./services/sketchAssetStore.js";
+import {
+  saveInputAssetCopy
+} from "./services/inputAssetCopy.js";
 import {
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
@@ -269,7 +273,6 @@ const DATA_DIR_ENV = "CROSSGEN_DATA_DIR";
 const USER_DATA_DIR_ENV = "CROSSGEN_USER_DATA_DIR";
 const LEGACY_USER_DATA_DIR_ENV = "IMAGE2TOOLS_USER_DATA_DIR";
 let mainWindow: BrowserWindow | null = null;
-const hasGuiInstanceLock = GUI_SINGLE_INSTANCE_ENABLED ? app.requestSingleInstanceLock() : true;
 const pendingAppLinks: string[] = [];
 let appLinkProcessingPromise: Promise<void> = Promise.resolve();
 let appLinksReady = false;
@@ -301,6 +304,7 @@ protocol.registerSchemesAsPrivileged([
 
 app.setName(BRAND_NAME);
 preserveLegacyUserDataPath();
+const hasGuiInstanceLock = GUI_SINGLE_INSTANCE_ENABLED ? app.requestSingleInstanceLock() : true;
 
 interface PackageMetadata {
   crossgen?: {
@@ -2058,6 +2062,12 @@ async function handleSaveSketchAsset(_event: IpcMainInvokeEvent, input: SketchEx
   )) {
     throw new Error("Sketch 引导设置无效。");
   }
+  if (input.parentArtifactId !== undefined && (
+    typeof input.parentArtifactId !== "string" ||
+    !sketchArtifactIdIsSafe(input.parentArtifactId)
+  )) {
+    throw new Error("Sketch 父 artifact ID 无效。");
+  }
   const guidance = normalizeSketchGuidance(input.guidance);
   if (input.pngBytes.byteLength > MAX_SKETCH_PNG_BYTES) {
     throw new Error("Sketch PNG 超过 50 MB 限制。");
@@ -2084,7 +2094,8 @@ async function handleSaveSketchAsset(_event: IpcMainInvokeEvent, input: SketchEx
     documentHash: input.documentHash,
     underlayIncluded: input.underlayIncluded,
     underlayAssetId: input.underlayAssetId,
-    guidance
+    guidance,
+    parentArtifactId: input.parentArtifactId
   });
   const { artifactId, paths } = record;
   try {
@@ -2097,6 +2108,7 @@ async function handleSaveSketchAsset(_event: IpcMainInvokeEvent, input: SketchEx
       ...(input.underlayIncluded ? { underlayIncluded: true } : {}),
       ...(input.underlayAssetId ? { underlayAssetId: input.underlayAssetId } : {}),
       ...(guidance.length > 0 ? { guidance } : {}),
+      ...(input.parentArtifactId ? { parentArtifactId: input.parentArtifactId } : {}),
       previewUrl: `image2tools-asset://image?path=${encodeURIComponent(paths.pngPath)}`
     };
     return {
@@ -2124,6 +2136,21 @@ async function handleLoadSketchDocument(_event: IpcMainInvokeEvent, artifactId: 
     artifactId
   });
   return record.document;
+}
+
+async function handleSaveInputAssetCopy(_event: IpcMainInvokeEvent, input: InputAssetCopyRequest): Promise<InputAsset> {
+  const state = await readState();
+  const mediaRoot = getStorageSettings(state).mediaRoot ?? getDefaultMediaRoot();
+  return saveInputAssetCopy({
+    input,
+    mediaRoot,
+    decodeImage: (bytes) => nativeImage.createFromBuffer(Buffer.from(bytes)),
+    createAsset: (filePath) => toInputAsset(filePath, false),
+    ensureDirectory: ensureDir,
+    writeFile: (filePath, bytes, options) => fs.writeFile(filePath, bytes, options),
+    rename: (oldPath, newPath) => fs.rename(oldPath, newPath),
+    remove: (filePath, options) => fs.rm(filePath, options)
+  });
 }
 
 async function handleClearApiKey(_event: IpcMainInvokeEvent, providerId?: string): Promise<ProviderConfig> {
@@ -6687,6 +6714,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("draft:clear", handleClearDraft);
   ipcMain.handle("sketch:saveAsset", handleSaveSketchAsset);
   ipcMain.handle("sketch:loadDocument", handleLoadSketchDocument);
+  ipcMain.handle("asset:saveInputCopy", handleSaveInputAssetCopy);
   ipcMain.handle("templates:list", handleListTemplates);
   ipcMain.handle("templates:save", handleSaveTemplate);
   ipcMain.handle("templates:delete", handleDeleteTemplate);

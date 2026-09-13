@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, ArrowDownUp, CheckCircle2, ChevronUp, Copy, Download, FolderInput, Info, RotateCcw, RefreshCw, Save, Search, Video, X } from "lucide-react";
+import { AlertTriangle, ArrowDownUp, CheckCircle2, ChevronUp, Copy, Download, FolderInput, Info, PenLine, RotateCcw, RefreshCw, Save, Search, Video, X } from "lucide-react";
 import type { GenerationJob, OutputAsset } from "../shared/types";
 import type { UiCopy } from "./i18n";
 
@@ -88,6 +88,8 @@ interface HistoryItemCardProps {
   copyButtonClass: string;
   downloadButtonClass: string;
   reuseButtonLabel: string;
+  continueButtonClass: string;
+  continueButtonLabel: string;
   copyButtonLabel: string;
   downloadButtonLabel: string;
   onToggleSelection: (checked: boolean) => void;
@@ -107,6 +109,7 @@ interface HistoryItemCardProps {
   onMoveToolbarTowardPointer: (event: React.MouseEvent<HTMLElement>) => void;
   onResetToolbarDrift: (event: React.MouseEvent<HTMLElement>) => void;
   onReuse: () => void;
+  onContinue: () => void;
   onCopyPrompt: () => void;
   onDownload: () => void;
   onDetails: () => void;
@@ -422,6 +425,8 @@ export function HistoryItemCard({
   copyButtonClass,
   downloadButtonClass,
   reuseButtonLabel,
+  continueButtonClass,
+  continueButtonLabel,
   copyButtonLabel,
   downloadButtonLabel,
   onToggleSelection,
@@ -441,6 +446,7 @@ export function HistoryItemCard({
   onMoveToolbarTowardPointer,
   onResetToolbarDrift,
   onReuse,
+  onContinue,
   onCopyPrompt,
   onDownload,
   onDetails,
@@ -588,6 +594,12 @@ export function HistoryItemCard({
           <RotateCcw size={15} />
           <span>{reuseButtonLabel}</span>
         </button>
+        {(job.workflow === "sketch" || job.inputAssets.some((asset) => asset.role === "sketch")) && (
+          <button type="button" className={continueButtonClass} onClick={onContinue} aria-label={copy.sketchContinue} data-tooltip={copy.sketchContinue}>
+            <PenLine size={15} />
+            <span>{continueButtonLabel}</span>
+          </button>
+        )}
         {recoverable && (
           <button type="button" className="history-action-button" onClick={onRetry} aria-label={copy.queue.retry} data-tooltip={copy.queue.retry}>
             <RefreshCw size={15} />

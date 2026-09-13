@@ -465,6 +465,7 @@ export interface UiCopy {
   addLocalReferences: string;
   newSketch: string;
   editSketch: string;
+  editReference: string;
   sketchTitle: string;
   sketchSaveUse: string;
   sketchEmptyHint: string;
@@ -476,7 +477,12 @@ export interface UiCopy {
   sketchWhite: string;
   sketchTransparent: string;
   sketchInputPreview: string;
+  compareInputResult: string;
+  compareInput: string;
+  compareResult: string;
   sketchSaved: string;
+  sketchContinue: string;
+  sketchContinueReady: string;
   sketchLoadFailed: string;
   sketchGeneralUnsupported: string;
   sketchMaskUnsupported: string;
@@ -651,6 +657,10 @@ export interface UiCopy {
   clearAnnotations: string;
   saveToGallery: string;
   saveCropSelectionToGallery: string;
+  saveReferenceCopy: string;
+  saveReferenceCropCopy: string;
+  referenceInputPreview: string;
+  inputCopySaved: string;
   downloadEditedImage: string;
   editedDownloadStarted: string;
   annotationRestoreFailed: string;
@@ -1094,6 +1104,7 @@ export const translations: Record<Language, UiCopy> = {
     addLocalReferences: "Add local reference image",
     newSketch: "New Sketch",
     editSketch: "Edit Sketch",
+    editReference: "Edit reference",
     sketchTitle: "Sketch input",
     sketchSaveUse: "Save and use",
     sketchEmptyHint: "Draw a few strokes to guide the image model.",
@@ -1105,7 +1116,12 @@ export const translations: Record<Language, UiCopy> = {
     sketchWhite: "White",
     sketchTransparent: "Transparent",
     sketchInputPreview: "Input preview · Sketch",
+    compareInputResult: "Compare input and result",
+    compareInput: "Input",
+    compareResult: "Result",
     sketchSaved: "Sketch saved as a reference input.",
+    sketchContinue: "Continue drawing",
+    sketchContinueReady: "Sketch reopened for continued drawing. Saving will create a new version.",
     sketchLoadFailed: "Could not reopen the Sketch document.",
     sketchGeneralUnsupported: "General does not support Sketch input.",
     sketchMaskUnsupported: "Sketch input cannot be combined with a mask.",
@@ -1279,6 +1295,10 @@ export const translations: Record<Language, UiCopy> = {
     clearAnnotations: "Clear annotations",
     saveToGallery: "Save to Gallery",
     saveCropSelectionToGallery: "Save selected area to Gallery",
+    saveReferenceCopy: "Save as input copy",
+    saveReferenceCropCopy: "Save crop as input copy",
+    referenceInputPreview: "Input preview · Reference",
+    inputCopySaved: "Reference input copy saved.",
     downloadEditedImage: "Download edited image",
     editedDownloadStarted: "Edited image download started.",
     annotationRestoreFailed: "Cannot restore edit layer.",
@@ -1787,6 +1807,7 @@ export const translations: Record<Language, UiCopy> = {
     addLocalReferences: "添加本地参考图",
     newSketch: "新建 Sketch",
     editSketch: "编辑 Sketch",
+    editReference: "编辑参考图",
     sketchTitle: "Sketch 输入",
     sketchSaveUse: "保存并使用",
     sketchEmptyHint: "画几笔，为模型提供构图与姿态引导。",
@@ -1798,7 +1819,12 @@ export const translations: Record<Language, UiCopy> = {
     sketchWhite: "白色",
     sketchTransparent: "透明",
     sketchInputPreview: "输入预览 · Sketch",
+    compareInputResult: "并排对照输入与结果",
+    compareInput: "输入",
+    compareResult: "结果",
     sketchSaved: "Sketch 已保存并加入参考图。",
+    sketchContinue: "继续绘制",
+    sketchContinueReady: "已打开 Sketch 继续绘制，保存后会创建新的版本。",
     sketchLoadFailed: "无法重新打开 Sketch 文档。",
     sketchGeneralUnsupported: "General 不支持 Sketch 输入。",
     sketchMaskUnsupported: "Sketch 输入不能与蒙版同时使用。",
@@ -1972,6 +1998,10 @@ export const translations: Record<Language, UiCopy> = {
     clearAnnotations: "清除批注",
     saveToGallery: "保存到图库",
     saveCropSelectionToGallery: "将选定区域存储到图库",
+    saveReferenceCopy: "保存为输入副本",
+    saveReferenceCropCopy: "将裁剪保存为输入副本",
+    referenceInputPreview: "输入预览 · 参考图",
+    inputCopySaved: "参考图输入副本已保存。",
     downloadEditedImage: "下载编辑图",
     editedDownloadStarted: "编辑图下载已开始。",
     annotationRestoreFailed: "无法恢复编辑图层。",

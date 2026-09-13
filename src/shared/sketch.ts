@@ -27,6 +27,7 @@ export interface SketchSidecar {
   underlayIncluded?: boolean;
   underlayAssetId?: string;
   guidance?: SketchGuidanceKey[];
+  parentArtifactId?: string;
 }
 
 const COLOR_PATTERN = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i;
@@ -212,6 +213,9 @@ export function validateSketchTaskMetadata(value: unknown): SketchValidationResu
       return { ok: false, message: "Sketch 引导设置无效。" };
     }
   }
+  if (value.parentArtifactId !== undefined && (typeof value.parentArtifactId !== "string" || !value.parentArtifactId.trim())) {
+    return { ok: false, message: "Sketch 父 artifact ID 无效。" };
+  }
   return { ok: true };
 }
 
@@ -235,6 +239,9 @@ export function validateSketchSidecar(value: unknown, expectedArtifactId?: strin
   if (value.guidance !== undefined && (!Array.isArray(value.guidance) || value.guidance.some((item) => !SKETCH_GUIDANCE_KEYS.includes(item as SketchGuidanceKey)))) {
     return { ok: false, message: "Sketch sidecar 引导设置无效。" };
   }
+  if (value.parentArtifactId !== undefined && (typeof value.parentArtifactId !== "string" || !value.parentArtifactId.trim())) {
+    return { ok: false, message: "Sketch sidecar 父 artifact ID 无效。" };
+  }
   return { ok: true };
 }
 
@@ -256,6 +263,9 @@ export function normalizeSketchSidecar(value: unknown, expectedArtifactId?: stri
     ...(typeof value.underlayAssetId === "string" && value.underlayAssetId.trim() ? { underlayAssetId: value.underlayAssetId } : {}),
     ...(Array.isArray(value.guidance)
       ? { guidance: normalizeSketchGuidance(value.guidance) }
+      : {}),
+    ...(typeof value.parentArtifactId === "string" && value.parentArtifactId.trim()
+      ? { parentArtifactId: value.parentArtifactId.trim() }
       : {})
   };
 }
@@ -264,7 +274,10 @@ export function normalizeSketchTaskMetadata(value: unknown): SketchTaskMetadata 
   if (!validateSketchTaskMetadata(value).ok || !isRecord(value)) return undefined;
   return {
     ...(value as unknown as SketchTaskMetadata),
-    ...(Array.isArray(value.guidance) ? { guidance: normalizeSketchGuidance(value.guidance) } : {})
+    ...(Array.isArray(value.guidance) ? { guidance: normalizeSketchGuidance(value.guidance) } : {}),
+    ...(typeof value.parentArtifactId === "string" && value.parentArtifactId.trim()
+      ? { parentArtifactId: value.parentArtifactId.trim() }
+      : {})
   };
 }
 

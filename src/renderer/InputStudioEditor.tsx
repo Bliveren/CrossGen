@@ -5,6 +5,7 @@ import {
   Check,
   Eraser,
   Maximize2,
+  Pencil,
   Paintbrush,
   RotateCcw,
   X,
@@ -36,6 +37,7 @@ interface InputStudioEditorProps {
   onSetPrimary?: () => void;
   onUseAsUnderlay?: () => void;
   onOpenMask?: () => void;
+  onEditImage?: () => void;
   onClearMask?: () => void;
   onApplyMask?: () => void;
   onCancelMask?: () => void;
@@ -62,6 +64,7 @@ export function InputStudioEditor({
   onSetPrimary,
   onUseAsUnderlay,
   onOpenMask,
+  onEditImage,
   onClearMask,
   onApplyMask,
   onCancelMask,
@@ -216,6 +219,17 @@ export function InputStudioEditor({
             >
               <Paintbrush size={15} />
               {copy.addReferenceMask}
+            </button>
+            <button
+              type="button"
+              className="input-studio-action-button secondary"
+              onClick={onEditImage}
+              disabled={!onEditImage}
+              aria-label={copy.editImage}
+              data-tooltip={copy.editImage}
+            >
+              <Pencil size={15} />
+              {copy.editImage}
             </button>
             <button
               type="button"

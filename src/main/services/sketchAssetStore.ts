@@ -37,6 +37,7 @@ export interface SketchArtifactWriteOptions {
   underlayIncluded?: boolean;
   underlayAssetId?: string;
   guidance?: SketchTaskMetadata["guidance"];
+  parentArtifactId?: string;
   artifactId?: string;
   createdAt?: string;
   idFactory?: () => string;
@@ -98,7 +99,8 @@ function artifactMetadata(
   createdAt: string,
   underlayIncluded?: boolean,
   underlayAssetId?: string,
-  guidance?: SketchTaskMetadata["guidance"]
+  guidance?: SketchTaskMetadata["guidance"],
+  parentArtifactId?: string
 ): SketchTaskMetadata & { document: SketchDocument; createdAt: string } {
   return {
     artifactId,
@@ -112,7 +114,8 @@ function artifactMetadata(
     createdAt,
     ...(underlayIncluded ? { underlayIncluded: true } : {}),
     ...(underlayAssetId ? { underlayAssetId } : {}),
-    ...(guidance && guidance.length > 0 ? { guidance: normalizeSketchGuidance(guidance) } : {})
+    ...(guidance && guidance.length > 0 ? { guidance: normalizeSketchGuidance(guidance) } : {}),
+    ...(parentArtifactId ? { parentArtifactId } : {})
   };
 }
 
@@ -159,7 +162,8 @@ export async function writeSketchArtifact(options: SketchArtifactWriteOptions): 
     createdAt,
     options.underlayIncluded,
     options.underlayAssetId,
-    options.guidance
+    options.guidance,
+    options.parentArtifactId
   );
   let publishedPng = false;
   let publishedSidecar = false;

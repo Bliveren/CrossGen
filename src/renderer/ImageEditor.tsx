@@ -6,6 +6,7 @@ import {
   Brush,
   CheckCircle2,
   Circle,
+  Columns2,
   Crop,
   Download,
   Expand,
@@ -48,7 +49,10 @@ interface ImageEditorProps {
   activePreviewSource?: string;
   embeddedInputEditor?: ReactNode;
   inputPreview?: boolean;
+  inputPreviewEditable?: boolean;
   inputPreviewLabel?: string;
+  inputPreviewSaveLabel?: string;
+  inputPreviewCropSaveLabel?: string;
   showInputStudioToggle?: boolean;
   inputStudioView?: "input" | "result";
   inputStudioInputLabel?: string;
@@ -56,8 +60,17 @@ interface ImageEditorProps {
   inputStudioEditorLabel?: string;
   inputStudioEditorMode?: "reference" | "sketch" | "mask";
   inputStudioEditLabel?: string;
+  compareMode?: "none" | "side-by-side";
+  compareInputSource?: string;
+  compareResultSource?: string;
+  compareInputLabel?: string;
+  compareResultLabel?: string;
+  compareToggleLabel?: string;
   onInputStudioViewChange?: (view: "input" | "result") => void;
   onEditInput?: () => void;
+  onSaveInputPreviewCopy?: () => void;
+  onSaveInputCropCopy?: () => void;
+  onToggleCompareMode?: () => void;
   activeJobError: string | null;
   isGenerating: boolean;
   generationElapsedSeconds: number;
@@ -152,7 +165,10 @@ export function ImageEditor({
   activePreviewSource,
   embeddedInputEditor,
   inputPreview = false,
+  inputPreviewEditable = false,
   inputPreviewLabel,
+  inputPreviewSaveLabel,
+  inputPreviewCropSaveLabel,
   showInputStudioToggle = false,
   inputStudioView = "result",
   inputStudioInputLabel = "Input",
@@ -160,8 +176,17 @@ export function ImageEditor({
   inputStudioEditorLabel,
   inputStudioEditorMode,
   inputStudioEditLabel,
+  compareMode = "none",
+  compareInputSource,
+  compareResultSource,
+  compareInputLabel = "Input",
+  compareResultLabel = "Result",
+  compareToggleLabel = "Compare input and result",
   onInputStudioViewChange,
   onEditInput,
+  onSaveInputPreviewCopy,
+  onSaveInputCropCopy,
+  onToggleCompareMode,
   activeJobError,
   isGenerating,
   generationElapsedSeconds,
@@ -248,9 +273,12 @@ export function ImageEditor({
   const isImagePreview = !activeMedia || isImageAsset(activeMedia);
   const isVideoPreview = isVideoAsset(activeMedia);
   const isAnimationPreview = isAnimationAsset(activeMedia);
-  const canUseImageEditor = Boolean(activeImage && isImagePreview);
-  const showEditTools = isImagePreview && isEditingPreview;
-  const showCropTools = isImagePreview && isCroppingPreview;
+  const canUseImageEditor = Boolean((activeImage || (inputPreviewEditable && activePreviewSource)) && isImagePreview);
+  const canCompareInputResult = Boolean(compareInputSource && compareResultSource && onToggleCompareMode);
+  const isCompareMode = compareMode === "side-by-side" && Boolean(compareInputSource && compareResultSource);
+  const canRenderImageOverlay = !inputPreview || inputPreviewEditable;
+  const showEditTools = isImagePreview && isEditingPreview && canRenderImageOverlay;
+  const showCropTools = isImagePreview && isCroppingPreview && canRenderImageOverlay;
   const mediaPathSource = (mediaPath?: string): string | undefined => {
     if (!mediaPath) return undefined;
     return `image2tools-asset://image?path=${encodeURIComponent(mediaPath)}`;
@@ -301,6 +329,64 @@ export function ImageEditor({
               {embeddedInputEditor}
             </div>
           </div>
+        ) : isCompareMode ? (
+          <>
+            <div className="input-result-compare" aria-label={compareToggleLabel}>
+              <figure>
+                <div className="input-result-compare-frame">
+                  <img src={compareInputSource} alt={compareInputLabel} draggable={false} />
+                </div>
+                <figcaption>{compareInputLabel}</figcaption>
+              </figure>
+              <figure>
+                <div className="input-result-compare-frame">
+                  <img src={compareResultSource} alt={compareResultLabel} draggable={false} />
+                </div>
+                <figcaption>{compareResultLabel}</figcaption>
+              </figure>
+            </div>
+            <div
+              className="preview-control-strip"
+              onMouseMove={onMoveToolbarTowardPointer}
+              onMouseLeave={onResetToolbarDrift}
+            >
+              {showInputStudioToggle && onInputStudioViewChange ? (
+                <div className="preview-view-switch" role="tablist" aria-label={copy.resultViewer}>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={inputStudioView === "input" ? "active" : undefined}
+                    aria-selected={inputStudioView === "input"}
+                    onClick={() => onInputStudioViewChange("input")}
+                  >
+                    {inputStudioInputLabel}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={inputStudioView === "result" ? "active" : undefined}
+                    aria-selected={inputStudioView === "result"}
+                    onClick={() => onInputStudioViewChange("result")}
+                  >
+                    {inputStudioResultLabel}
+                  </button>
+                </div>
+              ) : null}
+              <div className="preview-primary-actions" aria-label={copy.resultViewer}>
+                <button
+                  type="button"
+                  className="icon-button active"
+                  onClick={onToggleCompareMode}
+                  aria-label={compareToggleLabel}
+                  data-tooltip={compareToggleLabel}
+                  aria-pressed="true"
+                  style={PRIMARY_TOOL_ACTIVE_STYLE}
+                >
+                  <Columns2 size={16} />
+                </button>
+              </div>
+            </div>
+          </>
         ) : activePreviewSource ? (
           <>
             <div
@@ -338,7 +424,7 @@ export function ImageEditor({
                     aria-label={isImagePreview ? copy.resultViewer : copy.generatedResult}
                     crossOrigin={/^(?:https?:|image2tools-asset:)/i.test(activePreviewSource) ? "anonymous" : undefined}
                     draggable={false}
-                    onLoad={isImagePreview && !inputPreview ? () => onResizeAnnotationCanvas(true) : undefined}
+                    onLoad={isImagePreview && canRenderImageOverlay ? () => onResizeAnnotationCanvas(true) : undefined}
                     onKeyDown={isImagePreview ? (event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
                       event.preventDefault();
@@ -347,7 +433,7 @@ export function ImageEditor({
                     onContextMenu={isImagePreview ? onImageContextMenu : undefined}
                   />
                 )}
-                {!inputPreview && isImagePreview && annotationDrawingLayers.map((layer) => (
+                {canRenderImageOverlay && isImagePreview && annotationDrawingLayers.map((layer) => (
                   <img
                     key={layer.id}
                     className="annotation-drawing-layer"
@@ -357,7 +443,7 @@ export function ImageEditor({
                     style={annotationLayerStyle(layer.order)}
                   />
                 ))}
-                {!inputPreview && isImagePreview && (
+                {canRenderImageOverlay && isImagePreview && (
                   <canvas
                     ref={annotationCanvasRef}
                     className={[
@@ -374,16 +460,16 @@ export function ImageEditor({
                     onPointerCancel={onFinishAnnotation}
                   />
                 )}
-                {!inputPreview && isImagePreview && draftTextRect && showEditTools && (
+                {canRenderImageOverlay && isImagePreview && draftTextRect && showEditTools && (
                   <div className="annotation-text-draft" style={cssRectForCanvasRect(draftTextRect)} />
                 )}
-                {!inputPreview && isImagePreview && cropSelection && showCropTools && (
+                {canRenderImageOverlay && isImagePreview && cropSelection && showCropTools && (
                   <div
                     className={`crop-selection ${cropSelection.shape}`}
                     style={cssRectForCanvasRect(cropSelection)}
                   />
                 )}
-                {!inputPreview && isImagePreview && annotationTextBoxes.map((box) => (
+                {canRenderImageOverlay && isImagePreview && annotationTextBoxes.map((box) => (
                   showEditTools ? (
                     <div
                       key={box.id}
@@ -485,7 +571,7 @@ export function ImageEditor({
                 <button
                   type="button"
                   className={isEditingPreview ? "icon-button active" : "icon-button"}
-                  disabled={inputPreview ? !onEditInput : !canUseImageEditor}
+                  disabled={inputPreview ? (!inputPreviewEditable || !onEditInput) : !canUseImageEditor}
                   onClick={inputPreview && onEditInput ? onEditInput : onToggleEditMode}
                   aria-label={inputPreview && inputStudioEditLabel ? inputStudioEditLabel : copy.editImage}
                   data-tooltip={inputPreview && inputStudioEditLabel ? inputStudioEditLabel : copy.editImage}
@@ -496,8 +582,20 @@ export function ImageEditor({
                 </button>
                 <button
                   type="button"
+                  className={compareMode === "side-by-side" ? "icon-button active" : "icon-button"}
+                  disabled={inputPreview || !canCompareInputResult}
+                  onClick={onToggleCompareMode}
+                  aria-label={compareToggleLabel}
+                  data-tooltip={compareToggleLabel}
+                  aria-pressed={compareMode === "side-by-side"}
+                  style={compareMode === "side-by-side" ? PRIMARY_TOOL_ACTIVE_STYLE : undefined}
+                >
+                  <Columns2 size={16} />
+                </button>
+                <button
+                  type="button"
                   className={isCroppingPreview ? "icon-button active" : "icon-button"}
-                  disabled={inputPreview || !canUseImageEditor}
+                  disabled={inputPreview ? (!inputPreviewEditable || !canUseImageEditor) : !canUseImageEditor}
                   onClick={onToggleCropMode}
                   aria-label={copy.cropImage}
                   data-tooltip={copy.cropImage}
@@ -509,7 +607,7 @@ export function ImageEditor({
                 <button
                   type="button"
                   className={hasEditedPreviewChanges || cropSelection ? buttonFeedbackClass("download:edited") : activeImage ? buttonFeedbackClass(`download:${activeImage.id}`) : "icon-button"}
-                  disabled={inputPreview || (!activeMedia && !activeImage)}
+                  disabled={inputPreview ? (!inputPreviewEditable || !activePreviewSource) : (!activeMedia && !activeImage)}
                   onClick={onDownloadCurrentPreview}
                   aria-label={hasEditedPreviewChanges || cropSelection ? copy.downloadEditedImage : copy.download}
                   data-tooltip={hasEditedPreviewChanges || cropSelection ? copy.downloadEditedImage : copy.download}
@@ -519,15 +617,17 @@ export function ImageEditor({
                 <button
                   type="button"
                   className={buttonFeedbackClass(isCroppingPreview && cropSelection ? "gallery:cropped" : hasEditedPreviewChanges ? "gallery:edited" : "gallery:current")}
-                  disabled={inputPreview || !activeImage}
-                  onClick={onSaveCurrentPreviewToGallery}
-                  aria-label={copy.saveToGallery}
-                  data-tooltip={copy.saveToGallery}
+                  disabled={inputPreview
+                    ? (!inputPreviewEditable || (!hasEditedPreviewChanges && !cropSelection))
+                    : !activeImage}
+                  onClick={inputPreview && inputPreviewEditable && onSaveInputPreviewCopy ? onSaveInputPreviewCopy : onSaveCurrentPreviewToGallery}
+                  aria-label={inputPreview && inputPreviewSaveLabel ? inputPreviewSaveLabel : copy.saveToGallery}
+                  data-tooltip={inputPreview && inputPreviewSaveLabel ? inputPreviewSaveLabel : copy.saveToGallery}
                 >
                   <Save size={16} />
                 </button>
               </div>
-              {!inputPreview && showEditTools && (
+              {showEditTools && (
                 <div className="annotation-tools preview-secondary-actions" data-drift="subtle">
                   <button type="button" className={annotationTool === "draw" ? "icon-button active" : "icon-button"} onClick={onSelectDrawTool} aria-label={copy.drawTool} data-tooltip={copy.drawTool}>
                     <Brush size={15} />
@@ -626,7 +726,7 @@ export function ImageEditor({
                   </button>
                 </div>
               )}
-              {!inputPreview && showCropTools && (
+              {showCropTools && (
                 <div className="annotation-tools crop-tools preview-secondary-actions" data-drift="subtle">
                   <button type="button" className={cropShape === "rect" ? "icon-button active" : "icon-button"} onClick={() => onCropShapeChange("rect")} aria-label={copy.cropRectangle} data-tooltip={copy.cropRectangle}>
                     <RectangleHorizontal size={15} />
@@ -637,7 +737,14 @@ export function ImageEditor({
                   <button type="button" className="icon-button" onClick={onUndoEditorAction} disabled={editorUndoStackLength === 0} aria-label={copy.undo} data-tooltip={copy.undo}>
                     <RotateCcw size={15} />
                   </button>
-                  <button type="button" className={buttonFeedbackClass("gallery:cropped")} onClick={onSaveCropSelectionToGallery} disabled={!cropSelection} aria-label={copy.saveCropSelectionToGallery} data-tooltip={copy.saveCropSelectionToGallery}>
+                  <button
+                    type="button"
+                    className={buttonFeedbackClass(inputPreviewEditable ? "input:cropped" : "gallery:cropped")}
+                    onClick={inputPreviewEditable && onSaveInputCropCopy ? onSaveInputCropCopy : onSaveCropSelectionToGallery}
+                    disabled={!cropSelection}
+                    aria-label={inputPreviewEditable && inputPreviewCropSaveLabel ? inputPreviewCropSaveLabel : copy.saveCropSelectionToGallery}
+                    data-tooltip={inputPreviewEditable && inputPreviewCropSaveLabel ? inputPreviewCropSaveLabel : copy.saveCropSelectionToGallery}
+                  >
                     <FolderInput size={15} />
                   </button>
                   <button type="button" className="icon-button" onClick={onApplyCropSelection} disabled={!cropSelection} aria-label={copy.applyCrop} data-tooltip={copy.applyCrop}>
