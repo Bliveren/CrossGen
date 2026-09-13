@@ -59,6 +59,7 @@
     "verify:real-aihub-api": "node scripts/verify-real-aihub-api.mjs",
     "verify:real-api": "node scripts/verify-real-api.mjs",
     "verify:real-gemini-api": "node scripts/verify-real-gemini-api.mjs",
+    "probe:real-aihub-models": "node scripts/probe-real-aihub-models.mjs",
     "verify:signing-ready": "node scripts/verify-signing-readiness.mjs",
     "update:manifest-asset": "node scripts/update-manifest-asset.mjs",
     "perf:fixture": "node scripts/create-large-gallery-fixture.mjs",
