@@ -777,15 +777,17 @@
         "Unmanaged files are never overwritten and stale links are reported clearly."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T16:30:55.101Z",
-        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "verifiedAt": "2026-09-13T20:36:40.300Z",
+        "commit": "ce50a67348a66636edb501dd6682b6d7d7dff427",
         "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
         "commands": [
-          "pnpm exec vitest run src/main/services/agentRuntime.test.ts"
+          "pnpm exec vitest run src/main/services/agentRuntime.test.ts src/shared/package-config.test.ts src/cli/crossgen.test.ts",
+          "sh -n build/cli/crossgen",
+          "symlinked packaged launcher fixture: ~/.local/bin/crossgen -> CrossGen.app/Contents/Resources/cli/crossgen"
         ],
         "references": [],
         "artifacts": [],
-        "summary": "Managed POSIX link and Windows shim tests passed, including refusal to overwrite unmanaged files."
+        "summary": "Managed POSIX link and Windows shim tests passed. The v0.3.4 POSIX launcher now resolves its own symlink before deriving the app-relative executable, so a launcher linked outside /Applications follows the selected package instead of falling back to an older same-name app."
       }
     },
     {
@@ -799,23 +801,27 @@
         "The candidate reaches the packaged CLI/MCP smoke path without requiring a global Node.js installation."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-04T16:30:55.101Z",
-        "commit": "fd1ed7e788fed8488e0907fea388e6fdf16eeeb0",
+        "verifiedAt": "2026-09-13T20:36:40.300Z",
+        "commit": "ce50a67348a66636edb501dd6682b6d7d7dff427",
         "environment": "macOS local development shell; source-tree and unsigned unpacked candidate verification.",
         "commands": [
-          "pnpm exec node scripts/electron-builder-pnpm.mjs --dir -c.mac.identity=null -c.mac.notarize=false -c.mac.timestamp=null",
-          "CROSSGEN_APP_EXECUTABLE=release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen pnpm exec node scripts/verify-cli-mcp-smoke.mjs"
+          "pnpm package:mac",
+          "release/mac-arm64/CrossGen.app/Contents/MacOS/CrossGen --cli version --json",
+          "release/mac-arm64/CrossGen.app/Contents/Resources/cli/crossgen version --json",
+          "pnpm verify:cli-mcp-smoke",
+          "pnpm verify:sketch-packaged-smoke",
+          "pnpm verify:sketch-feature-flag-smoke"
         ],
         "references": [],
         "artifacts": [
           {
-            "kind": "unpacked macOS arm64 candidate",
+            "kind": "macOS arm64 test package",
             "path": "release/mac-arm64/CrossGen.app",
             "public": false,
-            "description": "Generated from fd1ed7e788fed8488e0907fea388e6fdf16eeeb0; aggregate file-tree SHA256 2861e558da319848fd4c98829370fa99ad6929f0d0dd8f4e91d091314500f53b; size 253004 KB."
+            "description": "Generated from ce50a67; app.asar SHA256 a4d71de5721a2bd550dacfd2afda44376cf82c96456e1e0d6e5de2e1dc535d39; main executable SHA256 183cf9370f7f2ae62c36aed06e21bed50366ac622f7b013bddeed1cd880889ea. DMG size 104000917 bytes SHA256 e91b920cb06e09ea2dbadf3d48095733c2bfcf16c759def5cb0fffc2569122f6; ZIP size 99746454 bytes SHA256 4a22b1e2f7cb4bc9a4d6ea074e2319a98c39520020cd4bf190da07fd3134348c."
           }
         ],
-        "summary": "Exact v0.3.4 unpacked macOS arm64 candidate was generated from the recorded commit and passed packaged command-mode smoke."
+        "summary": "Exact v0.3.4 macOS arm64 candidate generated from ce50a67; packaged app and bundled launcher both report appVersion 0.3.4 and pass CLI/MCP plus Sketch packaged smoke."
       }
     },
     {
@@ -943,11 +949,11 @@
         "No API key, bearer token, private home-directory path, or unconfirmed local asset path is disclosed."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T18:38:10.000Z",
-        "commit": "83ab084d6f6a6ea61de96bbdacd0b56daba014b4",
-        "environment": "macOS 25.5.0 arm64 local release shell. The exact 83ab084 v0.3.4 Sketch candidate was checked with deterministic renderer/provider/IPC/sidecar/state tests, memory smoke, lint, the full 52-file/528-test regression, and whitespace validation. No API key, bearer token, or private absolute path was recorded in the evidence.",
+        "verifiedAt": "2026-09-13T20:36:40.300Z",
+        "commit": "ce50a67348a66636edb501dd6682b6d7d7dff427",
+        "environment": "macOS arm64 local release shell. Exact ce50a67 candidate passed type checking, 52-file/528-test regression, renderer/main builds, lint with zero errors, deterministic Sketch smoke, IPC smoke, memory smoke, and whitespace validation. No API key, bearer token, or private absolute path was recorded.",
         "commands": [
-          "pnpm package:mac",
+          "pnpm build",
           "pnpm lint",
           "pnpm verify:sketch-smoke",
           "pnpm verify:sketch-ipc-smoke",
@@ -969,16 +975,16 @@
             "kind": "local-file",
             "path": "output/playwright/v034-sketch-packaged/1440x900.png",
             "public": false,
-            "description": "Packaged Sketch workspace screenshot from the 83ab084 macOS arm64 test package; SHA256 d6182bd1ea9d3b7024294a36c81e334aa9020040f7fe803438cbd3766ae13be8."
+            "description": "Packaged Sketch workspace screenshot from the ce50a67 macOS arm64 test package; SHA256 568f4893aa651be34351e2524233b626607d30b16cf4d47d947a45d8cb9aeff4."
           },
           {
             "kind": "local-file",
             "path": "output/playwright/v034-sketch-packaged/760x640.png",
             "public": false,
-            "description": "Constrained packaged Sketch workspace screenshot from the 83ab084 macOS arm64 test package; SHA256 f7213056fa589ae57b356e9735dec81f1ffdbf64b5874d0ac05bf07d68d1c78e."
+            "description": "Constrained packaged Sketch workspace screenshot from the ce50a67 macOS arm64 test package; SHA256 a8b45d920407cb80cd0501696543a79acc826c329ec1f457336f4df9d1d62016."
           }
         ],
-        "summary": "The exact 83ab084 Sketch candidate passed the package build (type checking, 52-file/528-test regression, renderer/main builds), lint with zero errors, deterministic Sketch smoke, IPC smoke, memory smoke (2048x2048, 500 strokes, 32000 points, 0.8 MB post-GC heap growth), and whitespace validation."
+        "summary": "The exact ce50a67 Sketch candidate passed the package build (type checking, 52-file/528-test regression, renderer/main builds), lint with zero errors, deterministic Sketch smoke, IPC smoke, memory smoke (2048x2048, 500 strokes, 32000 points, 0.79 MB post-GC heap growth), and whitespace validation."
       }
     },
     {
@@ -992,9 +998,9 @@
         "The evidence records the exact package identity and screenshots without exposing secrets or private paths."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T18:38:10.000Z",
-        "commit": "83ab084d6f6a6ea61de96bbdacd0b56daba014b4",
-        "environment": "macOS 25.5.0 arm64 packaged Electron candidate from 83ab084, Electron 39.8.10, Chromium 142. Candidate app bundle: release/mac-arm64/CrossGen.app; app.asar SHA256 a4d71de5721a2bd550dacfd2afda44376cf82c96456e1e0d6e5de2e1dc535d39; main executable SHA256 58db8f2b6f9d645a19f12122ac67c8a01f910672d76d8486fc4f30826e2c9bac.",
+        "verifiedAt": "2026-09-13T20:36:40.300Z",
+        "commit": "ce50a67348a66636edb501dd6682b6d7d7dff427",
+        "environment": "macOS arm64 packaged Electron candidate from ce50a67, Electron 39.8.10, Chromium 142. Candidate app bundle: release/mac-arm64/CrossGen.app; app.asar SHA256 a4d71de5721a2bd550dacfd2afda44376cf82c96456e1e0d6e5de2e1dc535d39; main executable SHA256 183cf9370f7f2ae62c36aed06e21bed50366ac622f7b013bddeed1cd880889ea.",
         "commands": [
           "pnpm package:mac",
           "pnpm verify:sketch-packaged-smoke"
@@ -1014,16 +1020,16 @@
             "kind": "local-directory",
             "path": "release/mac-arm64/CrossGen.app",
             "public": false,
-            "description": "Current 83ab084 macOS arm64 test package, launched successfully for manual inspection and automated CDP smoke; DMG size 104000694 bytes SHA256 4d57b1bc842c43953251cc838b1a968fdc86c081306922e42ad01541f3e88bb0, ZIP size 99746218 bytes SHA256 eca63626864c11a52470d3844e9503c652f9f73dd1a8a78f40c4461e10c5ca71."
+            "description": "Current ce50a67 macOS arm64 test package; DMG size 104000917 bytes SHA256 e91b920cb06e09ea2dbadf3d48095733c2bfcf16c759def5cb0fffc2569122f6, ZIP size 99746454 bytes SHA256 4a22b1e2f7cb4bc9a4d6ea074e2319a98c39520020cd4bf190da07fd3134348c."
           },
           {
             "kind": "local-file",
             "path": "output/playwright/v034-sketch-packaged/compact-sidebar.png",
             "public": false,
-            "description": "Compact-sidebar layout screenshot from the 83ab084 test package; SHA256 86395ca9a9b6e5537ad5468ab063b63c8052d6dec30bd98ce5242a6acc0661dd."
+            "description": "Compact-sidebar layout screenshot from the ce50a67 test package; SHA256 686134f51bef5d6a07cd71d454bdef88cde259fd700e9f8a48357abbef71a4f1."
           }
         ],
-        "summary": "The exact 83ab084 packaged candidate opened Sketch from the image-to-image reference area without adding a top-level mode, verified drawing, undo/redo/clear, underlay, save-and-use, restart recovery of the Sketch artifact and draft, mock generation, input/result switching, Sketch removal followed by ordinary reference Mask recovery, model switching, constrained viewports, and compact sidebar layout."
+        "summary": "The exact ce50a67 packaged candidate opened Sketch from the image-to-image reference area without adding a top-level mode, verified drawing, undo/redo/clear, underlay, save-and-use, restart recovery, mock generation, input/result switching, Sketch removal followed by ordinary reference Mask recovery, model switching, constrained viewports, and compact sidebar layout."
       }
     },
     {
@@ -1037,9 +1043,9 @@
         "The evidence records the flag value, exact candidate, and observed ordinary-workflow recovery."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T18:38:10.000Z",
-        "commit": "83ab084d6f6a6ea61de96bbdacd0b56daba014b4",
-        "environment": "macOS 25.5.0 arm64 packaged Electron candidate from 83ab084 with CROSSGEN_SKETCH_ENABLED=0 and an isolated temporary user-data directory. No provider credential was used.",
+        "verifiedAt": "2026-09-13T20:36:40.300Z",
+        "commit": "ce50a67348a66636edb501dd6682b6d7d7dff427",
+        "environment": "macOS arm64 packaged Electron candidate from ce50a67 with CROSSGEN_SKETCH_ENABLED=0 and an isolated temporary user-data directory. No provider credential was used.",
         "commands": [
           "pnpm verify:sketch-feature-flag-smoke"
         ],
@@ -1050,7 +1056,7 @@
           }
         ],
         "artifacts": [],
-        "summary": "With CROSSGEN_SKETCH_ENABLED=0, the renderer entry disappeared and Sketch asset/document IPC, Sketch draft, Sketch queue requests were explicitly rejected, while ordinary text-to-image, image-to-image, Mask, History, Gallery, and Queue read surfaces remained available on the 83ab084 packaged candidate."
+        "summary": "With CROSSGEN_SKETCH_ENABLED=0, the renderer entry disappeared and Sketch asset/document IPC, Sketch draft, and Sketch queue requests were explicitly rejected, while ordinary text-to-image, image-to-image, Mask, History, Gallery, and Queue read surfaces remained available on the ce50a67 packaged candidate."
       }
     },
     {
