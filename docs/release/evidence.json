@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-06T11:21:04.177Z",
+  "lastUpdated": "2026-09-13T05:37:50.000Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -935,7 +935,7 @@
       "id": "sketch-workspace-contract",
       "title": "Sketch workspace contract, deterministic validation, and performance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The v0.3.4 candidate satisfies the Sketch input, asset, provider, and view-layer separation contract.",
         "Deterministic renderer, provider, IPC/sidecar, migration, memory, and regression checks pass on the exact candidate.",
@@ -943,53 +943,115 @@
         "No API key, bearer token, private home-directory path, or unconfirmed local asset path is disclosed."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Sketch deterministic and performance evidence is pending final candidate verification."
+        "verifiedAt": "2026-09-13T05:37:50.000Z",
+        "commit": "a1635c6b22cde313523cfbac9f192807799d7055",
+        "environment": "macOS 25.5.0 arm64 local release shell. The exact current v0.3.4 Sketch implementation was checked with deterministic renderer/provider/IPC/sidecar/state tests, memory smoke, and whitespace validation. No API key, bearer token, or private absolute path was recorded in the evidence.",
+        "commands": [
+          "pnpm typecheck",
+          "pnpm test",
+          "pnpm lint",
+          "pnpm verify:sketch-smoke",
+          "pnpm verify:sketch-ipc-smoke",
+          "pnpm verify:sketch-memory-smoke",
+          "git diff --check"
+        ],
+        "references": [
+          {
+            "label": "CrossGen v0.3.4 Sketch 融合方案 r6",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.4-preflight.md"
+          },
+          {
+            "label": "CrossGen v0.3.4 Sketch 验证记录",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.4-preflight.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-file",
+            "path": "output/playwright/v034-sketch-packaged/1440x900.png",
+            "public": false,
+            "description": "Packaged Sketch workspace screenshot; SHA256 cb8274ea5c936704fbc65f637a23f56fd9db31f6c8b92eacc110af39274d5154."
+          },
+          {
+            "kind": "local-file",
+            "path": "output/playwright/v034-sketch-packaged/760x640.png",
+            "public": false,
+            "description": "Constrained packaged Sketch workspace screenshot; SHA256 588ba730a35b44685e290c04f170112d490d97bdff9f8036ecb76ba6da44ccf2."
+          }
+        ],
+        "summary": "The current Sketch implementation passed type checking, 51-file/513-test regression, lint with zero errors, deterministic Sketch smoke (223 tests), IPC smoke (45 tests), memory smoke (2048x2048, 500 strokes, 32000 points, 0.79 MB post-GC heap growth), and whitespace validation."
       }
     },
     {
       "id": "sketch-packaged-electron",
       "title": "Packaged Electron Sketch input/result workspace acceptance",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "The exact candidate package opens Sketch from the image-to-image reference area without adding a top-level mode.",
         "The same package verifies drawing, undo/redo, input/result switching, reference underlay, Mask separation, model switching, restart recovery, and constrained narrow-window layout.",
         "The evidence records the exact package identity and screenshots without exposing secrets or private paths."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
-        "artifacts": [],
-        "summary": "Packaged Electron Sketch workspace acceptance is pending final candidate verification."
+        "verifiedAt": "2026-09-13T05:37:50.000Z",
+        "commit": "a1635c6b22cde313523cfbac9f192807799d7055",
+        "environment": "macOS 25.5.0 arm64 packaged Electron candidate, Electron 39.8.10, Chromium 142. Candidate app bundle: release/mac-arm64/CrossGen.app; app.asar SHA256 dfd614cf80ddd6777f1d6fd3aaddc4070c04fd135af8d0fb3e42ee5711655e16; main executable SHA256 a0c1b69a11ea8a48c1cea0d409f43505e00d1ce3e87734916e3759487ed0911a.",
+        "commands": [
+          "pnpm package:dir",
+          "pnpm verify:sketch-packaged-smoke"
+        ],
+        "references": [
+          {
+            "label": "Packaged Sketch smoke script",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/scripts/verify-sketch-packaged-smoke.mjs"
+          },
+          {
+            "label": "Packaged Sketch verification record",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/docs/release/v0.3.4-preflight.md"
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "local-directory",
+            "path": "release/mac-arm64/CrossGen.app",
+            "public": false,
+            "description": "Current macOS arm64 test package, 252408 KiB, launched successfully for manual inspection and automated CDP smoke."
+          },
+          {
+            "kind": "local-file",
+            "path": "output/playwright/v034-sketch-packaged/compact-sidebar.png",
+            "public": false,
+            "description": "Compact-sidebar layout screenshot; SHA256 e0d6fecfa5537be5b55e80f9a6792a969c2698f3eda87b3b8aa69681dc4d0dd1."
+          }
+        ],
+        "summary": "The exact packaged candidate opened Sketch from the image-to-image reference area without adding a top-level mode, verified drawing, undo/redo/clear, underlay, save-and-use, restart recovery of the Sketch artifact and draft, mock generation, input/result switching, Sketch removal followed by ordinary reference Mask recovery, model switching, constrained viewports, and compact sidebar layout."
       }
     },
     {
       "id": "sketch-feature-flag-rollback",
       "title": "Packaged Sketch feature-flag rollback",
       "required": true,
-      "status": "pending",
+      "status": "passed",
       "acceptanceCriteria": [
         "CROSSGEN_SKETCH_ENABLED=0 disables the Sketch entry and rejects new Sketch IPC, draft, request, and queue operations.",
         "The same packaged app continues to support ordinary text-to-image, image-to-image, Mask, History, and Gallery workflows.",
         "The evidence records the flag value, exact candidate, and observed ordinary-workflow recovery."
       ],
       "evidence": {
-        "verifiedAt": null,
-        "commit": null,
-        "environment": null,
-        "commands": [],
-        "references": [],
+        "verifiedAt": "2026-09-13T05:28:31.000Z",
+        "commit": "a1635c6b22cde313523cfbac9f192807799d7055",
+        "environment": "macOS 25.5.0 arm64 packaged Electron candidate with CROSSGEN_SKETCH_ENABLED=0 and an isolated temporary user-data directory. No provider credential was used.",
+        "commands": [
+          "pnpm verify:sketch-feature-flag-smoke"
+        ],
+        "references": [
+          {
+            "label": "Packaged feature-flag smoke script",
+            "url": "https://github.com/Bliveren/CrossGen/blob/main/scripts/verify-sketch-feature-flag-smoke.mjs"
+          }
+        ],
         "artifacts": [],
-        "summary": "Packaged feature-flag rollback evidence is pending final candidate verification."
+        "summary": "With CROSSGEN_SKETCH_ENABLED=0, the renderer entry disappeared and Sketch asset/document IPC, Sketch draft, Sketch queue requests were explicitly rejected, while ordinary text-to-image, image-to-image, Mask, History, Gallery, and Queue read surfaces remained available."
       }
     },
     {
