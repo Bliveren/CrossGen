@@ -173,6 +173,54 @@ describe("state migration", () => {
     expect(migrated.activeProviderId).toBe("legacy-provider");
   });
 
+  it("canonicalizes legacy Nano Banana model ids during provider and params migration", () => {
+    const params = normalizeImageParams({
+      providerKind: "gemini",
+      launchId: "nano-banana-3",
+      model: "nano-banana-3"
+    });
+    expect(params.model).toBe("gemini-3.1-flash-image");
+
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "legacy-provider",
+      providers: [{
+        id: "legacy-provider",
+        kind: "gemini",
+        baseURL: "https://generativelanguage.googleapis.com/v1beta",
+        defaultModel: "nano-banana-3",
+        activeLaunchId: "nano-banana-3",
+        activeModelId: "nano-banana-3",
+        encryption: "none"
+      }],
+      history: [{
+        id: "legacy-nano-job",
+        providerKind: "gemini",
+        providerId: "legacy-provider",
+        launchId: "nano-banana-3",
+        modelId: "nano-banana-3",
+        modelDisplayName: "Nano Banana 3",
+        mode: "edit",
+        prompt: "legacy",
+        inputAssets: [],
+        params: {
+          ...params,
+          model: "nano-banana-3"
+        },
+        status: "succeeded",
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+        outputs: []
+      }],
+      queueConfig: { maxGlobalRunning: 1, providerConcurrency: {} }
+    });
+
+    expect(migrated.providers[0]?.defaultModel).toBe("gemini-3.1-flash-image");
+    expect(migrated.providers[0]?.activeModelId).toBe("gemini-3.1-flash-image");
+    expect(migrated.history[0]?.modelId).toBe("gemini-3.1-flash-image");
+    expect(migrated.history[0]?.modelDisplayName).toBe("Nano Banana 3 · Gemini 3.1 Flash Image");
+  });
+
   it("adds empty prompt templates when old state has none", () => {
     const migrated = normalizeState({
       version: 2,

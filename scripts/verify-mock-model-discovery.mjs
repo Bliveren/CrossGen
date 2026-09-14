@@ -4,6 +4,11 @@ import { spawn } from "node:child_process";
 const host = process.env.HOST ?? "127.0.0.1";
 const openAIApiKey = "sk-mock-crossgen";
 const geminiApiKey = "mock-gemini-key";
+const focusedGeminiModelIds = [
+  "gemini-3.1-flash-image",
+  "gemini-3.1-flash-lite-image",
+  "gemini-3-pro-image"
+];
 
 function assert(condition, message) {
   if (!condition) {
@@ -119,7 +124,11 @@ async function geminiModelIds(baseURL, key = geminiApiKey) {
 }
 
 function hasImageLikeCandidate(modelIds) {
-  return modelIds.some((id) => /image|imagen|dall-e|dalle|stable-diffusion|sdxl|flux|recraft/i.test(id) && id !== "gpt-image-2" && id !== "gemini-3.1-flash-image");
+  return modelIds.some((id) =>
+    /image|imagen|dall-e|dalle|stable-diffusion|sdxl|flux|recraft/i.test(id) &&
+    id !== "gpt-image-2" &&
+    !focusedGeminiModelIds.includes(id)
+  );
 }
 
 async function verifyOpenAIFocusedDiscovery() {
@@ -149,9 +158,11 @@ async function verifyOpenAIMissingFocusedDiscovery() {
 }
 
 async function verifyGeminiFocusedAndGeneralDiscovery() {
-  await withGeminiMock(8793, ["gemini-3.1-flash-image", "gemini-2.0-flash-preview-image-generation"], async (baseURL) => {
+  await withGeminiMock(8793, [...focusedGeminiModelIds, "gemini-2.0-flash-preview-image-generation"], async (baseURL) => {
     const ids = await geminiModelIds(baseURL);
-    assert(ids.includes("gemini-3.1-flash-image"), "Gemini mock did not expose gemini-3.1-flash-image");
+    for (const modelId of focusedGeminiModelIds) {
+      assert(ids.includes(modelId), `Gemini mock did not expose ${modelId}`);
+    }
     assert(hasImageLikeCandidate(ids), "Gemini mock did not expose a non-focused image-like General candidate");
   });
 }

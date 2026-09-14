@@ -45,9 +45,11 @@ import {
   GPT_IMAGE_2_MODEL_ID,
   GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
+  isGeminiImageModelId,
   NANO_BANANA_3_LAUNCH_ID,
   getModelDisplayName,
   isGptImage25ModelId,
+  normalizeGeminiImageModelId,
   normalizeModelId
 } from "../../shared/modelCatalog.js";
 import { normalizeSketchDocument, normalizeSketchGuidance, normalizeSketchTaskMetadata } from "../../shared/sketch.js";
@@ -440,7 +442,10 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
   const params = normalizeImageParams(input.params);
   const providerKind = normalizeProviderKind(input.providerKind, params.providerKind);
   const launchId = normalizeFocusedLaunchId(input.launchId, params.launchId);
-  const modelId = nonEmptyString(input.modelId, params.model);
+  const rawModelId = nonEmptyString(input.modelId, params.model);
+  const modelId = launchId === NANO_BANANA_3_LAUNCH_ID
+    ? normalizeGeminiImageModelId(rawModelId)
+    : rawModelId;
   const outputs = Array.isArray(input.outputs) ? input.outputs : [];
   const firstOutput = outputs.find((item) => isRecord(item) && nonEmptyString(item.sourceType, "") === "result") ?? outputs[outputs.length - 1];
   const outputFileName = isRecord(firstOutput) ? path.basename(nonEmptyString(firstOutput.fileName, "")) : "";
@@ -460,7 +465,7 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
     providerId: nonEmptyString(input.providerId, fallbackProviderId),
     launchId,
     modelId,
-    modelDisplayName: nonEmptyString(input.modelDisplayName, getModelDisplayName(launchId, modelId)),
+    modelDisplayName: getModelDisplayName(launchId, modelId),
     workflow: input.workflow === "sketch" ? "sketch" : input.workflow === "standard" ? "standard" : undefined,
     sketch: normalizeSketchTaskMetadata(input.sketch),
     params,
@@ -513,7 +518,7 @@ export function normalizeImageParams(value: unknown): ImageParams {
       ...defaults,
       providerKind: "gemini",
       launchId: NANO_BANANA_3_LAUNCH_ID,
-      model: nonEmptyString(input.model, defaults.model),
+      model: normalizeGeminiImageModelId(nonEmptyString(input.model, defaults.model)),
       referenceImageMode: oneOf(input.referenceImageMode, REFERENCE_IMAGE_MODE_OPTIONS, defaults.referenceImageMode ?? "original"),
       aspectRatio: oneOf(input.aspectRatio, ["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"] as const, defaults.aspectRatio),
       resolution: oneOf(input.resolution, ["0.5K", "1K", "2K", "4K"] as const, defaults.resolution),
@@ -603,6 +608,9 @@ function normalizeModelForLaunch(launchId: FocusedLaunchId, value: string): stri
   if (launchId === GPT_IMAGE_2_LAUNCH_ID) {
     return value;
   }
+  if (launchId === NANO_BANANA_3_LAUNCH_ID) {
+    return isGeminiImageModelId(value) ? normalizeGeminiImageModelId(value) : DEFAULT_GEMINI_IMAGE_PARAMS.model;
+  }
   return value;
 }
 
@@ -618,6 +626,7 @@ function normalizeFocusedLaunchId(value: unknown, fallback: FocusedLaunchId): Fo
 
 function normalizeStoredLaunchId(value: unknown, model: string): FocusedLaunchId {
   if (isGptImage25ModelId(model)) return GPT_IMAGE_2_5_LAUNCH_ID;
+  if (isGeminiImageModelId(model)) return NANO_BANANA_3_LAUNCH_ID;
   return normalizeFocusedLaunchId(value, GPT_IMAGE_2_LAUNCH_ID);
 }
 

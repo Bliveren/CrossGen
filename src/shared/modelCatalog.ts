@@ -15,8 +15,24 @@ export const GPT_IMAGE_2_5_MODEL_IDS = [
 ] as const;
 export const GPT_IMAGE_2_5_DEFAULT_MODEL_ID = GPT_IMAGE_2_5_SUNBURST_MODEL_ID;
 export const NANO_BANANA_3_LAUNCH_ID = "nano-banana-3" as const;
-export const NANO_BANANA_3_MODEL_ID = "gemini-3.1-flash-image" as const;
+/**
+ * `nano-banana-3` is retained as the stable CrossGen launch/workflow id for
+ * draft, history, and AppLink migration compatibility. These are the actual
+ * Gemini Image provider model ids currently exposed by the approved gateways.
+ */
+export const GEMINI_3_1_FLASH_IMAGE_MODEL_ID = "gemini-3.1-flash-image" as const;
+export const GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID = "gemini-3.1-flash-lite-image" as const;
 export const GEMINI_3_PRO_IMAGE_MODEL_ID = "gemini-3-pro-image" as const;
+export const GEMINI_IMAGE_MODEL_IDS = [
+  GEMINI_3_1_FLASH_IMAGE_MODEL_ID,
+  GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID,
+  GEMINI_3_PRO_IMAGE_MODEL_ID
+] as const;
+/** Legacy provider/workflow alias accepted in old drafts and AppLinks. */
+export const NANO_BANANA_3_MODEL_ALIAS = NANO_BANANA_3_LAUNCH_ID;
+/** @deprecated Use GEMINI_3_1_FLASH_IMAGE_MODEL_ID for provider requests. */
+export const NANO_BANANA_3_MODEL_ID = GEMINI_3_1_FLASH_IMAGE_MODEL_ID;
+export const GEMINI_IMAGE_DEFAULT_MODEL_ID = GEMINI_3_1_FLASH_IMAGE_MODEL_ID;
 export const GENERAL_LAUNCH_ID = "general" as const;
 export const GENERAL_MODEL_ID = "general" as const;
 
@@ -91,8 +107,8 @@ export const FOCUSED_MODEL_CATALOG = [
     launchId: NANO_BANANA_3_LAUNCH_ID,
     displayName: "Nano Banana 3",
     providerKind: "gemini",
-    modelIds: [NANO_BANANA_3_MODEL_ID, GEMINI_3_PRO_IMAGE_MODEL_ID],
-    defaultModelId: NANO_BANANA_3_MODEL_ID,
+    modelIds: [...GEMINI_IMAGE_MODEL_IDS],
+    defaultModelId: GEMINI_IMAGE_DEFAULT_MODEL_ID,
     capabilities: {
       generate: true,
       edit: true,
@@ -150,7 +166,42 @@ export function getModelDisplayName(launchId: FocusedLaunchId, modelId: string):
   if (launchId === GPT_IMAGE_2_5_LAUNCH_ID) {
     return `${definition.displayName} · ${gptImage25VariantLabel(modelId)}`;
   }
+  if (launchId === NANO_BANANA_3_LAUNCH_ID) {
+    return geminiImageModelDisplayName(modelId);
+  }
   return definition.launchId === GENERAL_LAUNCH_ID ? modelId || definition.displayName : definition.displayName;
+}
+
+export function geminiImageModelDisplayName(modelId: string): string {
+  const providerDisplayName = geminiProviderModelDisplayName(modelId);
+  const normalized = normalizeGeminiImageModelId(modelId);
+  if (normalized === GEMINI_3_1_FLASH_IMAGE_MODEL_ID) {
+    return `Nano Banana 3 · ${providerDisplayName}`;
+  }
+  return providerDisplayName;
+}
+
+export function geminiProviderModelDisplayName(modelId: string): string {
+  const normalized = normalizeGeminiImageModelId(modelId);
+  if (normalized === GEMINI_3_1_FLASH_IMAGE_MODEL_ID) return "Gemini 3.1 Flash Image";
+  if (normalized === GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID) return "Gemini 3.1 Flash Image Lite";
+  if (normalized === GEMINI_3_PRO_IMAGE_MODEL_ID) return "Gemini 3 Pro Image";
+  return modelId || "Gemini Image";
+}
+
+export function isGeminiImageModelId(modelId: string): boolean {
+  const normalized = normalizeGeminiImageModelId(modelId);
+  return GEMINI_IMAGE_MODEL_IDS.some((candidate) => normalizeModelId(candidate) === normalized);
+}
+
+/**
+ * Convert the old CrossGen workflow/provider alias to the actual Gemini model
+ * used on the wire. Unknown Gemini-compatible model ids are preserved so a
+ * gateway can still expose them through General or an explicit configuration.
+ */
+export function normalizeGeminiImageModelId(modelId: string): string {
+  const normalized = normalizeModelId(modelId);
+  return normalized === NANO_BANANA_3_MODEL_ALIAS ? GEMINI_IMAGE_DEFAULT_MODEL_ID : normalized;
 }
 
 export function isGptImage25ModelId(modelId: string): boolean {
@@ -188,7 +239,7 @@ export function generalFallbackSupportsReferenceImages(providerKind: ProviderKin
 }
 
 export function isFocusedImageModelId(providerKind: ProviderKind, modelId: string): boolean {
-  const normalizedId = normalizeModelId(modelId);
+  const normalizedId = providerKind === "gemini" ? normalizeGeminiImageModelId(modelId) : normalizeModelId(modelId);
   if (providerKind === "openai" && (normalizedId === normalizeModelId(GPT_IMAGE_2_MODEL_ID) || isGptImage25ModelId(normalizedId))) {
     return true;
   }
@@ -201,7 +252,7 @@ export function isFocusedImageModelId(providerKind: ProviderKind, modelId: strin
 }
 
 export function getProviderKindForFocusedModelId(modelId: string): ProviderKind | undefined {
-  const normalizedId = normalizeModelId(modelId);
+  const normalizedId = normalizeGeminiImageModelId(modelId);
   if (normalizedId === normalizeModelId(GPT_IMAGE_2_MODEL_ID) || isGptImage25ModelId(normalizedId)) return "openai";
   return FOCUSED_MODEL_CATALOG.find(
     (definition) =>

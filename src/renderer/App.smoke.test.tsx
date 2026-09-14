@@ -25,6 +25,8 @@ import {
   DEFAULT_IMAGE_PARAMS
 } from "../shared/validation";
 import {
+  GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID,
+  GEMINI_3_1_FLASH_IMAGE_MODEL_ID,
   GEMINI_3_PRO_IMAGE_MODEL_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
@@ -1233,6 +1235,62 @@ describe("renderer multi-model smoke", () => {
         })
       })
     );
+  });
+
+  it("keeps all discovered Gemini Image models distinct in launch and History", async () => {
+    const geminiConfig = providerConfig({
+      kind: "gemini",
+      name: "Gemini",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      defaultModel: GEMINI_3_1_FLASH_IMAGE_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: GEMINI_3_1_FLASH_IMAGE_MODEL_ID,
+      discoveredModels: [
+        { id: GEMINI_3_1_FLASH_IMAGE_MODEL_ID, providerKind: "gemini", displayName: "Gemini 3.1 Flash Image" },
+        { id: GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID, providerKind: "gemini", displayName: "Gemini 3.1 Flash Image Lite" },
+        { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini", displayName: "Gemini 3 Pro Image" },
+        { id: NANO_BANANA_3_LAUNCH_ID, providerKind: "gemini", displayName: "Nano Banana 3" }
+      ],
+      lastModelDiscoveryAt: now
+    });
+    const history = [
+      geminiJob(0, {
+        modelId: GEMINI_3_1_FLASH_IMAGE_MODEL_ID,
+        modelDisplayName: "Nano Banana 3"
+      }),
+      geminiJob(1, {
+        modelId: GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID,
+        modelDisplayName: "Nano Banana 3"
+      }),
+      geminiJob(2, {
+        modelId: GEMINI_3_PRO_IMAGE_MODEL_ID,
+        modelDisplayName: "Nano Banana 3"
+      })
+    ];
+
+    await renderApp(snapshot({
+      providers: [geminiConfig],
+      activeProviderId: geminiConfig.id,
+      history
+    }));
+
+    const launchLabels = [...launchModelSelect().options].map((option) => option.textContent ?? "");
+    expect(launchLabels).toEqual(expect.arrayContaining([
+      "Nano Banana 3 · Gemini 3.1 Flash Image",
+      "Nano Banana 3 · Gemini 3.1 Flash Image Lite",
+      "Nano Banana 3 · Gemini 3 Pro Image"
+    ]));
+    expect(new Set(launchLabels).size).toBe(launchLabels.length);
+    expect(launchLabels).toHaveLength(3);
+
+    const historyModelLabels = [...document.querySelectorAll<HTMLElement>(".history-date-model > span[title]")]
+      .map((element) => element.textContent?.trim());
+    expect(historyModelLabels).toEqual(expect.arrayContaining([
+      "Nano Banana 3 · Gemini 3.1 Flash Image",
+      "Gemini 3.1 Flash Image Lite",
+      "Gemini 3 Pro Image"
+    ]));
+    expect(historyModelLabels).not.toContain("Nano Banana 3");
   });
 
   it("keeps the single API config path working", async () => {

@@ -32,6 +32,9 @@ Use this skill when an agent needs to create or modify images through a local Cr
 - GPT Image 2.5 supports quality `auto|low|medium|high|xhigh|max`, transparent backgrounds with PNG/WebP, custom 16-multiple dimensions inside the documented 4K envelope, `n` up to 10, and Images API streaming `partialImages` from 0 to 3. Responses streaming sends `partialImages` only when it is 1 to 3; `0` means omit partial previews.
 - Use the Responses route for GPT Image 2.5 multi-turn work: pass a supported mainline `responsesModel`, `responsesAction` (`auto`, `generate`, or `edit`), and `previousResponseId` when continuing a prior response. The GPT Image 2.5 model belongs in the image-generation tool, not as the top-level Responses model.
 - In `imageRoute: "auto"`, keep batch requests (`n > 1`) on Images API. GPT Image 2.5 must never be sent through the legacy Chat Completions image route.
+- Treat `nano-banana-3` as CrossGen's launch/workflow alias only. The Gemini wire ids currently modeled by CrossGen are `gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image`, and `gemini-3-pro-image`; use the id returned by `crossgen_models_list` rather than guessing or sending the alias to a provider.
+- For Gemini image work, the latest model-discovery result is authoritative. Keep a focused model disabled when discovery does not return it or does not confirm the required image capability; do not silently fall back to another Gemini model.
+- Sketch is a desktop image-to-image input workflow. It uses `workflow: "sketch"` and `mode: "edit"` with a managed PNG input and provenance metadata. It is not a third top-level mode, cannot be combined with a mask, and must not be represented by an unverified provider-native `scratch` field.
 - When the user asks for multiple concepts, prefer one durable request per concept with distinct idempotency keys unless the selected model explicitly supports batching.
 - For edits, verify that every input path exists and is readable before submitting. Keep the original reference unchanged and describe the requested transformation separately from preservation constraints. For mask edits, verify matching source/mask dimensions and format, alpha presence, and a mask size below 50 MB.
 
@@ -46,6 +49,16 @@ Use this skill when an agent needs to create or modify images through a local Cr
   metadata for follow-up editing.
 - CrossGen v0.3.4 sends local Responses inputs as base64 data URLs. It does not
   upload or persist OpenAI Files API IDs.
+
+## Gemini and Sketch workflow notes
+
+Use the desktop CrossGen workspace to create or continue a Sketch in the
+reference-image area. The canvas may show a view-only reference underlay and
+guides, but only the explicitly exported Sketch input is sent to the provider.
+The selected Gemini model must pass discovery-backed edit/reference preflight;
+General and unknown-capability paths are blocked before submission. History and
+readonly CLI/MCP responses expose the real model id, `workflow`, and Sketch
+artifact summary without exposing API keys, absolute paths, or full data URLs.
 
 ## Media-aware behavior in v0.3.4
 

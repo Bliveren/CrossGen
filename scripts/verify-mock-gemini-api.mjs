@@ -5,7 +5,12 @@ const port = Number(process.env.PORT ?? 8788);
 const host = process.env.HOST ?? "127.0.0.1";
 const baseURL = `http://${host}:${port}/v1beta`;
 const apiKey = "mock-gemini-key";
-const focusedModelId = "gemini-3.1-flash-image";
+const focusedModelIds = [
+  "gemini-3.1-flash-image",
+  "gemini-3.1-flash-lite-image",
+  "gemini-3-pro-image"
+];
+const focusedModelId = focusedModelIds[0];
 const generalModelId = "gemini-2.0-flash-preview-image-generation";
 const tinyPngPrefix = "iVBORw0KGgoAAAANSUhEUg";
 const sourceImageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
@@ -72,7 +77,9 @@ async function verifyModels() {
   assert(response.ok, `models failed with HTTP ${response.status}`);
   const payload = await response.json();
   const modelIds = (payload.models ?? []).map((model) => model.name?.replace(/^models\//, "") ?? model.id);
-  assert(modelIds.includes(focusedModelId), "models response did not include gemini-3.1-flash-image");
+  for (const modelId of focusedModelIds) {
+    assert(modelIds.includes(modelId), `models response did not include ${modelId}`);
+  }
   assert(modelIds.includes(generalModelId), "models response did not include a non-focused image model for General probing");
 }
 
@@ -98,6 +105,24 @@ async function verifyTextToImage() {
   });
   assert(response.ok, `text-to-image failed with HTTP ${response.status}`);
   assertGeminiImageResponse(await response.json(), "text-to-image");
+}
+
+async function verifyAllFocusedModelsGenerate() {
+  for (const modelId of focusedModelIds) {
+    const response = await generateContent(modelId, {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Create a deterministic mock image with ${modelId}.` }]
+        }
+      ],
+      generationConfig: {
+        responseModalities: ["TEXT", "IMAGE"]
+      }
+    });
+    assert(response.ok, `${modelId} text-to-image failed with HTTP ${response.status}`);
+    assertGeminiImageResponse(await response.json(), modelId);
+  }
 }
 
 async function verifyTextAndImageEdit() {
@@ -203,6 +228,7 @@ async function main() {
   try {
     await waitForServer();
     await verifyModels();
+    await verifyAllFocusedModelsGenerate();
     await verifyTextToImage();
     await verifyTextAndImageEdit();
     await verifyGuidedRegionRequest();

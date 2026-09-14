@@ -101,7 +101,7 @@ CrossGen 0.3.4 增加 `crossgen://` AppLink，供 API 聚合平台把 API 名称
 crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
 ```
 
-同时兼容 `apiKey`/`api_key`、`baseURL`/`base_url`、`defaultModel`/`default_model`、`provider`/`kind` 等常见别名。支持的启动模型为 `gpt-image-2`、`gpt-image-2.5`、`nano-banana-3` 和 `general`；未提供时会根据 provider 类型和模型名自动推断。macOS、Windows、Linux 打包版本都会注册 `crossgen` scheme。
+同时兼容 `apiKey`/`api_key`、`baseURL`/`base_url`、`defaultModel`/`default_model`、`provider`/`kind` 等常见别名。支持的启动模型为 `gpt-image-2`、`gpt-image-2.5`、`nano-banana-3` 和 `general`；未提供时会根据 provider 类型和模型名自动推断。`nano-banana-3` 只是 CrossGen 的启动/工作流别名，不是 Gemini 请求中的真实模型 ID；如果要指定具体 Gemini 模型，应使用模型探测返回的 `gemini-3.1-flash-image`、`gemini-3.1-flash-lite-image` 或 `gemini-3-pro-image`。macOS、Windows、Linux 打包版本都会注册 `crossgen` scheme。
 
 > 已经在桌面、CLI 或 Agent 工作流中使用 CrossGen？可以 [Star 仓库](https://github.com/Bliveren/CrossGen)，帮助更多需要本地优先图像工具的用户发现它，也欢迎在 [Discord](https://discord.gg/XphwmYtY) 分享你的真实工作流。
 
@@ -158,6 +158,32 @@ GPT Image 2.5 可以走 Images API，也可以走 Responses API 的
 base64 data URL 传递本地参考图和 mask，不上传或持久化 OpenAI Files API
 的 File ID。完整能力矩阵和官方资料见
 [GPT Image 2.5 支持调研记录](./docs/plans/gpt-image-2.5-support.md)。
+
+## Gemini 图像模型与 Sketch
+
+CrossGen 保留产品启动名称 **Nano Banana 3**，同时保留 provider 实际使用
+的 Gemini 模型 ID。当前重点支持的 Gemini 图像模型为：
+
+- `gemini-3.1-flash-image`：Nano Banana 3 默认启动目标；
+- `gemini-3.1-flash-lite-image`：独立的 Gemini 图像模型；
+- `gemini-3-pro-image`：独立的 Gemini 图像模型。
+
+启动模型菜单、历史记录、CLI 和 MCP 都保留真实 provider model ID，避免
+不同模型被错误合并。旧草稿或 AppLink 中的 `nano-banana-3` 会迁移到
+`gemini-3.1-flash-image`；CrossGen 不会把这个别名直接作为 Gemini 请求
+模型发送。当前 API Key 的模型探测结果是唯一能力依据：未探测到的模型，
+或没有确认图像编辑与参考图能力的模型，会保持禁用，并在付费请求前阻断。
+
+Sketch 是现有图生图工作区中的输入编辑态，不是第三个顶层模式。用户在
+参考图区域新建或继续绘制 Sketch，在 Input Studio 中编辑，可选加入仅用于
+查看的参考图叠底，再将 Sketch 保存为首张输入图。History、CLI、MCP 会记录
+`workflow: "sketch"` 和 Sketch provenance；provider 请求仍使用已验证的
+图像编辑路径。CrossGen 不会虚构或发送 provider 原生的 `scratch` 字段，
+Sketch 也不能与 Mask 同时提交。
+
+0.3.4 已具备 GPT Image 2.5 与 Gemini 重点模型的代码和确定性/mock 契约；
+正式发布仍需完成真实 AIHub 的 GPT Image 2.5/Nano Banana 3 质量、速度、
+失败恢复和隐私矩阵。mock 或兼容模型的返回不能替代该门禁。
 
 ## 功能演示
 

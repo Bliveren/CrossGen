@@ -33,6 +33,33 @@ For an edit, state what must remain unchanged first, then the transformation, th
 - Treat a returned `revised_prompt` as provider metadata and retain it when
   reporting the result; it is not a replacement for the user's original prompt.
 
+## Gemini Image and Nano Banana launch semantics
+
+CrossGen's `nano-banana-3` value is a product launch/workflow alias. It is not a
+provider wire id. Use the exact Gemini model id returned by discovery:
+
+- `gemini-3.1-flash-image` for the default focused launch;
+- `gemini-3.1-flash-lite-image` for the Lite model;
+- `gemini-3-pro-image` for the Pro model.
+
+Keep the actual id in job reports and History. If the current API key does not
+discover the requested id, stop and surface the unavailable-model reason rather
+than substituting another model.
+
+## Sketch input workflow
+
+Sketch belongs to image-to-image editing. In the desktop app, create or reopen
+it from the reference-image area, draw in Input Studio, and save the exported
+PNG as the first input. A normal reference image may be a view-only underlay;
+it enters the exported request only after the user explicitly includes it.
+Sketch guidance becomes natural-language constraints, while grid, center line,
+safe area, and underlay opacity remain view-only.
+
+Use `workflow: "sketch"` with `mode: "edit"` only when the discovered model
+advertises both edit and reference-image support. Do not send a `scratch`
+parameter unless a future provider contract explicitly defines and verifies it.
+Sketch and Mask are separate input domains and must not be submitted together.
+
 ## Acceptance check
 
 After completion, verify the terminal job status and inspect the asset metadata. If the user asks for a visual QA judgment, open or render the exported asset using the host's image/file tooling; metadata alone cannot prove visual fidelity. Report any mismatch and offer a targeted edit rather than silently accepting a poor result.

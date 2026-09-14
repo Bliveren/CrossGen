@@ -77,6 +77,16 @@ describe("model discovery", () => {
             name: "models/gemini-3.1-flash-image",
             displayName: "Gemini 3.1 Flash Image",
             description: "Image model"
+          },
+          {
+            name: "models/gemini-3.1-flash-lite-image",
+            displayName: "Gemini 3.1 Flash Image Lite",
+            description: "Image model"
+          },
+          {
+            name: "models/gemini-3-pro-image",
+            displayName: "Gemini 3 Pro Image",
+            description: "Image model"
           }
         ]
       })
@@ -92,6 +102,16 @@ describe("model discovery", () => {
         id: "gemini-3.1-flash-image",
         providerKind: "gemini",
         displayName: "Gemini 3.1 Flash Image"
+      }),
+      expect.objectContaining({
+        id: "gemini-3.1-flash-lite-image",
+        providerKind: "gemini",
+        displayName: "Gemini 3.1 Flash Image Lite"
+      }),
+      expect.objectContaining({
+        id: "gemini-3-pro-image",
+        providerKind: "gemini",
+        displayName: "Gemini 3 Pro Image"
       })
     ]);
   });

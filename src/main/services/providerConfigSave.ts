@@ -11,10 +11,12 @@ import {
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
+  GEMINI_IMAGE_DEFAULT_MODEL_ID,
+  isGeminiImageModelId,
   NANO_BANANA_3_LAUNCH_ID,
-  NANO_BANANA_3_MODEL_ID,
   getFocusedModelDefinition,
   isGptImage25ModelId,
+  normalizeGeminiImageModelId,
   normalizeModelId
 } from "../../shared/modelCatalog.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
@@ -73,8 +75,10 @@ function defaultBaseURLForProvider(kind: StoredProviderConfig["kind"], previousB
 }
 
 function defaultModelForProvider(kind: StoredProviderConfig["kind"], requestedModel: string): string {
-  const model = requestedModel.trim();
-  if (kind === "gemini") return model && model !== DEFAULT_IMAGE_PARAMS.model ? model : NANO_BANANA_3_MODEL_ID;
+  const model = kind === "gemini" ? normalizeGeminiImageModelId(requestedModel) : requestedModel.trim();
+  if (kind === "gemini") return model && model !== DEFAULT_IMAGE_PARAMS.model && isGeminiImageModelId(model)
+    ? model
+    : GEMINI_IMAGE_DEFAULT_MODEL_ID;
   if (model) return model;
   if (kind === "custom") return "";
   return DEFAULT_IMAGE_PARAMS.model;
@@ -90,7 +94,9 @@ function activeLaunchForProvider(kind: StoredProviderConfig["kind"], requestedLa
 function defaultModelForLaunch(launchId: FocusedLaunchId, fallback: string): string {
   const definition = getFocusedModelDefinition(launchId);
   if (!definition || definition.launchId === GENERAL_LAUNCH_ID) return fallback;
-  const normalized = normalizeModelId(fallback);
+  const normalized = launchId === NANO_BANANA_3_LAUNCH_ID
+    ? normalizeGeminiImageModelId(fallback)
+    : normalizeModelId(fallback);
   if (launchId === GPT_IMAGE_2_LAUNCH_ID) {
     return normalized === normalizeModelId(DEFAULT_IMAGE_PARAMS.model)
       ? DEFAULT_IMAGE_PARAMS.model
