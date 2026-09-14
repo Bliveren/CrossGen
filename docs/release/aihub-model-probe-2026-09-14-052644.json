@@ -1,0 +1,45 @@
+{
+  "checkedAt": "2026-09-14T05:26:44.606Z",
+  "endpoint": "https://aihub.nowosoft.cn/v1/models",
+  "requestType": "read-only",
+  "availableImageModels": [
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-lite-image",
+    "gemini-3-pro-image",
+    "gpt-image-2"
+  ],
+  "targetModels": {
+    "gpt-image-2.5": {
+      "listed": false,
+      "status": 200,
+      "ok": true,
+      "errorCode": "model_not_found",
+      "errorType": "invalid_request_error",
+      "message": "The model 'gpt-image-2.5' does not exist"
+    },
+    "gpt-image-2.5-sunburst": {
+      "listed": false,
+      "status": 200,
+      "ok": true,
+      "errorCode": "model_not_found",
+      "errorType": "invalid_request_error",
+      "message": "The model 'gpt-image-2.5-sunburst' does not exist"
+    },
+    "gpt-image-2.5-flare": {
+      "listed": false,
+      "status": 200,
+      "ok": true,
+      "errorCode": "model_not_found",
+      "errorType": "invalid_request_error",
+      "message": "The model 'gpt-image-2.5-flare' does not exist"
+    },
+    "nano-banana-3": {
+      "listed": false,
+      "status": 200,
+      "ok": true,
+      "errorCode": "model_not_found",
+      "errorType": "invalid_request_error",
+      "message": "The model 'nano-banana-3' does not exist"
+    }
+  }
+}
