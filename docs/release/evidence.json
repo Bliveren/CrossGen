@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-13T21:42:23.183Z",
+  "lastUpdated": "2026-09-14T00:41:33.851Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -1071,27 +1071,27 @@
         "Mock tests and provider success responses are not treated as a substitute for product-owner quality review."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-13T22:22:11.677Z",
-        "commit": "eb60f2e40b33cf8986c8fba8529b6dabc2a26bac",
-        "environment": "Approved AIHub aggregation API /models probe returned HTTP 200 from https://aihub.nowosoft.cn/v1 against the current origin/main candidate. The configured key exposed gemini-3.1-flash-image, gemini-3.1-flash-lite-image, gemini-3-pro-image, and gpt-image-2; GPT Image 2.5, Sunburst, Flare, and Nano Banana 3 were not listed. Direct read-only probes returned model_not_found for each target. Credentials were loaded from the ignored local environment file and were not recorded.",
+        "verifiedAt": "2026-09-14T00:41:33.851Z",
+        "commit": "8a0873a77e35e9a6953243af6f98fe873cae1b9d",
+        "environment": "Approved AIHub aggregation API /models probe returned HTTP 200 from https://aihub.nowosoft.cn/v1 against the merged origin/main candidate. The configured key exposed gemini-3.1-flash-image, gemini-3.1-flash-lite-image, gemini-3-pro-image, and gpt-image-2; GPT Image 2.5, Sunburst, Flare, and Nano Banana 3 were not listed. Direct read-only probes returned model_not_found for each target. Credentials were loaded from the ignored local environment file and were not recorded.",
         "commands": [
           "set -a; . ./.env.local; set +a; pnpm probe:real-aihub-models"
         ],
         "references": [
           {
             "label": "v0.3.4 current mainline candidate",
-            "url": "https://github.com/Bliveren/CrossGen/commit/eb60f2e40b33cf8986c8fba8529b6dabc2a26bac"
+            "url": "https://github.com/Bliveren/CrossGen/commit/8a0873a77e35e9a6953243af6f98fe873cae1b9d"
           }
         ],
         "artifacts": [
           {
             "kind": "read-only-model-probe",
-            "path": "docs/release/aihub-model-probe-2026-09-13.json",
+            "path": "docs/release/aihub-model-probe-2026-09-14.json",
             "public": false,
-            "description": "No-cost read-only probe recorded the available image model IDs and redacted direct target-model responses; no image-generation request was made."
+            "description": "No-cost read-only probe recorded the available image model IDs and redacted direct target-model responses against the merged mainline; no image-generation request was made."
           }
         ],
-        "summary": "Real AIHub Sketch quality and recovery matrix remains pending because the approved AIHub /models response still does not expose GPT Image 2.5 or Nano Banana 3. Direct probes for gpt-image-2.5, gpt-image-2.5-sunburst, gpt-image-2.5-flare, and nano-banana-3 returned model_not_found. No mock, legacy model, or compatible model is used as a substitute; human quality review remains required."
+        "summary": "Real AIHub Sketch quality and recovery matrix remains pending because the approved AIHub /models response on September 14, 2026 still does not expose GPT Image 2.5 or Nano Banana 3. Direct probes for gpt-image-2.5, gpt-image-2.5-sunburst, gpt-image-2.5-flare, and nano-banana-3 returned model_not_found. No mock, legacy model, or compatible model is used as a substitute; human quality review remains required."
       }
     }
   ]
