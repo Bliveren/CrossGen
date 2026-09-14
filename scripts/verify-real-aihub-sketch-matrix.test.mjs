@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 const scriptPath = path.resolve("scripts/verify-real-aihub-sketch-matrix.mjs");
 const execFileAsync = promisify(execFile);
 const apiKey = "sk-test-secret";
-const imageBase64 = Buffer.from("mock-image-bytes").toString("base64");
+const imageBase64 = Buffer.from("mock-image-bytes".repeat(12)).toString("base64");
 
 async function startServer(models, options = {}) {
   const requests = [];
@@ -49,7 +49,11 @@ async function startServer(models, options = {}) {
       });
       response.end(
         `data: ${JSON.stringify({
-          choices: [{ message: { content: `data:image/png;base64,${imageBase64}` } }]
+          choices: [{
+            message: {
+              content: options.bareBase64 ? imageBase64 : `data:image/png;base64,${imageBase64}`
+            }
+          }]
         })}\n\ndata: [DONE]\n\n`
       );
       return;
@@ -170,7 +174,7 @@ describe("real AIHub Sketch matrix verifier", () => {
   it("records redacted outputs and the expected failure-recovery retry", async () => {
     const mock = await startServer(
       ["gpt-image-2.5-sunburst", "nano-banana-3"],
-      { failInvalidModel: true }
+      { failInvalidModel: true, bareBase64: true }
     );
     await withTempOutput(async (tempRoot) => {
       try {

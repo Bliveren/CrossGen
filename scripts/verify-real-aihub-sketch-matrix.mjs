@@ -263,6 +263,9 @@ function extractImageRefs(text) {
   for (const match of text.matchAll(/!\[[^\]]*]\((<[^>]+>|https?:\/\/[^)\s]+)/gi)) {
     refs.push((match[1] ?? "").replace(/^<|>$/g, ""));
   }
+  for (const match of text.matchAll(/\b[A-Za-z0-9+/=_-]{80,}\b/g)) {
+    refs.push(match[0] ?? "");
+  }
   return [...new Set(refs.map((ref) => ref.trim()).filter(Boolean))];
 }
 
@@ -271,6 +274,12 @@ async function fetchImageRef(label, ref) {
     const [, mimeType = "image/png", encoded = ""] =
       ref.match(/^data:([^;,]+);base64,(.*)$/i) ?? [];
     return { buffer: Buffer.from(encoded.replace(/\s+/g, ""), "base64"), mimeType };
+  }
+  if (/^[A-Za-z0-9+/=_-]{80,}$/.test(ref.trim())) {
+    return {
+      buffer: Buffer.from(ref.trim().replace(/-/g, "+").replace(/_/g, "/"), "base64"),
+      mimeType: "image/png"
+    };
   }
   const timeout = withTimeout(`${label} image download`, Math.min(timeoutMs, 30_000));
   try {
