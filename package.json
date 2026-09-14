@@ -56,6 +56,7 @@
     "verify:release-evidence:v0.3.4": "node scripts/verify-release-evidence.mjs --file docs/release/evidence.json --expected-version 0.3.4",
     "verify:real-crossgen-gate": "node scripts/verify-real-crossgen-gate.mjs",
     "verify:real-provider-gate": "node scripts/verify-real-provider-gate.mjs",
+    "verify:real-aihub-sketch-matrix": "node scripts/verify-real-aihub-sketch-matrix.mjs",
     "verify:real-aihub-api": "node scripts/verify-real-aihub-api.mjs",
     "verify:real-api": "node scripts/verify-real-api.mjs",
     "verify:real-gemini-api": "node scripts/verify-real-gemini-api.mjs",
