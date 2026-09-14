@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "releaseVersion": "0.3.4",
-  "lastUpdated": "2026-09-14T05:37:52.300Z",
+  "lastUpdated": "2026-09-14T09:53:38.001Z",
   "gates": [
     {
       "id": "product-owner-acceptance",
@@ -1127,11 +1127,13 @@
         "Mock tests and provider success responses are not treated as a substitute for product-owner quality review."
       ],
       "evidence": {
-        "verifiedAt": "2026-09-14T05:26:44.606Z",
-        "commit": "e65a18c2f6ee205c2207193872ce1092991647c5",
-        "environment": "Approved AIHub aggregation API /models probe returned HTTP 200 from https://aihub.nowosoft.cn/v1 against the current origin/main@e65a18c2f6ee205c2207193872ce1092991647c5 candidate. The configured key exposed gemini-3.1-flash-image, gemini-3.1-flash-lite-image, gemini-3-pro-image, and gpt-image-2; GPT Image 2.5, Sunburst, Flare, and Nano Banana 3 were not listed. Direct read-only probes returned model_not_found for each target. Credentials were loaded from the ignored local environment file and were not recorded.",
+        "verifiedAt": "2026-09-14T09:53:38.001Z",
+        "commit": "61b9f0cfbb7958e822cb602c7b31f9da3ddad93e",
+        "environment": "Approved AIHub aggregation API /models probe returned HTTP 200 from https://aihub.nowosoft.cn/v1 against the v0.3.4 gate-verifier branch at 61b9f0c. The configured key exposed gemini-3.1-flash-image, gemini-3.1-flash-lite-image, gemini-3-pro-image, and gpt-image-2; GPT Image 2.5, Sunburst, Flare, and Nano Banana 3 were not listed. Direct read-only probes returned model_not_found for each target. The real Sketch verifier then stopped before any paid request (requestCount 0). Credentials were loaded from ignored local environment files and were not recorded.",
         "commands": [
-          "set -a; . ./.env.local; set +a; pnpm probe:real-aihub-models"
+          "set -a; . ./.env.local; set +a; pnpm probe:real-aihub-models",
+          "set -a; . ./.env.local; set +a; CROSSGEN_REAL_AIHUB_SKETCH_OUTPUT_DIR=<isolated-output> pnpm verify:real-aihub-sketch-matrix",
+          "pnpm exec vitest run scripts/verify-real-aihub-sketch-matrix.test.mjs"
         ],
         "references": [
           {
@@ -1142,12 +1144,12 @@
         "artifacts": [
           {
             "kind": "read-only-model-probe",
-            "path": "docs/release/aihub-model-probe-2026-09-14-052644.json",
+            "path": "docs/release/aihub-model-probe-2026-09-14-095247.json",
             "public": false,
-            "description": "No-cost read-only probe recorded the available image model IDs and redacted direct target-model responses against the current mainline candidate; no image-generation request was made."
+            "description": "No-cost read-only probe recorded the available image model IDs and redacted direct target-model responses at 2026-09-14T09:53:38.001Z; no image-generation request was made."
           }
         ],
-        "summary": "Real AIHub Sketch quality and recovery matrix remains pending because the approved AIHub /models response at 2026-09-14T05:26:44.606Z still does not expose GPT Image 2.5 or Nano Banana 3. Direct probes for gpt-image-2.5, gpt-image-2.5-sunburst, gpt-image-2.5-flare, and nano-banana-3 returned model_not_found. No mock, legacy model, or compatible model is used as a substitute; human quality review remains required."
+        "summary": "Real AIHub Sketch quality and recovery matrix remains pending because the approved AIHub /models response at 2026-09-14T09:53:38.001Z still does not expose GPT Image 2.5 or Nano Banana 3. Direct probes for gpt-image-2.5, gpt-image-2.5-sunburst, gpt-image-2.5-flare, and nano-banana-3 returned model_not_found. The verifier's no-paid-request guard and four local regression tests passed. No mock, legacy model, or compatible model is used as a substitute; human quality review remains required."
       }
     }
   ]
