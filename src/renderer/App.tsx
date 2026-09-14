@@ -121,13 +121,17 @@ import {
   GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
+  geminiImageModelDisplayName,
   generalFallbackSupportsReferenceImages,
   getFocusedModelDefinition,
   isGeneralFallbackProvider,
   discoveredModelCapabilityHints,
   isDiscoveredImageModel,
+  isGeminiImageModelId,
   isGptImage25ModelId,
   isPotentialGeneralImageModel,
+  geminiProviderModelDisplayName,
+  normalizeGeminiImageModelId,
   normalizeModelId
 } from "../shared/modelCatalog";
 import { isImageAsset, mediaKindForFileName, mediaKindForMimeType } from "../core/mediaTypes";
@@ -790,6 +794,9 @@ function modelLabelFromId(value: string): string {
   if (value === "gpt-image-2") return DEFAULT_HISTORY_MODEL_DISPLAY;
   if (value.startsWith("gpt-image-2.5-sunburst")) return "GPT Image 2.5 · Sunburst";
   if (value.startsWith("gpt-image-2.5-flare")) return "GPT Image 2.5 · Flare";
+  if (isGeminiImageModelId(value) || normalizeModelId(value) === NANO_BANANA_3_LAUNCH_ID) {
+    return geminiImageModelDisplayName(value);
+  }
   return value;
 }
 
@@ -842,7 +849,7 @@ function defaultBaseURLForProvider(kind: ProviderKind, currentBaseURL: string): 
 }
 
 function defaultModelForProvider(kind: ProviderKind): string {
-  if (kind === "gemini") return NANO_BANANA_3_MODEL_ID;
+  if (kind === "gemini") return normalizeGeminiImageModelId(NANO_BANANA_3_MODEL_ID);
   if (kind === "custom") return "";
   return GPT_IMAGE_2_MODEL_ID;
 }
@@ -990,7 +997,7 @@ function createGeminiParams(modelId: string, current: ImageParams, config?: Prov
     ...base,
     providerKind: "gemini",
     launchId: NANO_BANANA_3_LAUNCH_ID,
-    model: modelId || NANO_BANANA_3_MODEL_ID,
+    model: normalizeGeminiImageModelId(modelId || NANO_BANANA_3_MODEL_ID),
     referenceImageMode: current.referenceImageMode,
     timeoutMs: config?.timeoutMs ?? base.timeoutMs
   };
@@ -1030,8 +1037,12 @@ function createParamsForConfig(config: ProviderConfig, current: ImageParams): Im
 }
 
 function paramsMatchActiveConfig(params: ImageParams, config: ProviderConfig): boolean {
-  const activeModelId = normalizeModelId(config.activeModelId || config.defaultModel);
-  const restoredModelId = normalizeModelId(params.model);
+  const activeModelId = config.activeLaunchId === NANO_BANANA_3_LAUNCH_ID
+    ? normalizeGeminiImageModelId(config.activeModelId || config.defaultModel)
+    : normalizeModelId(config.activeModelId || config.defaultModel);
+  const restoredModelId = params.launchId === NANO_BANANA_3_LAUNCH_ID
+    ? normalizeGeminiImageModelId(params.model)
+    : normalizeModelId(params.model);
   const modelMatches = !activeModelId || !restoredModelId || activeModelId === restoredModelId;
 
   if (config.activeLaunchId === NANO_BANANA_3_LAUNCH_ID) {
@@ -1053,8 +1064,16 @@ function defaultModelForConfigSave(kind: ProviderKind, params: ImageParams, conf
 }
 
 function hasDiscoveredProviderModel(config: ProviderConfig, providerKind: ProviderKind, modelId: string): boolean {
-  const normalizedModelId = normalizeModelId(modelId);
-  return config.discoveredModels.some((model) => model.providerKind === providerKind && normalizeModelId(model.id) === normalizedModelId);
+  const normalizedModelId = providerKind === "gemini"
+    ? normalizeGeminiImageModelId(modelId)
+    : normalizeModelId(modelId);
+  return config.discoveredModels.some((model) => {
+    if (model.providerKind !== providerKind) return false;
+    const normalizedCandidateId = providerKind === "gemini"
+      ? normalizeGeminiImageModelId(model.id)
+      : normalizeModelId(model.id);
+    return normalizedCandidateId === normalizedModelId;
+  });
 }
 
 function defaultSizeForConfigSave(params: ImageParams, config: ProviderConfig): string {
@@ -1110,7 +1129,7 @@ function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: 
 }
 
 function launchDefinitionForModel(modelId: string): (typeof FOCUSED_MODEL_CATALOG)[number] | undefined {
-  const normalizedId = normalizeModelId(modelId);
+  const normalizedId = normalizeGeminiImageModelId(modelId);
   return FOCUSED_MODEL_CATALOG.find((definition) =>
     definition.modelIds.some((id) => normalizeModelId(id) === normalizedId)
   ) ?? (isGptImage25ModelId(normalizedId)
@@ -1142,18 +1161,34 @@ function getDiscoveredLaunchModelOptions(config: ProviderConfig): LaunchModelOpt
       .map((id) => ({ id, providerKind: config.kind, displayName: id }))
       .find((model) =>
         normalizeModelId(model.id) !== GENERAL_MODEL_ID &&
-        !models.some((candidate) => normalizeModelId(candidate.id) === normalizeModelId(model.id)) &&
+        !models.some((candidate) => {
+          const candidateDefinition = launchDefinitionForModel(candidate.id);
+          const candidateId = candidateDefinition?.launchId === NANO_BANANA_3_LAUNCH_ID || candidate.providerKind === "gemini"
+            ? normalizeGeminiImageModelId(candidate.id)
+            : normalizeModelId(candidate.id);
+          const configuredDefinition = launchDefinitionForModel(model.id);
+          const configuredId = configuredDefinition?.launchId === NANO_BANANA_3_LAUNCH_ID || model.providerKind === "gemini"
+            ? normalizeGeminiImageModelId(model.id)
+            : normalizeModelId(model.id);
+          return candidateId === configuredId;
+        }) &&
         (launchDefinitionForModel(model.id) || isPotentialGeneralImageModel(model))
       );
     if (configuredModel) models.push(configuredModel);
   }
   return models.flatMap((model) => {
-    const key = `${model.providerKind}:${normalizeModelId(model.id)}`;
+    const definition = launchDefinitionForModel(model.id);
+    const normalizedModelId = definition?.launchId === NANO_BANANA_3_LAUNCH_ID || model.providerKind === "gemini"
+      ? normalizeGeminiImageModelId(model.id)
+      : normalizeModelId(model.id);
+    const key = `${model.providerKind}:${normalizedModelId}`;
     if (seen.has(key)) return [];
     seen.add(key);
-    const definition = launchDefinitionForModel(model.id);
+    const displayName = definition?.launchId === NANO_BANANA_3_LAUNCH_ID
+      ? geminiProviderModelDisplayName(model.id)
+      : model.displayName?.trim() || model.id;
     return [{
-      ...toLaunchModelOption(model),
+      ...toLaunchModelOption({ ...model, displayName }),
       launchId: definition?.launchId ?? GENERAL_LAUNCH_ID,
       launchLabel: definition?.displayName ?? "General"
     }];
@@ -1222,7 +1257,10 @@ function getHistoryModelDetails(job: GenerationJob): HistoryModelDetails {
   const modelId = stringFromRuntime(jobRecord.modelId);
   const launchId = stringFromRuntime(jobRecord.launchId) ?? stringFromRuntime(jobRecord.activeLaunchId) ?? stringFromRuntime(paramsRecord.launchId);
   const providerKind = stringFromRuntime(jobRecord.providerKind) ?? stringFromRuntime(paramsRecord.providerKind);
-  const rawModelDisplay = modelDisplayName ?? paramsModel ?? DEFAULT_HISTORY_MODEL_DISPLAY;
+  // Prefer the persisted provider id when available. Older jobs often stored
+  // the product launch label ("Nano Banana 3") as modelDisplayName, which
+  // hides the actual Gemini model used for that generation.
+  const rawModelDisplay = modelId ?? paramsModel ?? modelDisplayName ?? DEFAULT_HISTORY_MODEL_DISPLAY;
   const displayModel = modelLabelFromId(rawModelDisplay);
   const providerDisplayName = providerKind ? providerLabelFromKind(providerKind) : undefined;
   const searchText = [

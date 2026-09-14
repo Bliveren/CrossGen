@@ -72,6 +72,26 @@ describe("CrossGen AppLink", () => {
     expect(result.defaultModel).toBe("gpt-image-2");
   });
 
+  it("canonicalizes legacy Nano Banana AppLink aliases to the real Gemini model id", () => {
+    const result = parseAppLink(
+      "crossgen://provider/import?kind=gemini&base_url=https%3A%2F%2Fgateway.example%2Fv1beta&api_key=gemini-long-key&model=nano-banana-3"
+    );
+
+    expect(result.activeLaunchId).toBe("nano-banana-3");
+    expect(result.defaultModel).toBe("gemini-3.1-flash-image");
+    expect(result.activeModelId).toBe("gemini-3.1-flash-image");
+  });
+
+  it("keeps distinct Gemini Image provider ids distinct in AppLink imports", () => {
+    const result = parseAppLink(
+      "crossgen://provider/import?kind=gemini&base_url=https%3A%2F%2Fgateway.example%2Fv1beta&api_key=gemini-long-key&model=gemini-3.1-flash-lite-image"
+    );
+
+    expect(result.activeLaunchId).toBe("nano-banana-3");
+    expect(result.defaultModel).toBe("gemini-3.1-flash-lite-image");
+    expect(result.activeModelId).toBe("gemini-3.1-flash-lite-image");
+  });
+
   it("routes non-focused OpenAI-compatible models through General", () => {
     const result = parseAppLink(
       "crossgen://provider/import?provider=openai&base_url=https%3A%2F%2Fgateway.example%2Fv1&api_key=sk-another-long-key&defaultModel=dall-e-3"

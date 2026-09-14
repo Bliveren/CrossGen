@@ -65,6 +65,35 @@ data/state paths, active provider, live queue workers, copyable diagnostics, and
 client-specific MCP configuration snippets. It never edits shell startup files
 or the system `PATH` automatically.
 
+## Gemini Image IDs and Sketch
+
+CrossGen uses `nano-banana-3` as the stable product launch/workflow alias. It is
+not a Gemini wire model id. Use `crossgen models list --json` as the source of
+truth, then select one of the discovered focused ids:
+
+- `gemini-3.1-flash-image`
+- `gemini-3.1-flash-lite-image`
+- `gemini-3-pro-image`
+
+Older AppLinks and drafts containing `nano-banana-3` are normalized to
+`gemini-3.1-flash-image`. History, CLI, and MCP retain the actual `modelId`
+used for the request, so the Lite and Pro models are not reported as the same
+model. Do not send `nano-banana-3` directly to a Gemini-compatible endpoint.
+
+The desktop Sketch workflow is an image-to-image edit input. It is created in
+the reference-image area, saved as a managed PNG plus sidecar, and recorded in
+job metadata as `workflow: "sketch"` with Sketch provenance. CLI/MCP readonly
+responses expose that metadata when inspecting queue items or History. Sketch
+submission is allowed only when the latest discovery result confirms edit and
+reference-image capability for the selected model; unknown or unsupported
+models are blocked before a paid call. CrossGen does not send an unverified
+provider-native `scratch` field, and Sketch input cannot be combined with a mask.
+
+The v0.3.4 implementation and mock contracts cover these routes, but the final
+release gate still requires a real AIHub GPT Image 2.5/Nano Banana 3 matrix.
+Mock responses and a compatible fallback model are not evidence of target-model
+quality or availability.
+
 ## AppLink provider import
 
 Desktop packages register the `crossgen://` URL scheme so API aggregators can

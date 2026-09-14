@@ -10,6 +10,7 @@ import {
   discoveredModelCapabilityHints,
   isPotentialGeneralImageModel,
   isGptImage25ModelId,
+  normalizeGeminiImageModelId,
   normalizeModelId
 } from "../shared/modelCatalog.js";
 import type {
@@ -121,8 +122,18 @@ function discoveredContractForModel(model: DiscoveredModel): ImageModelCapabilit
   return contract;
 }
 
+function normalizeCapabilityModelId(
+  launchId: FocusedLaunchId | undefined,
+  providerKind: ProviderKind,
+  modelId: string
+): string {
+  return launchId === NANO_BANANA_3_LAUNCH_ID || providerKind === "gemini"
+    ? normalizeGeminiImageModelId(modelId)
+    : normalizeModelId(modelId);
+}
+
 function selectionKeyForModel(launchId: FocusedLaunchId | undefined, providerKind: ProviderKind, modelId: string): string {
-  return `${launchId ?? providerKind}:${normalizeModelId(modelId)}`;
+  return `${launchId ?? providerKind}:${normalizeCapabilityModelId(launchId, providerKind, modelId)}`;
 }
 
 function promptOnlyCapabilities(providerKind: ProviderKind, confidence: ImageCapabilityConfidence): ImageModelCapabilityContract {
@@ -175,20 +186,21 @@ export function capabilityContractForFocusedModel(definition: FocusedModelDefini
 }
 
 function summaryForFocusedModel(providerId: string | undefined, definition: FocusedModelDefinition, modelId = definition.defaultModelId): ModelCapabilitySummary {
+  const canonicalModelId = normalizeCapabilityModelId(definition.launchId, definition.providerKind, modelId);
   return {
     providerId,
     providerKind: definition.providerKind,
-    modelId,
-    displayName: getModelDisplayName(definition.launchId, modelId),
+    modelId: canonicalModelId,
+    displayName: getModelDisplayName(definition.launchId, canonicalModelId),
     launchId: definition.launchId,
-    selectionKey: selectionKeyForModel(definition.launchId, definition.providerKind, modelId),
+    selectionKey: selectionKeyForModel(definition.launchId, definition.providerKind, canonicalModelId),
     source: definition.launchId === GENERAL_LAUNCH_ID ? "general-fallback" : "focused-catalog",
     capabilities: capabilityContractForFocusedModel(definition)
   };
 }
 
 function focusedDefinitionForModel(providerKind: ProviderKind, modelId: string): FocusedModelDefinition | undefined {
-  const normalized = normalizeModelId(modelId);
+  const normalized = normalizeCapabilityModelId(undefined, providerKind, modelId);
   if (providerKind === "openai" && isGptImage25ModelId(normalized)) {
     return FOCUSED_MODEL_CATALOG.find((definition) => definition.launchId === GPT_IMAGE_2_5_LAUNCH_ID);
   }
@@ -269,8 +281,8 @@ export function preflightSketchCapability(
   provider: Pick<ProviderConfig, "id" | "discoveredModels" | "lastModelDiscoveryAt" | "lastModelDiscoveryError">,
   modelId: string
 ): SketchCapabilityPreflight {
-  const normalizedModelId = normalizeModelId(modelId);
-  if (!normalizedModelId) {
+  const normalizedRequestedModelId = normalizeModelId(modelId);
+  if (!normalizedRequestedModelId) {
     return {
       ok: false,
       reason: "Sketch 需要先选择一个支持图像编辑和参考图输入的模型。"
@@ -284,7 +296,9 @@ export function preflightSketchCapability(
   }
 
   const discovered = provider.discoveredModels.find(
-    (candidate) => normalizeModelId(candidate.id) === normalizedModelId
+    (candidate) =>
+      normalizeCapabilityModelId(undefined, candidate.providerKind, candidate.id) ===
+      normalizeCapabilityModelId(undefined, candidate.providerKind, modelId)
   );
   if (!discovered) {
     const suffix = provider.lastModelDiscoveryError
@@ -321,12 +335,13 @@ export function listProviderModelCapabilitySummaries(provider: ProviderConfig): 
   const summaries = new Map<string, ModelCapabilitySummary>();
 
   for (const definition of getFocusedModelsForProvider(provider.kind)) {
-    summaries.set(`${definition.providerKind}:${normalizeModelId(definition.defaultModelId)}`, summaryForFocusedModel(provider.id, definition));
+    const summary = summaryForFocusedModel(provider.id, definition);
+    summaries.set(summary.selectionKey, summary);
   }
 
   for (const model of provider.discoveredModels) {
     const summary = capabilitySummaryForDiscoveredModel(provider.id, model);
-    summaries.set(`${summary.providerKind}:${normalizeModelId(summary.modelId)}`, summary);
+    summaries.set(summary.selectionKey, summary);
   }
 
   if (

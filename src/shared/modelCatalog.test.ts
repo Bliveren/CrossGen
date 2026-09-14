@@ -1,19 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
   FOCUSED_MODEL_CATALOG,
+  GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID,
+  GEMINI_3_1_FLASH_IMAGE_MODEL_ID,
   GEMINI_3_PRO_IMAGE_MODEL_ID,
   GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
   GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
+  NANO_BANANA_3_MODEL_ALIAS,
   NANO_BANANA_3_MODEL_ID,
   generalFallbackSupportsReferenceImages,
   getFocusedModelDefinition,
   getFocusedModelsForProvider,
   getGeneralImageModelCandidate,
   getModelDisplayName,
-  isGeneralFallbackProvider
+  geminiProviderModelDisplayName,
+  isGeneralFallbackProvider,
+  isGeminiImageModelId,
+  normalizeGeminiImageModelId
 } from "./modelCatalog";
 
 describe("focused model catalog", () => {
@@ -52,7 +58,11 @@ describe("focused model catalog", () => {
       displayName: "Nano Banana 3",
       providerKind: "gemini",
       defaultModelId: NANO_BANANA_3_MODEL_ID,
-      modelIds: [NANO_BANANA_3_MODEL_ID, GEMINI_3_PRO_IMAGE_MODEL_ID],
+      modelIds: [
+        GEMINI_3_1_FLASH_IMAGE_MODEL_ID,
+        GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID,
+        GEMINI_3_PRO_IMAGE_MODEL_ID
+      ],
       capabilities: {
         inpaint: "guided-region",
         outputText: true,
@@ -61,6 +71,30 @@ describe("focused model catalog", () => {
         supportsSearchGrounding: true
       }
     });
+  });
+
+  it("keeps the product launch label while exposing real Gemini Image model names", () => {
+    expect(geminiProviderModelDisplayName(GEMINI_3_1_FLASH_IMAGE_MODEL_ID))
+      .toBe("Gemini 3.1 Flash Image");
+    expect(geminiProviderModelDisplayName(GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID))
+      .toBe("Gemini 3.1 Flash Image Lite");
+    expect(geminiProviderModelDisplayName(GEMINI_3_PRO_IMAGE_MODEL_ID))
+      .toBe("Gemini 3 Pro Image");
+    expect(getModelDisplayName(NANO_BANANA_3_LAUNCH_ID, GEMINI_3_1_FLASH_IMAGE_MODEL_ID))
+      .toBe("Nano Banana 3 · Gemini 3.1 Flash Image");
+    expect(getModelDisplayName(NANO_BANANA_3_LAUNCH_ID, GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID))
+      .toBe("Gemini 3.1 Flash Image Lite");
+    expect(getModelDisplayName(NANO_BANANA_3_LAUNCH_ID, GEMINI_3_PRO_IMAGE_MODEL_ID))
+      .toBe("Gemini 3 Pro Image");
+  });
+
+  it("canonicalizes the legacy Nano Banana alias without relabeling other Gemini models", () => {
+    expect(NANO_BANANA_3_MODEL_ALIAS).toBe(NANO_BANANA_3_LAUNCH_ID);
+    expect(normalizeGeminiImageModelId(NANO_BANANA_3_MODEL_ALIAS)).toBe(NANO_BANANA_3_MODEL_ID);
+    expect(isGeminiImageModelId(NANO_BANANA_3_MODEL_ALIAS)).toBe(true);
+    expect(getModelDisplayName(NANO_BANANA_3_LAUNCH_ID, NANO_BANANA_3_MODEL_ALIAS))
+      .toBe("Nano Banana 3 · Gemini 3.1 Flash Image");
+    expect(normalizeGeminiImageModelId(GEMINI_3_PRO_IMAGE_MODEL_ID)).toBe(GEMINI_3_PRO_IMAGE_MODEL_ID);
   });
 
   it("includes General as a provider fallback without advanced capabilities", () => {

@@ -27,9 +27,9 @@ import {
   GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
-  getFocusedModelDefinition,
   generalFallbackSupportsReferenceImages,
   isGeneralFallbackProvider,
+  isGeminiImageModelId,
   isGptImage25ModelId,
   isGptImageModelId
 } from "./modelCatalog.js";
@@ -501,8 +501,7 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
   const kind = isOneOf(input.kind, PROVIDER_KIND_OPTIONS) ? input.kind : undefined;
   const activeLaunchId = isOneOf(input.activeLaunchId, FOCUSED_LAUNCH_OPTIONS) ? input.activeLaunchId : undefined;
   const defaultModel = input.defaultModel.trim();
-  const nanoDefinition = getFocusedModelDefinition(NANO_BANANA_3_LAUNCH_ID);
-  const isNanoModel = activeLaunchId === NANO_BANANA_3_LAUNCH_ID && Boolean(nanoDefinition?.modelIds.some((modelId) => modelId === defaultModel));
+  const isNanoModel = activeLaunchId === NANO_BANANA_3_LAUNCH_ID && isGeminiImageModelId(defaultModel);
   const isGpt25Model = activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID && isGptImage25ModelId(defaultModel);
   if ((kind === undefined || kind === "openai") && activeLaunchId !== GENERAL_LAUNCH_ID && !isNanoModel && !isGpt25Model && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
     return { ok: false, message: `默认模型仅支持 ${DEFAULT_IMAGE_PARAMS.model} 或 GPT Image 2.5 的 Sunburst/Flare 模型。` };

@@ -6,7 +6,8 @@ import {
   GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
-  NANO_BANANA_3_MODEL_ID
+  NANO_BANANA_3_MODEL_ID,
+  normalizeGeminiImageModelId
 } from "./modelCatalog.js";
 import {
   DEFAULT_IMAGE_PARAMS,
@@ -144,7 +145,13 @@ export function parseAppLink(value: string): AppLinkProviderConfig {
   const kind = parseProviderKind(firstParam(url.searchParams, ["kind", "provider", "provider_kind"])) ?? "custom";
   const model = firstParam(url.searchParams, ["model", "default_model", "defaultModel"]);
   const launchId = parseLaunchId(firstParam(url.searchParams, ["launch", "launch_id", "activeLaunchId"])) ?? inferLaunchId(kind, model);
-  const activeModelId = firstParam(url.searchParams, ["active_model_id", "activeModelId"]) ?? model;
+  const requestedActiveModelId = firstParam(url.searchParams, ["active_model_id", "activeModelId"]) ?? model;
+  const activeModelId = launchId === NANO_BANANA_3_LAUNCH_ID && requestedActiveModelId
+    ? normalizeGeminiImageModelId(requestedActiveModelId)
+    : requestedActiveModelId;
+  const requestedDefaultModel = launchId === NANO_BANANA_3_LAUNCH_ID && model
+    ? normalizeGeminiImageModelId(model)
+    : model;
   const defaultModel = model ?? (
     launchId === GPT_IMAGE_2_LAUNCH_ID
       ? GPT_IMAGE_2_MODEL_ID
@@ -175,11 +182,11 @@ export function parseAppLink(value: string): AppLinkProviderConfig {
     name: displayName,
     apiKey,
     baseURL,
-    defaultModel,
+    defaultModel: requestedDefaultModel ?? defaultModel,
     defaultSize,
     defaultQuality,
     timeoutMs,
     activeLaunchId: launchId,
-    activeModelId: activeModelId || defaultModel
+    activeModelId: activeModelId || requestedDefaultModel || defaultModel
   };
 }

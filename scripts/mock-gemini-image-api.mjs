@@ -4,9 +4,14 @@ import http from "node:http";
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lw1m8QAAAABJRU5ErkJggg==";
 const port = Number(process.env.PORT ?? 8788);
 const host = process.env.HOST ?? "127.0.0.1";
-const focusedModelId = "gemini-3.1-flash-image";
+const focusedModelIds = [
+  "gemini-3.1-flash-image",
+  "gemini-3.1-flash-lite-image",
+  "gemini-3-pro-image"
+];
+const focusedModelId = focusedModelIds[0];
 const generalModelId = "gemini-2.0-flash-preview-image-generation";
-const modelIds = parseModelIds(process.env.MOCK_GEMINI_MODELS, [focusedModelId, generalModelId]);
+const modelIds = parseModelIds(process.env.MOCK_GEMINI_MODELS, [...focusedModelIds, generalModelId]);
 const supportedModelIds = new Set(modelIds);
 const recentRequests = [];
 
@@ -73,14 +78,20 @@ function validateApiKey(request, url) {
 }
 
 function modelResource(modelId) {
+  const displayNames = {
+    "gemini-3.1-flash-image": "Gemini 3.1 Flash Image",
+    "gemini-3.1-flash-lite-image": "Gemini 3.1 Flash Image Lite",
+    "gemini-3-pro-image": "Gemini 3 Pro Image"
+  };
+  const isFocused = focusedModelIds.includes(modelId);
   return {
     name: `models/${modelId}`,
     id: modelId,
-    version: modelId === focusedModelId ? "3.1" : "2.0",
-    displayName: modelId === focusedModelId ? "Gemini 3.1 Flash Image" : "Gemini 2.0 Flash Preview Image Generation",
+    version: isFocused ? "3" : "2.0",
+    displayName: displayNames[modelId] ?? "Gemini 2.0 Flash Preview Image Generation",
     description:
-      modelId === focusedModelId
-        ? "Mock Nano Banana 3 image model for CrossGen verification."
+      isFocused
+        ? "Mock Gemini Image model for CrossGen verification."
         : "Mock non-focused image generation model for General probing.",
     inputTokenLimit: 32768,
     outputTokenLimit: 8192,

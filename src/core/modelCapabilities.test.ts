@@ -249,6 +249,60 @@ describe("model capability contracts", () => {
     expect(new Set(nanoModels.map((summary) => summary.selectionKey)).size).toBe(nanoModels.length);
   });
 
+  it("canonicalizes the legacy Nano Banana launch alias during capability preflight", () => {
+    const discoveredProvider = provider({
+      id: "provider-gemini",
+      kind: "gemini",
+      name: "Gemini",
+      defaultModel: NANO_BANANA_3_MODEL_ID,
+      activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+      activeModelId: NANO_BANANA_3_MODEL_ID,
+      discoveredModels: [
+        { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }
+      ],
+      lastModelDiscoveryAt: now
+    });
+
+    const result = preflightSketchCapability(discoveredProvider, NANO_BANANA_3_LAUNCH_ID);
+
+    expect(result).toMatchObject({
+      ok: true,
+      summary: {
+        modelId: NANO_BANANA_3_MODEL_ID,
+        selectionKey: `${NANO_BANANA_3_LAUNCH_ID}:${NANO_BANANA_3_MODEL_ID}`,
+        capabilities: {
+          edit: true,
+          referenceImages: true,
+          maxReferenceImages: 2
+        }
+      }
+    });
+  });
+
+  it("does not duplicate a focused Gemini model when a legacy alias and canonical id coexist", () => {
+    const summaries = listProviderModelCapabilitySummaries(
+      provider({
+        id: "provider-gemini",
+        kind: "gemini",
+        name: "Gemini",
+        defaultModel: NANO_BANANA_3_MODEL_ID,
+        activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
+        activeModelId: NANO_BANANA_3_MODEL_ID,
+        discoveredModels: [
+          { id: NANO_BANANA_3_LAUNCH_ID, providerKind: "gemini" },
+          { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }
+        ]
+      })
+    );
+
+    const focusedGemini = summaries.filter((summary) => summary.launchId === NANO_BANANA_3_LAUNCH_ID);
+    expect(focusedGemini).toHaveLength(1);
+    expect(focusedGemini[0]).toMatchObject({
+      modelId: NANO_BANANA_3_MODEL_ID,
+      selectionKey: `${NANO_BANANA_3_LAUNCH_ID}:${NANO_BANANA_3_MODEL_ID}`
+    });
+  });
+
   it("does not trust a focused id when the gateway explicitly marks it text-only", () => {
     const summary = capabilitySummaryForDiscoveredModel("provider-openai", {
       id: "gpt-image-2",

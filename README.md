@@ -102,7 +102,7 @@ Canonical form:
 crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
 ```
 
-Accepted aliases include `apiKey`/`api_key`, `baseURL`/`base_url`, `defaultModel`/`default_model`, and `provider`/`kind`. Supported launch targets are `gpt-image-2`, `gpt-image-2.5`, `nano-banana-3`, and `general`; when omitted, CrossGen infers the focused launch from provider kind and model name. Packaged builds register the `crossgen` scheme on macOS, Windows, and Linux.
+Accepted aliases include `apiKey`/`api_key`, `baseURL`/`base_url`, `defaultModel`/`default_model`, and `provider`/`kind`. Supported launch targets are `gpt-image-2`, `gpt-image-2.5`, `nano-banana-3`, and `general`; when omitted, CrossGen infers the focused launch from provider kind and model name. `nano-banana-3` is a CrossGen launch/workflow alias, not a Gemini wire model id: pass a discovered provider id such as `gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image`, or `gemini-3-pro-image` when selecting a specific Gemini model. Packaged builds register the `crossgen` scheme on macOS, Windows, and Linux.
 
 > Using CrossGen in a real desktop, CLI, or agent workflow? [Star the repository](https://github.com/Bliveren/CrossGen) so other local-first image-tool users can find it, and share the workflow in [Discord](https://discord.gg/XphwmYtY).
 
@@ -165,6 +165,38 @@ For agent-driven work, the loop becomes equally direct:
 3. track, cancel, or retry the queue-backed job,
 4. inspect the resulting Gallery asset,
 5. export it into the agent's current project.
+
+## Gemini Image Models and Sketch
+
+CrossGen keeps the product launch name **Nano Banana 3** while preserving the
+actual Gemini model id used by the provider. The current focused Gemini image
+ids are:
+
+- `gemini-3.1-flash-image` — the default Nano Banana 3 launch target;
+- `gemini-3.1-flash-lite-image` — a distinct discovered Gemini image model;
+- `gemini-3-pro-image` — a distinct discovered Gemini image model.
+
+The desktop launch menu, History, CLI, and MCP retain the real provider id for
+selection and traceability. Older drafts and AppLinks containing
+`nano-banana-3` are migrated to `gemini-3.1-flash-image`; CrossGen never sends
+the alias as the Gemini request model. The current API key's model-discovery
+response is authoritative: a model that is not discovered, or whose capability
+metadata does not confirm image editing and reference images, remains disabled
+for Sketch and is blocked before a paid request.
+
+Sketch is an image-to-image input workflow inside the existing desktop workspace,
+not a third top-level mode. The user creates or reopens a Sketch in the
+reference-image area, draws it in Input Studio, optionally adds a view-only
+reference underlay, and saves it as the first input image. CrossGen records
+`workflow: "sketch"` and Sketch provenance in History/CLI/MCP metadata, while
+the provider request continues to use the validated image-edit route. CrossGen
+does not invent or send a provider-native `scratch` field, and Sketch cannot be
+combined with a mask.
+
+The code and deterministic/mocked contracts for GPT Image 2.5 and the Gemini
+focused launches are present in v0.3.4. The final release gate still requires a
+real AIHub GPT Image 2.5/Nano Banana 3 quality, latency, failure-recovery, and
+privacy matrix; mock or compatibility-model responses do not replace that gate.
 
 ## Visual Tour
 

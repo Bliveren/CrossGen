@@ -68,6 +68,18 @@ function createLocalProviderServer() {
       object: "model",
       displayName: "Nano Banana 3",
       capabilities: { image: true }
+    },
+    {
+      id: "gemini-3.1-flash-lite-image",
+      object: "model",
+      displayName: "Gemini 3.1 Flash Image Lite",
+      capabilities: { image: true }
+    },
+    {
+      id: "gemini-3-pro-image",
+      object: "model",
+      displayName: "Gemini 3 Pro Image",
+      capabilities: { image: true }
     }
   ];
   const server = createServer(async (request, response) => {
@@ -153,7 +165,9 @@ async function writeFixtureState(userDataDir, baseURL, referencePath, maskPath, 
       discoveredModels: [
         { id: "gpt-image-2", providerKind: "openai", displayName: "GPT Image 2", raw: { capabilities: { image: true } } },
         { id: "gpt-image-2.5-sunburst", providerKind: "openai", displayName: "GPT Image 2.5", raw: { capabilities: { image: true } } },
-        { id: "gemini-3.1-flash-image", providerKind: "gemini", displayName: "Nano Banana 3", raw: { capabilities: { image: true } } }
+        { id: "gemini-3.1-flash-image", providerKind: "gemini", displayName: "Nano Banana 3", raw: { capabilities: { image: true } } },
+        { id: "gemini-3.1-flash-lite-image", providerKind: "gemini", displayName: "Gemini 3.1 Flash Image Lite", raw: { capabilities: { image: true } } },
+        { id: "gemini-3-pro-image", providerKind: "gemini", displayName: "Gemini 3 Pro Image", raw: { capabilities: { image: true } } }
       ],
       lastModelDiscoveryAt: now,
       activeLaunchId: "gpt-image-2",
