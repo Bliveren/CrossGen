@@ -32,6 +32,7 @@ import {
 } from "./providerHttp.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 import { sketchGuidanceLines } from "../../shared/sketch.js";
+import { stripModelResourcePrefix } from "../../shared/modelCatalog.js";
 
 export interface GeminiInlineData {
   mimeType: string;
@@ -108,7 +109,7 @@ export function buildGeminiEndpoint(baseURL: string, endpoint: "/models"): strin
 }
 
 export function buildGeminiGenerateContentEndpoint(baseURL: string, model: string): string {
-  const modelId = model.trim().replace(/^models\//, "");
+  const modelId = stripModelResourcePrefix(model);
   return `${buildGeminiEndpoint(baseURL, "/models")}/${encodeURIComponent(modelId)}:generateContent`;
 }
 
@@ -633,10 +634,14 @@ async function readGeminiModelsResponse(response: Response): Promise<DiscoveredM
   return models.flatMap((item): DiscoveredModel[] => {
     if (!isRecord(item)) return [];
     const rawId = typeof item.name === "string" ? item.name : typeof item.id === "string" ? item.id : "";
-    const id = rawId.replace(/^models\//, "").trim();
+    const id = stripModelResourcePrefix(rawId);
     if (!id) return [];
-    const methods = Array.isArray(item.supportedGenerationMethods) ? item.supportedGenerationMethods : [];
-    if (methods.length > 0 && !methods.includes("generateContent")) return [];
+    const methods = Array.isArray(item.supportedGenerationMethods)
+      ? item.supportedGenerationMethods
+        .filter((method): method is string => typeof method === "string")
+        .map((method) => method.trim().toLowerCase().replace(/[_-]/g, ""))
+      : [];
+    if (methods.length > 0 && !methods.includes("generatecontent")) return [];
     return [
       {
         id,

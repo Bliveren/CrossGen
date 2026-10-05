@@ -125,6 +125,21 @@ describe("OpenAI image service", () => {
     });
   });
 
+  it("preserves exact focused provider ids and normalizes the legacy GPT Image 2.5 alias", () => {
+    const normalized = normalizeOpenAIRequestParams(params({
+      model: "Models/GPT-IMAGE-2.5-SUNBURST"
+    }));
+
+    expect(normalized.model).toBe("GPT-IMAGE-2.5-SUNBURST");
+    expect(baseRequestBody(params({
+      model: "Models/GPT-IMAGE-2.5-SUNBURST"
+    }), "prompt").model).toBe("GPT-IMAGE-2.5-SUNBURST");
+
+    expect(normalizeOpenAIRequestParams(params({
+      model: "Models/GPT-IMAGE-2.5"
+    })).model).toBe("gpt-image-2.5-sunburst");
+  });
+
   it("builds GPT Image 2.5 Image API requests with advanced controls", async () => {
     let requestBody: Record<string, unknown> = {};
     const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
@@ -838,7 +853,15 @@ data: ${JSON.stringify({
   });
 
   it("discovers OpenAI models through the provider adapter", async () => {
-    const fetchImpl = (async () => Response.json({ data: [{ id: "gpt-image-2" }, { id: "text-only" }, { object: "missing-id" }] })) as typeof fetch;
+    const fetchImpl = (async () => Response.json({
+      data: [
+        { id: "gpt-image-2", display_name: "GPT Image 2" },
+        { id: "models/gpt-image-2.5", display_name: "GPT Image 2" },
+        { id: "text-only" },
+        { id: "gpt-image-2.5", object: "permission", display_name: "GPT Image 2" },
+        { object: "missing-id" }
+      ]
+    })) as typeof fetch;
 
     const models = await openaiImageAdapter.discoverModels(config(), "sk-test-key", { fetch: fetchImpl });
 
@@ -846,8 +869,14 @@ data: ${JSON.stringify({
       {
         id: "gpt-image-2",
         providerKind: "openai",
-        displayName: "gpt-image-2",
-        raw: { id: "gpt-image-2" }
+        displayName: "GPT Image 2",
+        raw: { id: "gpt-image-2", display_name: "GPT Image 2" }
+      },
+      {
+        id: "gpt-image-2.5",
+        providerKind: "openai",
+        displayName: "GPT Image 2",
+        raw: { id: "models/gpt-image-2.5", display_name: "GPT Image 2" }
       },
       {
         id: "text-only",

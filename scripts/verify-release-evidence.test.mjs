@@ -19,7 +19,7 @@ const checklistFiles = [
 
 async function run(args, options = {}) {
   try {
-    const result = await execFileAsync("node", [scriptPath, ...args], options);
+    const result = await execFileAsync(process.execPath, [scriptPath, ...args], options);
     return { exitCode: 0, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     if (error && typeof error === "object" && "code" in error) {
@@ -111,8 +111,22 @@ describe("release evidence verifier", () => {
     expect(result.stdout).not.toContain("Pending required gate(s):");
   });
 
-  it("validates the current v0.3.4 release ledger with the real Sketch AIHub gate pending", async () => {
-    const result = await run(["--file", "docs/release/evidence.json", "--expected-version", "0.3.4"]);
+  it("passes --require-complete for the archived approved v0.3.4 release ledger", async () => {
+    const result = await run([
+      "--file",
+      "docs/release/v0.3.4-evidence.json",
+      "--expected-version",
+      "0.3.4",
+      "--require-complete"
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Release evidence validated: 27/27 required gate(s) passed.");
+    expect(result.stdout).not.toContain("Pending required gate(s):");
+  });
+
+  it("validates the v0.3.5 candidate ledger with every required gate pending", async () => {
+    const result = await run(["--file", "docs/release/evidence.json", "--expected-version", "0.3.5"]);
     const evidence = JSON.parse(await readFile(path.resolve("docs/release/evidence.json"), "utf8"));
     const requiredGates = evidence.gates.filter((gate) => gate.required);
     const passedGates = requiredGates.filter((gate) => gate.status === "passed");
@@ -123,7 +137,17 @@ describe("release evidence verifier", () => {
       `Release evidence validated: ${passedGates.length}/${requiredGates.length} required gate(s) passed.`
     );
     expect(result.stdout).toContain(`Pending required gate(s): ${pendingGates.map((gate) => gate.id).join(", ")}`);
-    expect(pendingGates.map((gate) => gate.id)).toEqual(["sketch-real-aihub-matrix"]);
+    expect(passedGates).toHaveLength(0);
+    expect(pendingGates.map((gate) => gate.id)).toEqual(
+      expect.arrayContaining([
+        "model-discovery-evidence-contract",
+        "general-reference-edit",
+        "sketch-workspace-contract",
+        "sketch-packaged-electron",
+        "sketch-feature-flag-rollback",
+        "sketch-real-aihub-matrix"
+      ])
+    );
     expect(evidence.gates.map((gate) => gate.id)).toEqual(
       expect.arrayContaining(["applink-provider-import", "media-foundation-contract"])
     );

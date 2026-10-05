@@ -1,20 +1,88 @@
 # GPT Image 2.5 Support Research
 
 > Research date: 2026-09-09
-> Target release: CrossGen v0.3.4
-> Status: implementation in the current v0.3.4 worktree
+> Target release: CrossGen v0.3.5
+> Status: implementation continues on the v0.3.5 development line. The released v0.3.4 package exposes GPT Image 2.5 launch targets but does not include the strict availability-evidence contract or the Sketch workspace.
 
 ## Executive Summary
 
-OpenAI's current GPT Image 2.5 family has two model variants:
+OpenAI's current GPT Image 2.5 family is represented in CrossGen by concrete
+provider ids and two named variants:
 
 - `gpt-image-2.5-sunburst`: prefer for precise edits, structure preservation, and high-fidelity reference work.
 - `gpt-image-2.5-flare`: prefer for fast, high-quality everyday generation.
+- `gpt-image-2.5-YYYY-MM-DD`, `gpt-image-2.5-sunburst-YYYY-MM-DD`, or
+  `gpt-image-2.5-flare-YYYY-MM-DD`: valid dated snapshots only when the provider
+  actually returns them.
+- `gpt-image-2.5`: a CrossGen launch/AppLink compatibility alias, not proof of
+  provider support and never an injected discovery candidate.
 
-Both variants are available through the Image API and through the Responses API
-`image_generation` tool. CrossGen v0.3.4 exposes both routes, keeps the model
+CrossGen keeps the separate `gpt-image-2` launch target out of this family.
+Model availability is not inferred from the product catalogue: the latest
+successful `/models` discovery for the selected API Key must return the exact
+provider id, and the follow-up metadata probe may confirm that id by echoing
+the same strong provider id field (`id`, `model`, `model_id`, or `modelId`).
+For native Gemini metadata, `name: models/<id>` is the canonical resource id;
+for OpenAI-compatible gateways, `name`, `display_name`, and `displayName` remain
+advisory labels and cannot confirm GPT Image 2 versus GPT Image 2.5. A
+lightweight image route must accept that exact id. For a provider-listed row,
+a non-empty 2xx image response is strong confirmation even when the optional
+metadata route is unavailable. Product-owned route candidates (used only when
+a gateway omits image deployments from `/models`) are stricter: they require
+an exact model-id echo in the successful route payload, or an exact metadata
+identity plus a reachable image route. Empty success envelopes such as
+`{ data: [] }`, `{ output: [] }`, or `{ choices: [] }` are only reachability
+evidence and cannot enable an unlisted candidate. A validation-only 400/422 is
+sufficient only when metadata echoed the same id, so the check remains
+no-output and does not start a paid generation. A metadata
+`200` for another model is a rejection for the requested id; a metadata `200`
+without any exact id echo stays inconclusive unless an exact lightweight route
+probe verifies the requested image model. For
+OpenAI-compatible gateways, the returned `id` is the source of truth for family
+selection; `display_name`/`displayName` is advisory only, so a row such as
+`id: gpt-image-2.5, display_name: GPT Image 2` is not sufficient evidence for
+GPT Image 2.5 and remains a disabled compatibility row. Only a concrete
+Sunburst/Flare id or a provider-returned valid dated snapshot can establish the
+2.5 family. When such an exact provider ID is discovered, CrossGen keeps that
+ID on the wire; it does not silently replace it with the default Sunburst
+variant.
+Explicit output metadata that says text-, audio-, video-only, or
+`image_generation: false` can veto an image-looking id. A `model_not_found`
+metadata response for a listed id is treated as an inconsistency until an exact
+image route confirms or rejects the same provider id; a missing metadata route
+or transport failure is inconclusive. Replacing the API Key, changing the Base
+URL, or receiving a failed/expired probe invalidates the previous discovery
+result and active route/model selection.
+
+The desktop discovery pass also performs a no-output route probe for the
+selected OpenAI image model. If every generate probe explicitly returns
+`model_not_found` for that exact id, CrossGen removes the stale row from the
+confirmed catalogue and re-runs selection. A generic validation error,
+transport failure, or a route-specific 404 remains inconclusive unless the
+metadata endpoint already echoed the same exact id and the validation response
+was a reachable 400/422. These cases are never silently treated as proof that
+the model is unavailable.
+
+Route evidence is stored with the exact provider model ID. Changing the
+selected model invalidates that evidence before the next request, so a route
+probe for `gpt-image-2` cannot be reused to claim support for
+`gpt-image-2.5-sunburst` (or the reverse). The no-cost AIHub probe checks both families
+independently. A `model_not_found` from the metadata endpoint is recorded as
+inconclusive until an exact image route confirms or rejects the same provider
+ID; only when every exact generate route rejects that ID is the model marked
+rejected. Generic metadata or transport failures remain inconclusive.
+
+These GPT Image 2.5 targets are available through the Image API and through the Responses API
+`image_generation` tool. CrossGen v0.3.5 exposes both routes, keeps the model
 choice in the provider/model catalog, and preserves the same durable queue,
 History, Gallery, and export behavior as GPT Image 2.
+
+When a gateway is probed through more than one protocol, the configured
+protocol is authoritative whenever it returns a runnable image model. CrossGen
+does not merge a secondary protocol catalogue into that successful result;
+fallback is used only when the primary response has no runnable image model.
+This prevents a protocol-shaped but semantically incompatible response from
+making GPT Image 2, GPT Image 2.5, or a Gemini image launch appear available.
 
 Operationally, 2.5 is a higher-fidelity model family rather than a magic
 layout engine. The current OpenAI guidance still calls out practical limits:
@@ -26,7 +94,7 @@ workflow instead of hiding retries behind silent route changes.
 
 ## Official Capability Matrix
 
-| Capability | Image API | Responses API image tool | CrossGen v0.3.4 |
+| Capability | Image API | Responses API image tool | CrossGen v0.3.5 |
 | --- | --- | --- | --- |
 | Text-to-image | `/v1/images/generations` | `tools: [{ type: "image_generation" }]` | Supported |
 | Image edit | `/v1/images/edits` | Input images plus `action: "edit"` or `auto` | Supported |
@@ -110,10 +178,10 @@ requests.
 
 ## Input and Privacy Decision
 
-CrossGen v0.3.4 sends local reference images and masks as base64 data URLs in
+CrossGen sends local reference images and masks as base64 data URLs in
 Responses requests, and as multipart files in Image API edit requests. It does
 not upload local files through the OpenAI Files API or persist provider File IDs.
-This keeps v0.3.4 local-first and avoids introducing a separate File lifecycle,
+This keeps CrossGen local-first and avoids introducing a separate File lifecycle,
 retention, cleanup, privacy, and cross-session ownership contract. File ID input
 can be added in a later release once those lifecycle rules are specified.
 
@@ -146,7 +214,7 @@ CrossGen does not expose classifier scores from provider responses.
 
 ## Verification
 
-The v0.3.4 implementation is covered by:
+The v0.3.5 implementation is covered by:
 
 - OpenAI adapter unit tests for Image API generation/edit, Responses generation,
   multi-turn editing, mask forwarding, streaming metadata, strict route
@@ -158,9 +226,9 @@ The v0.3.4 implementation is covered by:
 - Mock API and model-discovery verifiers covering Sunburst, Flare, dated
   snapshots, advanced controls, and Responses SSE.
 
-The current worktree verification result is 48 test files and 488 passing tests,
-with TypeScript type-checking, renderer/main builds, lint (0 errors), and
-whitespace validation passing.
+The current worktree verification result is 54 test files and 607 passing tests,
+with TypeScript type-checking, full Vitest, lint (0 errors), and whitespace
+validation passing. The repository retains its existing lint warnings.
 
 ## Official References
 

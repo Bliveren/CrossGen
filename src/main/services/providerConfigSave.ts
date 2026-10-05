@@ -15,9 +15,12 @@ import {
   isGeminiImageModelId,
   NANO_BANANA_3_LAUNCH_ID,
   getFocusedModelDefinition,
-  isGptImage25ModelId,
+  isGptImage2ModelId,
+  isGptImage25ProviderModelId,
   normalizeGeminiImageModelId,
-  normalizeModelId
+  normalizeModelId,
+  normalizeProviderModelId,
+  stripModelResourcePrefix
 } from "../../shared/modelCatalog.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 
@@ -27,20 +30,44 @@ export function providerDisplayName(kind: StoredProviderConfig["kind"]): string 
   return "OpenAI";
 }
 
-export function buildProviderConfigForSave(current: StoredProviderConfig, input: ProviderConfigInput, now: string): StoredProviderConfig {
+export function buildProviderConfigForSave(
+  current: StoredProviderConfig,
+  input: ProviderConfigInput,
+  now: string,
+  apiKeyChanged = false
+): StoredProviderConfig {
   const kind = input.kind ?? current.kind;
   const providerChanged = kind !== current.kind;
   const requestedLaunchId = input.activeLaunchId;
-  const defaultModel = requestedLaunchId
+  const requestedDefaultModel = requestedLaunchId
     ? defaultModelForLaunch(requestedLaunchId, input.defaultModel)
     : defaultModelForProvider(kind, input.defaultModel);
   const baseURL = normalizeBaseURL(input.baseURL || defaultBaseURLForProvider(kind, current.baseURL));
   const name = input.name?.trim() || (providerChanged ? providerDisplayName(kind) : current.name);
-  const discoveryInvalidated = providerChanged || baseURL !== current.baseURL;
-  const activeLaunchId = activeLaunchForProvider(kind, requestedLaunchId ?? (providerChanged ? undefined : current.activeLaunchId));
-  const activeModelId = requestedLaunchId
-    ? defaultModelForLaunch(requestedLaunchId, input.activeModelId?.trim() || defaultModel)
-    : defaultModel;
+  const discoveryInvalidated = providerChanged || baseURL !== current.baseURL || apiKeyChanged;
+  const activeLaunchId = discoveryInvalidated
+    ? GENERAL_LAUNCH_ID
+    : activeLaunchForProvider(kind, requestedLaunchId ?? (providerChanged ? undefined : current.activeLaunchId));
+  const defaultModel = discoveryInvalidated ? "" : requestedDefaultModel;
+  const activeModelId = discoveryInvalidated
+    ? ""
+    : requestedLaunchId
+      ? defaultModelForLaunch(requestedLaunchId, input.activeModelId?.trim() || defaultModel)
+      : defaultModel;
+  const currentRoutingModel = current.activeModelId || current.defaultModel;
+  const nextRoutingModel = activeModelId || defaultModel;
+  const modelSelectionChanged =
+    !discoveryInvalidated &&
+    (
+      activeLaunchId !== current.activeLaunchId ||
+      normalizeProviderModelId(kind, nextRoutingModel) !== normalizeProviderModelId(current.kind, currentRoutingModel)
+    );
+  const routingEvidenceModelMismatch = Boolean(current.openAIImageRouting?.modelId) &&
+    normalizeProviderModelId(current.kind, current.openAIImageRouting?.modelId ?? "") !==
+      normalizeProviderModelId(kind, nextRoutingModel);
+  const legacyRoutingEvidence = current.openAIImageRouting !== undefined &&
+    current.openAIImageRouting.modelId === undefined;
+  const routingInvalidated = discoveryInvalidated || modelSelectionChanged || routingEvidenceModelMismatch || legacyRoutingEvidence;
   const streamingPartialsEnabled = typeof input.streamingPartialsEnabled === "boolean"
     ? input.streamingPartialsEnabled
     : discoveryInvalidated
@@ -61,7 +88,7 @@ export function buildProviderConfigForSave(current: StoredProviderConfig, input:
     discoveredModels: discoveryInvalidated ? [] : current.discoveredModels,
     lastModelDiscoveryAt: discoveryInvalidated ? undefined : current.lastModelDiscoveryAt,
     lastModelDiscoveryError: discoveryInvalidated ? undefined : current.lastModelDiscoveryError,
-    openAIImageRouting: discoveryInvalidated ? undefined : current.openAIImageRouting,
+    openAIImageRouting: routingInvalidated ? undefined : current.openAIImageRouting,
     updatedAt: now
   };
 
@@ -98,12 +125,16 @@ function defaultModelForLaunch(launchId: FocusedLaunchId, fallback: string): str
     ? normalizeGeminiImageModelId(fallback)
     : normalizeModelId(fallback);
   if (launchId === GPT_IMAGE_2_LAUNCH_ID) {
-    return normalized === normalizeModelId(DEFAULT_IMAGE_PARAMS.model)
-      ? DEFAULT_IMAGE_PARAMS.model
+    const providerModelId = stripModelResourcePrefix(fallback);
+    return isGptImage2ModelId(providerModelId)
+      ? providerModelId
       : definition.defaultModelId;
   }
   if (launchId === GPT_IMAGE_2_5_LAUNCH_ID) {
-    return isGptImage25ModelId(normalized) ? normalized : GPT_IMAGE_2_5_DEFAULT_MODEL_ID;
+    const providerModelId = stripModelResourcePrefix(fallback);
+    return isGptImage25ProviderModelId(providerModelId)
+      ? providerModelId
+      : GPT_IMAGE_2_5_DEFAULT_MODEL_ID;
   }
   if (definition.modelIds.some((modelId) => normalizeModelId(modelId) === normalized)) {
     return normalized;

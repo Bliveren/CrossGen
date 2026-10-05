@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_IMAGE_PARAMS } from "../../shared/validation";
 import {
+  GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
   GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
   GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID
@@ -138,6 +139,242 @@ describe("state migration", () => {
     expect(migrated.activeProviderId).toBe("default");
   });
 
+  it("does not infer a focused GPT Image launch for a custom model before discovery", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "custom",
+      providers: [{
+        id: "custom",
+        kind: "custom",
+        name: "AIHub",
+        baseURL: "https://gateway.example/v1",
+        defaultModel: "gpt-image-2.5",
+        activeModelId: "gpt-image-2.5",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        encryption: "none"
+      }],
+      history: []
+    });
+
+    expect(migrated.providers[0]).toMatchObject({
+      kind: "custom",
+      activeLaunchId: "general",
+      activeModelId: "gpt-image-2.5",
+      defaultModel: "gpt-image-2.5"
+    });
+  });
+
+  it("restores a focused model discovered through a custom OpenAI-compatible gateway", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "custom",
+      providers: [{
+        id: "custom",
+        kind: "custom",
+        name: "AIHub",
+        baseURL: "https://gateway.example/v1",
+        defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        activeLaunchId: "gpt-image-2.5",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        discoveredModels: [{
+          id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          providerKind: "custom",
+          displayName: "GPT Image 2",
+          availability: "confirmed"
+        }],
+        lastModelDiscoveryAt: "2026-07-13T00:00:00.000Z",
+        encryption: "none"
+      }],
+      history: []
+    });
+
+    expect(migrated.providers[0]).toMatchObject({
+      kind: "custom",
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      discoveredModels: [{
+        id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        providerKind: "openai"
+      }]
+    });
+  });
+
+  it("does not resurrect a focused launch when discovery explicitly denies image generation", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "openai",
+      providers: [{
+        id: "openai",
+        kind: "openai",
+        name: "OpenAI",
+        baseURL: "https://gateway.example/v1",
+        defaultModel: "gpt-image-2.5",
+        activeModelId: "gpt-image-2.5",
+        activeLaunchId: "gpt-image-2.5",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        discoveredModels: [{
+          id: "gpt-image-2.5",
+          providerKind: "openai",
+          raw: { image_generation: false }
+        }],
+        lastModelDiscoveryAt: "2026-07-13T00:00:00.000Z",
+        encryption: "none"
+      }],
+      history: []
+    });
+
+    expect(migrated.providers[0]).toMatchObject({
+      activeLaunchId: "general",
+      activeModelId: "",
+      defaultModel: ""
+    });
+  });
+
+  it("replaces a stale model with the exact model from the latest successful discovery", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "openai",
+      providers: [{
+        id: "openai",
+        kind: "openai",
+        name: "OpenAI",
+        baseURL: "https://gateway.example/v1",
+        defaultModel: "gpt-image-2.5",
+        activeModelId: "gpt-image-2.5",
+        activeLaunchId: "gpt-image-2.5",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        discoveredModels: [{
+          id: "gpt-image-2",
+          providerKind: "openai",
+          availability: "confirmed"
+        }],
+        lastModelDiscoveryAt: "2026-07-13T00:00:00.000Z",
+        encryption: "none"
+      }],
+      history: []
+    });
+
+    expect(migrated.providers[0]).toMatchObject({
+      activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+      activeModelId: "gpt-image-2",
+      defaultModel: "gpt-image-2"
+    });
+  });
+
+  it("does not treat an invalid or failed discovery timestamp as completed during migration", () => {
+    const invalidTimestamp = normalizeState({
+      version: 3,
+      activeProviderId: "openai",
+      providers: [{
+        id: "openai",
+        kind: "openai",
+        name: "OpenAI",
+        baseURL: "https://api.openai.com/v1",
+        enabled: true,
+        defaultModel: "gpt-image-2.5",
+        activeModelId: "gpt-image-2.5",
+        activeLaunchId: "gpt-image-2.5",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        discoveredModels: [{ id: "gpt-image-2.5", providerKind: "openai" }],
+        lastModelDiscoveryAt: "not-a-timestamp",
+        encryptedApiKey: "plain:c2stdGVzdA==",
+        encryption: "localFallback"
+      }],
+      history: []
+    });
+    const failedDiscovery = normalizeState({
+      version: 3,
+      activeProviderId: "openai",
+      providers: [{
+        id: "openai",
+        kind: "openai",
+        name: "OpenAI",
+        baseURL: "https://api.openai.com/v1",
+        enabled: true,
+        defaultModel: "gpt-image-2.5",
+        activeModelId: "gpt-image-2.5",
+        activeLaunchId: "gpt-image-2.5",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        discoveredModels: [{ id: "gpt-image-2.5", providerKind: "openai" }],
+        lastModelDiscoveryAt: "2026-07-13T00:00:00.000Z",
+        lastModelDiscoveryError: "API key rejected",
+        encryptedApiKey: "plain:c2stdGVzdA==",
+        encryption: "localFallback"
+      }],
+      history: []
+    });
+
+    expect(invalidTimestamp.providers[0]?.activeLaunchId).toBe("general");
+    expect(failedDiscovery.providers[0]?.activeLaunchId).toBe("general");
+  });
+
+  it("drops legacy permission rows from persisted model discovery", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "openai",
+      providers: [{
+        id: "openai",
+        kind: "openai",
+        name: "OpenAI",
+        baseURL: "https://gateway.example/v1",
+        defaultModel: "gpt-image-2",
+        activeModelId: "gpt-image-2",
+        activeLaunchId: "gpt-image-2",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        discoveredModels: [{
+          id: "gpt-image-2",
+          providerKind: "openai",
+          raw: { id: "gpt-image-2", object: "permission" }
+        }],
+        lastModelDiscoveryAt: "2026-07-13T00:00:00.000Z",
+        encryption: "none"
+      }],
+      history: []
+    });
+
+    expect(migrated.providers[0]?.discoveredModels).toEqual([]);
+    expect(migrated.providers[0]?.activeLaunchId).toBe("general");
+  });
+
+  it("lets the exact OpenAI model id correct a stale launch family during migration", () => {
+    const migrated = normalizeState({
+      version: 3,
+      activeProviderId: "openai",
+      providers: [{
+        id: "openai",
+        kind: "openai",
+        name: "OpenAI",
+        baseURL: "https://api.openai.com/v1",
+        defaultModel: "gpt-image-2.5",
+        activeModelId: "gpt-image-2.5",
+        activeLaunchId: "gpt-image-2",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto",
+        timeoutMs: 120000,
+        encryption: "none"
+      }],
+      history: []
+    });
+
+    expect(migrated.providers[0]?.activeLaunchId).toBe(GPT_IMAGE_2_5_LAUNCH_ID);
+  });
+
   it("migrates v2 single config to providers[0]", () => {
     const migrated = normalizeState({
       version: 2,
@@ -151,7 +388,7 @@ describe("state migration", () => {
         defaultSize: "auto",
         defaultQuality: "auto",
         timeoutMs: 180000,
-        discoveredModels: [{ id: "gemini-3.1-flash-image", providerKind: "gemini" }],
+        discoveredModels: [{ id: "gemini-3.1-flash-image", providerKind: "gemini", availability: "confirmed" }],
         activeLaunchId: "nano-banana-3",
         activeModelId: "gemini-3.1-flash-image",
         updatedAt: "2026-01-02T03:04:05.000Z",
@@ -834,6 +1071,19 @@ describe("state migration", () => {
     expect(legacy).not.toHaveProperty("responsesModel");
     expect(legacy).not.toHaveProperty("responsesAction");
     expect(legacy).not.toHaveProperty("previousResponseId");
+  });
+
+  it("preserves the provider's exact focused model id while normalizing its family", () => {
+    const migrated = normalizeImageParams({
+      providerKind: "openai",
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      model: "Models/GPT-IMAGE-2.5-SUNBURST"
+    });
+
+    expect(migrated).toMatchObject({
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      model: "GPT-IMAGE-2.5-SUNBURST"
+    });
   });
 
   it("migrates a stored GPT Image 2.5 provider without a model to its default", () => {

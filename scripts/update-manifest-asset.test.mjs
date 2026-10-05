@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile);
 
 async function run(args) {
   try {
-    const result = await execFileAsync("node", [scriptPath, ...args]);
+    const result = await execFileAsync(process.execPath, [scriptPath, ...args]);
     return { exitCode: 0, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     if (error && typeof error === "object" && "code" in error) {

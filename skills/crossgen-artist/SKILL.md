@@ -28,11 +28,21 @@ Use this skill when an agent needs to create or modify images through a local Cr
 
 - Inspect capabilities before presenting controls. A disabled or missing model is unavailable for the current provider/key; do not silently substitute another model.
 - Keep provider-specific options namespaced to their adapter: OpenAI commonly uses `size`, `quality`, `background`, `outputFormat`, and `outputCompression`; Gemini commonly uses `aspectRatio` and `resolution`. Omit unsupported fields rather than guessing.
-- For GPT Image 2.5, choose `gpt-image-2.5-sunburst` when precise editing, structure preservation, or high-fidelity references matter; choose `gpt-image-2.5-flare` for fast everyday generation. Dated `-YYYY-MM-DD` snapshots are valid when model discovery reports them.
+- Keep `gpt-image-2` and GPT Image 2.5 separate. For GPT Image 2.5, the base
+  `gpt-image-2.5` id is valid when discovery reports it; choose
+  `gpt-image-2.5-sunburst` when precise editing, structure preservation, or
+  high-fidelity references matter; choose `gpt-image-2.5-flare` for fast
+  everyday generation. Dated `-YYYY-MM-DD` snapshots are valid when model
+  discovery reports them.
 - GPT Image 2.5 supports quality `auto|low|medium|high|xhigh|max`, transparent backgrounds with PNG/WebP, custom 16-multiple dimensions inside the documented 4K envelope, `n` up to 10, and Images API streaming `partialImages` from 0 to 3. Responses streaming sends `partialImages` only when it is 1 to 3; `0` means omit partial previews.
 - Use the Responses route for GPT Image 2.5 multi-turn work: pass a supported mainline `responsesModel`, `responsesAction` (`auto`, `generate`, or `edit`), and `previousResponseId` when continuing a prior response. The GPT Image 2.5 model belongs in the image-generation tool, not as the top-level Responses model.
 - In `imageRoute: "auto"`, keep batch requests (`n > 1`) on Images API. GPT Image 2.5 must never be sent through the legacy Chat Completions image route.
 - Treat `nano-banana-3` as CrossGen's launch/workflow alias only. The Gemini wire ids currently modeled by CrossGen are `gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image`, and `gemini-3-pro-image`; use the id returned by `crossgen_models_list` rather than guessing or sending the alias to a provider.
+- Treat the latest successful `crossgen_models_list` result for the selected
+  API Key as the availability source of truth. Do not present a GPT Image 2.5
+  option when discovery returned only `gpt-image-2`, and do not present GPT
+  Image 2 when discovery returned only a 2.5 id. A changed API Key requires a
+  fresh discovery before model-dependent work.
 - For Gemini image work, the latest model-discovery result is authoritative. Keep a focused model disabled when discovery does not return it or does not confirm the required image capability; do not silently fall back to another Gemini model.
 - Sketch is a desktop image-to-image input workflow. It uses `workflow: "sketch"` and `mode: "edit"` with a managed PNG input and provenance metadata. It is not a third top-level mode, cannot be combined with a mask, and must not be represented by an unverified provider-native `scratch` field.
 - When the user asks for multiple concepts, prefer one durable request per concept with distinct idempotency keys unless the selected model explicitly supports batching.
@@ -47,12 +57,15 @@ Use this skill when an agent needs to create or modify images through a local Cr
 - Responses output may include `image_generation_call.result` and
   `revised_prompt`; CrossGen persists the response ID and revised prompt in job
   metadata for follow-up editing.
-- CrossGen v0.3.4 sends local Responses inputs as base64 data URLs. It does not
+- CrossGen sends local Responses inputs as base64 data URLs. It does not
   upload or persist OpenAI Files API IDs.
 
 ## Gemini and Sketch workflow notes
 
-Use the desktop CrossGen workspace to create or continue a Sketch in the
+Sketch requires the v0.3.5 development line; the released v0.3.4 desktop
+package does not include the Sketch workspace, so check the app version before
+promising Sketch support. Use the desktop CrossGen workspace to create or
+continue a Sketch in the
 reference-image area. The canvas may show a view-only reference underlay and
 guides, but only the explicitly exported Sketch input is sent to the provider.
 The selected Gemini model must pass discovery-backed edit/reference preflight;
@@ -60,7 +73,7 @@ General and unknown-capability paths are blocked before submission. History and
 readonly CLI/MCP responses expose the real model id, `workflow`, and Sketch
 artifact summary without exposing API keys, absolute paths, or full data URLs.
 
-## Media-aware behavior in v0.3.4
+## Media-aware behavior
 
 - Treat `crossgen_job_status`, `crossgen_gallery_list`, and
   `crossgen_asset_inspect` as media-aware contracts. Read `kind`,
@@ -69,11 +82,11 @@ artifact summary without exposing API keys, absolute paths, or full data URLs.
 - Default CLI/MCP output intentionally omits local `path`, `posterPath`, and
   preview URLs. `hasPoster: true` means a poster reference exists in the local
   app; it is not visual proof that the poster is readable.
-- v0.3.4 can import and inspect GIF/video assets and the desktop viewer can
+- CrossGen v0.3.4 and later can import and inspect GIF/video assets and the desktop viewer can
   preview them within the host's codec support. GIFs are read-only previews;
   video and GIF assets are not valid reference-image, mask, Canvas-editing, or
   inpaint inputs.
-- v0.3.4 does not expose real video generation, video editing, poster
+- The released v0.3.4 and the v0.3.5 development line do not expose real video generation, video editing, poster
   extraction, ffmpeg conversion, or video MCP tools. Do not present those as
   available capabilities; route that work to the v0.3.5 preview plan.
 - Exporting a media asset still requires an explicit destination and

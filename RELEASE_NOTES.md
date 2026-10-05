@@ -1,5 +1,67 @@
 # CrossGen Release Notes
 
+## v0.3.5 (in development)
+
+> Status: not released. Version-consolidation decision recorded 2026-09-30.
+> `docs/updates/latest.json` continues to point at the approved v0.3.4 assets
+> until the v0.3.5 candidate completes product-owner acceptance.
+
+### Consolidated Post-0.3.4 Work
+
+- **GPT Image 2.5 Sketch workspace**: draw or continue a Sketch in the
+  reference-image area, edit it in Input Studio, and submit it as the first
+  input image with `workflow: "sketch"` provenance.
+- **Strict model-discovery evidence contract**: persist
+  `listed` / `confirmed` / `inconclusive` / `rejected` availability, bind
+  route evidence to the exact provider model ID, and keep display names and the
+  bare `gpt-image-2.5` compatibility alias out of provider evidence.
+- **Canonical Gemini image-model contract**: keep real provider model IDs on
+  the wire, with `nano-banana-3` as a CrossGen launch alias only.
+- **POSIX launcher fix**: resolve the `crossgen` symlink so a packaged launcher
+  does not fall back to an older installed app.
+- **Video technology preview (planned)**: one route strategy and one sample
+  model for submit / poll / download / poster / postprocess / preview / cleanup.
+
+### New Scope (2026-10-05)
+
+- **General image-to-image (planned)**: OpenAI-compatible General fallback
+  (`openai` / `custom`) gains `mode: "edit"` with reference images only after
+  the endpoint's edit/reference route is explicitly confirmed. Unconfirmed
+  endpoints stay prompt-only with a diagnosable reason instead of silently
+  degrading. Mask/inpaint, Sketch, and multi-turn Responses semantics remain out
+  of General scope.
+
+### Release Governance
+
+- The released v0.3.4 gate set is frozen at 27/27 passed in
+  `docs/release/v0.3.4-evidence.json`; post-release Sketch gates were
+  reclassified to v0.3.5 because the published v0.3.4 package does not contain
+  Sketch.
+- The v0.3.5 candidate ledger starts with all 33 required gates pending and
+  must be re-verified on the exact frozen candidate.
+
+## v0.3.4 (released 2026-09-06)
+
+### User-Facing Highlights
+
+- **GPT Image 2.5 launch support** through the Images API and the Responses API
+  `image_generation` tool, with GPT Image 2 kept as a separate launch target.
+- **Media-aware foundation**: `OutputAsset` / `VideoAsset` / `AnimationAsset`
+  contracts, state v5 migration, managed media root, media-aware
+  History/Gallery/viewer boundaries, and CLI/MCP metadata without default
+  absolute-path disclosure.
+- **AppLink provider import**: `crossgen://` links create a provider profile
+  only after explicit confirmation and keep the API key in local protected
+  storage.
+
+### Validation
+
+- macOS arm64 DMG/ZIP assets are Developer ID signed, Apple-notarized, stapled,
+  and accepted by Gatekeeper; Windows x64 NSIS and Linux x64 AppImage assets are
+  published on the GitHub Release.
+- 27/27 required release evidence gates passed for the released package. Sketch
+  is not part of the v0.3.4 package and was reclassified to v0.3.5.
+
 ## v0.3.3
 
 CrossGen 0.3.3 makes the local image workflow practical for coding agents while

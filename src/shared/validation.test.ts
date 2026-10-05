@@ -30,6 +30,7 @@ import {
 } from "./validation";
 import {
   GPT_IMAGE_2_5_LAUNCH_ID,
+  GPT_IMAGE_2_5_MODEL_ID,
   GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID
@@ -88,6 +89,21 @@ describe("gpt-image-2 validation", () => {
     expect(validateImageParams({ ...base, user: "   " }).ok).toBe(false);
     expect(validateImageParams({ ...base, user: "u".repeat(64) }).ok).toBe(true);
     expect(validateImageParams({ ...base, user: "u".repeat(65) }).ok).toBe(false);
+  });
+
+  it("accepts the bare GPT Image 2.5 compatibility alias while keeping it distinct from GPT Image 2", () => {
+    const params = {
+      ...DEFAULT_IMAGE_PARAMS,
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      model: GPT_IMAGE_2_5_MODEL_ID
+    };
+
+    expect(validateImageParams(params).ok).toBe(true);
+    expect(validateImageParams({
+      ...DEFAULT_IMAGE_PARAMS,
+      launchId: "gpt-image-2",
+      model: GPT_IMAGE_2_5_MODEL_ID
+    }).ok).toBe(false);
   });
 
   it("rejects Responses-only controls when batch generation requests multiple images", () => {

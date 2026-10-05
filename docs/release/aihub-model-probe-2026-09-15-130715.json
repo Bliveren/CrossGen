@@ -1,0 +1,394 @@
+{
+  "checkedAt": "2026-09-15T13:07:15.280Z",
+  "endpoint": "https://aihub.nowosoft.cn/v1/models",
+  "requestType": "read-only",
+  "listedImageModels": [
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-lite-image",
+    "gemini-3-pro-image",
+    "gpt-image-2"
+  ],
+  "availableImageModels": [
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-lite-image",
+    "gemini-3-pro-image",
+    "gpt-image-2"
+  ],
+  "targetModels": {
+    "gpt-image-2": {
+      "family": "gpt-image-2",
+      "providerModelIds": [
+        "gpt-image-2"
+      ],
+      "matchedProviderModelIds": [
+        "gpt-image-2"
+      ],
+      "exactIdMatch": true,
+      "listed": true,
+      "listedAs": "gpt-image-2",
+      "metadataStatus": "listed-but-metadata-rejected",
+      "availability": "inconclusive",
+      "eligibleForLaunch": false,
+      "probes": [
+        {
+          "providerModelId": "gpt-image-2",
+          "family": "gpt-image-2",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gpt-image-2",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false
+        }
+      ],
+      "providerProbes": {
+        "gpt-image-2": {
+          "providerModelId": "gpt-image-2",
+          "family": "gpt-image-2",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gpt-image-2",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2' does not exist"
+        }
+      }
+    },
+    "gpt-image-2.5": {
+      "family": "gpt-image-2.5",
+      "providerModelIds": [
+        "gpt-image-2.5",
+        "gpt-image-2.5-sunburst",
+        "gpt-image-2.5-flare"
+      ],
+      "matchedProviderModelIds": [],
+      "exactIdMatch": false,
+      "listed": false,
+      "listedAs": null,
+      "metadataStatus": "not-listed",
+      "availability": "not-listed",
+      "eligibleForLaunch": false,
+      "probes": [
+        {
+          "providerModelId": "gpt-image-2.5",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false
+        },
+        {
+          "providerModelId": "gpt-image-2.5-sunburst",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false
+        },
+        {
+          "providerModelId": "gpt-image-2.5-flare",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false
+        }
+      ],
+      "providerProbes": {
+        "gpt-image-2.5": {
+          "providerModelId": "gpt-image-2.5",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2.5' does not exist"
+        },
+        "gpt-image-2.5-sunburst": {
+          "providerModelId": "gpt-image-2.5-sunburst",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2.5-sunburst' does not exist"
+        },
+        "gpt-image-2.5-flare": {
+          "providerModelId": "gpt-image-2.5-flare",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2.5-flare' does not exist"
+        }
+      }
+    },
+    "gpt-image-2.5-sunburst": {
+      "family": "gpt-image-2.5",
+      "providerModelIds": [
+        "gpt-image-2.5-sunburst"
+      ],
+      "matchedProviderModelIds": [],
+      "exactIdMatch": false,
+      "listed": false,
+      "listedAs": null,
+      "metadataStatus": "not-listed",
+      "availability": "not-listed",
+      "eligibleForLaunch": false,
+      "probes": [
+        {
+          "providerModelId": "gpt-image-2.5-sunburst",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false
+        }
+      ],
+      "providerProbes": {
+        "gpt-image-2.5-sunburst": {
+          "providerModelId": "gpt-image-2.5-sunburst",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2.5-sunburst' does not exist"
+        }
+      }
+    },
+    "gpt-image-2.5-flare": {
+      "family": "gpt-image-2.5",
+      "providerModelIds": [
+        "gpt-image-2.5-flare"
+      ],
+      "matchedProviderModelIds": [],
+      "exactIdMatch": false,
+      "listed": false,
+      "listedAs": null,
+      "metadataStatus": "not-listed",
+      "availability": "not-listed",
+      "eligibleForLaunch": false,
+      "probes": [
+        {
+          "providerModelId": "gpt-image-2.5-flare",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false
+        }
+      ],
+      "providerProbes": {
+        "gpt-image-2.5-flare": {
+          "providerModelId": "gpt-image-2.5-flare",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2.5-flare' does not exist"
+        }
+      }
+    },
+    "nano-banana-3": {
+      "family": "nano-banana-3",
+      "providerModelIds": [
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
+        "gemini-3-pro-image",
+        "nano-banana-3"
+      ],
+      "matchedProviderModelIds": [
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
+        "gemini-3-pro-image"
+      ],
+      "exactIdMatch": true,
+      "listed": true,
+      "listedAs": "gemini-3.1-flash-image",
+      "metadataStatus": "confirmed-by-metadata",
+      "availability": "confirmed",
+      "eligibleForLaunch": true,
+      "probes": [
+        {
+          "providerModelId": "gemini-3.1-flash-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gemini-3.1-flash-image",
+          "errorPayload": false,
+          "metadataStatus": "confirmed-by-metadata",
+          "availability": "confirmed",
+          "eligibleForLaunch": true
+        },
+        {
+          "providerModelId": "gemini-3.1-flash-lite-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gemini-3.1-flash-lite-image",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false
+        },
+        {
+          "providerModelId": "gemini-3-pro-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gemini-3-pro-image",
+          "errorPayload": false,
+          "metadataStatus": "confirmed-by-metadata",
+          "availability": "confirmed",
+          "eligibleForLaunch": true
+        },
+        {
+          "providerModelId": "nano-banana-3",
+          "family": "nano-banana-3",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false
+        }
+      ],
+      "providerProbes": {
+        "gemini-3.1-flash-image": {
+          "providerModelId": "gemini-3.1-flash-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gemini-3.1-flash-image",
+          "errorPayload": false,
+          "metadataStatus": "confirmed-by-metadata",
+          "availability": "confirmed",
+          "eligibleForLaunch": true,
+          "status": 200,
+          "ok": true
+        },
+        "gemini-3.1-flash-lite-image": {
+          "providerModelId": "gemini-3.1-flash-lite-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gemini-3.1-flash-lite-image",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gemini-3.1-flash-lite-image' does not exist"
+        },
+        "gemini-3-pro-image": {
+          "providerModelId": "gemini-3-pro-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gemini-3-pro-image",
+          "errorPayload": false,
+          "metadataStatus": "confirmed-by-metadata",
+          "availability": "confirmed",
+          "eligibleForLaunch": true,
+          "status": 200,
+          "ok": true
+        },
+        "nano-banana-3": {
+          "providerModelId": "nano-banana-3",
+          "family": "nano-banana-3",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'nano-banana-3' does not exist"
+        }
+      }
+    }
+  },
+  "confirmedTargetModels": [
+    "nano-banana-3"
+  ],
+  "listedTargetModels": [
+    "gpt-image-2",
+    "nano-banana-3"
+  ],
+  "inconclusiveTargetModels": [
+    "gpt-image-2"
+  ],
+  "notListedTargetModels": [
+    "gpt-image-2.5",
+    "gpt-image-2.5-sunburst",
+    "gpt-image-2.5-flare"
+  ]
+}

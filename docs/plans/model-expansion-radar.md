@@ -12,7 +12,7 @@ v0.3.1 does not add large provider-native adapters. It freezes capability contra
 | --- | --- | --- | --- |
 | GPT Image 2 | `openai-image` | `verified` | image generate/edit/inpaint/reference/streaming |
 | Nano Banana 3 / Gemini image | `gemini-generate-content` | `verified` | image generate/edit/reference/outputText |
-| General fallback | compatible or Gemini content route | `assumed` / `discovered` | prompt-only generation for agents |
+| General fallback | compatible or Gemini content route | `assumed` / `discovered` | prompt-only today; v0.3.5 targets capability-gated reference edit |
 
 ## Confidence
 
@@ -26,7 +26,7 @@ v0.3.1 does not add large provider-native adapters. It freezes capability contra
 - Callable `mediaKinds` and `outputAssetKinds` are `["image"]`.
 - `animatedGif` and `video` are false/non-callable.
 - Discovered FLUX, SDXL, Recraft, Imagen, Seedream, Qwen, Ideogram, or similar names do not imply edit/reference/inpaint.
-- OpenAI-compatible General fallback uses minimal prompt-only generation.
+- OpenAI-compatible General fallback uses minimal prompt-only generation today; v0.3.5 targets capability-gated image-to-image (reference edit) behind an explicit route check.
 - Models requiring public URL input must set `requiresPublicUrl: true`.
 - v0.3.2 is reserved for image task reliability and visibility; model expansion must not become its release promise.
 - A later model-expansion slice may pick one high-value target only after the image queue UI, route diagnostics, and provider timeout behavior are stable.

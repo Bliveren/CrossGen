@@ -5,9 +5,9 @@ import packageJson from "../../package.json";
 import updateManifest from "../../docs/updates/latest.json";
 
 describe("package release configuration", () => {
-  it("stages the v0.3.4 release metadata", () => {
+  it("stages the v0.3.5 release metadata", () => {
     expect(packageJson.name).toBe("crossgen");
-    expect(packageJson.version).toBe("0.3.4");
+    expect(packageJson.version).toBe("0.3.5");
     expect(packageJson.description).toContain("One-stop AI image generation manager");
     expect(packageJson.description).toContain("API access");
     expect(packageJson.description).toContain("Gallery/history reuse");
@@ -26,7 +26,7 @@ describe("package release configuration", () => {
   });
 
   it("keeps a published update manifest with verifiable size and sha256", () => {
-    // The manifest describes the latest approved assets until the 0.3.2
+    // The manifest describes the latest approved assets until the v0.3.5
     // release is product-tested and promoted. Validate shape, not version equality.
     expect(typeof updateManifest.version).toBe("string");
     expect(updateManifest.version.length).toBeGreaterThan(0);

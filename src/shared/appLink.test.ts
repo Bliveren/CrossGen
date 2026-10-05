@@ -72,6 +72,22 @@ describe("CrossGen AppLink", () => {
     expect(result.defaultModel).toBe("gpt-image-2");
   });
 
+  it("keeps GPT Image 2 and 2.5 distinct during AppLink inference", () => {
+    const image2 = parseAppLink(
+      "crossgen://provider/import?kind=openai&base_url=https%3A%2F%2Fgateway.example%2Fv1&api_key=sk-another-long-key&model=gpt-image-2"
+    );
+    const image25 = parseAppLink(
+      "crossgen://provider/import?kind=openai&base_url=https%3A%2F%2Fgateway.example%2Fv1&api_key=sk-another-long-key&model=gpt-image-2.5"
+    );
+    const customAlias = parseAppLink(
+      "crossgen://provider/import?kind=custom&base_url=https%3A%2F%2Fgateway.example%2Fv1&api_key=sk-another-long-key&model=gpt-image-2.5"
+    );
+
+    expect(image2.activeLaunchId).toBe("gpt-image-2");
+    expect(image25.activeLaunchId).toBe("gpt-image-2.5");
+    expect(customAlias.activeLaunchId).toBe("general");
+  });
+
   it("canonicalizes legacy Nano Banana AppLink aliases to the real Gemini model id", () => {
     const result = parseAppLink(
       "crossgen://provider/import?kind=gemini&base_url=https%3A%2F%2Fgateway.example%2Fv1beta&api_key=gemini-long-key&model=nano-banana-3"

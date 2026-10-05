@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, Info, KeyRound, LibraryBig, Loader2, Plus, Radar, Save, Wrench, X } from "lucide-react";
-import type { FocusedLaunchId, ProviderConfig, ProviderKind } from "../shared/types";
+import type {
+  FocusedLaunchId,
+  ModelDiscoveryAvailability,
+  ModelDiscoverySource,
+  ProviderConfig,
+  ProviderKind
+} from "../shared/types";
+import {
+  hasCompletedModelDiscovery,
+  isPersistedDiscoveryEvidence,
+  normalizeProviderModelId
+} from "../shared/modelCatalog";
 import { DialogShell } from "./DialogShell";
 import type { UiCopy } from "./i18n";
 
@@ -13,6 +24,10 @@ interface LaunchModelOption {
   displayName: string;
   launchId: FocusedLaunchId;
   launchLabel: string;
+  available: boolean;
+  discoverySource?: ModelDiscoverySource;
+  availability?: ModelDiscoveryAvailability;
+  unavailableReason?: string;
 }
 
 interface ProviderSummarySectionProps {
@@ -37,7 +52,6 @@ interface LaunchSectionProps {
 
 interface ApiConfigCardProps {
   copy: UiCopy;
-  config: ProviderConfig;
   active: boolean;
   selected: boolean;
   promoted: boolean;
@@ -75,16 +89,30 @@ export function LaunchSection({
   saving,
   onLaunch
 }: LaunchSectionProps) {
-  const activeModel = modelOptions.find((model) => model.id === activeConfig.activeModelId) ?? modelOptions[0];
-  const [selectedModelKey, setSelectedModelKey] = useState(activeModel ? `${activeModel.providerKind}:${activeModel.id}` : "");
+  const modelSelectionKey = (model: Pick<LaunchModelOption, "providerKind" | "id">) =>
+    `${model.providerKind}:${normalizeProviderModelId(model.providerKind, model.id)}`;
+  const activeModel = modelOptions.find((model) =>
+    normalizeProviderModelId(model.providerKind, model.id) ===
+      normalizeProviderModelId(model.providerKind, activeConfig.activeModelId) &&
+      model.launchId === activeConfig.activeLaunchId
+  ) ?? modelOptions.find((model) => model.launchId === activeConfig.activeLaunchId)
+    ?? modelOptions.find((model) => model.available)
+    ?? modelOptions[0];
+  const [selectedModelKey, setSelectedModelKey] = useState(activeModel ? modelSelectionKey(activeModel) : "");
   const [menuOpen, setMenuOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const nextActive = modelOptions.find((model) => model.id === activeConfig.activeModelId) ?? modelOptions[0];
-    setSelectedModelKey(nextActive ? `${nextActive.providerKind}:${nextActive.id}` : "");
-  }, [activeConfig.activeModelId, activeConfig.kind, modelOptions]);
+    const nextActive = modelOptions.find((model) =>
+      normalizeProviderModelId(model.providerKind, model.id) ===
+        normalizeProviderModelId(model.providerKind, activeConfig.activeModelId) &&
+        model.launchId === activeConfig.activeLaunchId
+    ) ?? modelOptions.find((model) => model.launchId === activeConfig.activeLaunchId)
+      ?? modelOptions.find((model) => model.available)
+      ?? modelOptions[0];
+    setSelectedModelKey(nextActive ? modelSelectionKey(nextActive) : "");
+  }, [activeConfig.activeLaunchId, activeConfig.activeModelId, activeConfig.kind, modelOptions]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -106,21 +134,28 @@ export function LaunchSection({
     };
   }, [menuOpen]);
 
-  const selectedModel = modelOptions.find((model) => `${model.providerKind}:${model.id}` === selectedModelKey) ?? activeModel;
+  const selectedModel = modelOptions.find((model) => modelSelectionKey(model) === selectedModelKey) ?? activeModel;
   const selectedLaunchLabel = selectedModel ? selectedModel.launchLabel.toLowerCase() : modelSelectionReason;
   const handleModelChange = (event: ChangeEvent<HTMLSelectElement>) => {
     setSelectedModelKey(event.target.value);
   };
 
   const selectModel = (model: LaunchModelOption) => {
-    setSelectedModelKey(`${model.providerKind}:${model.id}`);
+    setSelectedModelKey(modelSelectionKey(model));
+    if (!model.available) return;
     setMenuOpen(false);
     onLaunch(model);
   };
 
   const triggerSelection = () => {
     if (!selectedModel) return;
-    const isPendingSelection = selectedModel.id !== activeConfig.activeModelId;
+    if (!selectedModel.available) {
+      setMenuOpen((current) => !current);
+      return;
+    }
+    const isPendingSelection = !activeModel ||
+      modelSelectionKey(selectedModel) !== modelSelectionKey(activeModel) ||
+      selectedModel.providerKind !== activeModel.providerKind;
     if (isPendingSelection) {
       onLaunch(selectedModel);
       return;
@@ -138,7 +173,7 @@ export function LaunchSection({
               <option value="">{modelSelectionReason}</option>
             ) : (
               modelOptions.map((model) => (
-                <option key={`${model.providerKind}:${model.id}`} value={`${model.providerKind}:${model.id}`}>
+                <option key={modelSelectionKey(model)} value={modelSelectionKey(model)} disabled={!model.available}>
                   {model.launchLabel} · {model.displayName}
                 </option>
               ))
@@ -148,12 +183,13 @@ export function LaunchSection({
         <button
           ref={triggerRef}
           type="button"
-          className={`launch-button launch-model-trigger ${menuOpen ? "active" : ""}`}
+          className={`launch-button launch-model-trigger ${menuOpen ? "active" : ""} ${selectedModel?.available === false ? "unavailable" : ""}`}
           onClick={triggerSelection}
-          disabled={!selectedModel || saving}
+          disabled={!selectedModel || saving || modelOptions.length === 0}
           aria-expanded={menuOpen}
           aria-haspopup="listbox"
           aria-label={`${copy.launchModels}: ${selectedModel?.displayName ?? modelSelectionReason}`}
+          title={selectedModel?.available ? undefined : selectedModel?.unavailableReason ?? modelSelectionReason}
         >
           <span className="launch-model-hover-label">{copy.selectModel}</span>
           <span className="launch-model-name">{selectedLaunchLabel}</span>
@@ -165,18 +201,29 @@ export function LaunchSection({
         {menuOpen && (
           <div className="launch-model-menu" role="listbox" aria-label={copy.selectModel}>
             {modelOptions.map((model) => {
-              const selected = selectedModel?.id === model.id && selectedModel.providerKind === model.providerKind;
+              const selected = selectedModel ? modelSelectionKey(selectedModel) === modelSelectionKey(model) : false;
               return (
                 <button
                   type="button"
                   role="option"
                   aria-selected={selected}
-                  className={`launch-model-option ${selected ? "selected" : ""}`}
-                  key={`${model.providerKind}:${model.id}`}
+                  aria-disabled={!model.available}
+                  className={`launch-model-option ${selected ? "selected" : ""} ${model.available ? "" : "unavailable"}`}
+                  key={modelSelectionKey(model)}
                   onClick={() => selectModel(model)}
+                  disabled={!model.available}
                 >
                   <strong>{model.launchLabel}</strong>
-                  <small>{model.displayName}</small>
+                  <small>
+                    {model.displayName}
+                    {model.discoverySource
+                      ? ` · ${copy.discoveredModelSource(model.discoverySource)}`
+                      : ""}
+                    {model.availability && model.availability !== "confirmed"
+                      ? ` · ${copy.discoveredModelAvailability(model.availability)}`
+                      : ""}
+                    {!model.available ? ` · ${model.unavailableReason ?? modelSelectionReason}` : ""}
+                  </small>
                 </button>
               );
             })}
@@ -392,7 +439,6 @@ export function ApiConfigDialog({
     <ApiConfigCard
       key={config.id}
       copy={copy}
-      config={config}
       active={active}
       selected={!addFormOpen && config.id === selectedConfig.id}
       promoted={promotedApiConfigId === config.id}
@@ -750,9 +796,9 @@ export function ApiConfigDetail({
         <p className="api-model-summary" data-kind={modelSummaryKind} title={modelTooltip}>
           {modelSummary}
         </p>
-        {selectedConfig.discoveredModels.length > 0 ? (
+        {hasCompletedModelDiscovery(selectedConfig) ? (
           <div className="api-model-list">
-            {selectedConfig.discoveredModels.map((model) => (
+            {selectedConfig.discoveredModels.filter(isPersistedDiscoveryEvidence).map((model) => (
               <span key={`${model.providerKind}:${model.id}`} title={modelLabel(model)}>
                 {modelLabel(model)}
               </span>
@@ -766,7 +812,6 @@ export function ApiConfigDetail({
 
 export function ApiConfigCard({
   copy,
-  config,
   active,
   selected,
   promoted,

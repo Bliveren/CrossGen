@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>Download v0.3.4</b></a> ·
+  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>Download v0.3.4 (latest release)</b></a> ·
   <a href="#applink-api-configuration"><b>AppLink</b></a> ·
   <a href="#crossgen-artist-skill"><b>CrossGen Artist Skill</b></a> ·
   <a href="#agent-quickstart"><b>Agent Quickstart</b></a> ·
@@ -36,8 +36,8 @@
 </p>
 
 <p align="center">
-  <a href="#why-crossgen-034">Why 0.3.4</a> ·
-  <a href="#gpt-image-25">GPT Image 2.5</a> ·
+  <a href="#why-crossgen-035">Why 0.3.5 (in development)</a> ·
+  <a href="#gpt-image-2-and-25">GPT Image 2 and 2.5</a> ·
   <a href="#visual-tour">Visual Tour</a> ·
   <a href="#core-workflows">Core Workflows</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -45,9 +45,9 @@
   <a href="#technical-notes">Technical Notes</a>
 </p>
 
-## Why CrossGen 0.3.4
+## Why CrossGen 0.3.5 (In Development)
 
-CrossGen 0.3.4 adds GPT Image 2.5 support, a media-aware foundation, and a confirmed AppLink import flow on top of the reliable 0.3.3 image workspace. The visual app, CLI, and MCP share the same queue, provider diagnostics, reference-image handling, History, Gallery, and media metadata contracts, while the bundled crossgen-artist skill keeps Codex and other agents on the same path.
+CrossGen 0.3.4 is **released**: it adds GPT Image 2.5 launch support, a media-aware foundation, and a confirmed AppLink import flow on top of the reliable 0.3.3 image workspace. v0.3.5 is **in development** and consolidates every feature and fix merged after that release: the GPT Image 2.5 Sketch input workspace and Input Studio integration, the strict model-discovery evidence contract (GPT Image 2 and 2.5 separated by exact provider model ID), the canonical Gemini image-model contract, capability-gated General image-to-image support, and the planned video technology preview. The visual app, CLI, and MCP keep sharing the same queue, provider diagnostics, reference-image handling, History, Gallery, and media metadata contracts, and the bundled crossgen-artist skill stays on the same path. **v0.3.5 is not released yet; the download link still points at v0.3.4.**
 
 The desktop app, CLI, and MCP server share the same API profiles, durable generation queue, History, and Gallery. The bundled skill stays aligned with that contract. Install CrossGen once; installed CLI and MCP use require no separate Node.js, npm, pnpm, global package, or local HTTP service.
 
@@ -79,7 +79,7 @@ Start with `readonly`, then enable `write` or `generate` only when the agent nee
 
 ### CrossGen Artist Skill
 
-CrossGen ships a first-class, media-aware agent workflow skill at [`skills/crossgen-artist`](./skills/crossgen-artist/). It is the recommended entry point for Codex and other compatible agents that need to discover model capabilities, choose generation/edit/inpaint operations, submit idempotent queue jobs, poll completion, inspect image/GIF/video metadata, and export results without exposing API keys or local paths by accident. v0.3.4 still does not expose real video generation or video editing.
+CrossGen ships a first-class, media-aware agent workflow skill at [`skills/crossgen-artist`](./skills/crossgen-artist/). It is the recommended entry point for Codex and other compatible agents that need to discover model capabilities, choose generation/edit/inpaint operations, submit idempotent queue jobs, poll completion, inspect image/GIF/video metadata, and export results without exposing API keys or local paths by accident. The released v0.3.4 still does not expose real video generation or video editing; the planned v0.3.5 video technology preview does not promise a full video product either.
 
 Install it for Codex from a CrossGen checkout:
 
@@ -94,7 +94,7 @@ The desktop **Agent access** panel remains the source of truth for MCP setup. Co
 
 ### AppLink API Configuration
 
-CrossGen 0.3.4 adds a `crossgen://` AppLink for API aggregation platforms. An aggregator can open a provider import link and hand CrossGen its API name, Base URL, API Key, and optional model in one step. CrossGen shows a confirmation dialog before saving anything; after receiving the link, it stores the key with the existing local key protection and does not write it to logs or render it in full.
+CrossGen 0.3.4 ships a `crossgen://` AppLink for API aggregation platforms. An aggregator can open a provider import link and hand CrossGen its API name, Base URL, API Key, and optional model in one step. CrossGen shows a confirmation dialog before saving anything; after receiving the link, it stores the key with the existing local key protection and does not write it to logs or render it in full.
 
 Canonical form:
 
@@ -102,7 +102,7 @@ Canonical form:
 crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
 ```
 
-Accepted aliases include `apiKey`/`api_key`, `baseURL`/`base_url`, `defaultModel`/`default_model`, and `provider`/`kind`. Supported launch targets are `gpt-image-2`, `gpt-image-2.5`, `nano-banana-3`, and `general`; when omitted, CrossGen infers the focused launch from provider kind and model name. `nano-banana-3` is a CrossGen launch/workflow alias, not a Gemini wire model id: pass a discovered provider id such as `gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image`, or `gemini-3-pro-image` when selecting a specific Gemini model. Packaged builds register the `crossgen` scheme on macOS, Windows, and Linux.
+Accepted aliases include `apiKey`/`api_key`, `baseURL`/`base_url`, `defaultModel`/`default_model`, and `provider`/`kind`. Supported launch targets are `gpt-image-2`, `gpt-image-2.5`, `nano-banana-3`, and `general`; an AppLink model hint only seeds the initial config. After import, the latest successful discovery for that API Key is authoritative, and a launch is enabled only when the exact provider model ID is returned. `nano-banana-3` is a CrossGen launch/workflow alias, not a Gemini wire model id: pass a discovered provider id such as `gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image`, or `gemini-3-pro-image` when selecting a specific Gemini model. Packaged builds register the `crossgen` scheme on macOS, Windows, and Linux.
 
 > Using CrossGen in a real desktop, CLI, or agent workflow? [Star the repository](https://github.com/Bliveren/CrossGen) so other local-first image-tool users can find it, and share the workflow in [Discord](https://discord.gg/XphwmYtY).
 
@@ -117,14 +117,112 @@ It is built for real image-generation work, not just one-off prompting. Designer
 
 CrossGen keeps that whole loop inside one app. No repeated file hunting, no scattered browser downloads, no separate folder cleanup before the next image-to-image attempt.
 
-## GPT Image 2.5
+## GPT Image 2 and 2.5
 
-CrossGen v0.3.4 supports the current GPT Image 2.5 family:
+CrossGen v0.3.5 (in development) keeps GPT Image 2 and GPT Image 2.5 as separate launch
+families. A familiar model name is never treated as proof that the current API
+Key can use it:
 
-- `gpt-image-2.5-sunburst` for precise edits, structure preservation, and high-fidelity reference work.
-- `gpt-image-2.5-flare` for fast, high-quality everyday generation.
-- Dated Sunburst/Flare snapshots are discovered automatically when the provider
-  exposes them.
+- `gpt-image-2` is the GPT Image 2 launch target.
+- `gpt-image-2.5` is the CrossGen launch/AppLink compatibility alias. It is
+  not a provider capability claim and is never injected as discovery evidence.
+- `gpt-image-2.5-sunburst` and `gpt-image-2.5-flare` are concrete GPT Image
+  2.5 provider targets; valid dated variants are accepted only when returned
+  by the provider.
+- `gpt-image-2.5-sunburst` is intended for precise edits, structure
+  preservation, and high-fidelity reference work.
+- `gpt-image-2.5-flare` is intended for fast, high-quality everyday generation.
+- Valid dated base, Sunburst, and Flare snapshots are accepted when the
+  provider exposes them.
+
+The latest successful model discovery for the selected API Key is the
+availability source of truth. CrossGen enables a GPT Image 2 or 2.5 launch only
+after the exact provider model ID is confirmed by a lightweight image route.
+Provider-listed rows may use a non-empty 2xx image response as confirmation even
+when the optional metadata route is unavailable. If a gateway omits image
+deployments from `/models`, CrossGen may try a small set of product-owned route
+candidates; those candidates are launchable only when the successful payload
+echoes the exact model ID (or exact metadata identity is paired with a
+reachable validation route), and the UI labels them as route-confirmed rather
+than provider-listed. Empty success envelopes such as `{ data: [] }`,
+`{ output: [] }`, or `{ choices: [] }` only prove route reachability and cannot
+enable a speculative candidate. A validation-only 400/422 is accepted only
+when the metadata endpoint also echoed the same ID, so discovery does not need
+to start a paid image generation. A different echoed ID is rejected, and a
+response without an exact ID echo remains inconclusive for route candidates. A
+row that is merely listed remains visible but disabled; `model_not_found` from
+the metadata endpoint alone is `inconclusive`, while `model_not_found` from
+every exact image route is `rejected`. A missing metadata route or transport
+failure is also `inconclusive`. Explicit
+`image_generation=false`, text-only, audio-only, or video-only declarations also
+veto a launch. If
+discovery returns only `gpt-image-2`, CrossGen shows only GPT Image 2; it does not
+silently add GPT Image 2.5. If it returns only a 2.5 ID, CrossGen shows only GPT
+Image 2.5. Replacing the API Key clears the previous discovery result before the
+new probe completes. A failed or stale probe also clears the active model and
+route until a later successful probe confirms a new exact model ID.
+
+For focused launches, CrossGen derives the family and variant label from the
+exact provider model ID. A gateway-supplied `displayName` is advisory, so it
+cannot relabel `gpt-image-2` as GPT Image 2.5 (or the reverse). The same rule
+applies to concrete 2.5 provider IDs and valid dated snapshots: when the
+provider returns one, CrossGen keeps that exact ID for routing and shows it
+alongside the friendly launch label. The bare `gpt-image-2.5` value remains a
+compatibility alias for imported links and older drafts; it does not enable the
+2.5 launch. For
+OpenAI-compatible metadata, `name` is treated the same way: it may be a product
+label, so only `id`, `model`, `model_id`, or `modelId` can confirm an exact GPT
+Image deployment. Native Gemini metadata still uses `name: models/<id>` as its
+canonical resource ID. When discovery promotes the active model, the desktop
+editor parameters are synchronized to that confirmed model before the next run.
+GPT Image 2.5 base, Sunburst, and Flare probes are aggregated independently; a
+confirmed variant never enables a different variant.
+
+Cross-protocol discovery gives the configured transport precedence. When the
+primary protocol returns at least one runnable image model, its catalogue alone
+drives the model picker; results from the alternate protocol are not merged.
+The alternate protocol is used only when the primary response has no runnable
+image model, and the inferred provider kind is recorded for routing. This keeps
+protocol-incompatible or error-shaped gateway responses from enabling the wrong
+focused launch.
+
+OpenAI route evidence is bound to the exact provider model ID that was probed.
+Switching between `gpt-image-2`, `gpt-image-2.5`, or a dated 2.5 variant clears
+the old route evidence until the newly selected model is probed. The
+read-only `pnpm probe:real-aihub-models` command checks GPT Image 2 and
+GPT Image 2.5 family IDs independently. It also resolves the product launch
+alias `nano-banana-3` to the actual Gemini provider IDs
+`gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image`, and
+`gemini-3-pro-image`; it never treats the alias itself as a required Gemini
+wire model. A gateway that lists a model but returns an explicit
+`model_not_found` for `/models/{id}` is reported as `inconclusive` until an
+exact image route confirms or rejects the same provider ID. Only when every
+probed image route explicitly rejects that exact ID is the result `rejected`;
+a generic missing metadata endpoint or transport failure remains
+`inconclusive`. Neither state is presented as a launchable model.
+
+The probe JSON keeps the evidence explicit: `family` is derived from the exact
+provider ID, `exactIdMatch` means that ID appeared in `/models`,
+`metadataStatus` describes the per-model endpoint, and only
+`availability: "confirmed"` with `eligibleForLaunch: true` is launchable.
+Metadata-only responses, ordinary HTTP failures, missing metadata routes, and
+metadata-only `model_not_found` responses are `inconclusive`; metadata that
+echoes a different model ID is `rejected`, and an explicit `model_not_found`
+from every exact image route is `rejected`. Only
+`confirmed` rows create an enabled model option. The legacy
+`availableImageModels` field is retained for readers of older evidence and
+means “image-looking IDs listed by `/models`”, not confirmed API-key access.
+For new consumers, use `confirmedImageModels` or `launchableImageModels` for
+the exact provider IDs that passed the read-only confirmation, and
+`launchableTargetModels` for CrossGen launch aliases. The provider-id arrays
+never contain the `nano-banana-3` workflow alias; a Gemini request must use the
+confirmed `gemini-*` ID. `confirmedTargetModels` remains as a compatibility
+alias for `launchableTargetModels`.
+For a launch represented by several provider IDs, `matchedProviderModelIds`
+shows the exact IDs returned by `/models`, and `providerProbes` preserves each
+metadata result. This command is read-only and does not replace the desktop
+runtime's exact-ID and route checks; it intentionally reports metadata
+uncertainty conservatively.
 
 The desktop, CLI, and MCP surfaces expose the same controls: `auto`, `low`,
 `medium`, `high`, `xhigh`, and `max` quality; custom 16-multiple dimensions up
@@ -166,7 +264,7 @@ For agent-driven work, the loop becomes equally direct:
 4. inspect the resulting Gallery asset,
 5. export it into the agent's current project.
 
-## Gemini Image Models and Sketch
+## Gemini Image Models and Sketch (0.3.5 In Development)
 
 CrossGen keeps the product launch name **Nano Banana 3** while preserving the
 actual Gemini model id used by the provider. The current focused Gemini image
@@ -177,12 +275,17 @@ ids are:
 - `gemini-3-pro-image` — a distinct discovered Gemini image model.
 
 The desktop launch menu, History, CLI, and MCP retain the real provider id for
-selection and traceability. Older drafts and AppLinks containing
-`nano-banana-3` are migrated to `gemini-3.1-flash-image`; CrossGen never sends
-the alias as the Gemini request model. The current API key's model-discovery
-response is authoritative: a model that is not discovered, or whose capability
-metadata does not confirm image editing and reference images, remains disabled
-for Sketch and is blocked before a paid request.
+selection and traceability. For OpenAI-compatible gateways, that returned
+`id` is the only family-classification source of truth; `display_name` is
+advisory. A row such as `id: gpt-image-2.5, display_name: GPT Image 2` remains
+a disabled compatibility row and does not prove GPT Image 2.5 support. Explicit text-only, audio-only, video-only,
+or `image_generation=false` metadata can veto an image-looking id. Older
+drafts and AppLinks containing `nano-banana-3` are migrated to
+`gemini-3.1-flash-image`; CrossGen never sends the alias as the Gemini request
+model. The current API key's model-discovery response is authoritative: a
+model that is not discovered, or whose capability metadata does not confirm
+image editing and reference images, remains disabled for Sketch and is blocked
+before a paid request.
 
 Sketch is an image-to-image input workflow inside the existing desktop workspace,
 not a third top-level mode. The user creates or reopens a Sketch in the
@@ -194,9 +297,11 @@ does not invent or send a provider-native `scratch` field, and Sketch cannot be
 combined with a mask.
 
 The code and deterministic/mocked contracts for GPT Image 2.5 and the Gemini
-focused launches are present in v0.3.4. The final release gate still requires a
+focused launches are present in v0.3.5. The final release gate still requires a
 real AIHub GPT Image 2.5/Nano Banana 3 quality, latency, failure-recovery, and
-privacy matrix; mock or compatibility-model responses do not replace that gate.
+privacy matrix; the presence of Gemini provider IDs confirms the Nano Banana
+launch mapping but does not replace real workflow acceptance. Mock or
+compatibility-model responses do not replace that gate.
 
 ## Visual Tour
 
@@ -284,7 +389,7 @@ This makes CrossGen useful for iterative visual work: generate a base image, cro
 
 ## Agent Runtime
 
-CrossGen 0.3.4 exposes the local image runtime through structured JSON CLI commands and an MCP stdio server. The same queue, diagnostics, and Gallery rules protect desktop, CLI, and MCP workflows:
+CrossGen exposes the local image runtime through structured JSON CLI commands and an MCP stdio server. The same queue, diagnostics, and Gallery rules protect desktop, CLI, and MCP workflows:
 
 - `crossgen doctor --agent --json` reports the app path, data directory, provider readiness, queue configuration, and MCP launch hints.
 - `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` prints client-ready MCP configuration.

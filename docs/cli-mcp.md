@@ -2,16 +2,49 @@
 
 CrossGen exposes the same local app state to terminal workflows and MCP hosts. The CLI defaults to read-only inspection unless a command asks for explicit confirmation with `--yes`.
 
-## GPT Image 2.5
+## GPT Image 2 and 2.5
 
-CrossGen v0.3.4 exposes `gpt-image-2.5-sunburst` and
-`gpt-image-2.5-flare`, including dated model snapshots returned by provider
-discovery. Sunburst is the preferred choice for precise editing and structure
-preservation; Flare is the preferred choice for fast, high-quality everyday
-generation.
+CrossGen v0.3.5 keeps `gpt-image-2` separate from the GPT Image 2.5 family:
+`gpt-image-2.5-sunburst`, `gpt-image-2.5-flare`, and dated
+Sunburst/Flare/base snapshots returned by provider discovery. The bare
+`gpt-image-2.5` value is a CrossGen launch/AppLink compatibility alias, not a
+provider capability claim. Sunburst is intended
+for precise editing and structure preservation; Flare is intended for fast,
+high-quality everyday generation.
+
+CLI and MCP use the latest successful discovery for the selected API Key as
+the availability source of truth. They enable only exact model IDs whose
+lightweight image route confirms. A non-empty 2xx image response is strong
+evidence for a provider-listed row even when the optional metadata route is
+unavailable. When a gateway omits image deployments from `/models`, CrossGen
+may try a small product-owned route candidate, but it must echo the exact model
+ID (or pair exact metadata identity with a reachable validation route); the
+result is labelled route-confirmed rather than provider-listed. Empty success
+envelopes such as `{ data: [] }`, `{ output: [] }`, or `{ choices: [] }` only
+prove route reachability and cannot enable a speculative candidate. A
+validation-only 400/422 is accepted only when the metadata endpoint also echoed
+the same ID, so discovery does not start a paid generation. IDs that are merely
+listed remain visible as disabled evidence. A `model_not_found` from the metadata endpoint alone is
+`inconclusive`; only when every exact image route rejects the same provider ID
+is it `rejected`. A missing metadata route or transport failure is also
+`inconclusive`. They never add GPT Image
+2.5 just because GPT Image 2 was returned (or vice versa). Explicit `image_generation=false`, text-only,
+audio-only, or video-only capability declarations override a familiar
+image-model name;
+`video_generation=false` alone does not hide an image model. Replacing an API
+Key invalidates the previous discovery result until the new probe succeeds;
+failed or stale probes also clear the active model.
+
+Focused model family and variant labels are derived from the exact discovered
+ID; provider `displayName` values are never trusted to distinguish GPT Image 2
+from GPT Image 2.5. When a provider returns a concrete or valid dated 2.5 ID,
+CLI/MCP preserve that exact wire ID instead of silently replacing it with
+Sunburst. The desktop editor applies the same confirmed selection
+after discovery, so CLI/MCP and desktop do not silently drift to different
+models.
 
 The OpenAI image options below are available to both CLI and MCP when the
-discovered model advertises GPT Image 2.5:
+confirmed model is an exact GPT Image 2.5 provider ID:
 
 ```bash
 crossgen generate \
@@ -50,7 +83,7 @@ Responses uses the mainline model in `--responses-model` at the top level and
 the GPT Image 2.5 model in the `image_generation` tool. CrossGen stores the
 returned response ID and revised prompt in job metadata so the next edit can
 continue from the latest result. Local Responses inputs use base64 data URLs;
-v0.3.4 does not upload or persist OpenAI Files API IDs.
+CrossGen does not upload or persist OpenAI Files API IDs.
 
 `--user` is an optional stable, privacy-preserving end-user safety identifier.
 Images API requests send it as `user`; Responses requests send it as
@@ -89,7 +122,7 @@ reference-image capability for the selected model; unknown or unsupported
 models are blocked before a paid call. CrossGen does not send an unverified
 provider-native `scratch` field, and Sketch input cannot be combined with a mask.
 
-The v0.3.4 implementation and mock contracts cover these routes, but the final
+The v0.3.5 implementation and mock contracts cover these routes, but the final
 release gate still requires a real AIHub GPT Image 2.5/Nano Banana 3 matrix.
 Mock responses and a compatible fallback model are not evidence of target-model
 quality or availability.
@@ -186,6 +219,20 @@ crossgen config status --json
 crossgen provider list --json
 crossgen models list --json
 ```
+
+`provider list`、`config status` 和 `models list` 返回的 provider 摘要会保留
+原有的 `discoveredModelCount`，并增加 `discoveredModelInventory`：
+
+- `total`：本次成功探测返回的模型总数；
+- `image`：通过图片输出能力分类、可进入 CrossGen 图片运行时的模型数；
+- `video`、`unknown`：视频模型和无法确认图片/视频输出的模型数；
+- `gptImage2`、`gptImage25`、`otherImage`：按精确 provider model ID
+  分类的图片模型列表。
+
+`display_name` 只用于展示，不能把 `gpt-image-2` 改标成
+`gpt-image-2.5`，也不能反过来。桌面启动模型菜单、CLI 和 MCP 共用这套
+分类；没有出现在最近一次成功探测结果中的模型不会被当作当前 API Key
+可用模型。
 
 `doctor --agent` reports readiness without disclosing saved API keys. Its
 machine-readable `data` includes:
@@ -343,7 +390,7 @@ the repository app path before `--mcp`; this keeps copied MCP configuration
 usable with the Electron development runtime. Packaged installs use the
 launcher form: `<resources>/cli/crossgen --mcp`.
 
-In v0.3.4, read-only history/Gallery results may report `kind`, dimensions,
+Read-only history/Gallery results may report `kind`, dimensions,
 size, duration, fps, frame count, and poster availability without returning
 local absolute paths. GIF/video assets remain read/preview/export subjects, not
 image editing or generation inputs.

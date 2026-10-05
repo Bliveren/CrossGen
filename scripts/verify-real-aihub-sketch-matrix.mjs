@@ -59,7 +59,6 @@ const outputRoot = path.resolve(
 );
 
 const gptTargetIds = [
-  "gpt-image-2.5",
   "gpt-image-2.5-sunburst",
   "gpt-image-2.5-flare"
 ];
@@ -474,6 +473,17 @@ async function runOperationWithRetry(options) {
 }
 
 function targetAvailability(models) {
+  if (gptModel === "gpt-image-2.5") {
+    throw new Error(
+      "CROSSGEN_REAL_AIHUB_GPT_SKETCH_MODEL=gpt-image-2.5 is a CrossGen compatibility alias, not a real provider model id. Use gpt-image-2.5-sunburst, gpt-image-2.5-flare, or a valid dated snapshot."
+    );
+  }
+  const listedNanoProviderModelIds = nanoProviderModelIds.filter((id) => models.includes(id));
+  const requestedNanoModel = nanoModel === nanoAliasId
+    ? listedNanoProviderModelIds[0] ?? nanoAliasId
+    : nanoModel;
+  const nanoProviderModelListed = requestedNanoModel !== nanoAliasId &&
+    models.includes(requestedNanoModel);
   return {
     gpt: {
       workflow: "gpt-image-2.5-sketch",
@@ -483,14 +493,16 @@ function targetAvailability(models) {
     },
     nano: {
       workflow: "nano-banana-3-sketch",
-      requested: nanoModel,
-      listed: models.includes(nanoModel),
+      requested: requestedNanoModel,
+      listed: nanoProviderModelListed,
       directAliasListed: models.includes(nanoAliasId),
-      providerModelIdsListed: nanoProviderModelIds.filter((id) => models.includes(id)),
+      providerModelIdsListed: listedNanoProviderModelIds,
       targetIdsListed: nanoTargetIds.filter((id) => models.includes(id)),
-      evidenceClass: nanoModel === nanoAliasId ? "direct-target-model" : "explicit-provider-model-for-nano-workflow",
-      caveat: nanoModel === nanoAliasId
-        ? null
+      evidenceClass: requestedNanoModel === nanoAliasId
+        ? "direct-target-model-unavailable"
+        : "explicit-provider-model-for-nano-workflow",
+      caveat: requestedNanoModel === nanoAliasId
+        ? "CrossGen requires a real Gemini provider model id for Nano Banana 3; the workflow alias nano-banana-3 is never sent as the wire model."
         : "This run verifies CrossGen's Nano Banana 3 workflow using the explicitly configured Gemini provider model. It does not prove that AIHub exposes a model literally named nano-banana-3."
     }
   };
@@ -514,7 +526,13 @@ async function main() {
     route: "POST /chat/completions",
     requestCount: 0,
     costConfirmed: acceptCost,
+    listedImageModels: models.filter((id) => /image|gemini|banana/i.test(id)),
+    // Kept for older evidence readers; this is only an image-looking
+    // /models listing and does not mean that the model can be launched.
     availableImageModels: models.filter((id) => /image|gemini|banana/i.test(id)),
+    confirmedImageModels: [],
+    launchableImageModels: [],
+    launchableTargetModels: [],
     targets: availability,
     qualityReviewRequired: true,
     operations: []
@@ -576,21 +594,21 @@ async function main() {
     },
     {
       label: "nano-composition",
-      model: nanoModel,
+      model: availability.nano.requested,
       operation: "composition",
       prompt: "Complete the attached hand-drawn sketch into a polished editorial illustration. Preserve the composition, silhouette, relative placement, and perspective. Return only an image.",
       images: [sketch]
     },
     {
       label: "nano-pose",
-      model: nanoModel,
+      model: availability.nano.requested,
       operation: "pose",
       prompt: "Complete the attached hand-drawn sketch into a finished character concept. Preserve the pose, gesture line, and spatial relationships. Return only an image.",
       images: [sketch]
     },
     {
       label: "nano-reference",
-      model: nanoModel,
+      model: availability.nano.requested,
       operation: "sketch-plus-reference",
       prompt: "Complete the first attached hand-drawn sketch using the second image as a visual style and color reference. Preserve the sketch composition and pose. Return only an image.",
       images: [sketch, reference]
@@ -625,6 +643,18 @@ async function main() {
   summary.operations.push(recoveryProbe, recoveryRetry);
 
   summary.requestCount = requestCount;
+  const confirmedImageModels = [...new Set(
+    summary.operations
+      .filter((operation) => operation.result === "pass")
+      .map((operation) => operation.model)
+      .filter((model) => typeof model === "string" && model.trim())
+  )];
+  summary.confirmedImageModels = confirmedImageModels;
+  summary.launchableImageModels = confirmedImageModels;
+  summary.launchableTargetModels = [
+    confirmedImageModels.includes(gptModel) ? "gpt-image-2.5" : null,
+    confirmedImageModels.includes(availability.nano.requested) ? "nano-banana-3" : null
+  ].filter(Boolean);
   summary.status = summary.operations.every((operation) => operation.result === "pass" || operation.result === "expected-failure")
     ? "awaiting-human-quality-review"
     : "failed";

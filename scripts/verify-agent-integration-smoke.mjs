@@ -176,7 +176,7 @@ async function writeMockState(dataDir) {
       defaultQuality: "low",
       timeoutMs: 30000,
       streamingPartialsEnabled: false,
-      discoveredModels: [{ id: "gpt-image-2", providerKind: "openai" }],
+      discoveredModels: [{ id: "gpt-image-2", providerKind: "openai", availability: "confirmed" }],
       activeLaunchId: "gpt-image-2",
       activeModelId: "gpt-image-2",
       updatedAt: now,

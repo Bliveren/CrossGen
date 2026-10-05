@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载 v0.3.4</b></a> ·
+  <a href="https://github.com/Bliveren/CrossGen/releases/latest"><b>下载最新版 v0.3.4</b></a> ·
   <a href="#applink-api-配置"><b>AppLink</b></a> ·
   <a href="#crossgen-artist-skill"><b>CrossGen Artist Skill</b></a> ·
   <a href="#agent-快速开始"><b>Agent 快速开始</b></a> ·
@@ -36,7 +36,7 @@
 </p>
 
 <p align="center">
-  <a href="#为什么是-crossgen-034">0.3.4 介绍</a> ·
+  <a href="#为什么是-crossgen-035">0.3.5 开发中</a> ·
   <a href="#功能演示">功能演示</a> ·
   <a href="#核心工作流">核心工作流</a> ·
   <a href="#agent-runtime">Agent Runtime</a> ·
@@ -44,9 +44,9 @@
   <a href="#技术说明">技术说明</a>
 </p>
 
-## 为什么是 CrossGen 0.3.4
+## 为什么是 CrossGen 0.3.5（开发中）
 
-CrossGen 0.3.4 在可靠的 0.3.3 图片工作区之上增加 GPT Image 2.5 支持、媒体感知基础层和需要确认的 AppLink 导入流程。桌面端、CLI 和 MCP 共用同一套队列、接口路径诊断、参考图处理、历史、图库和媒体元数据契约，内置的 crossgen-artist skill 也围绕同一套契约工作。
+CrossGen 0.3.4 **已正式发布**：交付 GPT Image 2.5 启动支持、媒体感知基础层和需要确认的 AppLink 导入流程。v0.3.5 **正在开发中**，把 0.3.4 发版之后的所有功能与修复统一归并到本版本：GPT Image 2.5 Sketch 输入工作区与 Input Studio 融合、严格的模型发现证据契约（GPT Image 2 / 2.5 按精确 provider model ID 区分）、Gemini 图像模型契约规范化、能力门禁下的 General 图生图支持，以及后续的视频技术预览。桌面端、CLI 和 MCP 继续共用同一套队列、接口路径诊断、参考图处理、历史、图库和媒体元数据契约，内置的 crossgen-artist skill 也围绕同一套契约工作。**0.3.5 尚未发布，下载页仍指向已发布的 v0.3.4。**
 
 | 在桌面端完成可视化工作 | 让 Agent 调用同一本地运行时 |
 | --- | --- |
@@ -78,7 +78,7 @@ crossgen mcp config --client cursor --mode generate --json
 
 ### CrossGen Artist Skill
 
-CrossGen 仓库内置一套媒体感知的首选 Agent 工作流技能 [`skills/crossgen-artist`](./skills/crossgen-artist/)。它会指导 Codex 等兼容 Agent 自动发现模型能力，选择生成、编辑或局部重绘，提交带幂等键的队列任务，轮询完成状态，读取图片/GIF/视频元数据，检查图库资产，并在不意外泄露 API Key 或本地路径的前提下导出结果。0.3.4 仍不开放真实视频生成和视频编辑。
+CrossGen 仓库内置一套媒体感知的首选 Agent 工作流技能 [`skills/crossgen-artist`](./skills/crossgen-artist/)。它会指导 Codex 等兼容 Agent 自动发现模型能力，选择生成、编辑或局部重绘，提交带幂等键的队列任务，轮询完成状态，读取图片/GIF/视频元数据，检查图库资产，并在不意外泄露 API Key 或本地路径的前提下导出结果。已发布的 0.3.4 仍不开放真实视频生成和视频编辑；0.3.5 只计划视频技术预览，同样不承诺完整视频产品。
 
 从 CrossGen 源码仓库为 Codex 安装：
 
@@ -93,7 +93,7 @@ ln -sfn "$(pwd)/skills/crossgen-artist" "$HOME/.codex/skills/crossgen-artist"
 
 ### AppLink API 配置
 
-CrossGen 0.3.4 增加 `crossgen://` AppLink，供 API 聚合平台把 API 名称、Base URL、API Key 和可选模型一键交给 CrossGen。CrossGen 会先弹出确认框，确认后才新增 API 配置；收到链接后，Key 会使用现有本地加密保护保存，不会写入日志或完整显示。
+CrossGen 0.3.4 已交付 `crossgen://` AppLink，供 API 聚合平台把 API 名称、Base URL、API Key 和可选模型一键交给 CrossGen。CrossGen 会先弹出确认框，确认后才新增 API 配置；收到链接后，Key 会使用现有本地加密保护保存，不会写入日志或完整显示。
 
 标准格式：
 
@@ -101,7 +101,7 @@ CrossGen 0.3.4 增加 `crossgen://` AppLink，供 API 聚合平台把 API 名称
 crossgen://provider/import?name=AIHub&kind=custom&base_url=https%3A%2F%2Fapi.example.com%2Fv1&api_key=sk-...&model=flux-pro
 ```
 
-同时兼容 `apiKey`/`api_key`、`baseURL`/`base_url`、`defaultModel`/`default_model`、`provider`/`kind` 等常见别名。支持的启动模型为 `gpt-image-2`、`gpt-image-2.5`、`nano-banana-3` 和 `general`；未提供时会根据 provider 类型和模型名自动推断。`nano-banana-3` 只是 CrossGen 的启动/工作流别名，不是 Gemini 请求中的真实模型 ID；如果要指定具体 Gemini 模型，应使用模型探测返回的 `gemini-3.1-flash-image`、`gemini-3.1-flash-lite-image` 或 `gemini-3-pro-image`。macOS、Windows、Linux 打包版本都会注册 `crossgen` scheme。
+同时兼容 `apiKey`/`api_key`、`baseURL`/`base_url`、`defaultModel`/`default_model`、`provider`/`kind` 等常见别名。支持的启动模型为 `gpt-image-2`、`gpt-image-2.5`、`nano-banana-3` 和 `general`；AppLink 中的模型提示只用于初始化配置，导入后以该 API Key 最近一次成功探测返回的真实 provider model ID 为准，只有精确 ID 被探测到时才启用对应启动模型。`nano-banana-3` 只是 CrossGen 的启动/工作流别名，不是 Gemini 请求中的真实模型 ID；如果要指定具体 Gemini 模型，应使用模型探测返回的 `gemini-3.1-flash-image`、`gemini-3.1-flash-lite-image` 或 `gemini-3-pro-image`。macOS、Windows、Linux 打包版本都会注册 `crossgen` scheme。
 
 > 已经在桌面、CLI 或 Agent 工作流中使用 CrossGen？可以 [Star 仓库](https://github.com/Bliveren/CrossGen)，帮助更多需要本地优先图像工具的用户发现它，也欢迎在 [Discord](https://discord.gg/XphwmYtY) 分享你的真实工作流。
 
@@ -124,13 +124,92 @@ CrossGen 把这些环节放在一个桌面应用里：配置 API、自动探测�
 4. 检查生成后的图库资产；
 5. 将选中的结果导出到 Agent 当前处理的项目。
 
-## GPT Image 2.5
+## GPT Image 2 与 2.5
 
-CrossGen v0.3.4 已完整接入当前 GPT Image 2.5 系列：
+CrossGen v0.3.5（开发中）将 GPT Image 2 与 GPT Image 2.5 严格作为两个独立的
+启动模型系列处理。模型名称本身不能证明当前 API Key 具备访问权限：
 
-- `gpt-image-2.5-sunburst`：适合精确编辑、结构保持和高保真参考图工作流；
-- `gpt-image-2.5-flare`：适合快速、高质量的日常生成；
-- 如果 provider 暴露了带日期的 Sunburst/Flare snapshot，模型探测会自动识别。
+- `gpt-image-2` 是 GPT Image 2 启动目标；
+- `gpt-image-2.5` 是 CrossGen 的启动模型/AppLink 兼容别名，不是 provider
+  能力证明，也不会被自动注入为模型探测候选；
+- `gpt-image-2.5-sunburst` 和 `gpt-image-2.5-flare` 是真实的 GPT Image
+  2.5 provider 目标；带日期的变体只有在 provider 实际返回时才接受；
+- `gpt-image-2.5-sunburst` 适合精确编辑、结构保持和高保真参考图工作流；
+- `gpt-image-2.5-flare` 适合快速、高质量的日常生成；
+- provider 暴露合法的基础版、Sunburst 或 Flare 日期 snapshot 时，模型探测也会识别。
+
+当前 API Key 最近一次成功的模型探测结果是可用性的唯一依据。只有至少一个
+精确的轻量生图路由确认了真实 provider model ID，CrossGen 才会启用
+GPT Image 2 或 GPT Image 2.5。对于 provider 实际列出的模型，路由返回
+带有非空图片输出的 2xx 即可作为强确认，即使可选的 metadata 接口不存在；
+如果网关没有在 `/models` 中列出生图部署，CrossGen 只会额外尝试少量产品
+自有候选，且必须在成功响应中精确回显请求的模型 ID，或同时满足精确 metadata
+身份与可达的校验路由，才会确认并在界面标记为“路由已确认 · provider 未列出”。
+`{ data: [] }`、`{ output: [] }`、`{ choices: [] }` 这类空成功包只能证明
+路由可达，不能单独启用候选模型。如果只是参数校验导致的 400/422，则只有在
+metadata 同时精确回显该 ID 时才确认，不会为了探测而发起付费生图。metadata
+回显了另一个模型 ID 会被标记为 `rejected`；没有回显精确 ID 且路由也没有
+成功时保持 `inconclusive`。仅
+metadata 接口返回 `model_not_found` 不能证明模型不可用，会保持
+`inconclusive`；只有所有实际生图路由都明确拒绝同一个精确 ID 时才标记为
+`rejected`。若只返回 `gpt-image-2`，
+界面只显示 GPT Image 2，不会静默补回 GPT Image 2.5；若只返回 2.5
+模型 ID，则只显示 GPT Image 2.5。更换 API Key 后，旧的模型探测结果会在
+新探测完成前清除；探测失败或结果过期时，活动模型和旧路由也会清空，直到
+下一次成功探测确认新的精确模型 ID。
+
+对于重点启动模型，CrossGen 始终依据 provider 返回的精确模型 ID 计算
+模型系列和变体名称。网关提供的 `displayName` 只作为提示，不能把
+`gpt-image-2` 改标成 GPT Image 2.5，或反向误标。探测结果促成活动模型
+切换后，桌面编辑器参数也会在下一次运行前同步到已确认的模型。
+如果 provider 返回具体的 Sunburst/Flare ID 或合法的日期 snapshot，
+CrossGen 会保留该精确 ID 用于请求，并在启动模型名称旁显示真实 provider
+ID。裸 `gpt-image-2.5` 只用于旧草稿和 AppLink 兼容迁移，不会启用
+GPT Image 2.5。
+GPT Image 2.5 基础版、Sunburst 与 Flare 的探测彼此独立，确认某个变体
+不会自动启用另一个变体。对于 OpenAI 兼容 metadata，`name` 也只按产品
+名称处理，只有 `id`、`model`、`model_id` 或 `modelId` 才能确认精确的
+GPT Image 部署；原生 Gemini metadata 则使用 `name: models/<id>` 作为规范
+资源 ID。
+
+跨协议探测会优先采用当前配置对应的主协议：只要主协议返回至少一个可运行的
+图像模型，就不会把另一种协议的结果混入模型选项。只有主协议没有可运行图像
+模型时，才会使用 fallback，并记录推断出的协议类型，避免兼容网关的错误载荷或
+协议不匹配结果误启用模型。
+
+OpenAI 路由探测证据会绑定到本次实际探测的精确 provider model ID。用户在
+`gpt-image-2`、`gpt-image-2.5` 或带日期的 2.5 变体之间切换时，旧路由证据会
+立即清除，直到新模型重新完成探测。只读命令
+`pnpm probe:real-aihub-models` 会分别检查 GPT Image 2 与 GPT Image 2.5
+系列，同时将产品启动别名 `nano-banana-3` 映射到真实的 Gemini provider
+模型 ID：`gemini-3.1-flash-image`、`gemini-3.1-flash-lite-image` 和
+`gemini-3-pro-image`；不会把 `nano-banana-3` 别名本身当作必须存在的
+Gemini wire model。若网关在模型列表中列出某模型，却对 `/models/{id}` 返回
+明确 `model_not_found`，结果会先标记为 `inconclusive`，并继续检查实际生图
+路由；只有实际生图路由也明确拒绝同一个精确 ID 时才标记为 `rejected`。若只是
+metadata 接口不存在或传输失败，则标记为 `inconclusive`。这两种状态都不会
+生成可启动模型选项。
+
+探测 JSON 会明确记录证据：`family` 只由 provider 精确 ID 推导，
+`exactIdMatch` 表示该 ID 是否出现在 `/models`，`metadataStatus` 表示
+单模型接口的结果。只有 `availability: "confirmed"` 且
+`eligibleForLaunch: true` 才允许启动模型。仅 metadata 返回、普通 HTTP
+失败、metadata 接口缺失，或仅 metadata 返回 `model_not_found` 的情况标记为
+`inconclusive`；metadata 回显了另一个模型 ID 时标记为 `rejected`，实际生图
+路由全部明确拒绝精确 ID 时也标记为 `rejected`。只有 `confirmed` 行会生成可用
+模型选项。
+为兼容旧证据保留的
+`availableImageModels` 仅表示 `/models` 返回的“看起来像图片模型”的 ID，
+不代表当前 API Key 已确认有权限。新工具应使用
+`confirmedImageModels` 或 `launchableImageModels` 获取已经通过只读确认的
+真实 provider model ID，使用 `launchableTargetModels` 获取 CrossGen 的
+启动别名。真实 provider ID 列表不会包含 `nano-banana-3` 工作流别名；
+Gemini 请求必须使用已确认的 `gemini-*` ID。`confirmedTargetModels` 仍作为
+`launchableTargetModels` 的兼容别名保留。对于由多个 provider ID 表示的启动模型，
+`matchedProviderModelIds` 会列出 `/models` 返回的精确 ID，
+`providerProbes` 会保留每个 ID 的 metadata 结果。
+该命令只读，不替代桌面运行时的精确 ID 与路由校验；对于 metadata 不确定的
+情况，它会有意采用更保守的报告方式。
 
 桌面端、CLI 和 MCP 使用同一套参数：`auto`、`low`、`medium`、`high`、
 `xhigh`、`max` 质量；宽高为 16 倍数的自定义尺寸；透明/不透明/自动背景；
@@ -159,7 +238,7 @@ base64 data URL 传递本地参考图和 mask，不上传或持久化 OpenAI Fil
 的 File ID。完整能力矩阵和官方资料见
 [GPT Image 2.5 支持调研记录](./docs/plans/gpt-image-2.5-support.md)。
 
-## Gemini 图像模型与 Sketch
+## Gemini 图像模型与 Sketch（0.3.5 开发中）
 
 CrossGen 保留产品启动名称 **Nano Banana 3**，同时保留 provider 实际使用
 的 Gemini 模型 ID。当前重点支持的 Gemini 图像模型为：
@@ -169,7 +248,12 @@ CrossGen 保留产品启动名称 **Nano Banana 3**，同时保留 provider 实�
 - `gemini-3-pro-image`：独立的 Gemini 图像模型。
 
 启动模型菜单、历史记录、CLI 和 MCP 都保留真实 provider model ID，避免
-不同模型被错误合并。旧草稿或 AppLink 中的 `nano-banana-3` 会迁移到
+不同模型被错误合并。OpenAI 兼容网关返回的 `id` 是模型归类的唯一依据，
+`display_name` 只用于辅助展示；因此即使网关把裸 `gpt-image-2.5` 错误标成
+“GPT Image 2”，CrossGen 也不会把它当作已确认的 GPT Image 2.5。只有具体
+provider ID 通过探测后才启用对应入口。相反，显式的
+纯文本、纯音频、纯视频或 `image_generation=false` 能力声明会否决图片能力，
+避免把同名但不可生图的部署误放进启动模型菜单。旧草稿或 AppLink 中的 `nano-banana-3` 会迁移到
 `gemini-3.1-flash-image`；CrossGen 不会把这个别名直接作为 Gemini 请求
 模型发送。当前 API Key 的模型探测结果是唯一能力依据：未探测到的模型，
 或没有确认图像编辑与参考图能力的模型，会保持禁用，并在付费请求前阻断。
@@ -181,9 +265,10 @@ Sketch 是现有图生图工作区中的输入编辑态，不是第三个顶层�
 图像编辑路径。CrossGen 不会虚构或发送 provider 原生的 `scratch` 字段，
 Sketch 也不能与 Mask 同时提交。
 
-0.3.4 已具备 GPT Image 2.5 与 Gemini 重点模型的代码和确定性/mock 契约；
+0.3.5 已具备 GPT Image 2.5 与 Gemini 重点模型的代码和确定性/mock 契约；
 正式发布仍需完成真实 AIHub 的 GPT Image 2.5/Nano Banana 3 质量、速度、
-失败恢复和隐私矩阵。mock 或兼容模型的返回不能替代该门禁。
+失败恢复和隐私矩阵。当前 Gemini provider ID 的存在只能确认 Nano Banana
+启动映射，不能替代真实工作流验收；mock 或兼容模型的返回也不能替代该门禁。
 
 ## 功能演示
 
@@ -271,7 +356,7 @@ CrossGen 的图片编辑区不再只是预览结果，而是串联图库和图�
 
 ## Agent Runtime
 
-CrossGen 0.3.4 通过结构化 JSON CLI 和 MCP stdio server 暴露本地生图运行时。桌面端、CLI 和 MCP 使用同一套队列、诊断与图库规则：
+CrossGen 通过结构化 JSON CLI 和 MCP stdio server 暴露本地生图运行时。桌面端、CLI 和 MCP 使用同一套队列、诊断与图库规则：
 
 - `crossgen doctor --agent --json` 返回应用路径、数据目录、provider 就绪状态、队列配置和 MCP 启动建议；
 - `crossgen mcp config --client codex|claude-code|cursor --mode readonly|write|generate --json` 输出可直接粘贴的 MCP 配置；

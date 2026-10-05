@@ -21,6 +21,7 @@ import type {
   SketchDocument
 } from "../shared/types";
 import {
+  DEFAULT_GENERAL_IMAGE_PARAMS,
   DEFAULT_GEMINI_IMAGE_PARAMS,
   DEFAULT_IMAGE_PARAMS
 } from "../shared/validation";
@@ -28,10 +29,15 @@ import {
   GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID,
   GEMINI_3_1_FLASH_IMAGE_MODEL_ID,
   GEMINI_3_PRO_IMAGE_MODEL_ID,
+  GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
+  GPT_IMAGE_2_5_LAUNCH_ID,
+  GPT_IMAGE_2_5_MODEL_ID,
+  GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
-  NANO_BANANA_3_MODEL_ID
+  NANO_BANANA_3_MODEL_ID,
+  focusedLaunchIdForModel
 } from "../shared/modelCatalog";
 
 const now = new Date(0).toISOString();
@@ -645,13 +651,56 @@ describe("renderer multi-model smoke", () => {
     expect(css).toMatch(/\.right-rail\.collapsed \.right-rail-action-group\s*{[^}]*z-index:\s*6100/s);
   });
 
-  it("disables all launch buttons before an API key is saved", async () => {
+  it("keeps unsupported launch families visible but disabled before an API key is saved", async () => {
     const defaultConfig = providerConfig({ apiKeySaved: false, discoveredModels: [] });
     await renderApp(snapshot({ providers: [defaultConfig], activeProviderId: defaultConfig.id }));
 
-    expect(launchStartButton().disabled).toBe(true);
-    expect(launchModelSelect().disabled).toBe(true);
+    expect(launchStartButton().disabled).toBe(false);
+    expect([...launchModelSelect().options].every((option) => option.disabled)).toBe(true);
     expect(document.body.textContent).toContain("Save an API key first.");
+  });
+
+  it("does not treat a legacy model cache without a successful discovery timestamp as current", async () => {
+    const staleConfig = providerConfig({
+      discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }],
+      lastModelDiscoveryAt: undefined
+    });
+    await renderApp(snapshot({ providers: [staleConfig], activeProviderId: staleConfig.id }));
+
+    expect(launchStartButton().disabled).toBe(false);
+    expect([...launchModelSelect().options].every((option) => option.disabled)).toBe(true);
+    expect([...launchModelSelect().options].map((option) => option.textContent)).toEqual([
+      "GPT Image 2 · gpt-image-2",
+      `GPT Image 2.5 · ${GPT_IMAGE_2_5_SUNBURST_MODEL_ID}`,
+      "Nano Banana 3 · Gemini 3.1 Flash Image",
+      "General · general"
+    ]);
+    expect(document.body.textContent).toContain("Run model discovery first.");
+
+    await openSavedApiAccess();
+    expect(document.querySelector(".api-model-list")).toBeNull();
+    expect(document.querySelector(".api-model-summary")?.textContent).toBe("No models discovered yet.");
+  });
+
+  it("reports a completed discovery with no image models instead of showing an undiscovered state", async () => {
+    const config = providerConfig({
+      discoveredModels: [],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    expect(launchStartButton().disabled).toBe(false);
+    expect([...launchModelSelect().options].every((option) => option.disabled)).toBe(true);
+    expect([...launchModelSelect().options].map((option) => option.textContent)).toEqual([
+      "GPT Image 2 · gpt-image-2",
+      `GPT Image 2.5 · ${GPT_IMAGE_2_5_SUNBURST_MODEL_ID}`,
+      "Nano Banana 3 · Gemini 3.1 Flash Image",
+      "General · general"
+    ]);
+    await click(launchStartButton());
+    expect(document.body.textContent).toContain(
+      "Models were discovered, but none declares image generation; a model list does not prove API key access."
+    );
   });
 
   it("auto-tests saved API config on startup and after config save", async () => {
@@ -671,6 +720,35 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.testConnection).toHaveBeenCalledTimes(1);
   });
 
+  it("applies models discovered by the post-save connection test", async () => {
+    const bridge = await renderApp(snapshot());
+    await flushAsync();
+    vi.mocked(bridge.testConnection).mockClear();
+    vi.mocked(bridge.testConnection).mockResolvedValueOnce({
+      ok: true,
+      message: "ok",
+      config: providerConfig({
+      defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      discoveredModels: [{
+        id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        providerKind: "openai",
+        availability: "confirmed"
+      }],
+        lastModelDiscoveryAt: now
+      })
+    });
+
+    await click(apiAccessCurrentButton());
+    await click(buttonByText("Save"));
+    await flushAsync();
+
+    expect(bridge.testConnection).toHaveBeenCalledTimes(1);
+    expect(availableLaunchLabels()).toEqual([`GPT Image 2.5 · ${GPT_IMAGE_2_5_SUNBURST_MODEL_ID}`]);
+    expect(document.querySelector(".launch-model-name")?.textContent).toBe("gpt image 2.5");
+  });
+
   it("enables only GPT Image 2 for OpenAI discovery without enabling General", async () => {
     const defaultConfig = providerConfig({
       apiKeySaved: true,
@@ -688,9 +766,336 @@ describe("renderer multi-model smoke", () => {
     );
 
     expect(launchStartButton().disabled).toBe(false);
-    expect([...launchModelSelect().options].map((option) => option.textContent).join(" ")).toContain("GPT Image 2");
-    expect([...launchModelSelect().options].map((option) => option.textContent).join(" ")).not.toContain("Nano Banana 3");
-    expect([...launchModelSelect().options].map((option) => option.textContent).join(" ")).not.toContain("General");
+    expect(availableLaunchLabels()).toEqual(["GPT Image 2 · gpt-image-2"]);
+    expect(optionByLaunchText("GPT Image 2.5").disabled).toBe(true);
+    expect(optionByLaunchText("Nano Banana 3").disabled).toBe(true);
+    expect(optionByLaunchText("General").disabled).toBe(true);
+  });
+
+  it("shows GPT Image 2.5 only when the current discovery returns a 2.5 id", async () => {
+    const config = providerConfig({
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      discoveredModels: [{
+        id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        providerKind: "openai",
+        availability: "confirmed"
+      }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    expect(availableLaunchLabels()).toEqual([`GPT Image 2.5 · ${GPT_IMAGE_2_5_SUNBURST_MODEL_ID}`]);
+    expect(launchStartButton().disabled).toBe(false);
+  });
+
+  it("does not treat the bare GPT Image 2.5 launch alias as provider support", async () => {
+    const config = providerConfig({
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_MODEL_ID,
+      defaultModel: GPT_IMAGE_2_5_MODEL_ID,
+      discoveredModels: [{
+        id: GPT_IMAGE_2_5_MODEL_ID,
+        providerKind: "openai",
+        displayName: "GPT Image 2",
+        availability: "confirmed"
+      }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    expect(availableLaunchLabels()).toEqual([]);
+    expect(optionByLaunchText("GPT Image 2.5").disabled).toBe(true);
+    expect(optionByLaunchText("GPT Image 2").disabled).toBe(true);
+  });
+
+  it("keeps the exact discovered OpenAI model id on the generation request", async () => {
+    const exactProviderModelId = "GPT-IMAGE-2.5-SUNBURST";
+    const config = providerConfig({
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: exactProviderModelId,
+      defaultModel: exactProviderModelId,
+      discoveredModels: [{
+        id: exactProviderModelId,
+        providerKind: "openai",
+        displayName: "GPT Image 2",
+        availability: "confirmed"
+      }],
+      lastModelDiscoveryAt: now
+    });
+    const bridge = await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    expect(availableLaunchLabels()).toEqual([`GPT Image 2.5 · ${exactProviderModelId}`]);
+
+    await selectAndLaunchModel(exactProviderModelId);
+    await click(buttonByText("Generate", ".primary-run"));
+
+    expect(bridge.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: exactProviderModelId
+        })
+      })
+    );
+  });
+
+  it("orders simultaneous GPT Image 2 and 2.5 options by exact family", async () => {
+    const config = providerConfig({
+      discoveredModels: [
+        { id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID, providerKind: "openai", displayName: "GPT Image 2", availability: "confirmed" },
+        { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai", displayName: "GPT Image 2.5" }
+      ],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    expect(availableLaunchLabels()).toEqual([
+      "GPT Image 2 · gpt-image-2",
+      `GPT Image 2.5 · ${GPT_IMAGE_2_5_SUNBURST_MODEL_ID}`
+    ]);
+  });
+
+  it("reports GPT Image 2 and GPT Image 2.5 discovery independently", async () => {
+    const config = providerConfig({
+      apiKeySaved: true,
+      discoveredModels: [
+        { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai", availability: "confirmed" },
+        {
+          id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+          providerKind: "openai",
+          displayName: "GPT Image 2",
+          availability: "rejected",
+          availabilityReason: `The model '${GPT_IMAGE_2_5_SUNBURST_MODEL_ID}' does not exist`
+        },
+        {
+          id: GEMINI_3_PRO_IMAGE_MODEL_ID,
+          providerKind: "gemini",
+          displayName: "GPT Image 2.5",
+          availability: "inconclusive"
+        }
+      ],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    await openSavedApiAccess();
+
+    const cardText = apiConfigCardByText("OpenAI").textContent ?? "";
+    expect(cardText).toContain("GPT Image 2: gpt-image-2 (confirmed)");
+    expect(cardText).toContain(`GPT Image 2.5: ${GPT_IMAGE_2_5_SUNBURST_MODEL_ID} (rejected)`);
+    expect(cardText).toContain("other image models: gemini-3-pro-image (listed, not confirmed)");
+  });
+
+  it("marks the bare GPT Image 2.5 compatibility alias without treating it as provider support", async () => {
+    const config = providerConfig({
+      discoveredModels: [
+        { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai", availability: "confirmed" },
+        {
+          id: GPT_IMAGE_2_5_MODEL_ID,
+          providerKind: "openai",
+          displayName: "GPT Image 2.5",
+          availability: "listed"
+        }
+      ],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    expect(availableLaunchLabels()).toEqual(["GPT Image 2 · gpt-image-2"]);
+    expect([...launchModelSelect().options].map((option) => option.textContent)).toContain(
+      `GPT Image 2.5 · ${GPT_IMAGE_2_5_SUNBURST_MODEL_ID}`
+    );
+    expect([...launchModelSelect().options].find((option) => option.textContent?.startsWith("GPT Image 2.5"))?.disabled).toBe(true);
+
+    await openSavedApiAccess();
+    const cardText = apiConfigCardByText("OpenAI").textContent ?? "";
+    expect(cardText).toContain("compatibility aliases (not launch evidence): gpt-image-2.5");
+    expect(
+      [...document.querySelectorAll<HTMLElement>(".api-model-list span")]
+        .some((element) => {
+          const title = element.getAttribute("title") ?? "";
+          return title.includes("gpt-image-2.5 · listed · provider-listed") &&
+            title.includes("compatibility alias only; not launch evidence");
+        })
+    ).toBe(true);
+  });
+
+  it("hides a focused image model when discovery explicitly denies image generation", async () => {
+    const config = providerConfig({
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      discoveredModels: [{
+        id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        providerKind: "openai",
+        raw: { image_generation: false }
+      }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    expect(availableLaunchLabels()).toEqual([]);
+    expect([...launchModelSelect().options].every((option) => option.disabled)).toBe(true);
+    expect(document.body.textContent).toContain(`${GPT_IMAGE_2_5_SUNBURST_MODEL_ID} was not discovered.`);
+  });
+
+  it("keeps an explicitly rejected focused model visible but disabled with its exact probe reason", async () => {
+    const config = providerConfig({
+      apiKeySaved: true,
+      activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_MODEL_ID,
+      defaultModel: GPT_IMAGE_2_MODEL_ID,
+      discoveredModels: [{
+        id: GPT_IMAGE_2_MODEL_ID,
+        providerKind: "openai",
+        availability: "rejected",
+        availabilityReason: "The model 'gpt-image-2' does not exist"
+      }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    const option = optionByLaunchText("GPT Image 2");
+    expect(option.disabled).toBe(true);
+    expect(option.textContent).toContain("gpt-image-2");
+    await click(launchStartButton());
+    expect(document.body.textContent).toContain("was explicitly rejected by the provider");
+    expect(document.body.textContent).toContain("The model 'gpt-image-2' does not exist");
+  });
+
+  it("keeps a listed GPT Image 2.5 row disabled until metadata confirms the exact id", async () => {
+    const config = providerConfig({
+      apiKeySaved: true,
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      discoveredModels: [{
+        id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        providerKind: "openai",
+        availability: "inconclusive",
+        availabilityReason: "model endpoint not found"
+      }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    const option = optionByLaunchText("GPT Image 2.5");
+    expect(option.disabled).toBe(true);
+    await click(launchStartButton());
+    expect(document.body.textContent).toContain("listed, but the provider could not confirm");
+    expect(document.body.textContent).toContain("model endpoint not found");
+  });
+
+  it("keeps a focused image model available when only video=false is declared", async () => {
+    const config = providerConfig({
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      discoveredModels: [{
+        id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        providerKind: "openai",
+        raw: { video_generation: false },
+        availability: "confirmed"
+      }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    expect(availableLaunchLabels()).toEqual([`GPT Image 2.5 · ${GPT_IMAGE_2_5_SUNBURST_MODEL_ID}`]);
+    expect(launchStartButton().disabled).toBe(false);
+  });
+
+  it("does not re-add an active GPT Image 2.5 model missing from discovery", async () => {
+    const config = providerConfig({
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    const labels = [...launchModelSelect().options].map((option) => option.textContent ?? "");
+    expect(availableLaunchLabels()).toEqual(["GPT Image 2 · gpt-image-2"]);
+    expect(labels).toContain(`GPT Image 2.5 · ${GPT_IMAGE_2_5_SUNBURST_MODEL_ID}`);
+    expect(launchModelSelect().options[1]?.disabled).toBe(true);
+    expect(launchStartButton().title).toBe(`${GPT_IMAGE_2_5_SUNBURST_MODEL_ID} is not listed by the provider.`);
+  });
+
+  it("disables generation when a restored GPT Image 2.5 draft is not in discovery", async () => {
+    const config = providerConfig({
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_MODEL_ID,
+      defaultModel: GPT_IMAGE_2_5_MODEL_ID,
+      discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({
+      providers: [config],
+      activeProviderId: config.id,
+      draft: {
+        activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_5_MODEL_ID,
+        mode: "generate",
+        prompt: "Restored 2.5 draft",
+        params: {
+          ...DEFAULT_IMAGE_PARAMS,
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID
+        },
+        inputAssets: [],
+        brushSize: 24,
+        updatedAt: now
+      }
+    }));
+
+    expect(buttonByText("Generate", ".primary-run").disabled).toBe(true);
+    expect(document.body.textContent).toContain(`${GPT_IMAGE_2_5_SUNBURST_MODEL_ID} is not listed by the provider.`);
+  });
+
+  it("does not relabel a custom-family row as GPT Image 2.5", async () => {
+    const config = providerConfig({
+      kind: "custom",
+      name: "Custom gateway",
+      activeLaunchId: "general",
+      activeModelId: "gpt-image-2.5-custom",
+      defaultModel: "gpt-image-2.5-custom",
+      discoveredModels: [{
+        id: "gpt-image-2.5-custom",
+        providerKind: "custom",
+        displayName: "GPT Image 2",
+        raw: { image_generation: true }
+      }],
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+
+    expect(availableLaunchLabels()).toEqual([
+      "General · gpt-image-2.5-custom"
+    ]);
+  });
+
+  it("keeps a custom-family history row on its exact model id", async () => {
+    const customJob = geminiJob(0, {
+      providerKind: "custom",
+      launchId: GENERAL_LAUNCH_ID,
+      modelId: GPT_IMAGE_2_5_MODEL_ID,
+      modelDisplayName: "GPT Image 2",
+      params: {
+        ...DEFAULT_GENERAL_IMAGE_PARAMS,
+        providerKind: "custom",
+        launchId: GENERAL_LAUNCH_ID,
+        model: GPT_IMAGE_2_5_MODEL_ID
+      }
+    });
+    await renderApp(snapshot({ history: [customJob] }));
+
+    const historyModelLabels = [...document.querySelectorAll<HTMLElement>(".history-date-model > span[title]")]
+      .map((element) => element.textContent?.trim());
+    expect(historyModelLabels).toContain(GPT_IMAGE_2_5_MODEL_ID);
+    expect(historyModelLabels).not.toContain("GPT Image 2");
   });
 
   it("submits GPT Image 2 multi-count requests without stream partial previews", async () => {
@@ -1274,7 +1679,7 @@ describe("renderer multi-model smoke", () => {
       history
     }));
 
-    const launchLabels = [...launchModelSelect().options].map((option) => option.textContent ?? "");
+    const launchLabels = availableLaunchLabels();
     expect(launchLabels).toEqual(expect.arrayContaining([
       "Nano Banana 3 · Gemini 3.1 Flash Image",
       "Nano Banana 3 · Gemini 3.1 Flash Image Lite",
@@ -1379,7 +1784,8 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("Gemini gateway");
     expect(document.querySelectorAll(".api-config-card").length).toBe(2);
     expect(document.body.textContent).toContain("Current API config");
-    expect(launchStartButton().disabled).toBe(true);
+    expect(launchStartButton().disabled).toBe(false);
+    expect([...launchModelSelect().options].every((option) => option.disabled)).toBe(true);
   });
 
   it("adds an API config without a key and leaves it untested", async () => {
@@ -1407,7 +1813,8 @@ describe("renderer multi-model smoke", () => {
     expect(bridge.testConnection).not.toHaveBeenCalled();
     expect(apiAccessCurrentButton().textContent).toBe("API status");
     expect(apiAccessCurrentButton().title).toContain("Needs setup");
-    expect(launchStartButton().disabled).toBe(true);
+    expect(launchStartButton().disabled).toBe(false);
+    expect([...launchModelSelect().options].every((option) => option.disabled)).toBe(true);
   });
 
   it("switches API config and derives launch availability from the selected config discovery", async () => {
@@ -1481,8 +1888,8 @@ describe("renderer multi-model smoke", () => {
     vi.mocked(bridge.discoverModels).mockResolvedValueOnce({
       ...geminiConfig,
       discoveredModels: [
-        { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
-        { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini", displayName: "Gemini 3 Pro Image" }
+        { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini", availability: "confirmed" },
+        { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini", displayName: "Gemini 3 Pro Image", availability: "confirmed" }
       ],
       lastModelDiscoveryAt: now
     });
@@ -1495,9 +1902,37 @@ describe("renderer multi-model smoke", () => {
 
     expect(bridge.discoverModels).toHaveBeenCalledWith("gemini-access");
     expect(apiConfigCardByText("Gemini access").textContent).toContain("Discovered");
-    expect(apiConfigCardByText("Gemini access").textContent).toContain("2 models discovered");
+    expect(apiConfigCardByText("Gemini access").textContent).toContain("2 models returned");
     expect(apiConfigCardByText("Gemini access").querySelector(".api-config-card-models")?.getAttribute("title")).toContain(NANO_BANANA_3_MODEL_ID);
     expect(document.body.textContent).toContain("Gemini 3 Pro Image");
+  });
+
+  it("syncs the active editor model after discovery promotes GPT Image 2 to 2.5", async () => {
+    const config = providerConfig();
+    const bridge = await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
+    vi.mocked(bridge.discoverModels).mockResolvedValueOnce({
+      ...config,
+      defaultModel: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      discoveredModels: [{
+        id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        providerKind: "openai",
+        displayName: "GPT Image 2",
+        availability: "confirmed"
+      }],
+      lastModelDiscoveryAt: now,
+      lastModelDiscoveryError: undefined
+    });
+
+    await openSavedApiAccess();
+    await click(buttonByText("Discover models", ".api-config-detail button"));
+    await flushAsync();
+
+    expect(availableLaunchLabels()).toEqual([`GPT Image 2.5 · ${GPT_IMAGE_2_5_SUNBURST_MODEL_ID}`]);
+    expect(document.querySelector<HTMLElement>(".api-config-card-models")?.getAttribute("title"))
+      .toContain(`GPT Image 2.5 · Sunburst (${GPT_IMAGE_2_5_SUNBURST_MODEL_ID})`);
+    expect(document.body.textContent).not.toContain("Select GPT Image 2");
   });
 
   it("keeps prompt and references when switching API config", async () => {
@@ -3919,7 +4354,7 @@ function mapQueueSnapshotTasks(snapshot: QueueSnapshot, mapper: (task: QueueTask
 }
 
 function providerConfig(patch: Partial<ProviderConfig> = {}): ProviderConfig {
-  return {
+  const config: ProviderConfig = {
     id: "test-provider",
     kind: "openai",
     name: "OpenAI",
@@ -3932,12 +4367,24 @@ function providerConfig(patch: Partial<ProviderConfig> = {}): ProviderConfig {
     defaultQuality: DEFAULT_IMAGE_PARAMS.quality,
     timeoutMs: DEFAULT_IMAGE_PARAMS.timeoutMs,
     streamingPartialsEnabled: false,
-    discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }],
+    discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai", availability: "confirmed" }],
     lastModelDiscoveryAt: now,
     activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
     activeModelId: GPT_IMAGE_2_MODEL_ID,
     updatedAt: now,
     ...patch
+  };
+  return {
+    ...config,
+    // Test fixtures that represent a successful discovery often omit the
+    // probe status for brevity. Make that intent explicit for focused models;
+    // tests covering listed/inconclusive/rejected states set availability
+    // themselves and remain unchanged.
+    discoveredModels: config.discoveredModels.map((model) =>
+      focusedLaunchIdForModel(model.providerKind, model.id) && !model.availability
+        ? { ...model, availability: "confirmed" as const }
+        : model
+    )
   };
 }
 
@@ -4060,6 +4507,18 @@ function launchModelSelect(): HTMLSelectElement {
   const select = document.querySelector<HTMLSelectElement>(".launch-picker select");
   if (!select) throw new Error("Launch model select was not found.");
   return select;
+}
+
+function availableLaunchLabels(): string[] {
+  return [...launchModelSelect().options]
+    .filter((option) => !option.disabled)
+    .map((option) => option.textContent ?? "");
+}
+
+function optionByLaunchText(text: string): HTMLOptionElement {
+  const option = [...launchModelSelect().options].find((item) => item.textContent?.includes(text));
+  if (!option) throw new Error(`Launch model option containing "${text}" was not found.`);
+  return option;
 }
 
 async function selectLaunchModelByText(text: string) {

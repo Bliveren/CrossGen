@@ -1,0 +1,4 @@
+# Vitest imports *.mjs helpers as modules. CRLF checkouts on Windows break
+# Vite's shebang handling and fail with "SyntaxError: Invalid or unexpected
+# token", so keep Node modules on LF regardless of the platform setting.
+*.mjs text eol=lf

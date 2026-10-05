@@ -1,6 +1,7 @@
 import { listProviderModelCapabilitySummaries } from "../core/modelCapabilities.js";
 import { DEFAULT_QUEUE_RUNTIME_CONFIG, normalizeQueueRuntimeConfig } from "../core/queueConfig.js";
 import { buildQueueSnapshot, buildQueueTaskSummary, type BuildQueueSnapshotOptions } from "../core/queueSnapshot.js";
+import { summarizeDiscoveredModels } from "../shared/modelCatalog.js";
 import type {
   AgentMcpClientName,
   AgentMcpMode,
@@ -69,6 +70,7 @@ function activeProvider(state: ReadonlyAppState): ReadonlyProviderConfig | undef
 }
 
 function publicProvider(provider: ReadonlyProviderConfig) {
+  const discoveredModelInventory = summarizeDiscoveredModels(provider.discoveredModels);
   return {
     id: provider.id,
     kind: provider.kind,
@@ -81,7 +83,10 @@ function publicProvider(provider: ReadonlyProviderConfig) {
     defaultQuality: provider.defaultQuality,
     timeoutMs: provider.timeoutMs,
     streamingPartialsEnabled: provider.streamingPartialsEnabled,
-    discoveredModelCount: provider.discoveredModels.length,
+    // Keep the scalar count aligned with the deduplicated inventory exposed
+    // beside it. Older state files can contain both `models/foo` and `foo`.
+    discoveredModelCount: discoveredModelInventory.total,
+    discoveredModelInventory,
     lastModelDiscoveryAt: provider.lastModelDiscoveryAt,
     lastModelDiscoveryError: provider.lastModelDiscoveryError,
     apiKeySaved: Boolean(provider.encryptedApiKey),

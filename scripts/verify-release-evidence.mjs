@@ -50,11 +50,13 @@ const v034GateIds = [
   "cli-mcp-media-contract"
 ];
 
-const v034SketchGateIds = [
+const v035GateIds = [
   "sketch-workspace-contract",
   "sketch-packaged-electron",
   "sketch-feature-flag-rollback",
-  "sketch-real-aihub-matrix"
+  "sketch-real-aihub-matrix",
+  "model-discovery-evidence-contract",
+  "general-reference-edit"
 ];
 
 const v034ChecklistGuards = [
@@ -82,26 +84,6 @@ const v034ChecklistGuards = [
     file: "docs/release/v0.3.4-preflight.md",
     text: "完成 CLI/MCP 媒体 metadata 契约与路径脱敏验证。",
     gateIds: ["cli-mcp-media-contract"]
-  },
-  {
-    file: "docs/release/v0.3.4-preflight.md",
-    text: "完成 Sketch 图生图融合的确定性测试和工作区契约验证。",
-    gateIds: ["sketch-workspace-contract"]
-  },
-  {
-    file: "docs/release/v0.3.4-preflight.md",
-    text: "在同一候选 Electron 包完成 Sketch 输入/结果、Mask 互斥、模型切换和窄窗口矩阵。",
-    gateIds: ["sketch-packaged-electron"]
-  },
-  {
-    file: "docs/release/v0.3.4-preflight.md",
-    text: "完成 CROSSGEN_SKETCH_ENABLED packaged 回滚实测。",
-    gateIds: ["sketch-feature-flag-rollback"]
-  },
-  {
-    file: "docs/release/v0.3.4-preflight.md",
-    text: "完成 AIHub 真实 GPT Image 2.5 / Nano Banana 3 Sketch 矩阵。",
-    gateIds: ["sketch-real-aihub-matrix"]
   },
   {
     file: "docs/release/v0.3.4-preflight.md",
@@ -156,6 +138,130 @@ const v034ChecklistGuards = [
       "media-aware-result-viewer",
       "cli-mcp-media-contract"
     ]
+  }
+];
+
+const v035RequiredGateIds = [
+  "real-openai-api",
+  "real-gemini-api",
+  "macos-signed",
+  "macos-notarized",
+  "windows-native-release",
+  "linux-native-release",
+  "update-manifest-assets",
+  "product-owner-acceptance",
+  "build-and-mock-verifiers",
+  "cli-mcp-packaged-smoke",
+  "agent-integration-smoke",
+  "queue-concurrency-smoke",
+  "gallery-mutation-smoke",
+  "image-core-regression",
+  "real-provider-operation-matrix",
+  "queue-ui-visibility",
+  "provider-diagnostics-timeout",
+  "reference-preflight",
+  "history-gallery-recovery",
+  "agent-access-contract",
+  "agent-cli-link-management",
+  "exact-candidate-package",
+  "applink-provider-import",
+  "media-foundation-contract",
+  "managed-media-root",
+  "media-aware-result-viewer",
+  "cli-mcp-media-contract",
+  "sketch-workspace-contract",
+  "sketch-packaged-electron",
+  "sketch-feature-flag-rollback",
+  "sketch-real-aihub-matrix",
+  "model-discovery-evidence-contract",
+  "general-reference-edit"
+];
+
+const v035ChecklistGuards = [
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成 AppLink provider import 合约与跨平台冷启动回归。",
+    gateIds: ["applink-provider-import"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成 media foundation 契约、managed media root 与媒体视图边界回归。",
+    gateIds: ["media-foundation-contract", "managed-media-root", "media-aware-result-viewer", "cli-mcp-media-contract"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成模型发现证据契约（listed/confirmed/inconclusive/rejected）与精确 provider model id 绑定验证。",
+    gateIds: ["model-discovery-evidence-contract"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成 General（OpenAI 兼容）图生图契约：参考图编辑仅在路由确认后启用，未确认时保持 prompt-only 并给出可诊断原因。",
+    gateIds: ["general-reference-edit"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成 Sketch 图生图融合的确定性测试和工作区契约验证。",
+    gateIds: ["sketch-workspace-contract"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "在同一 v0.3.5 候选 Electron 包完成 Sketch 输入/结果、Mask 互斥、模型切换和窄窗口矩阵。",
+    gateIds: ["sketch-packaged-electron"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成 CROSSGEN_SKETCH_ENABLED packaged 回滚实测。",
+    gateIds: ["sketch-feature-flag-rollback"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成 AIHub 真实 GPT Image 2.5 / Nano Banana 3 Sketch 矩阵。",
+    gateIds: ["sketch-real-aihub-matrix"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "在精确 v0.3.5 候选上完成 build、mock、CLI/MCP、Agent、队列、Gallery 和图片核心回归。",
+    gateIds: ["build-and-mock-verifiers", "cli-mcp-packaged-smoke", "agent-integration-smoke", "queue-concurrency-smoke", "gallery-mutation-smoke", "image-core-regression"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成精确候选的真实 provider gate；真实调用只走批准的 AIHub 聚合 API。",
+    gateIds: ["real-openai-api", "real-gemini-api", "real-provider-operation-matrix"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成原生 Windows/Linux 精确候选包验证。",
+    gateIds: ["windows-native-release", "linux-native-release"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成精确候选的 macOS Developer ID 签名、Apple 公证与 Gatekeeper 校验。",
+    gateIds: ["macos-signed", "macos-notarized"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成产品负责人安装实测并记录明确批准。",
+    gateIds: ["product-owner-acceptance", "exact-candidate-package"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "从精确候选资产更新 `docs/updates/latest.json` 的 URL、大小与 SHA256。",
+    gateIds: ["update-manifest-assets"]
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "完成 `pnpm verify:release-evidence -- --require-complete` on the final v0.3.5 release branch.",
+    gateIds: v035RequiredGateIds
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "Create and push `v0.3.5` tag.",
+    gateIds: v035RequiredGateIds
+  },
+  {
+    file: "docs/release/v0.3.5-preflight.md",
+    text: "Create GitHub Release with assets matching the approved update manifest.",
+    gateIds: v035RequiredGateIds
   }
 ];
 
@@ -496,8 +602,11 @@ function isAtLeastVersion(value, minimum) {
 }
 
 function knownGateIdsForRelease(releaseVersion) {
+  if (isAtLeastVersion(releaseVersion, "0.3.5")) {
+    return [...baseGateIds, ...v031GateIds, ...v032GateIds, ...v033GateIds, ...v034GateIds, ...v035GateIds];
+  }
   if (isAtLeastVersion(releaseVersion, "0.3.4")) {
-    return [...baseGateIds, ...v031GateIds, ...v032GateIds, ...v033GateIds, ...v034GateIds, ...v034SketchGateIds];
+    return [...baseGateIds, ...v031GateIds, ...v032GateIds, ...v033GateIds, ...v034GateIds];
   }
   if (isAtLeastVersion(releaseVersion, "0.3.3")) {
     return [...baseGateIds, ...v031GateIds, ...v032GateIds, ...v033GateIds];
@@ -512,6 +621,9 @@ function knownGateIdsForRelease(releaseVersion) {
 }
 
 function checklistGuardsForRelease(releaseVersion) {
+  if (isAtLeastVersion(releaseVersion, "0.3.5")) {
+    return v035ChecklistGuards;
+  }
   if (isAtLeastVersion(releaseVersion, "0.3.4")) {
     return v034ChecklistGuards;
   }

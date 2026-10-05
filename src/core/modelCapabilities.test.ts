@@ -4,8 +4,11 @@ import {
   GEMINI_3_PRO_IMAGE_MODEL_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
+  GPT_IMAGE_2_SNAPSHOT_MODEL_ID,
   GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
+  GPT_IMAGE_2_5_MODEL_ID,
+  GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID
 } from "../shared/modelCatalog";
@@ -66,6 +69,30 @@ describe("model capability contracts", () => {
     });
   });
 
+  it("applies the GPT Image 2 focused contract to dated provider snapshots", () => {
+    const summary = capabilitySummaryForDiscoveredModel("provider-openai", {
+      id: GPT_IMAGE_2_SNAPSHOT_MODEL_ID,
+      providerKind: "openai",
+      displayName: "GPT Image 2.5"
+    });
+
+    expect(summary).toMatchObject({
+      modelId: GPT_IMAGE_2_SNAPSHOT_MODEL_ID,
+      displayName: "GPT Image 2",
+      launchId: GPT_IMAGE_2_LAUNCH_ID,
+      selectionKey: `${GPT_IMAGE_2_LAUNCH_ID}:${GPT_IMAGE_2_SNAPSHOT_MODEL_ID}`,
+      source: "focused-catalog",
+      capabilities: {
+        generate: true,
+        edit: true,
+        inpaint: "exact-mask",
+        referenceImages: true,
+        contract: "openai-image",
+        confidence: "verified"
+      }
+    });
+  });
+
   it("marks Nano Banana 3 as verified Gemini image-only capability", () => {
     const definition = getFocusedModelDefinition(NANO_BANANA_3_LAUNCH_ID);
     expect(definition).toBeDefined();
@@ -109,6 +136,34 @@ describe("model capability contracts", () => {
         confidence: "verified"
       }
     });
+  });
+
+  it("does not treat the bare GPT Image 2.5 launch alias as provider capability evidence", () => {
+    const summary = capabilitySummaryForDiscoveredModel("provider-openai", {
+      id: GPT_IMAGE_2_5_MODEL_ID,
+      providerKind: "openai"
+    });
+
+    expect(summary).toMatchObject({
+      modelId: GPT_IMAGE_2_5_MODEL_ID,
+      source: "unknown",
+      capabilities: {
+        generate: false,
+        edit: false,
+        confidence: "unknown"
+      }
+    });
+  });
+
+  it("derives focused capability from the exact id when the gateway display name is wrong", () => {
+    const summary = capabilitySummaryForDiscoveredModel("provider-openai", {
+      id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      providerKind: "openai",
+      displayName: "GPT Image 2"
+    });
+
+    expect(summary.launchId).toBe(GPT_IMAGE_2_5_LAUNCH_ID);
+    expect(summary.displayName).toBe("GPT Image 2.5 · Sunburst");
   });
 
   it("keeps General fallback prompt-only for agents", () => {
@@ -203,7 +258,7 @@ describe("model capability contracts", () => {
     expect(discovered.capabilities.mediaKinds).toEqual(["image"]);
   });
 
-  it("lists provider focused, active general, and discovered capabilities without duplicates", () => {
+  it("lists only models confirmed by a successful discovery without duplicates", () => {
     const summaries = listProviderModelCapabilitySummaries(
       provider({
         activeLaunchId: GENERAL_LAUNCH_ID,
@@ -212,17 +267,32 @@ describe("model capability contracts", () => {
           { id: "gpt-image-2", providerKind: "openai" },
           { id: "dall-e-3", providerKind: "openai" },
           { id: "text-only", providerKind: "openai" }
-        ]
+        ],
+        lastModelDiscoveryAt: now
       })
     );
 
-    expect(summaries.map((summary) => summary.modelId)).toEqual(["gpt-image-2", "gpt-image-2.5-sunburst", "general", "dall-e-3", "text-only"]);
+    expect(summaries.map((summary) => summary.modelId)).toEqual(["gpt-image-2", "dall-e-3", "text-only"]);
     expect(summaries.find((summary) => summary.modelId === "text-only")?.capabilities.confidence).toBe("unknown");
     expect(summaries.find((summary) => summary.modelId === "dall-e-3")?.capabilities).toMatchObject({
       generate: true,
       edit: false,
       confidence: "discovered"
     });
+  });
+
+  it("does not advertise catalogue launches before discovery or after a failed discovery", () => {
+    expect(listProviderModelCapabilitySummaries(provider({ lastModelDiscoveryAt: undefined, discoveredModels: [] }))).toEqual([]);
+    expect(listProviderModelCapabilitySummaries(provider({
+      apiKeySaved: false,
+      lastModelDiscoveryAt: now,
+      discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }]
+    }))).toEqual([]);
+    expect(listProviderModelCapabilitySummaries(provider({
+      lastModelDiscoveryAt: now,
+      lastModelDiscoveryError: "API key rejected",
+      discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }]
+    }))).toEqual([]);
   });
 
   it("keeps shared-launch Gemini models selectable with unique keys", () => {
@@ -235,8 +305,10 @@ describe("model capability contracts", () => {
         activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
         activeModelId: NANO_BANANA_3_MODEL_ID,
         discoveredModels: [
+          { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" },
           { id: GEMINI_3_PRO_IMAGE_MODEL_ID, providerKind: "gemini" }
-        ]
+        ],
+        lastModelDiscoveryAt: now
       })
     );
 
@@ -291,7 +363,8 @@ describe("model capability contracts", () => {
         discoveredModels: [
           { id: NANO_BANANA_3_LAUNCH_ID, providerKind: "gemini" },
           { id: NANO_BANANA_3_MODEL_ID, providerKind: "gemini" }
-        ]
+        ],
+        lastModelDiscoveryAt: now
       })
     );
 
@@ -313,6 +386,54 @@ describe("model capability contracts", () => {
     expect(summary.capabilities.generate).toBe(false);
   });
 
+  it("keeps CLI and MCP capability summaries aligned with text-only output metadata", () => {
+    const summary = capabilitySummaryForDiscoveredModel("provider-openai", {
+      id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      providerKind: "openai",
+      raw: {
+        image_generation: true,
+        output_modalities: ["text"]
+      }
+    });
+
+    expect(summary.source).toBe("unknown");
+    expect(summary.capabilities).toMatchObject({
+      generate: false,
+      edit: false,
+      referenceImages: false,
+      confidence: "unknown"
+    });
+  });
+
+  it("does not let an explicit video=false flag hide a focused image model", () => {
+    const summary = capabilitySummaryForDiscoveredModel("provider-openai", {
+      id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+      providerKind: "openai",
+      raw: { image_generation: true, video_generation: false }
+    });
+
+    expect(summary).toMatchObject({
+      launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      source: "focused-catalog",
+      capabilities: {
+        generate: true,
+        edit: true,
+        confidence: "verified"
+      }
+    });
+  });
+
+  it("rejects nested text-only capability metadata even when the id looks like an image model", () => {
+    const summary = capabilitySummaryForDiscoveredModel("provider-openai", {
+      id: GPT_IMAGE_2_5_MODEL_ID,
+      providerKind: "openai",
+      raw: { capabilities: { text_generation: true } }
+    });
+    expect(summary.source).toBe("unknown");
+    expect(summary.capabilities.generate).toBe(false);
+    expect(summary.capabilities.confidence).toBe("unknown");
+  });
+
   it("requires discovered, edit-capable reference support before enabling Sketch", () => {
     const discoveredProvider = provider({
       discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }],
@@ -330,6 +451,14 @@ describe("model capability contracts", () => {
       }
     });
 
+    expect(preflightSketchCapability(provider({
+      discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }],
+      lastModelDiscoveryAt: undefined
+    }), GPT_IMAGE_2_MODEL_ID).ok).toBe(false);
+    expect(preflightSketchCapability(provider({
+      discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }],
+      lastModelDiscoveryAt: "not-a-timestamp"
+    }), GPT_IMAGE_2_MODEL_ID).ok).toBe(false);
     expect(preflightSketchCapability(provider({ discoveredModels: [], lastModelDiscoveryAt: now }), GPT_IMAGE_2_MODEL_ID).ok).toBe(false);
     expect(preflightSketchCapability(provider({
       discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }],
@@ -353,5 +482,18 @@ describe("model capability contracts", () => {
       lastModelDiscoveryAt: now
     }), GPT_IMAGE_2_MODEL_ID).ok).toBe(false);
     expect(preflightSketchCapability(provider({ activeLaunchId: GENERAL_LAUNCH_ID, activeModelId: "general" }), "general").ok).toBe(false);
+  });
+
+  it("requires Sketch discovery to match the request provider family", () => {
+    const mismatchedProvider = provider({
+      discoveredModels: [{
+        id: GPT_IMAGE_2_5_MODEL_ID,
+        providerKind: "gemini",
+        displayName: "GPT Image 2"
+      }],
+      lastModelDiscoveryAt: now
+    });
+
+    expect(preflightSketchCapability(mismatchedProvider, GPT_IMAGE_2_5_MODEL_ID, "openai").ok).toBe(false);
   });
 });

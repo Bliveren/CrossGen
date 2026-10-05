@@ -6,8 +6,13 @@ import {
   GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
+  focusedLaunchIdForModel,
+  isGptImage2ModelId,
+  isGptImage25LaunchAlias,
+  isGptImage25ProviderModelId,
   NANO_BANANA_3_MODEL_ID,
-  normalizeGeminiImageModelId
+  normalizeGeminiImageModelId,
+  stripModelResourcePrefix
 } from "./modelCatalog.js";
 import {
   DEFAULT_IMAGE_PARAMS,
@@ -60,13 +65,35 @@ function hasControlCharacters(value: string): boolean {
 }
 
 function inferLaunchId(kind: ProviderKind, model: string | undefined): FocusedLaunchId {
-  const normalizedModel = model?.toLowerCase() ?? "";
-  if (normalizedModel.includes("gpt-image-2.5")) return GPT_IMAGE_2_5_LAUNCH_ID;
-  if (normalizedModel === GPT_IMAGE_2_MODEL_ID || normalizedModel.includes("gpt-image")) return GPT_IMAGE_2_LAUNCH_ID;
-  if (normalizedModel.includes("gemini") || normalizedModel.includes("nano-banana")) return NANO_BANANA_3_LAUNCH_ID;
+  const focusedLaunchId = model ? focusedLaunchIdForModel(kind, model) : undefined;
+  if (focusedLaunchId) return focusedLaunchId;
+  // Keep accepting the old undated launch alias in imported links, but map it
+  // to the concrete provider variant before it reaches the runtime.
+  if (kind === "openai" && model && isGptImage25LaunchAlias(model)) {
+    return GPT_IMAGE_2_5_LAUNCH_ID;
+  }
   if (kind === "gemini") return NANO_BANANA_3_LAUNCH_ID;
-  if (!normalizedModel && kind === "openai") return GPT_IMAGE_2_LAUNCH_ID;
+  if (!model?.trim() && kind === "openai") return GPT_IMAGE_2_LAUNCH_ID;
   return GENERAL_LAUNCH_ID;
+}
+
+function normalizeAppLinkModel(
+  kind: ProviderKind,
+  launchId: FocusedLaunchId,
+  value: string | undefined
+): string | undefined {
+  if (!value?.trim()) return undefined;
+  if (kind === "gemini") return normalizeGeminiImageModelId(value);
+
+  const providerModelId = stripModelResourcePrefix(value);
+  if (kind === "openai" && launchId === GPT_IMAGE_2_5_LAUNCH_ID) {
+    if (isGptImage25ProviderModelId(providerModelId)) return providerModelId;
+    if (isGptImage25LaunchAlias(providerModelId)) return GPT_IMAGE_2_5_DEFAULT_MODEL_ID;
+  }
+  if (kind === "openai" && launchId === GPT_IMAGE_2_LAUNCH_ID && isGptImage2ModelId(providerModelId)) {
+    return providerModelId;
+  }
+  return providerModelId;
 }
 
 function isSupportedAppLinkTarget(url: URL): boolean {
@@ -146,13 +173,9 @@ export function parseAppLink(value: string): AppLinkProviderConfig {
   const model = firstParam(url.searchParams, ["model", "default_model", "defaultModel"]);
   const launchId = parseLaunchId(firstParam(url.searchParams, ["launch", "launch_id", "activeLaunchId"])) ?? inferLaunchId(kind, model);
   const requestedActiveModelId = firstParam(url.searchParams, ["active_model_id", "activeModelId"]) ?? model;
-  const activeModelId = launchId === NANO_BANANA_3_LAUNCH_ID && requestedActiveModelId
-    ? normalizeGeminiImageModelId(requestedActiveModelId)
-    : requestedActiveModelId;
-  const requestedDefaultModel = launchId === NANO_BANANA_3_LAUNCH_ID && model
-    ? normalizeGeminiImageModelId(model)
-    : model;
-  const defaultModel = model ?? (
+  const activeModelId = normalizeAppLinkModel(kind, launchId, requestedActiveModelId);
+  const requestedDefaultModel = normalizeAppLinkModel(kind, launchId, model);
+  const defaultModel = requestedDefaultModel ?? (
     launchId === GPT_IMAGE_2_LAUNCH_ID
       ? GPT_IMAGE_2_MODEL_ID
       : launchId === GPT_IMAGE_2_5_LAUNCH_ID
@@ -182,11 +205,11 @@ export function parseAppLink(value: string): AppLinkProviderConfig {
     name: displayName,
     apiKey,
     baseURL,
-    defaultModel: requestedDefaultModel ?? defaultModel,
+    defaultModel,
     defaultSize,
     defaultQuality,
     timeoutMs,
     activeLaunchId: launchId,
-    activeModelId: activeModelId || requestedDefaultModel || defaultModel
+    activeModelId: activeModelId || defaultModel
   };
 }

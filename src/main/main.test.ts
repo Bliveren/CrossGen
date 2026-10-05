@@ -5,8 +5,12 @@ import { buildProviderConfigForSave } from "./services/providerConfigSave";
 import { canRunRequestWithConfig } from "./services/providerRequestMatch";
 import { defaultStoredConfig, type StoredProviderConfig } from "./services/stateMigration";
 import {
+  GPT_IMAGE_2_LAUNCH_ID,
+  GPT_IMAGE_2_MODEL_ID,
   GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
+  GPT_IMAGE_2_5_MODEL_ID,
+  GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
   GPT_IMAGE_2_5_SUNBURST_SNAPSHOT_MODEL_ID
 } from "../shared/modelCatalog";
 
@@ -15,10 +19,11 @@ function savedConfig(patch: Partial<StoredProviderConfig> = {}): StoredProviderC
     ...defaultStoredConfig,
     encryptedApiKey: "plain:c2stdZXN0LW9wZW5haS1rZXk=",
     encryption: "localFallback",
-    discoveredModels: [{ id: "gpt-image-2", providerKind: "openai" }],
+    discoveredModels: [{ id: "gpt-image-2", providerKind: "openai", availability: "confirmed" }],
     lastModelDiscoveryAt: "2026-06-09T01:02:03.000Z",
     lastModelDiscoveryError: "old discovery error",
     openAIImageRouting: {
+      modelId: "gpt-image-2",
       preferredEditRoute: "chat-completions",
       probes: [{
         route: "chat-completions",
@@ -56,10 +61,59 @@ describe("main config save builder", () => {
     expect(next.kind).toBe("openai");
     expect(next.encryptedApiKey).toBe("plain:c2stdZXN0LW9wZW5haS1rZXk=");
     expect(next.encryption).toBe("localFallback");
-    expect(next.discoveredModels).toEqual([{ id: "gpt-image-2", providerKind: "openai" }]);
+    expect(next.discoveredModels).toEqual([{ id: "gpt-image-2", providerKind: "openai", availability: "confirmed" }]);
     expect(next.lastModelDiscoveryAt).toBe("2026-06-09T01:02:03.000Z");
     expect(next.openAIImageRouting?.preferredEditRoute).toBe("chat-completions");
     expect(next.streamingPartialsEnabled).toBe(true);
+  });
+
+  it("invalidates route evidence when switching between GPT Image 2 and GPT Image 2.5", () => {
+    const next = buildProviderConfigForSave(
+      savedConfig({
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        defaultModel: GPT_IMAGE_2_MODEL_ID,
+        openAIImageRouting: {
+          modelId: GPT_IMAGE_2_MODEL_ID,
+          preferredGenerateRoute: "chat-completions",
+          probes: [],
+          updatedAt: "2026-06-09T01:02:03.000Z"
+        }
+      }),
+      input({
+        activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_5_MODEL_ID,
+        defaultModel: GPT_IMAGE_2_5_MODEL_ID
+      }),
+      "2026-06-09T02:00:00.000Z"
+    );
+
+    expect(next.activeLaunchId).toBe(GPT_IMAGE_2_5_LAUNCH_ID);
+    expect(next.activeModelId).toBe(GPT_IMAGE_2_5_DEFAULT_MODEL_ID);
+    expect(next.openAIImageRouting).toBeUndefined();
+  });
+
+  it("does not preserve legacy route evidence without a bound model id", () => {
+    const next = buildProviderConfigForSave(
+      savedConfig({
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        defaultModel: GPT_IMAGE_2_MODEL_ID,
+        openAIImageRouting: {
+          preferredGenerateRoute: "chat-completions",
+          probes: [],
+          updatedAt: "2026-06-09T01:02:03.000Z"
+        }
+      }),
+      input({
+        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+        activeModelId: GPT_IMAGE_2_MODEL_ID,
+        defaultModel: GPT_IMAGE_2_MODEL_ID
+      }),
+      "2026-06-09T02:00:00.000Z"
+    );
+
+    expect(next.openAIImageRouting).toBeUndefined();
   });
 
   it("invalidates discovery metadata when the same provider base URL changes", () => {
@@ -74,7 +128,21 @@ describe("main config save builder", () => {
     expect(next.streamingPartialsEnabled).toBe(false);
   });
 
-  it("preserves saved key and invalidates discovery metadata when switching provider without a new key", () => {
+  it("invalidates discovery metadata when a new API key is submitted", () => {
+    const next = buildProviderConfigForSave(
+      savedConfig(),
+      input({ apiKey: "sk-new-key-that-is-long-enough" }),
+      "2026-06-09T02:00:00.000Z",
+      true
+    );
+
+    expect(next.discoveredModels).toEqual([]);
+    expect(next.lastModelDiscoveryAt).toBeUndefined();
+    expect(next.lastModelDiscoveryError).toBeUndefined();
+    expect(next.openAIImageRouting).toBeUndefined();
+  });
+
+  it("preserves saved key but clears the model selection when switching provider without a new key", () => {
     const next = buildProviderConfigForSave(
       savedConfig(),
       input({
@@ -90,8 +158,9 @@ describe("main config save builder", () => {
     expect(next.kind).toBe("gemini");
     expect(next.encryptedApiKey).toBe("plain:c2stdZXN0LW9wZW5haS1rZXk=");
     expect(next.encryption).toBe("localFallback");
-    expect(next.activeLaunchId).toBe("nano-banana-3");
-    expect(next.activeModelId).toBe("gemini-3.1-flash-image");
+    expect(next.activeLaunchId).toBe("general");
+    expect(next.activeModelId).toBe("");
+    expect(next.defaultModel).toBe("");
     expect(next.discoveredModels).toEqual([]);
     expect(next.lastModelDiscoveryAt).toBeUndefined();
     expect(next.lastModelDiscoveryError).toBeUndefined();
@@ -119,7 +188,7 @@ describe("main config save builder", () => {
     expect(next.lastModelDiscoveryAt).toBeUndefined();
   });
 
-  it("preserves an explicitly requested cross-provider focused launch", () => {
+  it("does not trust an explicitly requested cross-provider launch before discovery", () => {
     const next = buildProviderConfigForSave(
       savedConfig(),
       input({
@@ -132,12 +201,12 @@ describe("main config save builder", () => {
       "2026-06-09T02:00:00.000Z"
     );
 
-    expect(next.defaultModel).toBe("gpt-image-2");
-    expect(next.activeLaunchId).toBe("gpt-image-2");
-    expect(next.activeModelId).toBe("gpt-image-2");
+    expect(next.defaultModel).toBe("");
+    expect(next.activeLaunchId).toBe("general");
+    expect(next.activeModelId).toBe("");
   });
 
-  it("preserves the selected Nano Banana model when a Gemini endpoint exposes multiple image models", () => {
+  it("does not trust a selected Nano Banana model until the new endpoint is discovered", () => {
     const next = buildProviderConfigForSave(
       savedConfig({ kind: "gemini" }),
       input({
@@ -150,20 +219,21 @@ describe("main config save builder", () => {
       "2026-06-09T02:00:00.000Z"
     );
 
-    expect(next.defaultModel).toBe("gemini-3-pro-image");
-    expect(next.activeLaunchId).toBe("nano-banana-3");
-    expect(next.activeModelId).toBe("gemini-3-pro-image");
+    expect(next.defaultModel).toBe("");
+    expect(next.activeLaunchId).toBe("general");
+    expect(next.activeModelId).toBe("");
   });
 
   it("allows custom providers to run discovered Gemini image models", () => {
     const provider: StoredProviderConfig = {
       ...savedConfig({
-        kind: "custom",
-        activeLaunchId: "gpt-image-2",
-        activeModelId: "gpt-image-2",
-        discoveredModels: [
-          { id: "gemini-3.1-flash-image", providerKind: "gemini" },
-          { id: "gpt-image-2", providerKind: "openai" }
+      kind: "custom",
+      activeLaunchId: "gpt-image-2",
+      activeModelId: "gpt-image-2",
+      lastModelDiscoveryError: undefined,
+      discoveredModels: [
+        { id: "gemini-3.1-flash-image", providerKind: "gemini", availability: "confirmed" },
+        { id: "gpt-image-2", providerKind: "openai", availability: "confirmed" }
         ]
       })
     };
@@ -176,6 +246,116 @@ describe("main config save builder", () => {
         providerKind: "gemini" as const,
         launchId: "nano-banana-3" as const,
         model: "gemini-3.1-flash-image"
+      }
+    };
+
+    expect(canRunRequestWithConfig(request, provider)).toBe(true);
+  });
+
+  it("rejects a same-provider model that is absent from the latest discovery", () => {
+    const provider = savedConfig({
+      lastModelDiscoveryError: undefined,
+      discoveredModels: [{ id: "gpt-image-2", providerKind: "openai" }],
+      activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
+      activeModelId: GPT_IMAGE_2_5_MODEL_ID,
+      defaultModel: GPT_IMAGE_2_5_MODEL_ID
+    });
+    const request = {
+      mode: "generate" as const,
+      prompt: "test",
+      inputPaths: [],
+      params: {
+        ...DEFAULT_IMAGE_PARAMS,
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        model: GPT_IMAGE_2_5_MODEL_ID
+      }
+    };
+
+    expect(canRunRequestWithConfig(request, provider)).toBe(false);
+  });
+
+  it("rejects stale models after a discovery error even when provider kind matches", () => {
+    const provider = savedConfig({
+      discoveredModels: [{ id: "gpt-image-2", providerKind: "openai" }],
+      activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
+      activeModelId: "gpt-image-2",
+      defaultModel: "gpt-image-2"
+    });
+    const request = {
+      mode: "generate" as const,
+      prompt: "test",
+      inputPaths: [],
+      params: {
+        ...DEFAULT_IMAGE_PARAMS,
+        model: "gpt-image-2"
+      }
+    };
+
+    expect(canRunRequestWithConfig(request, provider)).toBe(false);
+  });
+
+  it("rejects a launch family that does not match the discovered model id", () => {
+    const provider = savedConfig({
+      lastModelDiscoveryError: undefined,
+      discoveredModels: [{ id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai" }]
+    });
+    const request = {
+      mode: "generate" as const,
+      prompt: "test",
+      inputPaths: [],
+      params: {
+        ...DEFAULT_IMAGE_PARAMS,
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        model: GPT_IMAGE_2_MODEL_ID
+      }
+    };
+
+    expect(canRunRequestWithConfig(request, provider)).toBe(false);
+  });
+
+  it.each(["listed", "inconclusive", "rejected"] as const)(
+    "rejects a focused model that is %s but not confirmed",
+    (availability) => {
+      const provider = savedConfig({
+        lastModelDiscoveryError: undefined,
+        discoveredModels: [{
+          id: GPT_IMAGE_2_5_MODEL_ID,
+          providerKind: "openai",
+          availability
+        }]
+      });
+      const request = {
+        mode: "generate" as const,
+        prompt: "test",
+        inputPaths: [],
+        params: {
+          ...DEFAULT_IMAGE_PARAMS,
+          launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+          model: GPT_IMAGE_2_5_MODEL_ID
+        }
+      };
+
+      expect(canRunRequestWithConfig(request, provider)).toBe(false);
+    }
+  );
+
+  it("allows an exact confirmed focused model to reach the runtime match", () => {
+    const provider = savedConfig({
+      lastModelDiscoveryError: undefined,
+      discoveredModels: [{
+        id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
+        providerKind: "openai",
+        availability: "confirmed"
+      }]
+    });
+    const request = {
+      mode: "generate" as const,
+      prompt: "test",
+      inputPaths: [],
+      params: {
+        ...DEFAULT_IMAGE_PARAMS,
+        launchId: GPT_IMAGE_2_5_LAUNCH_ID,
+        model: GPT_IMAGE_2_5_SUNBURST_MODEL_ID
       }
     };
 

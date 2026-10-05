@@ -117,14 +117,12 @@ import {
   GPT_IMAGE_2_5_LAUNCH_ID,
   GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   NANO_BANANA_3_LAUNCH_ID,
+  focusedLaunchIdForModel,
   getProviderKindForFocusedModelId,
-  getFocusedModelDefinition,
-  getModelDisplayName,
-  isGeneralFallbackProvider,
-  isGptImage25ModelId,
-  isGptImageModelId,
-  isPotentialGeneralImageModel,
-  normalizeModelId
+  getModelDisplayNameForProvider,
+  isDiscoveredImageModel,
+  isDiscoveredModelLaunchable,
+  normalizeProviderModelId
 } from "../shared/modelCatalog.js";
 import { compareVersions, isAllowedUpdateUrl, parseUpdateManifest, safeUpdateFileName, selectUpdateAsset } from "../shared/updateManifest.js";
 import { resolveDataDirs, resolveUserDataDir } from "../core/dataDirs.js";
@@ -189,9 +187,19 @@ import {
 import { runReadonlyMcpStdioServer } from "../mcp/stdioServer.js";
 import { runMcpWithBroker, socketPathForUserData } from "../mcp/broker.js";
 import { fetchWithTimeout } from "./services/openaiImageAdapter.js";
-import { probeOpenAIImageRouting } from "./services/openaiImageRouting.js";
+import {
+  isOpenAIImageModelUnavailable,
+  probeOpenAIImageRouting
+} from "./services/openaiImageRouting.js";
 import { getImageProviderAdapterForRequest, unsupportedImageProviderMessage } from "./services/imageProviderAdapters.js";
-import { discoverModelsAcrossProviders, sanitizeModelDiscoveryError } from "./services/modelDiscovery.js";
+import {
+  addFocusedOpenAIImageCandidates,
+  discoverModelsAcrossProviders,
+  probeDiscoveredModelAvailability,
+  retainVerifiedDiscoveryEvidence,
+  sanitizeModelDiscoveryError,
+  selectActiveLaunchForDiscovery
+} from "./services/modelDiscovery.js";
 import {
   buildAgentRuntimeStatus,
   disableAgentCliLink,
@@ -1703,7 +1711,7 @@ function createJob(
     providerId: config.id,
     launchId,
     modelId,
-    modelDisplayName: getModelDisplayName(launchId, modelId),
+    modelDisplayName: getModelDisplayNameForProvider(request.params.providerKind, modelId, launchId),
     mode: request.mode,
     workflow: request.workflow,
     sketch: request.sketch,
@@ -1930,7 +1938,8 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
     throw new Error(configValidation.message ?? "配置参数无效。");
   }
   const now = new Date().toISOString();
-  let nextConfig = buildProviderConfigForSave(activeProvider, input, now);
+  const submittedNewApiKey = input.apiKey !== undefined && input.apiKey.trim().length > 0;
+  let nextConfig = buildProviderConfigForSave(activeProvider, input, now, submittedNewApiKey);
 
   if (input.apiKey !== undefined && input.apiKey.trim()) {
     const validation = validateApiKey(input.apiKey);
@@ -1943,7 +1952,6 @@ async function handleSaveConfig(_event: IpcMainInvokeEvent, input: ProviderConfi
   const hasUsableApiKey = Boolean(nextConfig.encryptedApiKey);
   const baseURLChanged = nextConfig.baseURL !== activeProvider.baseURL;
   const providerKindChanged = nextConfig.kind !== activeProvider.kind;
-  const submittedNewApiKey = input.apiKey !== undefined && input.apiKey.trim().length > 0;
 
   const nextProviders = state.providers.map(p => p.id === activeProvider.id ? nextConfig : p);
   const nextState = { ...state, providers: nextProviders };
@@ -1982,7 +1990,10 @@ async function addProviderConfig(input: ProviderConfigInput): Promise<AppSnapsho
     updatedAt: now,
     encryption: "none"
   };
-  let newConfig = buildProviderConfigForSave(baseConfig, input, now);
+  // A newly added provider has no trustworthy model catalogue yet, even when
+  // the AppLink supplied a familiar default model. Keep it unselected until
+  // the first successful discovery returns an exact provider model id.
+  let newConfig = buildProviderConfigForSave(baseConfig, input, now, true);
 
   if (input.apiKey !== undefined && input.apiKey.trim()) {
     const validation = validateApiKey(input.apiKey);
@@ -2167,6 +2178,10 @@ async function handleClearApiKey(_event: IpcMainInvokeEvent, providerId?: string
     discoveredModels: [],
     lastModelDiscoveryAt: undefined,
     lastModelDiscoveryError: undefined,
+    defaultModel: "",
+    activeLaunchId: GENERAL_LAUNCH_ID,
+    activeModelId: "",
+    openAIImageRouting: undefined,
     updatedAt: new Date().toISOString()
   };
   const nextProviders = state.providers.map(p => p.id === activeProvider.id ? nextConfig : p);
@@ -3006,29 +3021,138 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
   const apiKey = getApiKeyForConfigOrThrow(config);
   try {
     const discovery = await discoverModelsAcrossProviders(config.kind, config.baseURL, apiKey, Math.min(config.timeoutMs, 30000), { fetch });
-    const kind = discovery.inferredProviderKind ?? config.kind;
-    const activeSelection = selectActiveLaunchForDiscovery(
-      config,
-      discovery.models,
-      discovery.inferredProviderKind ?? kind
+    // `config.kind` is the configured transport and must remain stable. A
+    // discovered model's family (for example Gemini) is independent from the
+    // protocol used by an OpenAI-compatible gateway.
+    let transportProviderKind = discovery.transportProviderKind ?? config.kind;
+    const discoveryModels = transportProviderKind === "gemini"
+      ? discovery.models
+      : addFocusedOpenAIImageCandidates(discovery.models, config.kind);
+    let discoveredModels = await probeDiscoveredModelAvailability(
+      discoveryModels,
+      transportProviderKind,
+      config.baseURL,
+      apiKey,
+      Math.min(config.timeoutMs, 30000),
+      { fetch },
+      config.kind
     );
+    discoveredModels = retainVerifiedDiscoveryEvidence(discoveredModels);
+    let inferredProviderKind = discovery.inferredProviderKind ?? config.kind;
+
+    // A stale focused id in the primary catalogue can look image-capable
+    // before its exact metadata/route probe runs. If that probe leaves no
+    // launchable image row, retry the in-memory alternate catalogues and keep
+    // their confirmed rows alongside the rejected primary evidence.
+    if (!discoveredModels.some(isDiscoveredModelLaunchable)) {
+      for (const alternate of discovery.alternateResults ?? []) {
+        const alternateModels = await probeDiscoveredModelAvailability(
+          alternate.models,
+          alternate.transportProviderKind,
+          config.baseURL,
+          apiKey,
+          Math.min(config.timeoutMs, 30000),
+          { fetch },
+          config.kind
+        );
+        const retainedAlternateModels = retainVerifiedDiscoveryEvidence(alternateModels);
+        if (!retainedAlternateModels.some(isDiscoveredModelLaunchable)) continue;
+
+        const mergedByKey = new Map(
+          discoveredModels.map((model) => [
+            `${model.providerKind}:${normalizeProviderModelId(model.providerKind, model.id)}`,
+            model
+          ])
+        );
+        for (const model of retainedAlternateModels) {
+          const key = `${model.providerKind}:${normalizeProviderModelId(model.providerKind, model.id)}`;
+          const existing = mergedByKey.get(key);
+          if (!existing || (isDiscoveredModelLaunchable(model) && !isDiscoveredModelLaunchable(existing))) {
+            mergedByKey.set(key, model);
+          }
+        }
+        discoveredModels = [...mergedByKey.values()];
+        transportProviderKind = alternate.transportProviderKind;
+        inferredProviderKind = alternate.inferredProviderKind ?? config.kind;
+        break;
+      }
+    }
+
+    let activeSelection = selectActiveLaunchForDiscovery(
+      { ...config, providerKind: config.kind },
+      discoveredModels,
+      inferredProviderKind
+    );
+    let openAIImageRouting = activeSelection.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ||
+      activeSelection.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID
+      ? await probeOpenAIImageRouting({
+          ...config,
+          kind: config.kind,
+          defaultModel: activeSelection.defaultModel,
+          activeLaunchId: activeSelection.activeLaunchId,
+          activeModelId: activeSelection.activeModelId
+        }, apiKey)
+      : undefined;
+
+    // `/models` is useful discovery evidence, but a few aggregators return
+    // stale or over-broad catalogues. If every lightweight generate probe
+    // explicitly rejects the selected model id, remove that exact row and
+    // re-run launch selection so GPT Image 2.5 cannot mask a runnable GPT
+    // Image 2 fallback (or remain falsely enabled by a display name).
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (!isOpenAIImageModelUnavailable(openAIImageRouting)) break;
+      const rejectedModelId = activeSelection.activeModelId;
+      if (!rejectedModelId) break;
+      const normalizedRejectedModelId = normalizeProviderModelId("openai", rejectedModelId);
+      const rejectedModel = discoveredModels.find((model) =>
+        model.providerKind === "openai" &&
+        normalizeProviderModelId("openai", model.id) === normalizedRejectedModelId
+      );
+      if (!rejectedModel) break;
+      const rejectionReason = openAIImageRouting?.probes
+        .filter((probe) => probe.mode === "generate" && probe.modelUnavailable)
+        .map((probe) => probe.error)
+        .find(Boolean);
+      discoveredModels = discoveredModels.map((model) =>
+        model === rejectedModel
+          ? {
+              ...model,
+              availability: "rejected",
+              ...(rejectionReason ? { availabilityReason: rejectionReason } : {
+                availabilityReason: "The provider rejected this exact model id."
+              })
+            }
+          : model
+      );
+      activeSelection = selectActiveLaunchForDiscovery(
+        { ...config, providerKind: config.kind },
+        discoveredModels,
+        inferredProviderKind
+      );
+      openAIImageRouting =
+        activeSelection.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ||
+        activeSelection.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID
+          ? await probeOpenAIImageRouting({
+              ...config,
+              kind: config.kind,
+              defaultModel: activeSelection.defaultModel,
+              activeLaunchId: activeSelection.activeLaunchId,
+              activeModelId: activeSelection.activeModelId
+            }, apiKey)
+          : undefined;
+    }
+    discoveredModels = retainVerifiedDiscoveryEvidence(discoveredModels);
     return {
       ...config,
-      kind,
-      name: config.name || providerDisplayName(kind),
+      kind: config.kind,
+      name: config.name || providerDisplayName(config.kind),
       defaultModel: activeSelection.defaultModel,
       activeLaunchId: activeSelection.activeLaunchId,
       activeModelId: activeSelection.activeModelId,
-      discoveredModels: discovery.models,
+      discoveredModels,
       lastModelDiscoveryAt: new Date().toISOString(),
       lastModelDiscoveryError: undefined,
-      openAIImageRouting: await probeOpenAIImageRouting({
-        ...config,
-        kind,
-        defaultModel: activeSelection.defaultModel,
-        activeLaunchId: activeSelection.activeLaunchId,
-        activeModelId: activeSelection.activeModelId
-      }, apiKey),
+      openAIImageRouting,
       updatedAt: new Date().toISOString()
     };
   } catch (error) {
@@ -3037,7 +3161,16 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
       discoveredModels: [],
       lastModelDiscoveryAt: new Date().toISOString(),
       lastModelDiscoveryError: sanitizeModelDiscoveryError(error, apiKey),
-      openAIImageRouting: await probeOpenAIImageRouting(config, apiKey),
+      // A failed probe is not evidence that the previous model or route still
+      // works for this key. Clear the active selection until a later successful
+      // probe confirms an exact provider model id again.
+      defaultModel: "",
+      activeLaunchId: GENERAL_LAUNCH_ID,
+      activeModelId: "",
+      // A failed catalogue request is not evidence that the previously
+      // selected model is still available. Do not probe or retain route
+      // preferences for stale GPT Image 2/2.5 state.
+      openAIImageRouting: undefined,
       updatedAt: new Date().toISOString()
     };
   }
@@ -3067,67 +3200,6 @@ async function refreshProviderDiscoveryIfCurrent(providerId: string, expectedUpd
   broadcastSnapshot(nextState);
 }
 
-function selectActiveLaunchForDiscovery(
-  config: StoredProviderConfig,
-  models: StoredProviderConfig["discoveredModels"],
-  inferredProviderKind: StoredProviderConfig["kind"]
-) {
-  if (inferredProviderKind === "gemini") {
-    const nanoDefinition = getFocusedModelDefinition(NANO_BANANA_3_LAUNCH_ID);
-    const nanoModelIds = new Set((nanoDefinition?.modelIds ?? []).map(normalizeModelId));
-    const nanoModel = models.find((model) => model.providerKind === "gemini" && nanoModelIds.has(normalizeModelId(model.id)));
-    if (nanoModel) {
-      return {
-        activeLaunchId: NANO_BANANA_3_LAUNCH_ID,
-        activeModelId: nanoModel.id,
-        defaultModel: nanoModel.id
-      };
-    }
-  }
-
-  if (inferredProviderKind === "openai") {
-    const currentModel = models.find((model) => normalizeModelId(model.id) === normalizeModelId(config.activeModelId || config.defaultModel));
-    if (currentModel && isGptImageModelId(currentModel.id)) {
-      return {
-        activeLaunchId: isGptImage25ModelId(currentModel.id) ? GPT_IMAGE_2_5_LAUNCH_ID : GPT_IMAGE_2_LAUNCH_ID,
-        activeModelId: currentModel.id,
-        defaultModel: currentModel.id
-      };
-    }
-    const gpt25Model = models.find((model) => model.providerKind === "openai" && isGptImage25ModelId(model.id));
-    if (gpt25Model) {
-      return {
-        activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
-        activeModelId: gpt25Model.id,
-        defaultModel: gpt25Model.id
-      };
-    }
-    const gptModel = models.find((model) => model.providerKind === "openai" && normalizeModelId(model.id) === normalizeModelId(GPT_IMAGE_2_MODEL_ID));
-    if (gptModel) {
-      return {
-        activeLaunchId: GPT_IMAGE_2_LAUNCH_ID,
-        activeModelId: gptModel.id,
-        defaultModel: gptModel.id
-      };
-    }
-  }
-
-  const generalModel = models.find((model) => isGeneralFallbackProvider(model.providerKind) && isPotentialGeneralImageModel(model));
-  if (generalModel) {
-    return {
-      activeLaunchId: GENERAL_LAUNCH_ID,
-      activeModelId: generalModel.id,
-      defaultModel: generalModel.id
-    };
-  }
-
-  return {
-    activeLaunchId: config.activeLaunchId,
-    activeModelId: config.activeModelId,
-    defaultModel: config.defaultModel
-  };
-}
-
 async function handleDiscoverModels(_event: IpcMainInvokeEvent, providerId?: string): Promise<ProviderConfig> {
   const state = await readState();
   const targetProviderId = typeof providerId === "string" && providerId.trim() ? providerId.trim() : state.activeProviderId;
@@ -3151,14 +3223,16 @@ async function handleTestConnection(): Promise<ConnectionTestResult> {
     if (nextConfig.lastModelDiscoveryError) {
       return {
         ok: false,
-        message: nextConfig.lastModelDiscoveryError
+        message: nextConfig.lastModelDiscoveryError,
+        config: toPublicConfig(nextConfig)
       };
     }
 
     return {
       ok: true,
       message: "连接成功。",
-      status: 200
+      status: 200,
+      config: toPublicConfig(nextConfig)
     };
   } catch (error) {
     return {
@@ -3412,11 +3486,21 @@ function isOpenAIImageRouteValue(value: string | undefined): value is OpenAIImag
 }
 
 function storedOpenAIImageRouteProbeVerified(provider: StoredProviderConfig, mode: "generate" | "edit" | "guided-region", route: OpenAIImageRoute): boolean {
+  if (!openAIImageRoutingMatchesActiveModel(provider)) return false;
   return Boolean(provider.openAIImageRouting?.probes.some((probe) =>
     probe.mode === mode &&
     probe.route === route &&
-    (probe.verified === true || (typeof probe.status === "number" && probe.status >= 200 && probe.status < 300))
+    normalizeProviderModelId("openai", probe.modelId ?? "") ===
+      normalizeProviderModelId("openai", provider.activeModelId || provider.defaultModel) &&
+    probe.verified === true
   ));
+}
+
+function openAIImageRoutingMatchesActiveModel(provider: StoredProviderConfig): boolean {
+  const routing = provider.openAIImageRouting;
+  if (!routing?.modelId) return false;
+  return normalizeProviderModelId("openai", routing.modelId) ===
+    normalizeProviderModelId("openai", provider.activeModelId || provider.defaultModel);
 }
 
 function routeVerifiedForQueueDiagnostic(provider: StoredProviderConfig | undefined, request: RunJobRequest, route: string | undefined): boolean | undefined {
@@ -3437,7 +3521,7 @@ function routeVerifiedForQueueDiagnostic(provider: StoredProviderConfig | undefi
     if (request.params.imageRoute !== "auto") {
       return storedOpenAIImageRouteProbeVerified(provider, "guided-region", resolvedRoute) ? true : undefined;
     }
-    if (!provider.openAIImageRouting) return false;
+    if (!provider.openAIImageRouting || !openAIImageRoutingMatchesActiveModel(provider)) return false;
     if (provider.openAIImageRouting.preferredGuidedEditRoute === resolvedRoute) {
       return provider.openAIImageRouting.preferredGuidedEditRouteVerified ?? storedOpenAIImageRouteProbeVerified(provider, "guided-region", resolvedRoute);
     }
@@ -3448,7 +3532,7 @@ function routeVerifiedForQueueDiagnostic(provider: StoredProviderConfig | undefi
     return storedOpenAIImageRouteProbeVerified(provider, probeMode, resolvedRoute) ? true : undefined;
   }
 
-  if (!provider.openAIImageRouting) return false;
+  if (!provider.openAIImageRouting || !openAIImageRoutingMatchesActiveModel(provider)) return false;
   if (probeMode === "generate" && provider.openAIImageRouting.preferredGenerateRoute === resolvedRoute) {
     return provider.openAIImageRouting.preferredGenerateRouteVerified ?? storedOpenAIImageRouteProbeVerified(provider, probeMode, resolvedRoute);
   }
@@ -3969,7 +4053,11 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
     throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
   }
   if (normalizedRequest.workflow === "sketch") {
-    const preflight = preflightSketchCapability(activeProvider, normalizedRequest.params.model);
+    const preflight = preflightSketchCapability(
+      activeProvider,
+      normalizedRequest.params.model,
+      normalizedRequest.params.providerKind
+    );
     if (!preflight.ok) {
       throw new Error(preflight.reason ?? "当前 API Key 尚未确认所选模型支持 Sketch。");
     }
@@ -5459,17 +5547,32 @@ function activeProviderModel(provider: StoredProviderConfig, override?: string):
 }
 
 function agentModelProviderKind(provider: StoredProviderConfig, model: string, override?: string): StoredProviderConfig["kind"] {
-  const normalizedModel = normalizeModelId(model);
-  const discoveredModel = provider.discoveredModels.find((candidate) => normalizeModelId(candidate.id) === normalizedModel);
   const focusedProviderKind = getProviderKindForFocusedModelId(model);
+  const discoveredModel = provider.discoveredModels
+    .filter((candidate) =>
+      normalizeProviderModelId(candidate.providerKind, candidate.id) ===
+        normalizeProviderModelId(candidate.providerKind, model) &&
+      isDiscoveredImageModel(candidate)
+    )
+    .sort((left, right) => {
+      const leftFocused = focusedLaunchIdForModel(left.providerKind, left.id);
+      const rightFocused = focusedLaunchIdForModel(right.providerKind, right.id);
+      const leftScore = focusedProviderKind
+        ? left.providerKind === focusedProviderKind ? 0 : 10
+        : left.providerKind === provider.kind ? 0 : leftFocused ? 1 : 2;
+      const rightScore = focusedProviderKind
+        ? right.providerKind === focusedProviderKind ? 0 : 10
+        : right.providerKind === provider.kind ? 0 : rightFocused ? 1 : 2;
+      return leftScore - rightScore;
+    })[0];
 
   if (override?.trim()) {
-    return focusedProviderKind ?? discoveredModel?.providerKind ?? provider.kind;
+    return discoveredModel?.providerKind ?? focusedProviderKind ?? provider.kind;
   }
 
   if (provider.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID || provider.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID) return "openai";
   if (provider.activeLaunchId === NANO_BANANA_3_LAUNCH_ID) return "gemini";
-  return focusedProviderKind ?? discoveredModel?.providerKind ?? provider.kind;
+  return discoveredModel?.providerKind ?? focusedProviderKind ?? provider.kind;
 }
 
 function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGenerationEnqueueInput): ImageParams {
@@ -5478,11 +5581,7 @@ function buildAgentImageParams(provider: StoredProviderConfig, input: AgentGener
   const referenceImageMode = normalizeReferenceImageModeOption(input.referenceImageMode);
   const modelProviderKind = agentModelProviderKind(provider, model, input.model);
   const activeLaunchId = input.model?.trim()
-    ? modelProviderKind === "gemini"
-      ? NANO_BANANA_3_LAUNCH_ID
-      : modelProviderKind === "openai"
-        ? isGptImage25ModelId(model) ? GPT_IMAGE_2_5_LAUNCH_ID : GPT_IMAGE_2_LAUNCH_ID
-        : GENERAL_LAUNCH_ID
+    ? focusedLaunchIdForModel(modelProviderKind, model) ?? GENERAL_LAUNCH_ID
     : provider.activeLaunchId;
 
   if (activeLaunchId === GENERAL_LAUNCH_ID) {
@@ -5586,7 +5685,11 @@ function validateAgentRunJobRequest(request: RunJobRequest, provider: StoredProv
     throwCliCommandError("CAPABILITY_UNSUPPORTED", "Request provider/model does not match the selected provider configuration.", ["Switch provider or pass --provider/--model for a compatible configuration."], 4);
   }
   if (normalizedRequest.workflow === "sketch") {
-    const preflight = preflightSketchCapability(provider, normalizedRequest.params.model);
+    const preflight = preflightSketchCapability(
+      provider,
+      normalizedRequest.params.model,
+      normalizedRequest.params.providerKind
+    );
     if (!preflight.ok) {
       throwCliCommandError(
         "CAPABILITY_UNSUPPORTED",

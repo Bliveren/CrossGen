@@ -79,7 +79,7 @@ async function startServer(models, options = {}) {
 
 async function run(env) {
   try {
-    const result = await execFileAsync("node", [scriptPath], {
+    const result = await execFileAsync(process.execPath, [scriptPath], {
       env: {
         ...process.env,
         ...env
@@ -116,10 +116,29 @@ async function withTempOutput(callback) {
 }
 
 describe("real AIHub Sketch matrix verifier", () => {
-  it("does not send paid requests when the literal Nano Banana target is absent", async () => {
+  it("rejects the bare GPT Image 2.5 compatibility alias as a wire model", async () => {
+    const mock = await startServer(["gpt-image-2.5-sunburst", "gemini-3.1-flash-image"]);
+    await withTempOutput(async (tempRoot) => {
+      try {
+        const result = await run({
+          CROSSGEN_REAL_AIHUB_BASE_URL: mock.baseURL,
+          CROSSGEN_REAL_AIHUB_API_KEY: apiKey,
+          CROSSGEN_REAL_AIHUB_GPT_SKETCH_MODEL: "gpt-image-2.5",
+          CROSSGEN_REAL_AIHUB_SKETCH_OUTPUT_DIR: path.join(tempRoot, "artifacts")
+        });
+
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("compatibility alias");
+        expect(mock.requests).toHaveLength(0);
+      } finally {
+        await mock.close();
+      }
+    });
+  });
+
+  it("does not send paid requests when no real Nano Banana provider target is present", async () => {
     const mock = await startServer([
-      "gpt-image-2.5-sunburst",
-      "gemini-3.1-flash-image"
+      "gpt-image-2.5-sunburst"
     ]);
     await withTempOutput(async (tempRoot) => {
       try {
@@ -137,7 +156,9 @@ describe("real AIHub Sketch matrix verifier", () => {
         expect(summary.status).toBe("pending-target-models");
         expect(summary.requestCount).toBe(0);
         expect(summary.targets.nano.directAliasListed).toBe(false);
-        expect(summary.targets.nano.providerModelIdsListed).toEqual(["gemini-3.1-flash-image"]);
+        expect(summary.targets.nano.providerModelIdsListed).toEqual([]);
+        expect(summary.confirmedImageModels).toEqual([]);
+        expect(summary.launchableImageModels).toEqual([]);
         expect(JSON.stringify(summary)).not.toContain(apiKey);
       } finally {
         await mock.close();
@@ -148,7 +169,7 @@ describe("real AIHub Sketch matrix verifier", () => {
   it("requires explicit cost confirmation even when both target ids are visible", async () => {
     const mock = await startServer([
       "gpt-image-2.5-sunburst",
-      "nano-banana-3"
+      "gemini-3.1-flash-image"
     ]);
     await withTempOutput(async (tempRoot) => {
       try {
@@ -165,6 +186,11 @@ describe("real AIHub Sketch matrix verifier", () => {
         expect(summary.status).toBe("blocked-cost-confirmation");
         expect(summary.requestCount).toBe(0);
         expect(summary.costConfirmed).toBe(false);
+        expect(summary.targets.nano.requested).toBe("gemini-3.1-flash-image");
+        expect(summary.targets.nano.listed).toBe(true);
+        expect(summary.targets.nano.directAliasListed).toBe(false);
+        expect(summary.confirmedImageModels).toEqual([]);
+        expect(summary.launchableImageModels).toEqual([]);
       } finally {
         await mock.close();
       }
@@ -173,7 +199,7 @@ describe("real AIHub Sketch matrix verifier", () => {
 
   it("records redacted outputs and the expected failure-recovery retry", async () => {
     const mock = await startServer(
-      ["gpt-image-2.5-sunburst", "nano-banana-3"],
+      ["gpt-image-2.5-sunburst", "gemini-3.1-flash-image"],
       { failInvalidModel: true, bareBase64: true }
     );
     await withTempOutput(async (tempRoot) => {
@@ -205,6 +231,12 @@ describe("real AIHub Sketch matrix verifier", () => {
           .not.toContain(apiKey);
         expect(JSON.stringify(summary)).not.toContain(apiKey);
         expect(summary.operations.filter((operation) => operation.output)).toHaveLength(7);
+        expect(summary.confirmedImageModels).toEqual([
+          "gpt-image-2.5-sunburst",
+          "gemini-3.1-flash-image"
+        ]);
+        expect(summary.launchableImageModels).toEqual(summary.confirmedImageModels);
+        expect(summary.launchableTargetModels).toEqual(["gpt-image-2.5", "nano-banana-3"]);
       } finally {
         await mock.close();
       }

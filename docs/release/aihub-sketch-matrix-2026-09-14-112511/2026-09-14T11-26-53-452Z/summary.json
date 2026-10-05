@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "acceptanceId": "5f639898-e1c9-4928-a170-84e6bcea3de5",
+  "checkedAt": "2026-09-14T11:26:53.453Z",
+  "commit": "e9e6cca9094908e54621d40bd5a8e4e0c9f3b4da",
+  "provider": "aihub",
+  "baseURLSha256": "1fcbcc21e9c141cf2c0471fcd9eaecfd682fc56b7055740a518525a3d9851b87",
+  "route": "POST /chat/completions",
+  "requestCount": 0,
+  "costConfirmed": false,
+  "availableImageModels": [
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-lite-image",
+    "gemini-3-pro-image",
+    "gpt-image-2"
+  ],
+  "targets": {
+    "gpt": {
+      "workflow": "gpt-image-2.5-sketch",
+      "requested": "gpt-image-2.5-sunburst",
+      "listed": false,
+      "targetIdsListed": []
+    },
+    "nano": {
+      "workflow": "nano-banana-3-sketch",
+      "requested": "nano-banana-3",
+      "listed": false,
+      "directAliasListed": false,
+      "providerModelIdsListed": [
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
+        "gemini-3-pro-image"
+      ],
+      "targetIdsListed": [
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
+        "gemini-3-pro-image"
+      ],
+      "evidenceClass": "direct-target-model",
+      "caveat": null
+    }
+  },
+  "qualityReviewRequired": true,
+  "operations": [],
+  "status": "pending-target-models",
+  "blockedBy": "AIHub model discovery",
+  "missingTargetModels": [
+    "gpt-image-2.5-sunburst",
+    "nano-banana-3"
+  ],
+  "summary": "No paid image request was made because the configured AIHub account does not expose every selected target model."
+}

@@ -1,10 +1,15 @@
 # Release Evidence
 
-`evidence.json` records the external gates that cannot be completed from a
-normal local development shell: real provider API acceptance, macOS Developer ID
-signing, Apple notarization status, native Windows and Linux validation, and
-formal update manifest assets. For v0.3.4 it also records AppLink and the
-media-foundation contract gates.
+`evidence.json` records the current release candidate's external gates: real
+provider API acceptance, macOS Developer ID signing, Apple notarization status,
+native Windows and Linux validation, and formal update manifest assets. It now
+tracks the v0.3.5 candidate, which consolidates every feature and fix merged
+after the v0.3.4 release (Sketch workspace, model-discovery evidence contract,
+Gemini model contract, launcher fix) plus the planned video technology preview.
+
+The approved v0.3.4 ledger is frozen at `v0.3.4-evidence.json` (27 gates, all
+passed). Post-release Sketch work was reclassified from v0.3.4 to v0.3.5 because
+the published v0.3.4 package does not contain Sketch.
 
 Validate the ledger after every evidence update:
 
@@ -20,6 +25,7 @@ pnpm verify:release-evidence:v0.3.1
 pnpm verify:release-evidence:v0.3.2
 pnpm verify:release-evidence:v0.3.3
 pnpm verify:release-evidence:v0.3.4
+pnpm verify:release-evidence:v0.3.5
 ```
 
 The verifier also checks guarded checklist and TODO items. External acceptance
@@ -82,8 +88,10 @@ External gate trackers:
 
 Release-specific preparation:
 
-- `v0.3.4`: [v0.3.4-preflight.md](./v0.3.4-preflight.md)
-- `v0.3.4`: [evidence.json](./evidence.json)
+- `v0.3.5`: [v0.3.5-preflight.md](./v0.3.5-preflight.md)
+- `v0.3.5`: [evidence.json](./evidence.json) (current candidate ledger)
+- `v0.3.4`: [v0.3.4-preflight.md](./v0.3.4-preflight.md) (released execution record; post-release Sketch items are reclassified to v0.3.5)
+- `v0.3.4`: [v0.3.4-evidence.json](./v0.3.4-evidence.json) (frozen approved release ledger)
 - `v0.3.3`: [v0.3.3-preflight.md](./v0.3.3-preflight.md)
 - `v0.3.3`: [v0.3.3-evidence.json](./v0.3.3-evidence.json)
 - `v0.3.2`: [v0.3.2-evidence.json](./v0.3.2-evidence.json)
@@ -108,6 +116,7 @@ Rules for updating evidence:
 - Do not change checklist items from pending to complete until the matching
   evidence gate is marked `passed` and the validator succeeds.
 - `docs/release/evidence.json` tracks the current package-version release
-  candidate. Version-specific evidence files such as
-  `docs/release/v0.3.3-evidence.json` remain immutable archives for approved
+  candidate (v0.3.5 at the time of writing). Version-specific evidence files
+  such as `docs/release/v0.3.3-evidence.json` and
+  `docs/release/v0.3.4-evidence.json` remain immutable archives for approved
   releases and compatibility checks.

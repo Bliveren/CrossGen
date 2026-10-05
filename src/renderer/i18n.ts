@@ -1,4 +1,4 @@
-import type { WorkMode } from "../shared/types";
+import type { ModelDiscoveryAvailability, ModelDiscoverySource, WorkMode } from "../shared/types";
 
 export type Language = "en" | "zh";
 
@@ -229,7 +229,13 @@ export interface UiCopy {
   discoverModels: string;
   discoveringModels: string;
   discoveredModelsCount: (count: number) => string;
+  discoveredModelFamilies: (gptImage2: string[], gptImage25: string[], otherImage: string[]) => string;
+  discoveredModelCompatibilityAliases: (aliases: string[]) => string;
+  discoveredModelCompatibilityAlias: string;
   discoveredModelsSummary: (image: number, video: number, unknown: number) => string;
+  discoveredModelStatusSummary: (confirmed: number, listed: number, inconclusive: number, rejected: number) => string;
+  discoveredModelAvailability: (status: ModelDiscoveryAvailability) => string;
+  discoveredModelSource: (source: ModelDiscoverySource) => string;
   connectionIdle: string;
   connectionChecking: string;
   connectionOk: string;
@@ -244,6 +250,10 @@ export interface UiCopy {
   launchUnavailableNoImageModels: string;
   launchUnavailableProvider: (provider: string) => string;
   launchUnavailableModel: (model: string) => string;
+  launchUnavailableNotListed: (model: string) => string;
+  launchUnavailableListed: (model: string) => string;
+  launchUnavailableInconclusive: (model: string) => string;
+  launchUnavailableRejected: (model: string) => string;
   launchRuntimeUnavailable: (model: string) => string;
   selectLaunchToRun: (model: string) => string;
   generalRuntimeUnsupported: string;
@@ -865,9 +875,26 @@ export const translations: Record<Language, UiCopy> = {
     discoveryLastRun: (date: string, count: number) => `${date} · ${count} model${count === 1 ? "" : "s"}`,
     discoverModels: "Discover models",
     discoveringModels: "Discovering",
-    discoveredModelsCount: (count: number) => `${count} model${count === 1 ? "" : "s"} discovered`,
+    discoveredModelsCount: (count: number) => `${count} model${count === 1 ? "" : "s"} returned`,
+    discoveredModelFamilies: (gptImage2: string[], gptImage25: string[], otherImage: string[]) =>
+      `GPT Image 2: ${gptImage2.length > 0 ? gptImage2.join(", ") : "not listed"} · GPT Image 2.5: ${gptImage25.length > 0 ? gptImage25.join(", ") : "not listed"} · other image models: ${otherImage.length > 0 ? otherImage.join(", ") : "none"}`,
+    discoveredModelCompatibilityAliases: (aliases: string[]) =>
+      `compatibility aliases (not launch evidence): ${aliases.join(", ")}`,
+    discoveredModelCompatibilityAlias: "compatibility alias only; not launch evidence",
     discoveredModelsSummary: (image: number, video: number, unknown: number) =>
-      `image ${image} · video ${video} · capability unknown ${unknown}`,
+      `launchable image ${image} · video ${video} · capability unknown ${unknown}`,
+    discoveredModelStatusSummary: (confirmed: number, listed: number, inconclusive: number, rejected: number) =>
+      `confirmation: ${confirmed} confirmed · ${listed} listed · ${inconclusive} inconclusive · ${rejected} rejected`,
+    discoveredModelAvailability: (status: ModelDiscoveryAvailability) => ({
+      listed: "listed",
+      confirmed: "confirmed",
+      inconclusive: "listed, not confirmed",
+      rejected: "rejected"
+    }[status]),
+    discoveredModelSource: (source: ModelDiscoverySource) => ({
+      "provider-listed": "provider-listed",
+      "route-candidate": "route-confirmed · not provider-listed"
+    }[source]),
     connectionIdle: "Not tested",
     connectionChecking: "Checking",
     connectionOk: "Connected",
@@ -875,13 +902,17 @@ export const translations: Record<Language, UiCopy> = {
     connectionErrorDetail: (message: string) => `Connection issue: ${message}. Check the API key, base URL, API protocol, or network.`,
     launchModels: "Launch",
     selectModel: "Select model",
-    modelSupportHint: "Only models declaring image generation are shown; a model list does not prove API key access.",
+    modelSupportHint: "Only models with confirmed image-generation support can be launched. GPT Image 2 and 2.5 require an exact model-id match plus a lightweight route check; unsupported families remain visible as disabled rows. A model list alone does not prove API key access.",
     launchAvailable: "Available",
     launchUnavailableNoKey: "Save an API key first.",
     launchUnavailableNoDiscovery: "Run model discovery first.",
     launchUnavailableNoImageModels: "Models were discovered, but none declares image generation; a model list does not prove API key access.",
     launchUnavailableProvider: (provider: string) => `Switch to ${provider}.`,
     launchUnavailableModel: (model: string) => `${model} was not discovered.`,
+    launchUnavailableNotListed: (model: string) => `${model} is not listed by the provider.`,
+    launchUnavailableListed: (model: string) => `${model} is listed, but the provider has not confirmed this exact model.`,
+    launchUnavailableInconclusive: (model: string) => `${model} was listed, but the provider could not confirm this exact model.`,
+    launchUnavailableRejected: (model: string) => `${model} was explicitly rejected by the provider.`,
     launchRuntimeUnavailable: (model: string) => `${model} runtime is not connected yet.`,
     selectLaunchToRun: (model: string) => `Select ${model} before running.`,
     generalRuntimeUnsupported: "General is not available for this API config.",
@@ -1568,9 +1599,26 @@ export const translations: Record<Language, UiCopy> = {
     discoveryLastRun: (date: string, count: number) => `${date} · ${count} 个模型`,
     discoverModels: "探测模型",
     discoveringModels: "探测中",
-    discoveredModelsCount: (count: number) => `探测到【${count}】个模型`,
+    discoveredModelsCount: (count: number) => `探测返回【${count}】个模型`,
+    discoveredModelFamilies: (gptImage2: string[], gptImage25: string[], otherImage: string[]) =>
+      `GPT Image 2：${gptImage2.length > 0 ? gptImage2.join("、") : "未列出"} · GPT Image 2.5：${gptImage25.length > 0 ? gptImage25.join("、") : "未列出"} · 其他图片模型：${otherImage.length > 0 ? otherImage.join("、") : "无"}`,
+    discoveredModelCompatibilityAliases: (aliases: string[]) =>
+      `兼容别名（不作为启动依据）：${aliases.join("、")}`,
+    discoveredModelCompatibilityAlias: "仅兼容别名，不作为启动依据",
     discoveredModelsSummary: (image: number, video: number, unknown: number) =>
-      `图片 ${image} · 视频 ${video} · 能力未知 ${unknown}`,
+      `可启动图片 ${image} · 视频 ${video} · 能力未知 ${unknown}`,
+    discoveredModelStatusSummary: (confirmed: number, listed: number, inconclusive: number, rejected: number) =>
+      `确认状态：${confirmed} 已确认 · ${listed} 已列出 · ${inconclusive} 未确认 · ${rejected} 已拒绝`,
+    discoveredModelAvailability: (status: ModelDiscoveryAvailability) => ({
+      listed: "已列出",
+      confirmed: "已确认",
+      inconclusive: "已列出，未确认",
+      rejected: "已拒绝"
+    }[status]),
+    discoveredModelSource: (source: ModelDiscoverySource) => ({
+      "provider-listed": "provider 已列出",
+      "route-candidate": "路由已确认 · provider 未列出"
+    }[source]),
     connectionIdle: "未测试",
     connectionChecking: "检测中",
     connectionOk: "连接成功",
@@ -1578,13 +1626,17 @@ export const translations: Record<Language, UiCopy> = {
     connectionErrorDetail: (message: string) => `连接异常：${message}。请检查 API Key、Base URL、服务商协议或网络。`,
     launchModels: "启动模型",
     selectModel: "选择模型",
-    modelSupportHint: "仅展示已声明图片生成能力的模型；模型列表不等于 API Key 权限。",
+    modelSupportHint: "只有已确认具备生图能力的模型可以启动；GPT Image 2 与 2.5 必须同时通过精确模型 ID 匹配和轻量路由探测。不支持的模型族会保留为灰色不可用项，模型列表本身不等于 API Key 权限。",
     launchAvailable: "可用",
     launchUnavailableNoKey: "请先保存 API Key。",
     launchUnavailableNoDiscovery: "请先探测模型。",
     launchUnavailableNoImageModels: "已发现模型，但没有模型声明图片生成能力；模型列表不等于 API Key 权限。",
     launchUnavailableProvider: (provider: string) => `切换到 ${provider}。`,
     launchUnavailableModel: (model: string) => `未探测到 ${model}。`,
+    launchUnavailableNotListed: (model: string) => `${model} 未在 provider 模型列表中列出。`,
+    launchUnavailableListed: (model: string) => `${model} 已列出，但 provider 尚未确认这个精确模型。`,
+    launchUnavailableInconclusive: (model: string) => `${model} 已列出，但 provider 尚未完成这个精确模型的确认。`,
+    launchUnavailableRejected: (model: string) => `${model} 已被 provider 明确拒绝。`,
     launchRuntimeUnavailable: (model: string) => `${model} 运行时尚未接入。`,
     selectLaunchToRun: (model: string) => `运行前请选择 ${model}。`,
     generalRuntimeUnsupported: "当前 API 配置暂未接入 General 运行时。",
