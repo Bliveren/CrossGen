@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
