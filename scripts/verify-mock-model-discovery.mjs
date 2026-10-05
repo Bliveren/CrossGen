@@ -142,6 +142,7 @@ async function verifyOpenAIFocusedDiscovery() {
   ], async (baseURL) => {
     const ids = await openAIModelIds(baseURL);
     assert(ids.includes("gpt-image-2"), "OpenAI mock did not expose gpt-image-2");
+    assert(!ids.includes("gpt-image-2.5"), "OpenAI mock unexpectedly exposed the bare GPT Image 2.5 compatibility alias");
     assert(ids.includes("gpt-image-2.5-sunburst"), "OpenAI mock did not expose GPT Image 2.5 Sunburst");
     assert(ids.includes("gpt-image-2.5-sunburst-2026-09-08"), "OpenAI mock did not expose the Sunburst snapshot");
     assert(ids.includes("gpt-image-2.5-flare"), "OpenAI mock did not expose GPT Image 2.5 Flare");

@@ -222,6 +222,7 @@ async function writeMockState(dataDir, baseURL) {
       timeoutMs: 30000,
       streamingPartialsEnabled: false,
       discoveredModels: [{ id: "gpt-image-2", providerKind: "openai" }],
+      lastModelDiscoveryAt: now,
       activeLaunchId: "gpt-image-2",
       activeModelId: "gpt-image-2",
       updatedAt: now,

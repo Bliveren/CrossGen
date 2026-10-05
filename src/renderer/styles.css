@@ -2798,6 +2798,10 @@
     color: var(--accent);
   }
 
+  .launch-button.unavailable {
+    color: var(--text-muted);
+  }
+
   .launch-button:disabled,
   .launch-button.active:disabled {
     border-color: var(--border-subtle);
@@ -2856,6 +2860,17 @@
   .launch-model-option.selected {
     background: var(--accent-soft);
     color: var(--accent);
+  }
+
+  .launch-model-option:disabled,
+  .launch-model-option.unavailable {
+    color: var(--text-muted);
+    cursor: not-allowed;
+    opacity: 0.62;
+  }
+
+  .launch-model-option.unavailable small {
+    color: var(--text-muted);
   }
 
   .template-panel,

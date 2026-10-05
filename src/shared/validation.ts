@@ -30,6 +30,9 @@ import {
   generalFallbackSupportsReferenceImages,
   isGeneralFallbackProvider,
   isGeminiImageModelId,
+  isGptImage2ModelId,
+  isGptImage25LaunchAlias,
+  isGptImage25ProviderModelId,
   isGptImage25ModelId,
   isGptImageModelId
 } from "./modelCatalog.js";
@@ -289,9 +292,11 @@ export function validateOpenAIImageParams(params: unknown): ValidationResult {
   }
   const model = params.model.trim();
   if (!isGptImageModelId(model)) {
-    return { ok: false, message: `OpenAI 图片模型仅支持 ${GPT_IMAGE_2_MODEL} 或 GPT Image 2.5 的 Sunburst/Flare 模型。` };
+    return { ok: false, message: `OpenAI 图片模型仅支持 GPT Image 2（${GPT_IMAGE_2_MODEL} 或合法日期快照）或 GPT Image 2.5 的真实 provider model id（Sunburst/Flare 或合法日期快照）。裸 gpt-image-2.5 仅作为旧配置/AppLink 兼容别名；provider 返回的精确 model id 会原样保留。` };
   }
-  const launchId = isGptImage25ModelId(model) ? GPT_IMAGE_2_5_LAUNCH_ID : GPT_IMAGE_2_LAUNCH_ID;
+  const launchId = isGptImage25ProviderModelId(model) || isGptImage25LaunchAlias(model)
+    ? GPT_IMAGE_2_5_LAUNCH_ID
+    : GPT_IMAGE_2_LAUNCH_ID;
   if (params.launchId !== undefined && params.launchId !== launchId) {
     return { ok: false, message: "OpenAI 图片模型与启动模型不匹配。" };
   }
@@ -502,9 +507,17 @@ export function validateProviderConfigInput(input: unknown): ValidationResult {
   const activeLaunchId = isOneOf(input.activeLaunchId, FOCUSED_LAUNCH_OPTIONS) ? input.activeLaunchId : undefined;
   const defaultModel = input.defaultModel.trim();
   const isNanoModel = activeLaunchId === NANO_BANANA_3_LAUNCH_ID && isGeminiImageModelId(defaultModel);
-  const isGpt25Model = activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID && isGptImage25ModelId(defaultModel);
-  if ((kind === undefined || kind === "openai") && activeLaunchId !== GENERAL_LAUNCH_ID && !isNanoModel && !isGpt25Model && defaultModel && defaultModel !== DEFAULT_IMAGE_PARAMS.model) {
-    return { ok: false, message: `默认模型仅支持 ${DEFAULT_IMAGE_PARAMS.model} 或 GPT Image 2.5 的 Sunburst/Flare 模型。` };
+  const isGpt2Model = isGptImage2ModelId(defaultModel);
+  const isGpt25Model = isGptImage25ProviderModelId(defaultModel) || isGptImage25LaunchAlias(defaultModel);
+  const focusedDefaultAllowed = isGpt2Model || isGpt25Model;
+  if ((kind === undefined || kind === "openai") && activeLaunchId !== GENERAL_LAUNCH_ID && !isNanoModel && !focusedDefaultAllowed && defaultModel) {
+    return { ok: false, message: `默认模型仅支持 GPT Image 2（${GPT_IMAGE_2_MODEL} 或合法日期快照）或 GPT Image 2.5 的真实 provider model id（Sunburst/Flare 或合法日期快照）。裸 gpt-image-2.5 仅作为旧配置/AppLink 兼容别名。` };
+  }
+  if ((kind === undefined || kind === "openai") && activeLaunchId === GPT_IMAGE_2_LAUNCH_ID && defaultModel && !isGpt2Model) {
+    return { ok: false, message: "GPT Image 2 启动模型必须使用 GPT Image 2 的 provider id。" };
+  }
+  if ((kind === undefined || kind === "openai") && activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID && defaultModel && !isGpt25Model) {
+    return { ok: false, message: "GPT Image 2.5 启动模型必须使用 Sunburst/Flare 或合法日期快照 provider id；裸 gpt-image-2.5 仅作为旧配置/AppLink 兼容别名。" };
   }
   const defaultSize = input.defaultSize.trim();
   if (defaultSize) {

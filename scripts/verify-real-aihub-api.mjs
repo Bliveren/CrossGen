@@ -484,9 +484,23 @@ async function main() {
       gemini: geminiModel
     },
     timeoutMs,
+    listedImageModels: availableModels.filter((id) => /image|gemini|banana/i.test(id)),
+    // Kept for older evidence readers; this is a listing heuristic rather
+    // than a permission or launchability signal.
     availableImageModels: availableModels.filter((id) => /image|gemini|banana/i.test(id)),
+    confirmedImageModels: [...new Set(
+      results
+        .filter((result) => result.result === "pass")
+        .map((result) => result.model)
+        .filter((model) => typeof model === "string" && model.trim())
+    )],
     results
   };
+  summary.launchableImageModels = summary.confirmedImageModels;
+  summary.launchableTargetModels = [
+    summary.confirmedImageModels.includes(openAIModel) ? openAIModel : null,
+    summary.confirmedImageModels.includes(geminiModel) ? geminiModel : null
+  ].filter(Boolean);
   const summaryPath = path.join(outputDir, "summary.json");
   await writeFile(summaryPath, JSON.stringify(summary, null, 2));
   console.log("Real AIHub image acceptance passed.");

@@ -121,18 +121,28 @@ import {
   GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
-  geminiImageModelDisplayName,
+  classifyDiscoveredModel,
+  discoveredLaunchIdForModel,
+  discoveredModelDisplayName,
+  discoveredModelSource,
   generalFallbackSupportsReferenceImages,
+  findDiscoveredImageModel,
+  getModelDisplayNameForProvider,
   getFocusedModelDefinition,
+  hasCompletedModelDiscovery,
   isGeneralFallbackProvider,
-  discoveredModelCapabilityHints,
   isDiscoveredImageModel,
-  isGeminiImageModelId,
-  isGptImage25ModelId,
-  isPotentialGeneralImageModel,
+  isPersistedDiscoveryEvidence,
+  discoveredModelAvailability,
+  isGptImage2ModelId,
+  isGptImage25LaunchAlias,
+  isGptImage25ProviderModelId,
   geminiProviderModelDisplayName,
   normalizeGeminiImageModelId,
-  normalizeModelId
+  normalizeModelId,
+  normalizeProviderModelId,
+  stripModelResourcePrefix,
+  summarizeDiscoveredModels
 } from "../shared/modelCatalog";
 import { isImageAsset, mediaKindForFileName, mediaKindForMimeType } from "../core/mediaTypes";
 import { preflightSketchCapability } from "../core/modelCapabilities";
@@ -485,6 +495,10 @@ interface LaunchModelOption {
   displayName: string;
   launchId: FocusedLaunchId;
   launchLabel: string;
+  available: boolean;
+  discoverySource?: ProviderConfig["discoveredModels"][number]["discoverySource"];
+  availability?: ReturnType<typeof discoveredModelAvailability>;
+  unavailableReason?: string;
 }
 
 type OpenAIParamPatch = Partial<Omit<OpenAIImageParams, "providerKind" | "launchId">>;
@@ -790,14 +804,24 @@ function runtimeRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
-function modelLabelFromId(value: string): string {
-  if (value === "gpt-image-2") return DEFAULT_HISTORY_MODEL_DISPLAY;
-  if (value.startsWith("gpt-image-2.5-sunburst")) return "GPT Image 2.5 · Sunburst";
-  if (value.startsWith("gpt-image-2.5-flare")) return "GPT Image 2.5 · Flare";
-  if (isGeminiImageModelId(value) || normalizeModelId(value) === NANO_BANANA_3_LAUNCH_ID) {
-    return geminiImageModelDisplayName(value);
+function modelLabelFromId(value: string, providerKind?: ProviderKind, launchId?: FocusedLaunchId): string {
+  const label = getModelDisplayNameForProvider(providerKind, value, launchId);
+  return label || value;
+}
+
+function providerKindFromRuntime(value: string | undefined): ProviderKind | undefined {
+  if (value === "openai" || value === "gemini" || value === "custom") return value;
+  return undefined;
+}
+
+function focusedLaunchIdFromRuntime(value: string | undefined): FocusedLaunchId | undefined {
+  if (value === GPT_IMAGE_2_LAUNCH_ID ||
+    value === GPT_IMAGE_2_5_LAUNCH_ID ||
+    value === NANO_BANANA_3_LAUNCH_ID ||
+    value === GENERAL_LAUNCH_ID) {
+    return value;
   }
-  return value;
+  return undefined;
 }
 
 function providerLabelFromKind(value: string): string {
@@ -863,9 +887,16 @@ function defaultLaunchForProvider(kind: ProviderKind): FocusedLaunchId {
 function createOpenAIParams(modelId: string, current: ImageParams, config?: ProviderConfig): OpenAIImageParams {
   const base = isOpenAIImageParams(current) ? current : DEFAULT_IMAGE_PARAMS;
   const requestedModel = modelId || base.model || config?.activeModelId || config?.defaultModel || GPT_IMAGE_2_MODEL_ID;
-  const launchId = isGptImage25ModelId(requestedModel)
+  // Keep the provider's exact discovered id for the wire request while using
+  // a lower-cased canonical form only for family matching. Resource prefixes
+  // such as `models/` are removed, but provider casing is preserved.
+  const providerModelId = stripModelResourcePrefix(requestedModel);
+  const normalizedRequestedModel = normalizeModelId(providerModelId);
+  const requestedGptImage25ProviderModel = isGptImage25ProviderModelId(normalizedRequestedModel);
+  const requestedGptImage25Alias = isGptImage25LaunchAlias(normalizedRequestedModel);
+  const launchId = requestedGptImage25ProviderModel || requestedGptImage25Alias
     ? GPT_IMAGE_2_5_LAUNCH_ID
-    : normalizeModelId(requestedModel) === normalizeModelId(GPT_IMAGE_2_MODEL_ID)
+    : isGptImage2ModelId(normalizedRequestedModel)
       ? GPT_IMAGE_2_LAUNCH_ID
       : config?.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID
         ? GPT_IMAGE_2_5_LAUNCH_ID
@@ -882,7 +913,13 @@ function createOpenAIParams(modelId: string, current: ImageParams, config?: Prov
     launchId === GPT_IMAGE_2_5_LAUNCH_ID && base.imageRoute === "chat-completions"
       ? "auto"
       : base.imageRoute;
-  const model = requestedModel || (launchId === GPT_IMAGE_2_5_LAUNCH_ID ? GPT_IMAGE_2_5_DEFAULT_MODEL_ID : GPT_IMAGE_2_MODEL_ID);
+  const model = requestedGptImage25ProviderModel
+    ? providerModelId
+    : requestedGptImage25Alias
+      ? GPT_IMAGE_2_5_DEFAULT_MODEL_ID
+    : isGptImage2ModelId(normalizedRequestedModel)
+      ? providerModelId
+      : providerModelId || (launchId === GPT_IMAGE_2_5_LAUNCH_ID ? GPT_IMAGE_2_5_DEFAULT_MODEL_ID : GPT_IMAGE_2_MODEL_ID);
   const gptImage25OnlyParams = launchId === GPT_IMAGE_2_5_LAUNCH_ID
     ? {
         inputFidelity: base.inputFidelity,
@@ -960,7 +997,8 @@ function openAIImageRouteVerified(config: ProviderConfig, mode: WorkMode, route:
   const probedVerified = config.openAIImageRouting?.probes.some((probe) =>
     probe.mode === probeMode &&
     probe.route === route &&
-    (probe.verified === true || (typeof probe.status === "number" && probe.status >= 200 && probe.status < 300))
+    probe.ok &&
+    probe.verified === true
   );
   if (probedVerified) return true;
   if (mode === "generate" && config.openAIImageRouting?.preferredGenerateRoute === route) {
@@ -1063,19 +1101,6 @@ function defaultModelForConfigSave(kind: ProviderKind, params: ImageParams, conf
   return defaultModelForProvider(kind);
 }
 
-function hasDiscoveredProviderModel(config: ProviderConfig, providerKind: ProviderKind, modelId: string): boolean {
-  const normalizedModelId = providerKind === "gemini"
-    ? normalizeGeminiImageModelId(modelId)
-    : normalizeModelId(modelId);
-  return config.discoveredModels.some((model) => {
-    if (model.providerKind !== providerKind) return false;
-    const normalizedCandidateId = providerKind === "gemini"
-      ? normalizeGeminiImageModelId(model.id)
-      : normalizeModelId(model.id);
-    return normalizedCandidateId === normalizedModelId;
-  });
-}
-
 function defaultSizeForConfigSave(params: ImageParams, config: ProviderConfig): string {
   return isOpenAIImageParams(params) ? params.size : config.defaultSize || DEFAULT_IMAGE_PARAMS.size;
 }
@@ -1085,21 +1110,60 @@ function defaultQualityForConfigSave(params: ImageParams, config: ProviderConfig
 }
 
 function runtimeSelectionError(params: ImageParams, config: ProviderConfig, copy: UiCopy): string | null {
+  if (!config.apiKeySaved) return copy.launchUnavailableNoKey;
+  if (config.lastModelDiscoveryError) return config.lastModelDiscoveryError;
+  if (!hasCompletedModelDiscovery(config)) return copy.launchUnavailableNoDiscovery;
+  const launchLabel = (launchId: FocusedLaunchId): string =>
+    getFocusedModelDefinition(launchId)?.displayName ?? launchId;
+
+  const unavailableReasonForModel = (providerKind: ProviderKind, modelId: string): string => {
+    const discoveredModel = config.discoveredModels.find((model) =>
+      model.providerKind === providerKind &&
+      normalizeProviderModelId(model.providerKind, model.id) ===
+        normalizeProviderModelId(providerKind, modelId)
+    );
+    if (!discoveredModel) return copy.launchUnavailableNotListed(modelId);
+    const status = discoveredModelAvailability(discoveredModel);
+    const statusMessage = status === "rejected"
+      ? copy.launchUnavailableRejected(modelId)
+      : status === "inconclusive"
+        ? copy.launchUnavailableInconclusive(modelId)
+        : status === "listed"
+          ? copy.launchUnavailableListed(modelId)
+          : copy.launchUnavailableModel(modelId);
+    const statusReason = discoveredModel.availabilityReason?.trim();
+    return statusReason && statusReason !== statusMessage
+      ? `${statusMessage} · ${statusReason}`
+      : statusMessage;
+  };
+
+  const modelIsDiscovered = (providerKind: ProviderKind, modelId: string): boolean =>
+    Boolean(findDiscoveredImageModel(config.discoveredModels, providerKind, modelId));
+
   if (isOpenAIImageParams(params)) {
-    return config.activeLaunchId === params.launchId
-      ? null
-      : copy.selectLaunchToRun(params.launchId === GPT_IMAGE_2_5_LAUNCH_ID ? "GPT Image 2.5" : "GPT Image 2");
+    if (config.activeLaunchId !== params.launchId) {
+      return copy.selectLaunchToRun(launchLabel(params.launchId));
+    }
+    const discoveredModel = findDiscoveredImageModel(config.discoveredModels, "openai", params.model);
+    const expectedLaunchId = discoveredModel
+      ? discoveredLaunchIdForModel(discoveredModel)
+      : undefined;
+    if (expectedLaunchId && expectedLaunchId !== params.launchId) {
+      return copy.selectLaunchToRun(launchLabel(expectedLaunchId));
+    }
+    return modelIsDiscovered("openai", params.model) ? null : unavailableReasonForModel("openai", params.model);
   }
   if (isGeminiImageParams(params)) {
     if (config.activeLaunchId !== NANO_BANANA_3_LAUNCH_ID) return copy.selectLaunchToRun("Nano Banana 3");
-    if (config.kind === "gemini" || hasDiscoveredProviderModel(config, "gemini", params.model)) return null;
-    return copy.launchUnavailableModel(params.model);
+    return modelIsDiscovered("gemini", params.model) ? null : unavailableReasonForModel("gemini", params.model);
   }
   if (!isGeneralImageParams(params)) return copy.generalRuntimeUnsupported;
   if (config.activeLaunchId !== GENERAL_LAUNCH_ID) return copy.selectLaunchToRun("General");
   if (!isGeneralFallbackProvider(params.providerKind)) return copy.generalRuntimeUnsupported;
   if (!params.model.trim()) return copy.launchUnavailableNoImageModels;
-  return null;
+  return modelIsDiscovered(params.providerKind, params.model)
+    ? null
+    : unavailableReasonForModel(params.providerKind, params.model);
 }
 
 function generalRuntimeNotice(providerKind: ProviderKind, copy: UiCopy): string {
@@ -1128,78 +1192,174 @@ function updateCustomSizeFromParams(params: ImageParams, setCustomSize: (value: 
   }
 }
 
-function launchDefinitionForModel(modelId: string): (typeof FOCUSED_MODEL_CATALOG)[number] | undefined {
-  const normalizedId = normalizeGeminiImageModelId(modelId);
-  return FOCUSED_MODEL_CATALOG.find((definition) =>
-    definition.modelIds.some((id) => normalizeModelId(id) === normalizedId)
-  ) ?? (isGptImage25ModelId(normalizedId)
-    ? FOCUSED_MODEL_CATALOG.find((definition) => definition.launchId === GPT_IMAGE_2_5_LAUNCH_ID)
-    : undefined);
-}
-
-function getDiscoveredLaunchModelOptions(config: ProviderConfig): LaunchModelOption[] {
+function getDiscoveredLaunchModelOptions(config: ProviderConfig, copy: UiCopy): LaunchModelOption[] {
   const seen = new Set<string>();
+  const unavailableReasonForModel = (modelId: string, general = false): string => {
+    if (!config.apiKeySaved) return copy.launchUnavailableNoKey;
+    if (config.lastModelDiscoveryError) return config.lastModelDiscoveryError;
+    if (!hasCompletedModelDiscovery(config)) return copy.launchUnavailableNoDiscovery;
+    return general ? copy.launchUnavailableNoImageModels : copy.launchUnavailableNotListed(modelId);
+  };
+  const unavailableReasonForDiscoveredModel = (model: ProviderConfig["discoveredModels"][number]): string => {
+    const modelId = model.id;
+    const status = discoveredModelAvailability(model);
+    const statusReason = model.availabilityReason?.trim();
+    const message = status === "rejected"
+      ? copy.launchUnavailableRejected(modelId)
+      : status === "inconclusive"
+        ? copy.launchUnavailableInconclusive(modelId)
+        : status === "listed"
+          ? copy.launchUnavailableListed(modelId)
+          : unavailableReasonForModel(modelId);
+    return statusReason && statusReason !== message ? `${message} · ${statusReason}` : message;
+  };
   // Discovery reports the model family in providerKind. A custom or OpenAI-compatible
   // endpoint may legitimately return Gemini-family models, so the active API config
   // must not filter those models out by transport kind.
-  const models = config.discoveredModels.filter((model) => {
-    const focused = launchDefinitionForModel(model.id);
-    if (focused) {
-      const hints = discoveredModelCapabilityHints(model);
-      return !hints.explicitMedia || hints.image;
-    }
-    return isDiscoveredImageModel(model);
-  });
-  // Some gateways omit image models from `/models` even though the configured
-  // model works on the image endpoint. Keep an explicitly selected model
-  // visible so discovery cannot erase a valid user configuration.
-  if (config.apiKeySaved && config.lastModelDiscoveryAt && config.discoveredModels.length > 0) {
-    const configuredModelIds = [config.activeModelId, config.defaultModel]
-      .map((modelId) => modelId?.trim())
-      .filter((modelId): modelId is string => Boolean(modelId));
-    const configuredModel = configuredModelIds
-      .map((id) => ({ id, providerKind: config.kind, displayName: id }))
-      .find((model) =>
-        normalizeModelId(model.id) !== GENERAL_MODEL_ID &&
-        !models.some((candidate) => {
-          const candidateDefinition = launchDefinitionForModel(candidate.id);
-          const candidateId = candidateDefinition?.launchId === NANO_BANANA_3_LAUNCH_ID || candidate.providerKind === "gemini"
-            ? normalizeGeminiImageModelId(candidate.id)
-            : normalizeModelId(candidate.id);
-          const configuredDefinition = launchDefinitionForModel(model.id);
-          const configuredId = configuredDefinition?.launchId === NANO_BANANA_3_LAUNCH_ID || model.providerKind === "gemini"
-            ? normalizeGeminiImageModelId(model.id)
-            : normalizeModelId(model.id);
-          return candidateId === configuredId;
-        }) &&
-        (launchDefinitionForModel(model.id) || isPotentialGeneralImageModel(model))
-      );
-    if (configuredModel) models.push(configuredModel);
-  }
-  return models.flatMap((model) => {
-    const definition = launchDefinitionForModel(model.id);
+  const models = hasCompletedModelDiscovery(config)
+    ? deduplicateDiscoveredModelsForUi(config.discoveredModels).filter((model) => {
+        if (!isPersistedDiscoveryEvidence(model)) return false;
+        const classification = classifyDiscoveredModel(model);
+        // Keep focused rows visible even when metadata rejected them. The
+        // exact provider id and status are useful evidence and make the
+        // disabled state explainable instead of silently replacing it with a
+        // generic "not discovered" placeholder.
+        return classification.family !== undefined || classification.launchable;
+      })
+    : [];
+  const options: LaunchModelOption[] = models.flatMap((model) => {
+    const classification = classifyDiscoveredModel(model);
+    const exactFocusedLaunchId = classification.launchId;
+    const discoveredLaunchId = classification.launchable
+      ? classification.launchId ?? GENERAL_LAUNCH_ID
+      : undefined;
+    const focusedLaunchId = exactFocusedLaunchId ??
+      (discoveredLaunchId && discoveredLaunchId !== GENERAL_LAUNCH_ID ? discoveredLaunchId : undefined);
+    const definition = focusedLaunchId
+      ? FOCUSED_MODEL_CATALOG.find((candidate) => candidate.launchId === focusedLaunchId)
+      : undefined;
     const normalizedModelId = definition?.launchId === NANO_BANANA_3_LAUNCH_ID || model.providerKind === "gemini"
       ? normalizeGeminiImageModelId(model.id)
       : normalizeModelId(model.id);
     const key = `${model.providerKind}:${normalizedModelId}`;
     if (seen.has(key)) return [];
     seen.add(key);
-    const displayName = definition?.launchId === NANO_BANANA_3_LAUNCH_ID
-      ? geminiProviderModelDisplayName(model.id)
-      : model.displayName?.trim() || model.id;
+    const available = classification.launchable;
+    // Focused launch labels are derived from the exact model id. A gateway's
+    // displayName is advisory and can be stale or incorrectly reused.
+    const displayName = definition && available
+      ? definition.launchId === NANO_BANANA_3_LAUNCH_ID
+        ? geminiProviderModelDisplayName(model.id)
+        : model.id
+      : discoveredModelDisplayName(model);
     return [{
       ...toLaunchModelOption({ ...model, displayName }),
-      launchId: definition?.launchId ?? GENERAL_LAUNCH_ID,
-      launchLabel: definition?.displayName ?? "General"
+      launchId: focusedLaunchId ?? GENERAL_LAUNCH_ID,
+      launchLabel: definition?.displayName ?? "General",
+      available,
+      availability: discoveredModelAvailability(model),
+      ...(!available ? { unavailableReason: unavailableReasonForDiscoveredModel(model) } : {})
     }];
   });
+  const representedLaunches = new Set(options.map((option) => option.launchId));
+  const addUnavailableLaunch = (
+    launchId: FocusedLaunchId,
+    providerKind: ProviderKind,
+    id: string,
+    launchLabel: string,
+    displayName: string,
+    unavailableReason: string
+  ) => {
+    if (representedLaunches.has(launchId)) return;
+    representedLaunches.add(launchId);
+    options.push({
+      id,
+      providerKind,
+      displayName,
+      launchId,
+      launchLabel,
+      available: false,
+      unavailableReason
+    });
+  };
+  // Keep the focused launch families visible even before discovery or when
+  // the current API key does not expose them. The disabled rows are
+  // intentional: disappearing options make "not supported" indistinguishable
+  // from "discovery has not run yet".
+  addUnavailableLaunch(
+    GPT_IMAGE_2_LAUNCH_ID,
+    "openai",
+    GPT_IMAGE_2_MODEL_ID,
+    "GPT Image 2",
+    GPT_IMAGE_2_MODEL_ID,
+    unavailableReasonForModel(GPT_IMAGE_2_MODEL_ID)
+  );
+  addUnavailableLaunch(
+    GPT_IMAGE_2_5_LAUNCH_ID,
+    "openai",
+    GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
+    "GPT Image 2.5",
+    GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
+    unavailableReasonForModel(GPT_IMAGE_2_5_DEFAULT_MODEL_ID)
+  );
+  addUnavailableLaunch(
+    NANO_BANANA_3_LAUNCH_ID,
+    "gemini",
+    NANO_BANANA_3_MODEL_ID,
+    "Nano Banana 3",
+    geminiProviderModelDisplayName(NANO_BANANA_3_MODEL_ID),
+    unavailableReasonForModel(NANO_BANANA_3_MODEL_ID)
+  );
+  addUnavailableLaunch(
+    GENERAL_LAUNCH_ID,
+    config.kind,
+    GENERAL_MODEL_ID,
+    "General",
+    GENERAL_MODEL_ID,
+    unavailableReasonForModel(GENERAL_MODEL_ID, true)
+  );
+  const launchRank: Record<FocusedLaunchId, number> = {
+    [GPT_IMAGE_2_LAUNCH_ID]: 0,
+    [GPT_IMAGE_2_5_LAUNCH_ID]: 1,
+    [NANO_BANANA_3_LAUNCH_ID]: 2,
+    [GENERAL_LAUNCH_ID]: 3
+  };
+  const variantRank = (option: LaunchModelOption): number => {
+    const normalized = normalizeModelId(option.id);
+    if (option.launchId === GPT_IMAGE_2_LAUNCH_ID) return normalized === normalizeModelId(GPT_IMAGE_2_MODEL_ID) ? 0 : 10;
+    if (option.launchId === GPT_IMAGE_2_5_LAUNCH_ID) {
+      if (normalized === normalizeModelId(GPT_IMAGE_2_5_DEFAULT_MODEL_ID)) return 0;
+      if (normalized.includes("sunburst")) return 1;
+      if (normalized.includes("flare")) return 2;
+      return 10;
+    }
+    if (option.launchId === NANO_BANANA_3_LAUNCH_ID) {
+      if (normalized === normalizeModelId(NANO_BANANA_3_MODEL_ID)) return 0;
+      return 1;
+    }
+    return 0;
+  };
+  return options.sort((left, right) =>
+    launchRank[left.launchId] - launchRank[right.launchId] ||
+    variantRank(left) - variantRank(right) ||
+    normalizeModelId(left.id).localeCompare(normalizeModelId(right.id))
+  );
 }
 
-function toLaunchModelOption(model: { id: string; providerKind: ProviderKind; displayName?: string }): Omit<LaunchModelOption, "launchId" | "launchLabel"> {
+function toLaunchModelOption(model: {
+  id: string;
+  providerKind: ProviderKind;
+  displayName?: string;
+  discoverySource?: ProviderConfig["discoveredModels"][number]["discoverySource"];
+}): Omit<LaunchModelOption, "launchId" | "launchLabel" | "available"> {
   return {
     id: model.id,
     providerKind: model.providerKind,
-    displayName: model.displayName?.trim() || model.id
+    displayName: model.displayName?.trim() || model.id,
+    // Rows from older state files predate source tracking. They still came
+    // from the provider catalogue, so expose that fact instead of leaving
+    // the evidence origin ambiguous in the launch picker.
+    discoverySource: model.discoverySource ?? "provider-listed"
   };
 }
 
@@ -1222,31 +1382,114 @@ function connectionStatusLabel(check: ConnectionCheck, copy: UiCopy): string {
   return copy.connectionIdle;
 }
 
-function discoverySummary(config: ProviderConfig, copy: UiCopy): string {
-  if (config.lastModelDiscoveryError) return config.lastModelDiscoveryError;
-  const counts = config.discoveredModels.reduce(
-    (result, model) => {
-      const hints = discoveredModelCapabilityHints(model);
-      const imageCapable = isDiscoveredImageModel(model);
-      if (imageCapable) result.image += 1;
-      if (hints.video) result.video += 1;
-      if (!imageCapable && !hints.video) result.unknown += 1;
-      return result;
-    },
-    { image: 0, video: 0, unknown: 0 }
-  );
-  return `${copy.discoveredModelsCount(config.discoveredModels.length)} · ${copy.discoveredModelsSummary(counts.image, counts.video, counts.unknown)}`;
+type DiscoveredModelRecord = ProviderConfig["discoveredModels"][number];
+
+function discoveryModelKey(model: DiscoveredModelRecord): string {
+  return `${model.providerKind}:${normalizeProviderModelId(model.providerKind, model.id)}`;
 }
 
-function discoveredModelLabel(model: ProviderConfig["discoveredModels"][number]): string {
-  const display = model.displayName?.trim();
-  return display && display !== model.id ? `${display} (${model.id})` : model.id;
+function discoveryAvailabilityPriority(status: ReturnType<typeof discoveredModelAvailability>): number {
+  // Conflicting legacy rows should fail closed: an explicit provider rejection
+  // wins over a stale positive row, while a confirmed route wins over merely
+  // listed/inconclusive metadata when no rejection exists.
+  return {
+    listed: 1,
+    inconclusive: 2,
+    confirmed: 3,
+    rejected: 4
+  }[status];
+}
+
+function deduplicateDiscoveredModelsForUi(
+  models: readonly DiscoveredModelRecord[]
+): DiscoveredModelRecord[] {
+  const merged = new Map<string, DiscoveredModelRecord>();
+  for (const model of models) {
+    if (!isPersistedDiscoveryEvidence(model)) continue;
+    const key = discoveryModelKey(model);
+    const current = merged.get(key);
+    if (!current) {
+      merged.set(key, model);
+      continue;
+    }
+    const currentPriority = discoveryAvailabilityPriority(discoveredModelAvailability(current));
+    const nextPriority = discoveryAvailabilityPriority(discoveredModelAvailability(model));
+    if (nextPriority > currentPriority) merged.set(key, model);
+  }
+  return [...merged.values()];
+}
+
+function discoveryFamilyEvidence(
+  models: readonly DiscoveredModelRecord[],
+  launchId: FocusedLaunchId | undefined,
+  copy: UiCopy
+): string[] {
+  const seen = new Set<string>();
+  return models.flatMap((model) => {
+    if (classifyDiscoveredModel(model).launchId !== launchId) return [];
+    const key = discoveryModelKey(model);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const sourceNote = ` · ${copy.discoveredModelSource(discoveredModelSource(model))}`;
+    return [`${model.id} (${copy.discoveredModelAvailability(discoveredModelAvailability(model))})${sourceNote}`];
+  });
+}
+
+function discoveryOtherImageEvidence(
+  models: readonly DiscoveredModelRecord[],
+  copy: UiCopy
+): string[] {
+  const seen = new Set<string>();
+  return models.flatMap((model) => {
+    const focusedLaunchId = classifyDiscoveredModel(model).launchId;
+    if (focusedLaunchId === GPT_IMAGE_2_LAUNCH_ID || focusedLaunchId === GPT_IMAGE_2_5_LAUNCH_ID) return [];
+    if (!isDiscoveredImageModel(model)) return [];
+    const key = discoveryModelKey(model);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const sourceNote = ` · ${copy.discoveredModelSource(discoveredModelSource(model))}`;
+    return [`${model.id} (${copy.discoveredModelAvailability(discoveredModelAvailability(model))})${sourceNote}`];
+  });
+}
+
+function discoverySummary(config: ProviderConfig, copy: UiCopy): string {
+  if (config.lastModelDiscoveryError) return config.lastModelDiscoveryError;
+  if (!hasCompletedModelDiscovery(config)) return copy.apiAccessNoModels;
+  const models = deduplicateDiscoveredModelsForUi(config.discoveredModels);
+  const inventory = summarizeDiscoveredModels(models);
+  const gptImage2Evidence = discoveryFamilyEvidence(models, GPT_IMAGE_2_LAUNCH_ID, copy);
+  const gptImage25Evidence = discoveryFamilyEvidence(models, GPT_IMAGE_2_5_LAUNCH_ID, copy);
+  const otherImageEvidence = discoveryOtherImageEvidence(models, copy);
+  const compatibilityAliasSummary = inventory.compatibilityAliases.length > 0
+    ? ` · ${copy.discoveredModelCompatibilityAliases(inventory.compatibilityAliases)}`
+    : "";
+  const statusCounts = models.reduce(
+    (counts, model) => {
+      counts[discoveredModelAvailability(model)] += 1;
+      return counts;
+    },
+    { confirmed: 0, listed: 0, inconclusive: 0, rejected: 0 } as Record<ReturnType<typeof discoveredModelAvailability>, number>
+  );
+  return `${copy.discoveredModelsCount(inventory.total)} · ${copy.discoveredModelFamilies(gptImage2Evidence, gptImage25Evidence, otherImageEvidence)}${compatibilityAliasSummary} · ${copy.discoveredModelsSummary(inventory.image, inventory.video, inventory.unknown)} · ${copy.discoveredModelStatusSummary(statusCounts.confirmed, statusCounts.listed, statusCounts.inconclusive, statusCounts.rejected)}`;
+}
+
+function discoveredModelLabel(model: ProviderConfig["discoveredModels"][number], copy: UiCopy): string {
+  const display = discoveredModelDisplayName(model);
+  const base = display && display !== model.id ? `${display} (${model.id})` : model.id;
+  const classification = classifyDiscoveredModel(model);
+  const aliasNote = classification.compatibilityAlias
+    ? ` · ${copy.discoveredModelCompatibilityAlias}`
+    : "";
+  const sourceNote = ` · ${copy.discoveredModelSource(discoveredModelSource(model))}`;
+  return `${base} · ${copy.discoveredModelAvailability(model.availability ?? "listed")}${sourceNote}${aliasNote}`;
 }
 
 function discoveredModelTooltip(config: ProviderConfig, copy: UiCopy): string {
   if (config.lastModelDiscoveryError) return config.lastModelDiscoveryError;
-  if (config.discoveredModels.length === 0) return copy.apiAccessNoModels;
-  return config.discoveredModels.map(discoveredModelLabel).join("\n");
+  if (!hasCompletedModelDiscovery(config)) return copy.apiAccessNoModels;
+  return deduplicateDiscoveredModelsForUi(config.discoveredModels)
+    .map((model) => discoveredModelLabel(model, copy))
+    .join("\n");
 }
 
 function getHistoryModelDetails(job: GenerationJob): HistoryModelDetails {
@@ -1257,15 +1500,19 @@ function getHistoryModelDetails(job: GenerationJob): HistoryModelDetails {
   const modelId = stringFromRuntime(jobRecord.modelId);
   const launchId = stringFromRuntime(jobRecord.launchId) ?? stringFromRuntime(jobRecord.activeLaunchId) ?? stringFromRuntime(paramsRecord.launchId);
   const providerKind = stringFromRuntime(jobRecord.providerKind) ?? stringFromRuntime(paramsRecord.providerKind);
+  const typedProviderKind = providerKindFromRuntime(providerKind);
+  const typedLaunchId = focusedLaunchIdFromRuntime(launchId);
   // Prefer the persisted provider id when available. Older jobs often stored
   // the product launch label ("Nano Banana 3") as modelDisplayName, which
   // hides the actual Gemini model used for that generation.
-  const rawModelDisplay = modelId ?? paramsModel ?? modelDisplayName ?? DEFAULT_HISTORY_MODEL_DISPLAY;
-  const displayModel = modelLabelFromId(rawModelDisplay);
+  const rawModelId = modelId ?? paramsModel;
+  const displayModel = rawModelId
+    ? modelLabelFromId(rawModelId, typedProviderKind, typedLaunchId)
+    : modelDisplayName ?? DEFAULT_HISTORY_MODEL_DISPLAY;
   const providerDisplayName = providerKind ? providerLabelFromKind(providerKind) : undefined;
   const searchText = [
     displayModel,
-    rawModelDisplay,
+    rawModelId,
     modelDisplayName,
     paramsModel,
     modelId,
@@ -1278,7 +1525,7 @@ function getHistoryModelDetails(job: GenerationJob): HistoryModelDetails {
 
   return {
     modelDisplayName: displayModel,
-    modelTitle: modelId && modelId !== rawModelDisplay ? `${displayModel} (${modelId})` : displayModel,
+    modelTitle: rawModelId && rawModelId !== displayModel ? `${displayModel} (${rawModelId})` : displayModel,
     providerDisplayName,
     providerTitle: providerKind && providerDisplayName !== providerKind ? `${providerDisplayName} (${providerKind})` : providerDisplayName,
     searchText
@@ -1767,15 +2014,17 @@ export function App() {
   const streamDisabledReason = openAIParams ? streamPartialPreviewDisabledReason(openAIParams, activeConfig, requestMode, copy) : undefined;
   const streamPartialsAllowed = openAIParams ? !streamDisabledReason : false;
   const apiKeyPlaceholder = selectedApiConfig.apiKeyPreview ?? (selectedApiConfig.apiKeySaved ? copy.savedLocally : copy.pasteApiKey);
-  const launchModelOptions = useMemo(() => getDiscoveredLaunchModelOptions(activeConfig), [activeConfig]);
+  const launchModelOptions = useMemo(() => getDiscoveredLaunchModelOptions(activeConfig, copy), [activeConfig, copy]);
+  const discoveryCompleted = hasCompletedModelDiscovery(activeConfig);
   const launchModelSelectionReason = !activeConfig.apiKeySaved
     ? copy.launchUnavailableNoKey
-    : activeConfig.lastModelDiscoveryError ?? (activeConfig.discoveredModels.length > 0 ? copy.launchUnavailableNoImageModels : copy.launchUnavailableNoDiscovery);
+    : activeConfig.lastModelDiscoveryError
+      ?? (discoveryCompleted ? copy.launchUnavailableNoImageModels : copy.launchUnavailableNoDiscovery);
   const connectionLabel = connectionStatusLabel(connectionCheck, copy);
   const connectionErrorText = connectionCheck.status === "error" && connectionCheck.message ? copy.connectionErrorDetail(connectionCheck.message) : null;
   const selectedDiscoveryText = discoverySummary(selectedApiConfig, copy);
   const selectedModelSummary = selectedApiConfig.lastModelDiscoveryError
-    ?? (selectedApiConfig.lastModelDiscoveryAt || selectedApiConfig.discoveredModels.length > 0 ? selectedDiscoveryText : copy.apiAccessNoModels);
+    ?? (hasCompletedModelDiscovery(selectedApiConfig) ? selectedDiscoveryText : copy.apiAccessNoModels);
   const isSelectedConfigSaved = savedApiConfigId === selectedApiConfig.id && selectedApiConfig.apiKeySaved && !apiKey.trim();
   const inactiveApiConfigs = snapshot.providers.filter((config) => config.id !== activeConfig.id);
   const renderedSidebarWidth = isSidebarCompact ? COMPACT_SIDEBAR_WIDTH : sidebarWidth;
@@ -2205,10 +2454,10 @@ export function App() {
   const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, effectivePrompt), copy) ?? modeError;
   const discoveredSketchPreflight = activeSketchAsset
-    ? preflightSketchCapability(activeConfig, params.model)
+    ? preflightSketchCapability(activeConfig, params.model, params.providerKind)
     : undefined;
   const sketchPreflight = activeSketchAsset ? {
-    model: modelLabelFromId(params.model),
+    model: modelLabelFromId(params.model, params.providerKind, params.launchId),
     canvas: openAIParams
       ? openAIParams.size
       : geminiParams
@@ -3744,7 +3993,7 @@ export function App() {
     const check = apiConfigConnectionCheck(config);
     const testing = config.id === activeConfig.id && (isTestingConnection || check.status === "checking");
     const discovering = discoveringProviderId === config.id;
-    const hasDiscovery = !config.lastModelDiscoveryError && (Boolean(config.lastModelDiscoveryAt) || config.discoveredModels.length > 0);
+    const hasDiscovery = hasCompletedModelDiscovery(config);
     const isTested = check.status === "ok";
     const hasError = check.status === "error" || Boolean(config.lastModelDiscoveryError);
     const status = testing || discovering ? "checking" : hasError ? "error" : isTested || hasDiscovery ? "ok" : "idle";
@@ -3953,9 +4202,14 @@ export function App() {
     try {
       const updatedConfig = await bridge.discoverModels(config.id);
       applyConfig(updatedConfig);
+      if (updatedConfig.id === activeConfig.id) {
+        // Discovery can promote GPT Image 2 -> 2.5 (or select a Gemini image
+        // model). Keep the editor/runtime params aligned with that result.
+        syncParamsToConfig(updatedConfig);
+      }
       setNotice({
         kind: updatedConfig.lastModelDiscoveryError ? "error" : "success",
-        text: updatedConfig.lastModelDiscoveryError ?? copy.notices.modelsDiscovered(updatedConfig.discoveredModels.length)
+        text: updatedConfig.lastModelDiscoveryError ?? discoverySummary(updatedConfig, copy)
       });
     } catch (error) {
       setNotice({ kind: "error", text: normalizeNotice(error) });
@@ -3966,6 +4220,16 @@ export function App() {
 
   async function launchModel(model: LaunchModelOption) {
     if (!bridge || !model.id) return;
+    // The picker disables unconfirmed or rejected rows, but keep the
+    // invariant at the action boundary as well. This prevents a stale UI
+    // event or another renderer caller from persisting an unsupported model.
+    if (!model.available) {
+      setNotice({
+        kind: "error",
+        text: model.unavailableReason ?? copy.launchUnavailableModel(model.id)
+      });
+      return;
+    }
     const launchProvider = model.providerKind;
     const launchConfig = activeConfig;
     const nextParams = createLaunchParams(model.launchId, model.id, params, launchProvider, launchConfig);
@@ -4009,6 +4273,16 @@ export function App() {
     setConnectionCheck({ status: "checking" });
     try {
       const result = await bridge.testConnection();
+      if (result.config) {
+        // Connection testing also performs model discovery. Apply the same
+        // authoritative provider snapshot used by the explicit discovery
+        // action so a newly detected GPT Image 2/2.5 model is immediately
+        // reflected in the launch menu and editor parameters.
+        applyConfig(result.config);
+        if (result.config.id === activeConfig.id) {
+          syncParamsToConfig(result.config);
+        }
+      }
       setConnectionCheck({ status: result.ok ? "ok" : "error", message: result.message });
       if (!silent || !result.ok) {
         setNotice({
@@ -8232,7 +8506,7 @@ export function App() {
           baseUrlSummaryForValue={summarizeBaseURL}
           discoverySummaryForConfig={(config) => discoverySummary(config, copy)}
           discoveryTooltipForConfig={(config) => discoveredModelTooltip(config, copy)}
-          modelLabel={discoveredModelLabel}
+          modelLabel={(model) => discoveredModelLabel(model, copy)}
           connectionBadgeForConfig={renderApiConfigConnectionBadge}
           onClose={() => {
             setIsAddingApiAccess(false);

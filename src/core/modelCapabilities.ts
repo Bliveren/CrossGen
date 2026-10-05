@@ -4,12 +4,13 @@ import {
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
-  getFocusedModelsForProvider,
+  discoveredModelDisplayName,
   getModelDisplayName,
-  isFocusedImageModelId,
   discoveredModelCapabilityHints,
-  isPotentialGeneralImageModel,
-  isGptImage25ModelId,
+  getProviderKindForFocusedModelId,
+  hasCompletedModelDiscovery,
+  isDiscoveredImageModel,
+  focusedLaunchIdForModel,
   normalizeGeminiImageModelId,
   normalizeModelId
 } from "../shared/modelCatalog.js";
@@ -84,11 +85,11 @@ function baseContract(
 
 function discoveredContractForModel(model: DiscoveredModel): ImageModelCapabilityContract | undefined {
   const hints = discoveredModelCapabilityHints(model);
-  const imageByName = isPotentialGeneralImageModel(model);
-  // Explicit provider metadata takes precedence over the legacy name marker.
-  // This prevents a catalogue entry such as "image-preview" with
-  // `output_modalities: ["text"]` from being advertised as image-capable.
-  const image = hints.explicitMedia ? hints.image : hints.image || imageByName;
+  // Keep capability summaries on exactly the same conservative classifier as
+  // the desktop model picker. This prevents a gateway response such as
+  // `image_generation: true` + `output_modalities: ["text"]` from being
+  // hidden in the UI but advertised as runnable through CLI/MCP.
+  const image = isDiscoveredImageModel(model);
   const video = hints.video;
   if (!image && !video) return hints.explicit ? unknownCapabilities() : undefined;
 
@@ -201,30 +202,23 @@ function summaryForFocusedModel(providerId: string | undefined, definition: Focu
 
 function focusedDefinitionForModel(providerKind: ProviderKind, modelId: string): FocusedModelDefinition | undefined {
   const normalized = normalizeCapabilityModelId(undefined, providerKind, modelId);
-  if (providerKind === "openai" && isGptImage25ModelId(normalized)) {
-    return FOCUSED_MODEL_CATALOG.find((definition) => definition.launchId === GPT_IMAGE_2_5_LAUNCH_ID);
-  }
-  return FOCUSED_MODEL_CATALOG.find(
-    (definition) =>
-      definition.launchId !== GENERAL_LAUNCH_ID &&
-      definition.providerKind === providerKind &&
-      definition.modelIds.some((candidate) => normalizeModelId(candidate) === normalized)
-  );
+  const launchId = focusedLaunchIdForModel(providerKind, normalized);
+  if (!launchId || launchId === GENERAL_LAUNCH_ID) return undefined;
+  return FOCUSED_MODEL_CATALOG.find((definition) => definition.launchId === launchId);
 }
 
 export function capabilitySummaryForDiscoveredModel(providerId: string | undefined, model: DiscoveredModel): ModelCapabilitySummary {
   const focusedDefinition = focusedDefinitionForModel(model.providerKind, model.id);
   if (focusedDefinition) {
-    const hints = discoveredModelCapabilityHints(model);
     // A gateway may reuse a known model id for a text-only deployment. Honor
     // an explicit modality declaration instead of treating the id as proof of
     // access to CrossGen's focused image runtime.
-    if (hints.explicitMedia && !hints.image) {
+    if (!isDiscoveredImageModel(model)) {
       return {
         providerId,
         providerKind: model.providerKind,
         modelId: model.id,
-        displayName: model.displayName?.trim() || model.id,
+        displayName: discoveredModelDisplayName(model),
         selectionKey: selectionKeyForModel(undefined, model.providerKind, model.id),
         source: "unknown",
         capabilities: unknownCapabilities()
@@ -233,7 +227,7 @@ export function capabilitySummaryForDiscoveredModel(providerId: string | undefin
     return summaryForFocusedModel(providerId, focusedDefinition, model.id);
   }
 
-  const displayName = model.displayName?.trim() || model.id;
+  const displayName = discoveredModelDisplayName(model);
   const discoveredContract = discoveredContractForModel(model);
   if (discoveredContract && (discoveredContract.generate || discoveredContract.video)) {
     return {
@@ -278,8 +272,12 @@ export function capabilitySummaryForDiscoveredModel(providerId: string | undefin
  * key can actually use that model.
  */
 export function preflightSketchCapability(
-  provider: Pick<ProviderConfig, "id" | "discoveredModels" | "lastModelDiscoveryAt" | "lastModelDiscoveryError">,
-  modelId: string
+  provider: Pick<ProviderConfig, "id" | "kind" | "discoveredModels" | "lastModelDiscoveryAt" | "lastModelDiscoveryError"> & {
+    apiKeySaved?: boolean;
+    encryptedApiKey?: string;
+  },
+  modelId: string,
+  providerKind?: ProviderKind
 ): SketchCapabilityPreflight {
   const normalizedRequestedModelId = normalizeModelId(modelId);
   if (!normalizedRequestedModelId) {
@@ -288,17 +286,33 @@ export function preflightSketchCapability(
       reason: "Sketch 需要先选择一个支持图像编辑和参考图输入的模型。"
     };
   }
+  const hasApiKey = provider.apiKeySaved ??
+    (provider.encryptedApiKey === undefined ? undefined : Boolean(provider.encryptedApiKey));
+  if (hasApiKey === false) {
+    return {
+      ok: false,
+      reason: "Sketch 需要先保存 API Key，并重新探测当前 Key 支持的模型。"
+    };
+  }
   if (provider.lastModelDiscoveryError) {
     return {
       ok: false,
       reason: `当前 API Key 的模型探测失败，暂时不能确认 ${modelId} 支持 Sketch。${provider.lastModelDiscoveryError}`
     };
   }
+  if (!hasCompletedModelDiscovery(provider)) {
+    return {
+      ok: false,
+      reason: `当前 API Key 尚未完成有效的模型探测，暂时不能确认 ${modelId} 支持 Sketch。请先重新探测当前 API Key 可用的模型。`
+    };
+  }
 
+  const requestedProviderKind = providerKind ?? getProviderKindForFocusedModelId(modelId) ?? provider.kind;
   const discovered = provider.discoveredModels.find(
     (candidate) =>
-      normalizeCapabilityModelId(undefined, candidate.providerKind, candidate.id) ===
-      normalizeCapabilityModelId(undefined, candidate.providerKind, modelId)
+      candidate.providerKind === requestedProviderKind &&
+      normalizeCapabilityModelId(undefined, requestedProviderKind, candidate.id) ===
+      normalizeCapabilityModelId(undefined, requestedProviderKind, modelId)
   );
   if (!discovered) {
     const suffix = provider.lastModelDiscoveryError
@@ -334,34 +348,17 @@ export function preflightSketchCapability(
 export function listProviderModelCapabilitySummaries(provider: ProviderConfig): ModelCapabilitySummary[] {
   const summaries = new Map<string, ModelCapabilitySummary>();
 
-  for (const definition of getFocusedModelsForProvider(provider.kind)) {
-    const summary = summaryForFocusedModel(provider.id, definition);
-    summaries.set(summary.selectionKey, summary);
-  }
+  // The product catalogue describes what CrossGen knows how to run, but it is
+  // not evidence that the current API key can access those models. Once a
+  // discovery attempt has completed, only models returned by that attempt are
+  // exposed to CLI/MCP callers. A missing or failed discovery therefore
+  // produces an empty capability list instead of advertising unverified
+  // focused launches.
+  if (!hasCompletedModelDiscovery(provider)) return [];
 
   for (const model of provider.discoveredModels) {
     const summary = capabilitySummaryForDiscoveredModel(provider.id, model);
     summaries.set(summary.selectionKey, summary);
-  }
-
-  if (
-    provider.activeLaunchId === GENERAL_LAUNCH_ID &&
-    provider.activeModelId &&
-    !isFocusedImageModelId(provider.kind, provider.activeModelId)
-  ) {
-    const activeGeneralKey = `${provider.kind}:${normalizeModelId(provider.activeModelId)}`;
-    if (!summaries.has(activeGeneralKey)) {
-      summaries.set(activeGeneralKey, {
-        providerId: provider.id,
-        providerKind: provider.kind,
-        modelId: provider.activeModelId,
-        displayName: provider.activeModelId,
-        launchId: GENERAL_LAUNCH_ID,
-        selectionKey: selectionKeyForModel(GENERAL_LAUNCH_ID, provider.kind, provider.activeModelId),
-        source: "general-fallback",
-        capabilities: promptOnlyCapabilities(provider.kind, "assumed")
-      });
-    }
   }
 
   return [...summaries.values()];

@@ -6,6 +6,8 @@ import {
   buildCliJobList,
   buildCliJobStatus,
   buildCliMcpConfig,
+  buildCliModelsList,
+  buildCliProviderList,
   buildCliQueueConfig,
   buildCliQueueStatus
 } from "./readonly";
@@ -35,6 +37,97 @@ function request() {
 }
 
 describe("readonly CLI builders", () => {
+  it("reports exact discovered image families in provider and model summaries", () => {
+    const state = {
+      providers: [{
+        id: "provider-1",
+        kind: "openai" as const,
+        name: "AIHub",
+        baseURL: "https://gateway.example/v1",
+        enabled: true,
+        defaultModel: "gpt-image-2",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto" as const,
+        timeoutMs: 30000,
+        streamingPartialsEnabled: true,
+        discoveredModels: [
+          { id: "gpt-image-2", providerKind: "openai" as const, displayName: "GPT Image 2.5", availability: "confirmed" as const },
+          { id: "gpt-image-2.5-sunburst", providerKind: "openai" as const, displayName: "GPT Image 2", availability: "confirmed" as const },
+          { id: "gpt-4.1", providerKind: "openai" as const }
+        ],
+        lastModelDiscoveryAt: "2026-09-15T00:00:00.000Z",
+        activeLaunchId: "gpt-image-2" as const,
+        activeModelId: "gpt-image-2",
+        updatedAt: "2026-09-15T00:00:00.000Z",
+        encryptedApiKey: "plain:test-key"
+      }],
+      activeProviderId: "provider-1",
+      history: [],
+      galleryFolders: [],
+      galleryAssets: []
+    };
+
+    const provider = buildCliProviderList(state).providers[0];
+    expect(provider).toMatchObject({
+      discoveredModelCount: 3,
+      discoveredModelInventory: {
+        total: 3,
+        image: 2,
+        video: 0,
+        unknown: 1,
+        gptImage2: ["gpt-image-2"],
+        gptImage25: ["gpt-image-2.5-sunburst"],
+        otherImage: [],
+        compatibilityAliases: []
+      }
+    });
+
+    expect(buildCliModelsList(state).providers[0]?.models.map((model) => ({
+      modelId: model.modelId,
+      launchId: model.launchId,
+      displayName: model.displayName
+    }))).toEqual([
+      { modelId: "gpt-image-2", launchId: "gpt-image-2", displayName: "GPT Image 2" },
+      { modelId: "gpt-image-2.5-sunburst", launchId: "gpt-image-2.5", displayName: "GPT Image 2.5 · Sunburst" },
+      { modelId: "gpt-4.1", launchId: undefined, displayName: "gpt-4.1" }
+    ]);
+  });
+
+  it("keeps the provider model count aligned with deduplicated discovery inventory", () => {
+    const state = {
+      providers: [{
+        id: "provider-1",
+        kind: "openai" as const,
+        name: "AIHub",
+        baseURL: "https://gateway.example/v1",
+        enabled: true,
+        defaultModel: "gpt-image-2",
+        defaultSize: "1024x1024",
+        defaultQuality: "auto" as const,
+        timeoutMs: 30000,
+        streamingPartialsEnabled: true,
+        discoveredModels: [
+          { id: "models/gpt-image-2", providerKind: "openai" as const },
+          { id: "gpt-image-2", providerKind: "openai" as const }
+        ],
+        lastModelDiscoveryAt: "2026-09-15T00:00:00.000Z",
+        activeLaunchId: "gpt-image-2" as const,
+        activeModelId: "gpt-image-2",
+        updatedAt: "2026-09-15T00:00:00.000Z",
+        encryptedApiKey: "plain:test-key"
+      }],
+      activeProviderId: "provider-1",
+      history: [],
+      galleryFolders: [],
+      galleryAssets: []
+    };
+
+    expect(buildCliProviderList(state).providers[0]).toMatchObject({
+      discoveredModelCount: 1,
+      discoveredModelInventory: { total: 1 }
+    });
+  });
+
   it("reports queue config in config and queue status", () => {
     const queue = {
       schemaVersion: 1 as const,

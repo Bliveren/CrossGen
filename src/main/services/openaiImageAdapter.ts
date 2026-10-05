@@ -23,13 +23,27 @@ import {
   validateOpenAIRunJobRequest
 } from "../../shared/validation.js";
 import {
+  GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
-  isGptImage25ModelId
+  getProviderKindForFocusedModelId,
+  isGptImage25LaunchAlias,
+  isGptImage25ModelId,
+  isGptImage25ProviderModelId,
+  isGptImage2ModelId,
+  normalizeModelId,
+  stripModelResourcePrefix
 } from "../../shared/modelCatalog.js";
 import { DEFAULT_RESPONSES_MODEL } from "../../shared/validation.js";
 import type { ImageJobRuntime, ImageProviderAdapter, ImageProviderRuntime } from "./imageProviderAdapter.js";
 import { isImageAsset } from "../../core/mediaTypes.js";
-import { firstString, isRecord, readProviderApiError, readProviderJsonResponse, redactLikelySecrets } from "./providerHttp.js";
+import {
+  firstString,
+  isRecord,
+  optionalString,
+  readProviderApiError,
+  readProviderJsonResponse,
+  redactLikelySecrets
+} from "./providerHttp.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 import { sketchGuidanceLines } from "../../shared/sketch.js";
 
@@ -132,9 +146,27 @@ export function asOpenAIImageJob(job: GenerationJob): OpenAIImageJob {
 }
 
 export function normalizeOpenAIRequestParams(params: OpenAIImageParams): OpenAIImageParams {
-  if (!params.stream || params.n <= 1) return params;
+  // Discovery preserves the provider's exact model id. Keep that id on the
+  // wire for focused families as well; normalization remains case-insensitive
+  // and is used only to identify the family.
+  const providerModelId = stripModelResourcePrefix(params.model);
+  const normalizedModel = normalizeModelId(providerModelId);
+  // Provider discovery only treats concrete GPT Image 2.5 ids (Sunburst,
+  // Flare, or a valid dated snapshot) as deployment evidence. Older drafts
+  // and AppLinks may still contain the undated launch alias; normalize that
+  // compatibility value to the concrete default instead of sending an
+  // ambiguous provider id. Any real provider id remains unchanged on wire.
+  const model = isGptImage25ProviderModelId(normalizedModel) || isGptImage2ModelId(normalizedModel)
+      ? providerModelId
+      : isGptImage25LaunchAlias(normalizedModel)
+        ? GPT_IMAGE_2_5_DEFAULT_MODEL_ID
+      : params.model.trim();
+  const normalizedParams = model === params.model
+    ? params
+    : { ...params, model };
+  if (!normalizedParams.stream || normalizedParams.n <= 1) return normalizedParams;
   return {
-    ...params,
+    ...normalizedParams,
     stream: false,
     partialImages: 0
   };
@@ -2149,11 +2181,16 @@ async function readModelsResponse(response: Response): Promise<DiscoveredModel[]
   const data = Array.isArray(payload.data) ? payload.data : [];
   return data.flatMap((item): DiscoveredModel[] => {
     if (!isRecord(item) || typeof item.id !== "string" || !item.id.trim()) return [];
+    if (typeof item.object === "string" && item.object.trim().toLowerCase() !== "model") return [];
+    const id = stripModelResourcePrefix(item.id);
+    if (!id) return [];
+    const description = optionalString(item.description);
     return [
       {
-        id: item.id.trim(),
-        providerKind: "openai",
-        displayName: item.id.trim(),
+        id,
+        providerKind: getProviderKindForFocusedModelId(id) ?? "openai",
+        displayName: optionalString(item.display_name) ?? optionalString(item.displayName) ?? id,
+        ...(description ? { description } : {}),
         raw: item
       }
     ];

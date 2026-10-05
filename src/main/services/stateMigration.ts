@@ -45,12 +45,21 @@ import {
   GPT_IMAGE_2_MODEL_ID,
   GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
+  focusedLaunchIdForModel,
+  getFocusedModelDefinition,
+  getProviderKindForFocusedModelId,
+  hasCompletedModelDiscovery,
+  isDiscoveredModelLaunchable,
   isGeminiImageModelId,
+  isGptImage2ModelId,
+  isGptImage25LaunchAlias,
+  isGptImage25ProviderModelId,
   NANO_BANANA_3_LAUNCH_ID,
-  getModelDisplayName,
-  isGptImage25ModelId,
+  getModelDisplayNameForProvider,
   normalizeGeminiImageModelId,
-  normalizeModelId
+  normalizeModelId,
+  normalizeProviderModelId,
+  stripModelResourcePrefix
 } from "../../shared/modelCatalog.js";
 import { normalizeSketchDocument, normalizeSketchGuidance, normalizeSketchTaskMetadata } from "../../shared/sketch.js";
 
@@ -172,10 +181,43 @@ function normalizeStoredConfig(value: unknown): StoredProviderConfig {
   const input = isRecord(value) ? value : {};
   const kind = normalizeProviderKind(input.kind, "openai");
   const requestedModelForLaunch = nonEmptyString(input.activeModelId, nonEmptyString(input.defaultModel, ""));
-  const activeLaunchId = normalizeStoredLaunchId(input.activeLaunchId, requestedModelForLaunch);
+  const discoveredModels = normalizeDiscoveredModels(input.discoveredModels, kind);
+  const discoveryVeto = hasPersistedDiscoveryVeto(input.discoveredModels, kind, requestedModelForLaunch);
+  const lastModelDiscoveryAt = optionalString(input.lastModelDiscoveryAt);
+  const lastModelDiscoveryError = optionalString(input.lastModelDiscoveryError);
+  const discoveryAttempted = Boolean(lastModelDiscoveryAt || lastModelDiscoveryError);
+  const discoveryState = {
+    discoveredModels,
+    lastModelDiscoveryAt,
+    lastModelDiscoveryError,
+    ...(Object.prototype.hasOwnProperty.call(input, "encryptedApiKey")
+      ? { encryptedApiKey: optionalString(input.encryptedApiKey) }
+      : {})
+  };
+  const discoveryCompleted = hasCompletedModelDiscovery(discoveryState);
+  const selectedDiscoveredModel = selectDiscoveredModelForMigration(
+    discoveredModels,
+    requestedModelForLaunch,
+    discoveryCompleted
+  );
+  const modelForLaunch = discoveryAttempted
+    ? selectedDiscoveredModel?.id ?? ""
+    : requestedModelForLaunch;
+  const activeLaunchId = normalizeStoredLaunchId(
+    input.activeLaunchId,
+    modelForLaunch,
+    kind,
+    discoveredModels,
+    discoveryVeto && !selectedDiscoveredModel,
+    discoveryCompleted,
+    discoveryAttempted
+  );
+  const selectedModelSeed = discoveryAttempted
+    ? selectedDiscoveredModel?.id ?? ""
+    : undefined;
   const defaultModel = normalizeModelForLaunch(
     activeLaunchId,
-    nonEmptyString(input.defaultModel, getDefaultModelForLaunch(activeLaunchId))
+    selectedModelSeed ?? nonEmptyString(input.defaultModel, getDefaultModelForLaunch(activeLaunchId))
   );
   const defaultSize = nonEmptyString(input.defaultSize, DEFAULT_IMAGE_PARAMS.size);
   const defaultBaseURL = kind === "gemini" ? DEFAULT_GEMINI_BASE_URL : DEFAULT_BASE_URL;
@@ -199,19 +241,58 @@ function normalizeStoredConfig(value: unknown): StoredProviderConfig {
     streamingPartialsEnabled: typeof input.streamingPartialsEnabled === "boolean"
       ? input.streamingPartialsEnabled
       : defaultStreamingPartialsEnabled(kind, normalizedBaseURL),
-    discoveredModels: normalizeDiscoveredModels(input.discoveredModels, kind),
-    lastModelDiscoveryAt: optionalString(input.lastModelDiscoveryAt),
-    lastModelDiscoveryError: optionalString(input.lastModelDiscoveryError),
+    discoveredModels,
+    lastModelDiscoveryAt,
+    lastModelDiscoveryError,
     activeLaunchId,
     activeModelId: normalizeModelForLaunch(
       activeLaunchId,
-      nonEmptyString(input.activeModelId, defaultModel || getDefaultModelForLaunch(activeLaunchId))
+      selectedModelSeed ?? nonEmptyString(input.activeModelId, defaultModel || getDefaultModelForLaunch(activeLaunchId))
     ),
     openAIImageRouting: normalizeOpenAIImageRouting(input.openAIImageRouting),
     updatedAt: nonEmptyString(input.updatedAt, new Date(0).toISOString()),
     encryptedApiKey: optionalString(input.encryptedApiKey),
     encryption: normalizeEncryption(input.encryption)
   };
+}
+
+function selectDiscoveredModelForMigration(
+  discoveredModels: DiscoveredModel[],
+  requestedModel: string,
+  discoveryCompleted: boolean
+): DiscoveredModel | undefined {
+  if (!discoveryCompleted) return undefined;
+
+  const requested = requestedModel.trim();
+  if (requested) {
+    const matching = discoveredModels.find((candidate) =>
+      isDiscoveredModelLaunchable(candidate) &&
+      normalizeProviderModelId(candidate.providerKind, candidate.id) ===
+      normalizeProviderModelId(candidate.providerKind, requested)
+    );
+    if (matching) return matching;
+  }
+
+  // Keep restart behavior deterministic when the previously selected model
+  // disappeared from a successful catalogue refresh. Prefer the same focused
+  // family order used by the live discovery selector, then any image-capable
+  // General model.
+  const preferredLaunches = [
+    GPT_IMAGE_2_5_LAUNCH_ID,
+    GPT_IMAGE_2_LAUNCH_ID,
+    NANO_BANANA_3_LAUNCH_ID
+  ] as const;
+  for (const launchId of preferredLaunches) {
+    const focused = discoveredModels.find((candidate) =>
+      isDiscoveredModelLaunchable(candidate) &&
+      focusedLaunchIdForModel(candidate.providerKind, candidate.id) === launchId
+    );
+    if (focused) return focused;
+  }
+  return discoveredModels.find((candidate) =>
+    isDiscoveredModelLaunchable(candidate) &&
+    focusedLaunchIdForModel(candidate.providerKind, candidate.id) === undefined
+  );
 }
 
 function normalizeOpenAIImageRouting(value: unknown): OpenAIImageRouting | undefined {
@@ -223,19 +304,24 @@ function normalizeOpenAIImageRouting(value: unknown): OpenAIImageRouting | undef
         const mode = optionalOneOf(probe.mode, ["generate", "edit", "guided-region"] as const);
         const endpoint = optionalString(probe.endpoint);
         if (!route || !mode || !endpoint) return [];
+        const modelId = optionalString(probe.modelId);
         return [{
+          ...(modelId ? { modelId } : {}),
           route,
           mode,
           endpoint,
           ok: typeof probe.ok === "boolean" ? probe.ok : false,
           verified: typeof probe.verified === "boolean" ? probe.verified : undefined,
+          ...(typeof probe.modelUnavailable === "boolean" ? { modelUnavailable: probe.modelUnavailable } : {}),
           latencyMs: boundedInteger(probe.latencyMs, 0, 600000, 0),
           status: typeof probe.status === "number" ? probe.status : undefined,
           error: optionalString(probe.error)
         }];
       })
     : [];
+  const modelId = optionalString(value.modelId);
   return {
+    ...(modelId ? { modelId } : {}),
     preferredGenerateRoute: optionalOneOf(value.preferredGenerateRoute, ["image-api", "responses", "chat-completions"] as const),
     preferredEditRoute: optionalOneOf(value.preferredEditRoute, ["image-api", "responses", "chat-completions"] as const),
     preferredGuidedEditRoute: optionalOneOf(value.preferredGuidedEditRoute, ["image-api", "responses", "chat-completions"] as const),
@@ -251,15 +337,69 @@ function normalizeDiscoveredModels(value: unknown, fallbackKind: ProviderKind): 
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
     if (!isRecord(item) || typeof item.id !== "string" || !item.id.trim()) return [];
+    const id = stripModelResourcePrefix(item.id);
+    if (!id) return [];
+    if (
+      isRecord(item.raw) &&
+      typeof item.raw.object === "string" &&
+      item.raw.object.trim().toLowerCase() !== "model"
+    ) {
+      return [];
+    }
+    const storedProviderKind = normalizeProviderKind(item.providerKind, fallbackKind);
+    const availability = optionalOneOf(item.availability, ["listed", "confirmed", "inconclusive", "rejected"] as const);
+    const discoverySource = optionalOneOf(item.discoverySource, ["provider-listed", "route-candidate"] as const);
+    const availabilityReason = optionalString(item.availabilityReason);
     return [
       {
-        id: item.id.trim(),
-        providerKind: normalizeProviderKind(item.providerKind, fallbackKind),
+        id,
+        // Persisted discovery rows from older builds could be tagged with the
+        // transport kind (`custom`) even when the exact model id identifies a
+        // focused OpenAI/Gemini family. Re-derive that family on load so the
+        // launch menu, history, CLI, and MCP keep the same model semantics
+        // after an app restart.
+        providerKind: getProviderKindForFocusedModelId(id) ?? storedProviderKind,
         displayName: optionalString(item.displayName),
         description: optionalString(item.description),
-        raw: item.raw
+        raw: item.raw,
+        ...(discoverySource ? { discoverySource } : {}),
+        ...(availability ? { availability } : {}),
+        ...(availabilityReason ? { availabilityReason } : {})
       }
     ];
+  });
+}
+
+function hasPersistedDiscoveryVeto(value: unknown, fallbackKind: ProviderKind, model: string): boolean {
+  if (!Array.isArray(value) || !model.trim()) return false;
+  return value.some((item) => {
+    if (!isRecord(item) || typeof item.id !== "string" || !item.id.trim()) return false;
+    const id = stripModelResourcePrefix(item.id);
+    if (!id) return false;
+    const storedProviderKind = normalizeProviderKind(item.providerKind, fallbackKind);
+    const providerKind = getProviderKindForFocusedModelId(id) ?? storedProviderKind;
+    if (
+      normalizeProviderModelId(providerKind, id) !==
+      normalizeProviderModelId(providerKind, model)
+    ) {
+      return false;
+    }
+    if (
+      isRecord(item.raw) &&
+      typeof item.raw.object === "string" &&
+      item.raw.object.trim().toLowerCase() !== "model"
+    ) {
+      return true;
+    }
+    const availability = optionalOneOf(item.availability, ["listed", "confirmed", "inconclusive", "rejected"] as const);
+    return !isDiscoveredModelLaunchable({
+      id,
+      providerKind,
+      displayName: optionalString(item.displayName),
+      description: optionalString(item.description),
+      raw: item.raw,
+      ...(availability ? { availability } : {})
+    });
   });
 }
 
@@ -449,7 +589,8 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
   const outputs = Array.isArray(input.outputs) ? input.outputs : [];
   const firstOutput = outputs.find((item) => isRecord(item) && nonEmptyString(item.sourceType, "") === "result") ?? outputs[outputs.length - 1];
   const outputFileName = isRecord(firstOutput) ? path.basename(nonEmptyString(firstOutput.fileName, "")) : "";
-  const fallbackName = outputFileName || `${getModelDisplayName(launchId, modelId)}-${nonEmptyString(input.id, "image").slice(-8)}.png`;
+  const fallbackName = outputFileName ||
+    `${getModelDisplayNameForProvider(providerKind, modelId, launchId)}-${nonEmptyString(input.id, "image").slice(-8)}.png`;
   const fallbackCreatedAt = nonEmptyString(input.createdAt, new Date(0).toISOString());
   const normalizedOutputs = outputs.flatMap((item): OutputAsset[] => {
     const output = normalizeOutputAssetValue(item, nonEmptyString(input.id, "legacy-job"), fallbackCreatedAt);
@@ -465,7 +606,7 @@ function normalizeGenerationJob(value: unknown, fallbackProviderId: string): Gen
     providerId: nonEmptyString(input.providerId, fallbackProviderId),
     launchId,
     modelId,
-    modelDisplayName: getModelDisplayName(launchId, modelId),
+    modelDisplayName: getModelDisplayNameForProvider(providerKind, modelId, launchId),
     workflow: input.workflow === "sketch" ? "sketch" : input.workflow === "standard" ? "standard" : undefined,
     sketch: normalizeSketchTaskMetadata(input.sketch),
     params,
@@ -534,15 +675,19 @@ export function normalizeImageParams(value: unknown): ImageParams {
 
 function normalizeOpenAIImageParams(input: Record<string, unknown>): OpenAIImageParams {
   const requestedModel = nonEmptyString(input.model, "");
-  const modelIsGptImage25 = isGptImage25ModelId(requestedModel);
+  const providerModelId = stripModelResourcePrefix(requestedModel);
+  const normalizedRequestedModel = normalizeModelId(providerModelId);
+  const modelIsGptImage25Provider = isGptImage25ProviderModelId(normalizedRequestedModel);
+  const modelIsGptImage25Alias = isGptImage25LaunchAlias(normalizedRequestedModel);
+  const modelIsGptImage25 = modelIsGptImage25Provider || modelIsGptImage25Alias;
   const launchId = input.launchId === GPT_IMAGE_2_5_LAUNCH_ID || modelIsGptImage25
     ? GPT_IMAGE_2_5_LAUNCH_ID
     : GPT_IMAGE_2_LAUNCH_ID;
   const model = launchId === GPT_IMAGE_2_5_LAUNCH_ID
-    ? modelIsGptImage25
-      ? normalizeModelId(requestedModel)
+    ? modelIsGptImage25Provider
+      ? providerModelId
       : GPT_IMAGE_2_5_DEFAULT_MODEL_ID
-    : requestedModel || GPT_IMAGE_2_MODEL_ID;
+    : providerModelId || GPT_IMAGE_2_MODEL_ID;
   const imageRoute = oneOf(input.imageRoute, ["auto", "image-api", "responses", "chat-completions"] as const, DEFAULT_IMAGE_PARAMS.imageRoute);
   return {
     ...DEFAULT_IMAGE_PARAMS,
@@ -601,12 +746,17 @@ function getDefaultModelForLaunch(launchId: FocusedLaunchId): string {
 }
 
 function normalizeModelForLaunch(launchId: FocusedLaunchId, value: string): string {
+  const providerModelId = stripModelResourcePrefix(value);
   if (launchId === GPT_IMAGE_2_5_LAUNCH_ID) {
-    const normalized = normalizeModelId(value);
-    return isGptImage25ModelId(normalized) ? normalized : GPT_IMAGE_2_5_DEFAULT_MODEL_ID;
+    const normalized = normalizeModelId(providerModelId);
+    return isGptImage25ProviderModelId(normalized)
+      ? providerModelId
+      : GPT_IMAGE_2_5_DEFAULT_MODEL_ID;
   }
   if (launchId === GPT_IMAGE_2_LAUNCH_ID) {
-    return value;
+    return isGptImage2ModelId(providerModelId)
+      ? providerModelId || GPT_IMAGE_2_MODEL_ID
+      : providerModelId;
   }
   if (launchId === NANO_BANANA_3_LAUNCH_ID) {
     return isGeminiImageModelId(value) ? normalizeGeminiImageModelId(value) : DEFAULT_GEMINI_IMAGE_PARAMS.model;
@@ -624,10 +774,74 @@ function normalizeFocusedLaunchId(value: unknown, fallback: FocusedLaunchId): Fo
   return fallback;
 }
 
-function normalizeStoredLaunchId(value: unknown, model: string): FocusedLaunchId {
-  if (isGptImage25ModelId(model)) return GPT_IMAGE_2_5_LAUNCH_ID;
-  if (isGeminiImageModelId(model)) return NANO_BANANA_3_LAUNCH_ID;
-  return normalizeFocusedLaunchId(value, GPT_IMAGE_2_LAUNCH_ID);
+function normalizeStoredLaunchId(
+  value: unknown,
+  model: string,
+  providerKind: ProviderKind,
+  discoveredModels: DiscoveredModel[] = [],
+  discoveryVeto = false,
+  discoveryCompleted = false,
+  discoveryAttempted = false
+): FocusedLaunchId {
+  const defaultLaunchId = providerKind === "gemini"
+    ? NANO_BANANA_3_LAUNCH_ID
+    : providerKind === "custom"
+      ? GENERAL_LAUNCH_ID
+      : GPT_IMAGE_2_LAUNCH_ID;
+  const normalizedModel = model.trim();
+  const discoveredModel = normalizedModel
+    ? discoveredModels.find((candidate) =>
+        normalizeProviderModelId(candidate.providerKind, candidate.id) ===
+          normalizeProviderModelId(candidate.providerKind, normalizedModel)
+      )
+    : undefined;
+  const discoveredLaunchId = discoveredModel
+    ? isDiscoveredModelLaunchable(discoveredModel)
+      ? focusedLaunchIdForModel(discoveredModel.providerKind, discoveredModel.id)
+      : undefined
+    : undefined;
+  // Discovery rows are only authoritative after a successful, timestamped
+  // attempt. A cached row paired with an invalid timestamp or a discovery
+  // error must not resurrect a focused launch on restart.
+  if (discoveryCompleted && discoveredLaunchId) return discoveredLaunchId;
+  if (discoveryAttempted && !discoveryCompleted) return GENERAL_LAUNCH_ID;
+  // A matching discovery row with explicit non-image metadata is a veto. Do
+  // not resurrect a focused launch from the saved id after a restart.
+  if ((discoveredModel && !discoveredLaunchId) || discoveryVeto) return GENERAL_LAUNCH_ID;
+  // A completed discovery with no matching row means this model is stale for
+  // the current API Key. Keep the provider in General until the user selects
+  // one of the models that is actually present in the latest result.
+  if (discoveryCompleted) return GENERAL_LAUNCH_ID;
+  // Older state files may contain a model cache without the discovery marker.
+  // Preserve that legacy intent for migration; the runtime still requires a
+  // fresh successful discovery before generation is allowed.
+  if (discoveredLaunchId) return discoveredLaunchId;
+
+  const exactLaunchId = focusedLaunchIdForModel(providerKind, model) ??
+    (providerKind === "openai" && isGptImage25LaunchAlias(model)
+      ? GPT_IMAGE_2_5_LAUNCH_ID
+      : undefined);
+  if (exactLaunchId) return exactLaunchId;
+
+  const requestedLaunchId = normalizeFocusedLaunchId(value, defaultLaunchId);
+  if (requestedLaunchId === GENERAL_LAUNCH_ID) return requestedLaunchId;
+
+  // A custom provider is an OpenAI-compatible transport in CrossGen. If the
+  // saved launch was explicitly selected for a known focused model, preserve
+  // that intent even though the config's transport kind is still `custom`.
+  // This is especially important after restarting with a custom gateway that
+  // exposes `gpt-image-2.5` or a Gemini Image id.
+  if (providerKind === "custom") {
+    const modelProviderKind = getProviderKindForFocusedModelId(model);
+    const modelLaunchId = modelProviderKind
+      ? focusedLaunchIdForModel(modelProviderKind, model)
+      : undefined;
+    if (modelLaunchId && requestedLaunchId === modelLaunchId) return modelLaunchId;
+  }
+
+  return getFocusedModelDefinition(requestedLaunchId)?.providerKind === providerKind
+    ? requestedLaunchId
+    : defaultLaunchId;
 }
 
 function normalizeEncryption(value: unknown): StoredProviderConfig["encryption"] {

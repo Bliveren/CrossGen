@@ -55,6 +55,23 @@ export type ProviderKind = "openai" | "gemini" | "custom";
 
 export type FocusedLaunchId = "gpt-image-2" | "gpt-image-2.5" | "nano-banana-3" | "general";
 
+/**
+ * Model discovery is deliberately more precise than a boolean "available".
+ * A provider can list a model while a metadata or route check is still
+ * inconclusive, or can return a stale row that explicitly rejects the model.
+ */
+export type ModelDiscoveryAvailability = "listed" | "confirmed" | "inconclusive" | "rejected";
+
+/**
+ * Evidence source for a discovered model.
+ *
+ * Older state files omit this field and are treated as provider-listed rows.
+ * Route candidates are product-owned ids added only to validate gateways whose
+ * `/models` response is incomplete; they are evidence only after an exact
+ * image route confirms the id.
+ */
+export type ModelDiscoverySource = "provider-listed" | "route-candidate";
+
 export type ImageQuality = "auto" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export type ImageFormat = "png" | "jpeg" | "webp";
@@ -307,6 +324,11 @@ export interface DiscoveredModel {
   displayName?: string;
   description?: string;
   raw?: unknown;
+  discoverySource?: ModelDiscoverySource;
+  /** Optional because older state files only stored the /models row. */
+  availability?: ModelDiscoveryAvailability;
+  /** Sanitized provider or probe explanation for non-confirmed rows. */
+  availabilityReason?: string;
 }
 
 export interface ProviderConfig {
@@ -336,17 +358,25 @@ export type OpenAIImageRoute = "image-api" | "responses" | "chat-completions";
 export type OpenAIImageRouteSelection = "auto" | OpenAIImageRoute;
 
 export interface OpenAIImageRouteProbe {
+  /** Exact provider model id used for this probe (resource prefix removed, casing preserved). */
+  modelId?: string;
   route: OpenAIImageRoute;
   mode: "generate" | "edit" | "guided-region";
   endpoint: string;
   ok: boolean;
   verified?: boolean;
+  /** The successful payload explicitly echoed the exact requested deployment id. */
+  modelIdConfirmed?: boolean;
+  /** The provider explicitly rejected the exact model id, even if HTTP was 2xx/4xx. */
+  modelUnavailable?: boolean;
   latencyMs: number;
   status?: number;
   error?: string;
 }
 
 export interface OpenAIImageRouting {
+  /** Exact provider model id whose routes were probed. */
+  modelId?: string;
   preferredGenerateRoute?: OpenAIImageRoute;
   preferredEditRoute?: OpenAIImageRoute;
   preferredGuidedEditRoute?: OpenAIImageRoute;
@@ -919,6 +949,8 @@ export interface ConnectionTestResult {
   message: string;
   status?: number;
   requestId?: string;
+  /** The provider snapshot produced by the test's model-discovery pass. */
+  config?: ProviderConfig;
 }
 
 export interface AppSnapshot {

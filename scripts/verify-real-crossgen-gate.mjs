@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { deflateSync } from "node:zlib";
 
@@ -379,14 +380,23 @@ async function main() {
   console.log("CrossGen saved-config gate completed.");
 }
 
-main().catch((error) => {
-  console.error(redact(error instanceof Error ? error.message : String(error)));
-  process.exit(1);
-});
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main().catch((error) => {
+    console.error(redact(error instanceof Error ? error.message : String(error)));
+    process.exit(1);
+  });
+}
 
 function openAIGates(provider, fixtures) {
   if (!provider) return [];
   const model = openAIModel || openAIModelForProvider(provider);
+  if (!model || !isGptImageModelId(model)) {
+    return [
+      missingModelResult("G1-crossgen-text-to-image", provider.kind ?? "openai-compatible", "text-to-image"),
+      missingModelResult("G2-crossgen-image-to-image", provider.kind ?? "openai-compatible", "image-to-image"),
+      missingModelResult("G3-crossgen-guided-region", provider.kind ?? "openai-compatible", "guided-region", true)
+    ];
+  }
   return [
     {
       id: "G1-crossgen-text-to-image",
@@ -558,8 +568,12 @@ function publicActiveProvider(provider) {
 function isOpenAIProvider(provider) {
   if (!provider?.enabled || !provider.apiKeySaved) return false;
   if (provider.kind === "openai") return true;
-  if (Array.isArray(provider.models) && provider.models.some((model) => model.providerKind === "openai" && /gpt-image/i.test(model.modelId ?? ""))) return true;
-  return provider.activeLaunchId === "gpt-image-2" || /gpt-image/i.test(provider.activeModelId ?? provider.defaultModel ?? "");
+  if (Array.isArray(provider.models) && provider.models.some((model) =>
+    model.providerKind === "openai" && isGptImageModelId(model.modelId)
+  )) return true;
+  return provider.activeLaunchId === "gpt-image-2" ||
+    provider.activeLaunchId === "gpt-image-2.5" ||
+    isGptImageModelId(provider.activeModelId ?? provider.defaultModel);
 }
 
 function isGeminiProvider(provider) {
@@ -571,10 +585,63 @@ function isGeminiProvider(provider) {
 }
 
 function openAIModelForProvider(provider) {
-  const preferredModel = provider.models?.find((model) =>
-    model.providerKind === "openai" && String(model.modelId).toLowerCase() === "gpt-image-2"
-  )?.modelId ?? provider.models?.find((model) => model.providerKind === "openai")?.modelId;
-  return preferredModel || provider.activeModelId || provider.defaultModel || "";
+  const exactModels = Array.isArray(provider.models)
+    ? provider.models
+      .filter((model) => model?.providerKind === "openai" && isGptImageModelId(model.modelId))
+      .map((model) => String(model.modelId))
+    : [];
+  const preferredModel = exactModels.find((model) => isGptImage2ProviderModelId(model)) ??
+    exactModels[0];
+  const configuredExactModel = [provider.activeModelId, provider.defaultModel]
+    .map((model) => String(model ?? "").trim())
+    .find((model) => isGptImageModelId(model));
+  return preferredModel || configuredExactModel || "";
+}
+
+function canonicalModelId(value) {
+  return String(value ?? "").trim().replace(/^models\//i, "").toLowerCase();
+}
+
+function isValidIsoDate(value) {
+  const match = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/.exec(value);
+  if (!match?.groups) return false;
+  const year = Number(match.groups.year);
+  const month = Number(match.groups.month);
+  const day = Number(match.groups.day);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+}
+
+function isGptImage25ProviderModelId(modelId) {
+  const normalized = canonicalModelId(modelId);
+  if (
+    normalized === "gpt-image-2.5-sunburst" ||
+    normalized === "gpt-image-2.5-flare"
+  ) {
+    return true;
+  }
+  const snapshot = normalized.match(
+    /^gpt-image-2\.5(?:-(?:sunburst|flare))?-(\d{4}-\d{2}-\d{2})$/
+  );
+  return Boolean(snapshot?.[1] && isValidIsoDate(snapshot[1]));
+}
+
+function isGptImage25LaunchAlias(modelId) {
+  return canonicalModelId(modelId) === "gpt-image-2.5";
+}
+
+function isGptImage2ProviderModelId(modelId) {
+  const normalized = canonicalModelId(modelId);
+  if (normalized === "gpt-image-2") return true;
+  const snapshot = normalized.match(/^gpt-image-2-(\d{4}-\d{2}-\d{2})$/);
+  return Boolean(snapshot?.[1] && isValidIsoDate(snapshot[1]));
+}
+
+function isGptImageModelId(modelId) {
+  const normalized = canonicalModelId(modelId);
+  return isGptImage2ProviderModelId(normalized) || isGptImage25ProviderModelId(normalized);
 }
 
 function geminiModelForProvider(provider) {
@@ -619,6 +686,27 @@ function missingProviderResult(gate, providerKind, operation, mask = false) {
   };
 }
 
+function missingModelResult(gate, providerKind, operation, mask = false) {
+  return {
+    gate,
+    providerKind,
+    model: null,
+    operation,
+    routeSelection: "crossgen-auto",
+    resolvedRoute: null,
+    inputImageCount: operation === "text-to-image" ? 0 : 1,
+    mask,
+    timeoutSeconds: Math.round(timeoutMs / 1000),
+    attemptCount: 0,
+    elapsedSeconds: 0,
+    result: "blocker",
+    outputCount: 0,
+    diagnosticCategory: "model_evidence_missing",
+    errorSummary: "No exact GPT Image 2 or GPT Image 2.5 provider model id was confirmed for this saved configuration. The bare gpt-image-2.5 compatibility alias is not accepted as provider evidence.",
+    userVisibleNextActions: ["Run model discovery and select a confirmed exact provider model id before rerunning the real provider gate."]
+  };
+}
+
 function dryRunResult(gate) {
   return {
     gate: gate.id,
@@ -639,3 +727,12 @@ function dryRunResult(gate) {
     userVisibleNextActions: ["Rerun with CROSSGEN_REAL_PROVIDER_ACCEPT_COST=1 to submit this paid gate."]
   };
 }
+
+export {
+  canonicalModelId,
+  isGptImage25LaunchAlias,
+  isGptImage2ProviderModelId,
+  isGptImage25ProviderModelId,
+  isGptImageModelId,
+  openAIModelForProvider
+};

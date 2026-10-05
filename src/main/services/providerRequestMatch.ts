@@ -1,16 +1,28 @@
-import { normalizeModelId } from "../../shared/modelCatalog.js";
+import {
+  GENERAL_LAUNCH_ID,
+  findDiscoveredImageModel,
+  focusedLaunchIdForModel,
+  hasCompletedModelDiscovery
+} from "../../shared/modelCatalog.js";
 import type { RunJobRequest } from "../../shared/types.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 
 export function canRunRequestWithConfig(request: RunJobRequest, config: StoredProviderConfig): boolean {
-  if (request.params.providerKind === config.kind) return true;
+  // A provider kind only describes the transport/configuration. It is not
+  // proof that this API key can run an arbitrary model in that family.
+  if (!hasCompletedModelDiscovery(config)) return false;
 
-  const requestedModelId = normalizeModelId(request.params.model);
-  const discoveredModelMatches = config.discoveredModels.some(
-    (model) => model.providerKind === request.params.providerKind && normalizeModelId(model.id) === requestedModelId
+  const discoveredModel = findDiscoveredImageModel(
+    config.discoveredModels,
+    request.params.providerKind,
+    request.params.model
   );
-  if (discoveredModelMatches) return true;
+  if (!discoveredModel) return false;
 
-  const configuredModelMatches = normalizeModelId(config.activeModelId || config.defaultModel) === requestedModelId;
-  return request.params.launchId === config.activeLaunchId && configuredModelMatches;
+  // Keep the launch family derived from the exact discovered model id. This
+  // prevents an old GPT Image 2.5 draft from being sent as GPT Image 2 (or
+  // vice versa), and keeps Gemini image models on the Nano Banana workflow.
+  const expectedLaunchId =
+    focusedLaunchIdForModel(discoveredModel.providerKind, discoveredModel.id) ?? GENERAL_LAUNCH_ID;
+  return request.params.launchId === expectedLaunchId;
 }
