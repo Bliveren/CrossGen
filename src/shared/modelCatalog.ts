@@ -4,6 +4,7 @@ import type {
   FocusedModelDefinition,
   ModelDiscoveryAvailability,
   ModelDiscoverySource,
+  OpenAIImageRouting,
   ProviderKind
 } from "./types.js";
 
@@ -531,8 +532,43 @@ export function isOpenAICompatibleGeneralFallbackProvider(providerKind: Provider
   return providerKind === "openai" || providerKind === "custom";
 }
 
-export function generalFallbackSupportsReferenceImages(providerKind: ProviderKind): boolean {
-  return providerKind === "gemini";
+/**
+ * Gemini General fallback supports reference images natively. The
+ * OpenAI-compatible fallback only exposes edit/reference support after the
+ * main process has confirmed the exact provider model id on the image edit
+ * route; callers without evidence must stay prompt-only.
+ */
+export function generalFallbackSupportsReferenceImages(
+  providerKind: ProviderKind,
+  referenceEditConfirmed = false
+): boolean {
+  if (providerKind === "gemini") return true;
+  if (!isOpenAICompatibleGeneralFallbackProvider(providerKind)) return false;
+  return referenceEditConfirmed;
+}
+
+/**
+ * General OpenAI-compatible edit evidence is a validation-only route probe
+ * bound to the exact provider model id. A reachable edit route (2xx or a
+ * validation-only 400/422 that does not reject the model) is enough to offer
+ * the capability; explicit model rejection or a missing route is not.
+ */
+export function hasGeneralEditRouteEvidence(
+  routing: OpenAIImageRouting | undefined,
+  providerKind: ProviderKind,
+  modelId: string
+): boolean {
+  if (!isOpenAICompatibleGeneralFallbackProvider(providerKind)) return false;
+  const requested = normalizeProviderModelId(providerKind, modelId);
+  if (!requested) return false;
+  return (routing?.probes ?? []).some(
+    (probe) =>
+      probe.route === "image-api" &&
+      probe.mode === "edit" &&
+      probe.ok === true &&
+      probe.modelUnavailable !== true &&
+      normalizeProviderModelId(providerKind, probe.modelId ?? "") === requested
+  );
 }
 
 export function isFocusedImageModelId(providerKind: ProviderKind, modelId: string): boolean {

@@ -4,7 +4,6 @@ import {
   DEFAULT_GEMINI_IMAGE_PARAMS,
   DEFAULT_GENERAL_IMAGE_PARAMS,
   GPT_IMAGE_2_5_QUALITY_OPTIONS,
-  GENERAL_PROMPT_ONLY_MESSAGE,
   MAX_GPT_IMAGE_INPUTS,
   dataUrlToBase64,
   extensionForFormat,
@@ -275,11 +274,24 @@ describe("gpt-image-2 validation", () => {
         mode: "edit",
         inputPaths: ["/tmp/a.png"],
         params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "openai", model: "dall-e-3" }
+      }).ok
+    ).toBe(true);
+    expect(
+      validateRunJobRequest({
+        ...job,
+        mode: "edit",
+        inputPaths: [],
+        params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "custom", model: "flux-pro" }
       })
-    ).toMatchObject({
-      ok: false,
-      message: GENERAL_PROMPT_ONLY_MESSAGE
-    });
+    ).toMatchObject({ ok: false, message: "基础参考图编辑至少需要一张参考图。" });
+    expect(
+      validateRunJobRequest({
+        ...job,
+        mode: "generate",
+        inputPaths: ["/tmp/a.png"],
+        params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "custom", model: "flux-pro" }
+      })
+    ).toMatchObject({ ok: false, message: "文生图不应携带输入图片。" });
     expect(validateRunJobRequest({ ...job, params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "custom", model: "flux-pro" } }).ok).toBe(true);
     expect(validateRunJobRequest({ ...job, params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "gemini", model: "gemini-3-pro-image" } }).ok).toBe(true);
     expect(validateGeneralRunJobRequest({ ...job, params: { ...DEFAULT_GENERAL_IMAGE_PARAMS, providerKind: "gemini", model: "gemini-3-pro-image" }, mode: "edit" })).toMatchObject({

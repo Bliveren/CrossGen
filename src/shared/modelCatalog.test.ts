@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { OpenAIImageRouting } from "./types";
 import {
   FOCUSED_MODEL_CATALOG,
   GEMINI_3_1_FLASH_LITE_IMAGE_MODEL_ID,
@@ -19,6 +20,7 @@ import {
   NANO_BANANA_3_MODEL_ALIAS,
   NANO_BANANA_3_MODEL_ID,
   generalFallbackSupportsReferenceImages,
+  hasGeneralEditRouteEvidence,
   classifyDiscoveredModel,
   discoveredModelDisplayName,
   discoveredModelCapabilityHints,
@@ -746,5 +748,39 @@ describe("focused model catalog", () => {
     expect(generalFallbackSupportsReferenceImages("gemini")).toBe(true);
     expect(generalFallbackSupportsReferenceImages("openai")).toBe(false);
     expect(generalFallbackSupportsReferenceImages("custom")).toBe(false);
+    expect(generalFallbackSupportsReferenceImages("openai", true)).toBe(true);
+    expect(generalFallbackSupportsReferenceImages("custom", true)).toBe(true);
+    expect(generalFallbackSupportsReferenceImages("gemini", false)).toBe(true);
+  });
+
+  it("requires exact-id edit route evidence for OpenAI-compatible General references", () => {
+    const routing: OpenAIImageRouting = {
+      modelId: "dall-e-3",
+      preferredEditRoute: "image-api",
+      probes: [
+        {
+          route: "image-api",
+          mode: "edit",
+          modelId: "dall-e-3",
+          endpoint: "/images/edits",
+          ok: true,
+          verified: false,
+          latencyMs: 12
+        }
+      ],
+      updatedAt: new Date(0).toISOString()
+    };
+
+    expect(hasGeneralEditRouteEvidence(routing, "openai", "dall-e-3")).toBe(true);
+    expect(hasGeneralEditRouteEvidence(routing, "openai", "flux-pro")).toBe(false);
+    expect(hasGeneralEditRouteEvidence(routing, "gemini", "dall-e-3")).toBe(false);
+    expect(
+      hasGeneralEditRouteEvidence(
+        { ...routing, probes: [{ ...routing.probes[0], modelUnavailable: true }] },
+        "openai",
+        "dall-e-3"
+      )
+    ).toBe(false);
+    expect(hasGeneralEditRouteEvidence(undefined, "openai", "dall-e-3")).toBe(false);
   });
 });

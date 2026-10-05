@@ -28,6 +28,7 @@ import type {
   DownloadRequest,
   EditedImageDownloadRequest,
   EditedGalleryImageInput,
+  FocusedLaunchId,
   GalleryAsset,
   GalleryAssetPatch,
   GalleryFolder,
@@ -207,7 +208,7 @@ import {
   installArtistSkill
 } from "./services/agentRuntime.js";
 import { buildProviderConfigForSave, providerDisplayName } from "./services/providerConfigSave.js";
-import { canRunRequestWithConfig } from "./services/providerRequestMatch.js";
+import { canRunRequestWithConfig, generalReferenceEditBlockReason } from "./services/providerRequestMatch.js";
 import { preflightSketchCapability } from "../core/modelCapabilities.js";
 import { assertManagedRegularFile, assertManagedRegularFileInRoots, collectOwnedJobFilePaths, historyAssetReadRoots, normalizeManagedAssetPath, resolveManagedFileName } from "./services/assetOwnership.js";
 import {
@@ -3083,8 +3084,7 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
       discoveredModels,
       inferredProviderKind
     );
-    let openAIImageRouting = activeSelection.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ||
-      activeSelection.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID
+    let openAIImageRouting = shouldProbeRoutingForSelection(activeSelection, config)
       ? await probeOpenAIImageRouting({
           ...config,
           kind: config.kind,
@@ -3129,10 +3129,8 @@ async function refreshModelDiscovery(config: StoredProviderConfig): Promise<Stor
         discoveredModels,
         inferredProviderKind
       );
-      openAIImageRouting =
-        activeSelection.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ||
-        activeSelection.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID
-          ? await probeOpenAIImageRouting({
+      openAIImageRouting = shouldProbeRoutingForSelection(activeSelection, config)
+        ? await probeOpenAIImageRouting({
               ...config,
               kind: config.kind,
               defaultModel: activeSelection.defaultModel,
@@ -4016,6 +4014,22 @@ async function waitForQueuedGenerationStatus(queueId: string, waitMs: number) {
   }
 }
 
+function shouldProbeRoutingForSelection(
+  selection: { activeLaunchId: FocusedLaunchId },
+  config: StoredProviderConfig
+): boolean {
+  if (
+    selection.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ||
+    selection.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID
+  ) {
+    return true;
+  }
+  return (
+    selection.activeLaunchId === GENERAL_LAUNCH_ID &&
+    (config.kind === "openai" || config.kind === "custom")
+  );
+}
+
 async function hasLiveGenerationWorkerHost(now = Date.now()): Promise<boolean> {
   if (backgroundQueueRuns.size > 0) return true;
   const queue = await readExistingQueueForCli();
@@ -4050,6 +4064,8 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   const state = await readState();
   const activeProvider = state.providers.find(p => p.id === state.activeProviderId) ?? state.providers[0];
   if (!canRunRequestWithConfig(normalizedRequest, activeProvider)) {
+    const generalEditReason = generalReferenceEditBlockReason(normalizedRequest, activeProvider);
+    if (generalEditReason) throw new Error(generalEditReason);
     throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
   }
   if (normalizedRequest.workflow === "sketch") {
@@ -4072,6 +4088,8 @@ async function handleRunJob(_event: IpcMainInvokeEvent, request: RunJobRequest):
   await mutateStateAndQueue((currentState, queue) => {
     const currentProvider = currentState.providers.find(p => p.id === currentState.activeProviderId) ?? currentState.providers[0];
     if (!canRunRequestWithConfig(normalizedRequest, currentProvider)) {
+      const generalEditReason = generalReferenceEditBlockReason(normalizedRequest, currentProvider);
+      if (generalEditReason) throw new Error(generalEditReason);
       throw new Error("任务 provider 与当前服务配置不一致。请先切换并保存对应服务商。");
     }
     job = createJob(normalizedRequest, currentProvider, inputs, mask, "desktop", referencePreflight);
@@ -5682,6 +5700,15 @@ function validateAgentRunJobRequest(request: RunJobRequest, provider: StoredProv
     throwCliCommandError("CAPABILITY_UNSUPPORTED", adapterValidation.message ?? "Generation request is not supported by the selected model.", ["Run crossgen --cli models list --json to inspect supported model capabilities."], 4);
   }
   if (!canRunRequestWithConfig(normalizedRequest, provider)) {
+    const generalEditReason = generalReferenceEditBlockReason(normalizedRequest, provider);
+    if (generalEditReason) {
+      throwCliCommandError(
+        "CAPABILITY_UNSUPPORTED",
+        generalEditReason,
+        ["Run model discovery again with the current API key before submitting a General reference edit."],
+        4
+      );
+    }
     throwCliCommandError("CAPABILITY_UNSUPPORTED", "Request provider/model does not match the selected provider configuration.", ["Switch provider or pass --provider/--model for a compatible configuration."], 4);
   }
   if (normalizedRequest.workflow === "sketch") {

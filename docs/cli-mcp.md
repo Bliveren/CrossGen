@@ -127,6 +127,27 @@ release gate still requires a real AIHub GPT Image 2.5/Nano Banana 3 matrix.
 Mock responses and a compatible fallback model are not evidence of target-model
 quality or availability.
 
+## General fallback
+
+General is CrossGen's minimal fallback launch for OpenAI-compatible or Gemini
+endpoints that are not part of a focused model family.
+
+- **Gemini**: prompt and reference-image edits use the Gemini generateContent
+  fallback contract.
+- **OpenAI-compatible (`openai` / `custom`)**: prompt-only generation is
+  always available. Reference-image editing (`mode: "edit"`) is enabled only
+  after the exact provider model id has edit-route evidence from discovery (a
+  validation-only `/images/edits` probe bound to the exact id). When the route
+  is unconfirmed, CrossGen fails closed with a prompt-only diagnostic instead of
+  sending a paid edit request.
+- Mask/inpaint, Sketch, and multi-turn Responses semantics are not part of the
+  General fallback.
+- CLI/MCP share the same gate: `models list` reports `edit` /
+  `referenceImages` only when the evidence is confirmed, and generate/edit
+  submissions still require `--yes` / `confirm: true`.
+- Set `CROSSGEN_GENERAL_EDIT_ENABLED=0` to force the prompt-only fallback
+  regardless of route evidence (kill switch).
+
 ## AppLink provider import
 
 Desktop packages register the `crossgen://` URL scheme so API aggregators can

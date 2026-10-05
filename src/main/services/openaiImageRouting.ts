@@ -1,4 +1,5 @@
 import {
+  GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
   GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
@@ -230,11 +231,19 @@ export async function probeOpenAIImageRouting(
   // GPT Image 2 or GPT Image 2.5. This prevents a stale launch field from
   // probing a GPT Image 2 deployment with the GPT Image 2.5 route matrix (or
   // vice versa).
-  const probeTarget = resolveProbeTarget(config);
+  const isGeneralFallback = config.activeLaunchId === GENERAL_LAUNCH_ID;
+  const probeTarget = isGeneralFallback
+    ? {
+        model: normalizeProbeModelId(config.activeModelId || config.defaultModel),
+        gptImage25: false
+      }
+    : resolveProbeTarget(config);
   const model = probeTarget.model;
   const gptImage25 = probeTarget.gptImage25;
   const probeTimeoutMs = Math.min(Math.max(Math.floor(config.timeoutMs / 8), 2500), 8000);
-  const routes: Array<[OpenAIImageRoute, ProbeMode]> = gptImage25
+  const routes: Array<[OpenAIImageRoute, ProbeMode]> = isGeneralFallback
+    ? [["image-api", "edit"]]
+    : gptImage25
     ? [
         ["image-api", "generate"],
         ["image-api", "edit"],
@@ -258,6 +267,15 @@ export async function probeOpenAIImageRouting(
   const probes = await Promise.all(
     routes.map(([route, mode]) => probeOpenAIImageRoute(fetchImpl, config.baseURL, apiKey, probeTimeoutMs, route, mode, buildOpenAIImageRouteProbeRequest(route, mode, model)))
   );
+  if (isGeneralFallback) {
+    return {
+      modelId: normalizeProbeModelId(model),
+      preferredEditRoute: "image-api",
+      preferredEditRouteVerified: isPreferredRouteVerified(probes, "edit", "image-api"),
+      probes,
+      updatedAt: nowIso()
+    };
+  }
   const preferredGenerateRoute = gptImage25
     ? "image-api"
     : preferredOpenAIImageRoute(probes, "generate", "chat-completions");
@@ -332,6 +350,12 @@ function resolveProbeTarget(config: StoredProviderConfig): {
 }
 
 function shouldProbeOpenAIImageRouting(config: StoredProviderConfig): boolean {
+  if (config.activeLaunchId === GENERAL_LAUNCH_ID) {
+    // General OpenAI-compatible fallback: probe the edit route for the exact
+    // model so the main process can gate reference-image editing on evidence.
+    if (config.kind !== "openai" && config.kind !== "custom") return false;
+    return Boolean((config.activeModelId || config.defaultModel).trim());
+  }
   if (config.kind === "openai") {
     return config.activeLaunchId === GPT_IMAGE_2_LAUNCH_ID ||
       config.activeLaunchId === GPT_IMAGE_2_5_LAUNCH_ID ||

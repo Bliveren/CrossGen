@@ -105,6 +105,7 @@ interface ValidationCopy {
   generalNoMask: string;
   generalReferenceRequired: string;
   generalPromptOnly: string;
+  generalEditUnconfirmed: string;
   cannotReadImage: string;
   maskFormatInvalid: string;
   maskSizeMismatch: string;
@@ -917,8 +918,9 @@ export const translations: Record<Language, UiCopy> = {
     selectLaunchToRun: (model: string) => `Select ${model} before running.`,
     generalRuntimeUnsupported: "General is not available for this API config.",
     generalLimitedRuntime: "General uses API-specific minimal fallback capability.",
-    generalReferenceRuntime: "General uses a minimal Gemini fallback: prompt and reference images only.",
-    generalPromptOnlyRuntime: "General uses a minimal OpenAI-compatible fallback: prompt-only generation.",
+    generalReferenceRuntime: "General uses a minimal fallback: prompt and reference images only.",
+    generalPromptOnlyRuntime:
+      "General uses a minimal OpenAI-compatible fallback: prompt-only generation until an edit route is confirmed.",
     generalFallback: "Discovered fallback",
     savedLocally: "Saved locally",
     pasteApiKey: "Paste API key",
@@ -1401,6 +1403,8 @@ export const translations: Record<Language, UiCopy> = {
       generalNoMask: "General does not support mask parameters in this version.",
       generalReferenceRequired: "Basic reference editing needs at least one reference image.",
       generalPromptOnly: "General OpenAI-compatible fallback only supports prompt-only generation.",
+      generalEditUnconfirmed:
+        "General OpenAI-compatible fallback has not confirmed a reference-image edit route yet. Run model discovery again with the current API key.",
       cannotReadImage: "Cannot read image.",
       maskFormatInvalid: "Mask format is invalid.",
       maskSizeMismatch: "Mask size must match the first source image.",
@@ -1641,8 +1645,8 @@ export const translations: Record<Language, UiCopy> = {
     selectLaunchToRun: (model: string) => `运行前请选择 ${model}。`,
     generalRuntimeUnsupported: "当前 API 配置暂未接入 General 运行时。",
     generalLimitedRuntime: "General 使用 API 配置专属最小兜底能力。",
-    generalReferenceRuntime: "General 使用最小 Gemini 兜底能力：仅提示词和参考图。",
-    generalPromptOnlyRuntime: "General 使用最小 OpenAI 兼容兜底能力：仅纯提示词生成。",
+    generalReferenceRuntime: "General 使用最小兜底能力：仅提示词和参考图。",
+    generalPromptOnlyRuntime: "General 使用最小 OpenAI 兼容兜底能力：在确认参考图编辑路由前仅支持纯提示词生成。",
     generalFallback: "探测到的兜底模型",
     savedLocally: "已本地保存",
     pasteApiKey: "粘贴 API Key",
@@ -2125,6 +2129,7 @@ export const translations: Record<Language, UiCopy> = {
       generalNoMask: "General 首期不支持 mask 参数。",
       generalReferenceRequired: "基础参考图编辑至少需要一张参考图。",
       generalPromptOnly: "General OpenAI 兼容兜底仅支持纯提示词生成。",
+      generalEditUnconfirmed: "General OpenAI 兼容兜底尚未确认参考图编辑路由，请先完成模型发现或路由探测。",
       cannotReadImage: "无法读取图片。",
       maskFormatInvalid: "蒙版格式无效。",
       maskSizeMismatch: "蒙版尺寸必须与第一张源图一致。",
@@ -2154,6 +2159,7 @@ const validationMessageMap: Record<string, keyof UiCopy["validation"]> = {
   "General 首期不支持 mask 参数。": "generalNoMask",
   "基础参考图编辑至少需要一张参考图。": "generalReferenceRequired",
   "General OpenAI 兼容兜底仅支持纯提示词生成。": "generalPromptOnly",
+  "General OpenAI 兼容兜底尚未确认参考图编辑路由，请先完成模型发现或路由探测。": "generalEditUnconfirmed",
   "Paint or upload a mask before inpaint.": "paintOrUploadMask",
   "Mask format is invalid.": "maskFormatInvalid",
   "Mask must be PNG or WebP with alpha.": "maskFormatInvalid",

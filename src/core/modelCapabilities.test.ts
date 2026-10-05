@@ -186,6 +186,50 @@ describe("model capability contracts", () => {
     });
   });
 
+  it("upgrades discovered General models to reference edit capability with exact-id evidence", () => {
+    const model = {
+      id: "dall-e-3",
+      providerKind: "openai" as const,
+      availability: "listed" as const,
+      raw: { capabilities: { image_generation: true } }
+    };
+
+    const withoutEvidence = capabilitySummaryForDiscoveredModel("provider-openai", model);
+    expect(withoutEvidence.capabilities).toMatchObject({ edit: false, referenceImages: false });
+
+    const withEvidence = capabilitySummaryForDiscoveredModel("provider-openai", model, {
+      generalReferenceEditConfirmed: true
+    });
+    expect(withEvidence.capabilities).toMatchObject({
+      generate: true,
+      edit: true,
+      referenceImages: true,
+      maxReferenceImages: 2,
+      inpaint: false,
+      multiTurn: false
+    });
+
+    const summaries = listProviderModelCapabilitySummaries(provider({
+      discoveredModels: [model],
+      lastModelDiscoveryAt: now,
+      openAIImageRouting: {
+        modelId: "dall-e-3",
+        preferredEditRoute: "image-api",
+        probes: [{
+          route: "image-api",
+          mode: "edit",
+          modelId: "dall-e-3",
+          endpoint: "/images/edits",
+          ok: true,
+          verified: false,
+          latencyMs: 12
+        }],
+        updatedAt: now
+      }
+    }));
+    expect(summaries.find((summary) => summary.modelId === "dall-e-3")?.capabilities.edit).toBe(true);
+  });
+
   it("reports discovered image-like models conservatively", () => {
     const discovered = capabilitySummaryForDiscoveredModel("custom-provider", {
       id: "flux-pro",
