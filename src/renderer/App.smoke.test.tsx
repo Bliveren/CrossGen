@@ -1597,6 +1597,41 @@ describe("renderer multi-model smoke", () => {
     );
   });
 
+  it("enables General reference inputs when the exact model has edit route evidence", async () => {
+    const defaultConfig = providerConfig({
+      apiKeySaved: true,
+      discoveredModels: [
+        { id: GPT_IMAGE_2_MODEL_ID, providerKind: "openai", availability: "confirmed" },
+        { id: "dall-e-3", providerKind: "openai", availability: "listed" }
+      ],
+      openAIImageRouting: {
+        modelId: "dall-e-3",
+        preferredEditRoute: "image-api",
+        probes: [{
+          route: "image-api",
+          mode: "edit",
+          modelId: "dall-e-3",
+          endpoint: "/images/edits",
+          ok: true,
+          verified: false,
+          latencyMs: 12
+        }],
+        updatedAt: now
+      },
+      lastModelDiscoveryAt: now
+    });
+    await renderApp(
+      snapshot({
+        providers: [defaultConfig],
+        activeProviderId: defaultConfig.id
+      })
+    );
+
+    await selectAndLaunchModel("dall-e-3");
+
+    expect(document.body.textContent).toContain("reference images only");
+  });
+
   it("enables discovered Nano Banana 3 models on OpenAI-compatible access", async () => {
     const defaultConfig = providerConfig({
       kind: "openai",

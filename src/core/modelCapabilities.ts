@@ -11,6 +11,7 @@ import {
   hasCompletedModelDiscovery,
   isDiscoveredImageModel,
   focusedLaunchIdForModel,
+  hasGeneralEditRouteEvidence,
   normalizeGeminiImageModelId,
   normalizeModelId
 } from "../shared/modelCatalog.js";
@@ -207,7 +208,11 @@ function focusedDefinitionForModel(providerKind: ProviderKind, modelId: string):
   return FOCUSED_MODEL_CATALOG.find((definition) => definition.launchId === launchId);
 }
 
-export function capabilitySummaryForDiscoveredModel(providerId: string | undefined, model: DiscoveredModel): ModelCapabilitySummary {
+export function capabilitySummaryForDiscoveredModel(
+  providerId: string | undefined,
+  model: DiscoveredModel,
+  options: { generalReferenceEditConfirmed?: boolean } = {}
+): ModelCapabilitySummary {
   const focusedDefinition = focusedDefinitionForModel(model.providerKind, model.id);
   if (focusedDefinition) {
     // A gateway may reuse a known model id for a text-only deployment. Honor
@@ -229,6 +234,10 @@ export function capabilitySummaryForDiscoveredModel(providerId: string | undefin
 
   const displayName = discoveredModelDisplayName(model);
   const discoveredContract = discoveredContractForModel(model);
+  const confirmedContract = withGeneralReferenceEdit(
+    discoveredContract,
+    options.generalReferenceEditConfirmed === true
+  );
   if (discoveredContract && (discoveredContract.generate || discoveredContract.video)) {
     return {
       providerId,
@@ -237,7 +246,7 @@ export function capabilitySummaryForDiscoveredModel(providerId: string | undefin
       displayName,
       selectionKey: selectionKeyForModel(undefined, model.providerKind, model.id),
       source: "discovered",
-      capabilities: discoveredContract
+      capabilities: confirmedContract ?? discoveredContract
     };
   }
 
@@ -249,7 +258,7 @@ export function capabilitySummaryForDiscoveredModel(providerId: string | undefin
       displayName,
       selectionKey: selectionKeyForModel(undefined, model.providerKind, model.id),
       source: "unknown",
-      capabilities: discoveredContract
+      capabilities: confirmedContract ?? discoveredContract
     };
   }
 
@@ -345,6 +354,21 @@ export function preflightSketchCapability(
   return { ok: true, summary };
 }
 
+function withGeneralReferenceEdit(
+  capabilities: ImageModelCapabilityContract | undefined,
+  confirmed: boolean
+): ImageModelCapabilityContract | undefined {
+  if (!capabilities || !confirmed || !capabilities.generate) return undefined;
+  return {
+    ...capabilities,
+    edit: true,
+    referenceImages: true,
+    maxReferenceImages: Math.max(capabilities.maxReferenceImages, 2),
+    inpaint: false,
+    multiTurn: false
+  };
+}
+
 export function listProviderModelCapabilitySummaries(provider: ProviderConfig): ModelCapabilitySummary[] {
   const summaries = new Map<string, ModelCapabilitySummary>();
 
@@ -357,7 +381,13 @@ export function listProviderModelCapabilitySummaries(provider: ProviderConfig): 
   if (!hasCompletedModelDiscovery(provider)) return [];
 
   for (const model of provider.discoveredModels) {
-    const summary = capabilitySummaryForDiscoveredModel(provider.id, model);
+    const summary = capabilitySummaryForDiscoveredModel(provider.id, model, {
+      generalReferenceEditConfirmed: hasGeneralEditRouteEvidence(
+        provider.openAIImageRouting,
+        model.providerKind,
+        model.id
+      )
+    });
     summaries.set(summary.selectionKey, summary);
   }
 

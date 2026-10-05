@@ -10,6 +10,7 @@ import {
 import { defaultStoredConfig } from "./stateMigration";
 import type { OpenAIImageRouteProbe } from "../../shared/types";
 import {
+  GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
   GPT_IMAGE_2_5_FLARE_SNAPSHOT_MODEL_ID,
   GPT_IMAGE_2_5_LAUNCH_ID,
@@ -784,5 +785,41 @@ describe("OpenAI image route probing", () => {
     expect(routing?.preferredEditRouteVerified).toBe(false);
     expect(routing?.preferredGuidedEditRoute).toBe("chat-completions");
     expect(routing?.preferredGuidedEditRouteVerified).toBe(false);
+  });
+
+  it("probes the edit route to produce General OpenAI-compatible reference evidence", async () => {
+    const requests: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request) => {
+      requests.push(String(url));
+      return new Response(JSON.stringify({ error: { message: "missing image" } }), {
+        status: 400,
+        headers: { "content-type": "application/json" }
+      });
+    }) as typeof fetch;
+
+    const routing = await probeOpenAIImageRouting(
+      {
+        ...defaultStoredConfig,
+        kind: "openai",
+        baseURL: "https://api.test/v1",
+        activeLaunchId: GENERAL_LAUNCH_ID,
+        activeModelId: "dall-e-3",
+        defaultModel: "dall-e-3",
+        discoveredModels: [{ id: "dall-e-3", providerKind: "openai" }],
+        timeoutMs: 30000
+      },
+      "sk-test-key",
+      fetchImpl
+    );
+
+    expect(requests).toEqual(["https://api.test/v1/images/edits"]);
+    expect(routing?.probes).toHaveLength(1);
+    expect(routing?.probes[0]).toMatchObject({
+      route: "image-api",
+      mode: "edit",
+      modelId: "dall-e-3",
+      ok: true
+    });
+    expect(routing?.preferredEditRoute).toBe("image-api");
   });
 });

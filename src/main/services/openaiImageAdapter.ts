@@ -1225,7 +1225,7 @@ function isGptImage25Request(params: OpenAIImageParams): boolean {
   return params.launchId === GPT_IMAGE_2_5_LAUNCH_ID || isGptImage25ModelId(params.model);
 }
 
-async function assetToBlob(asset: InputAsset): Promise<Blob> {
+export async function assetToBlob(asset: InputAsset): Promise<Blob> {
   const content = await fs.readFile(asset.path);
   return new Blob([content], { type: asset.mimeType });
 }

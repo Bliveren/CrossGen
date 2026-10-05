@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_GEMINI_IMAGE_PARAMS, DEFAULT_IMAGE_PARAMS } from "../shared/validation";
+import { DEFAULT_GENERAL_IMAGE_PARAMS, DEFAULT_GEMINI_IMAGE_PARAMS, DEFAULT_IMAGE_PARAMS } from "../shared/validation";
 import type { ProviderConfigInput } from "../shared/types";
 import { buildProviderConfigForSave } from "./services/providerConfigSave";
-import { canRunRequestWithConfig } from "./services/providerRequestMatch";
+import { canRunRequestWithConfig, generalReferenceEditBlockReason } from "./services/providerRequestMatch";
 import { defaultStoredConfig, type StoredProviderConfig } from "./services/stateMigration";
 import {
+  GENERAL_LAUNCH_ID,
   GPT_IMAGE_2_LAUNCH_ID,
   GPT_IMAGE_2_MODEL_ID,
   GPT_IMAGE_2_5_DEFAULT_MODEL_ID,
@@ -311,6 +312,113 @@ describe("main config save builder", () => {
     };
 
     expect(canRunRequestWithConfig(request, provider)).toBe(false);
+  });
+
+  it("blocks a General OpenAI-compatible edit without exact-id route evidence", () => {
+    const provider = savedConfig({
+      kind: "openai",
+      lastModelDiscoveryError: undefined,
+      discoveredModels: [{ id: "dall-e-3", providerKind: "openai", availability: "listed" }],
+      openAIImageRouting: undefined,
+      activeLaunchId: GENERAL_LAUNCH_ID,
+      activeModelId: "dall-e-3",
+      defaultModel: "dall-e-3"
+    });
+    const request = {
+      mode: "edit" as const,
+      prompt: "test",
+      inputPaths: ["/tmp/a.png"],
+      params: {
+        ...DEFAULT_GENERAL_IMAGE_PARAMS,
+        providerKind: "openai" as const,
+        model: "dall-e-3"
+      }
+    };
+
+    expect(canRunRequestWithConfig(request, provider)).toBe(false);
+    expect(generalReferenceEditBlockReason(request, provider)).toContain("尚未确认参考图编辑路由");
+  });
+
+  it("allows a General OpenAI-compatible edit with exact-id edit route evidence", () => {
+    const provider = savedConfig({
+      kind: "openai",
+      lastModelDiscoveryError: undefined,
+      discoveredModels: [{ id: "dall-e-3", providerKind: "openai", availability: "listed" }],
+      openAIImageRouting: {
+        modelId: "dall-e-3",
+        preferredEditRoute: "image-api",
+        probes: [{
+          route: "image-api",
+          mode: "edit",
+          modelId: "dall-e-3",
+          endpoint: "/images/edits",
+          ok: true,
+          verified: false,
+          latencyMs: 12
+        }],
+        updatedAt: "2026-06-09T01:02:03.000Z"
+      },
+      activeLaunchId: GENERAL_LAUNCH_ID,
+      activeModelId: "dall-e-3",
+      defaultModel: "dall-e-3"
+    });
+    const request = {
+      mode: "edit" as const,
+      prompt: "test",
+      inputPaths: ["/tmp/a.png"],
+      params: {
+        ...DEFAULT_GENERAL_IMAGE_PARAMS,
+        providerKind: "openai" as const,
+        model: "dall-e-3"
+      }
+    };
+
+    expect(canRunRequestWithConfig(request, provider)).toBe(true);
+    expect(generalReferenceEditBlockReason(request, provider)).toBeUndefined();
+  });
+
+  it("honors the General reference edit kill switch even with route evidence", () => {
+    const provider = savedConfig({
+      kind: "openai",
+      lastModelDiscoveryError: undefined,
+      discoveredModels: [{ id: "dall-e-3", providerKind: "openai", availability: "listed" }],
+      openAIImageRouting: {
+        modelId: "dall-e-3",
+        preferredEditRoute: "image-api",
+        probes: [{
+          route: "image-api",
+          mode: "edit",
+          modelId: "dall-e-3",
+          endpoint: "/images/edits",
+          ok: true,
+          verified: false,
+          latencyMs: 12
+        }],
+        updatedAt: "2026-06-09T01:02:03.000Z"
+      },
+      activeLaunchId: GENERAL_LAUNCH_ID,
+      activeModelId: "dall-e-3",
+      defaultModel: "dall-e-3"
+    });
+    const request = {
+      mode: "edit" as const,
+      prompt: "test",
+      inputPaths: ["/tmp/a.png"],
+      params: {
+        ...DEFAULT_GENERAL_IMAGE_PARAMS,
+        providerKind: "openai" as const,
+        model: "dall-e-3"
+      }
+    };
+    const previous = process.env.CROSSGEN_GENERAL_EDIT_ENABLED;
+    process.env.CROSSGEN_GENERAL_EDIT_ENABLED = "0";
+    try {
+      expect(canRunRequestWithConfig(request, provider)).toBe(false);
+      expect(generalReferenceEditBlockReason(request, provider)).toContain("feature flag");
+    } finally {
+      if (previous === undefined) delete process.env.CROSSGEN_GENERAL_EDIT_ENABLED;
+      else process.env.CROSSGEN_GENERAL_EDIT_ENABLED = previous;
+    }
   });
 
   it.each(["listed", "inconclusive", "rejected"] as const)(

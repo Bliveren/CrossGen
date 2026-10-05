@@ -22,7 +22,7 @@ import {
 import { isGeneralFallbackProvider, isOpenAICompatibleGeneralFallbackProvider } from "../../shared/modelCatalog.js";
 import type { ImageJobRuntime, ImageProviderAdapter } from "./imageProviderAdapter.js";
 import { runGeminiImageJob } from "./geminiImageAdapter.js";
-import { buildEndpoint, fetchWithTimeout } from "./openaiImageAdapter.js";
+import { assetToBlob, buildEndpoint, fetchWithTimeout } from "./openaiImageAdapter.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 
 interface OpenAICompatibleGeneralImagesResponse {
@@ -124,6 +124,9 @@ async function runOpenAICompatibleGeneralImageJob(
   if (!isGeneralImageParams(job.params) || !isOpenAICompatibleGeneralFallbackProvider(job.params.providerKind)) {
     throw new Error("General 图片参数无效。");
   }
+  if (job.mode === "edit") {
+    return runOpenAICompatibleGeneralImageEditJob(job, apiKey, baseURL, runtime);
+  }
   if (job.mode !== "generate" || job.inputAssets.length > 0 || job.maskAsset) {
     throw new Error(GENERAL_PROMPT_ONLY_MESSAGE);
   }
@@ -145,6 +148,80 @@ async function runOpenAICompatibleGeneralImageJob(
     remainingTimeoutMs(deadlineMs)
   );
 
+  return handleOpenAICompatibleGeneralResponse(
+    job,
+    response,
+    apiKey,
+    runtime,
+    deadlineMs,
+    "openai-compatible-minimal"
+  );
+}
+
+/**
+ * OpenAI-compatible General image-to-image. The route is only reached when the
+ * main process already confirmed the exact model id on /images/edits; this
+ * function still validates the shape and fails closed for masks or missing
+ * inputs.
+ */
+async function runOpenAICompatibleGeneralImageEditJob(
+  job: GenerationJob,
+  apiKey: string,
+  baseURL: string,
+  runtime: ImageJobRuntime
+): Promise<GenerationJob> {
+  if (!isGeneralImageParams(job.params) || !isOpenAICompatibleGeneralFallbackProvider(job.params.providerKind)) {
+    throw new Error("General 图片参数无效。");
+  }
+  if (job.mode !== "edit" || job.inputAssets.length === 0) {
+    throw new Error(GENERAL_PROMPT_ONLY_MESSAGE);
+  }
+  if (job.maskAsset) {
+    throw new Error("General 首期不支持 mask 参数。");
+  }
+
+  const deadlineMs = Date.now() + job.params.timeoutMs;
+  const form = new FormData();
+  for (const [key, value] of Object.entries(buildOpenAICompatibleGeneralRequestBody(job.params, job.prompt))) {
+    form.append(key, String(value));
+  }
+  for (const asset of job.inputAssets) {
+    form.append("image", await assetToBlob(asset), asset.name);
+  }
+
+  const response = await fetchWithTimeout(
+    runtime.fetch,
+    buildEndpoint(baseURL, "/images/edits"),
+    {
+      method: "POST",
+      signal: runtime.abortSignal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json"
+      },
+      body: form
+    },
+    remainingTimeoutMs(deadlineMs)
+  );
+
+  return handleOpenAICompatibleGeneralResponse(
+    job,
+    response,
+    apiKey,
+    runtime,
+    deadlineMs,
+    "openai-compatible-minimal-edit"
+  );
+}
+
+async function handleOpenAICompatibleGeneralResponse(
+  job: GenerationJob,
+  response: Response,
+  apiKey: string,
+  runtime: ImageJobRuntime,
+  deadlineMs: number,
+  contract: "openai-compatible-minimal" | "openai-compatible-minimal-edit"
+): Promise<GenerationJob> {
   if (!response.ok) {
     throw new Error(await readOpenAICompatibleGeneralApiError(response, apiKey));
   }
@@ -174,7 +251,7 @@ async function runOpenAICompatibleGeneralImageJob(
     updatedAt: new Date().toISOString(),
     providerMetadata: {
       ...job.providerMetadata,
-      generalFallbackContract: "openai-compatible-minimal"
+      generalFallbackContract: contract
     }
   };
 }

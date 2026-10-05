@@ -27,7 +27,6 @@ import {
   GPT_IMAGE_2_5_LAUNCH_ID,
   NANO_BANANA_3_LAUNCH_ID,
   NANO_BANANA_3_MODEL_ID,
-  generalFallbackSupportsReferenceImages,
   isGeneralFallbackProvider,
   isGeminiImageModelId,
   isGptImage2ModelId,
@@ -46,6 +45,8 @@ export const DEFAULT_RESPONSES_MODEL = "gpt-6-astra";
 export const MAX_GPT_IMAGE_INPUTS = 16;
 export const MAX_OPENAI_SAFETY_IDENTIFIER_LENGTH = 64;
 export const GENERAL_PROMPT_ONLY_MESSAGE = "General OpenAI 兼容兜底仅支持纯提示词生成。";
+export const GENERAL_EDIT_UNCONFIRMED_MESSAGE =
+  "General OpenAI 兼容兜底尚未确认参考图编辑路由，请先完成模型发现或路由探测。";
 
 export const DEFAULT_IMAGE_PARAMS: OpenAIImageParams = {
   providerKind: "openai",
@@ -783,16 +784,17 @@ export function validateGeneralRunJobRequest(request: unknown): ValidationResult
   if (request.maskPath || request.maskDataUrl) {
     return { ok: false, message: "General 首期不支持 mask 参数。" };
   }
-  if (generalFallbackSupportsReferenceImages(request.params.providerKind)) {
-    if (request.mode === "generate" && inputPaths.length > 0) {
-      return { ok: false, message: "文生图不应携带输入图片。" };
-    }
-    if (request.mode === "edit" && inputPaths.length === 0) {
-      return { ok: false, message: "基础参考图编辑至少需要一张参考图。" };
-    }
-    return { ok: true };
+  // Shape-only checks. Gemini's General fallback has native reference-image
+  // support; the OpenAI-compatible fallback is gated on exact-id edit route
+  // evidence in the main process (canRunRequestWithConfig) before a request is
+  // allowed to leave the app.
+  if (request.mode === "generate" && inputPaths.length > 0) {
+    return { ok: false, message: "文生图不应携带输入图片。" };
   }
-  if (request.mode !== "generate" || inputPaths.length > 0) {
+  if (request.mode === "edit" && inputPaths.length === 0) {
+    return { ok: false, message: "基础参考图编辑至少需要一张参考图。" };
+  }
+  if (request.mode !== "generate" && request.mode !== "edit") {
     return { ok: false, message: GENERAL_PROMPT_ONLY_MESSAGE };
   }
   return { ok: true };

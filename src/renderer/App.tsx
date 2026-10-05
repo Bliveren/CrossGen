@@ -126,6 +126,7 @@ import {
   discoveredModelDisplayName,
   discoveredModelSource,
   generalFallbackSupportsReferenceImages,
+  hasGeneralEditRouteEvidence,
   findDiscoveredImageModel,
   getModelDisplayNameForProvider,
   getFocusedModelDefinition,
@@ -435,14 +436,14 @@ function themeModeLabel(copy: UiCopy, mode: ThemeMode): string {
   return copy.themeSystem;
 }
 
-function getReferenceImageLimit(params: ImageParams): number {
+function getReferenceImageLimit(params: ImageParams, generalAllowsReferences = false): number {
   if (isOpenAIImageParams(params)) {
     return getFocusedModelDefinition(params.launchId)?.capabilities.maxReferenceImages ?? MAX_GPT_IMAGE_INPUTS;
   }
   if (isGeminiImageParams(params)) {
     return getFocusedModelDefinition(NANO_BANANA_3_LAUNCH_ID)?.capabilities.maxReferenceImages ?? 2;
   }
-  if (isGeneralImageParams(params) && generalFallbackSupportsReferenceImages(params.providerKind)) {
+  if (isGeneralImageParams(params) && generalAllowsReferences) {
     return getFocusedModelDefinition(NANO_BANANA_3_LAUNCH_ID)?.capabilities.maxReferenceImages ?? 2;
   }
   return 0;
@@ -1166,9 +1167,9 @@ function runtimeSelectionError(params: ImageParams, config: ProviderConfig, copy
     : unavailableReasonForModel(params.providerKind, params.model);
 }
 
-function generalRuntimeNotice(providerKind: ProviderKind, copy: UiCopy): string {
+function generalRuntimeNotice(providerKind: ProviderKind, copy: UiCopy, generalAllowsReferences: boolean): string {
   if (!isGeneralFallbackProvider(providerKind)) return copy.generalRuntimeUnsupported;
-  return generalFallbackSupportsReferenceImages(providerKind) ? copy.generalReferenceRuntime : copy.generalPromptOnlyRuntime;
+  return generalAllowsReferences ? copy.generalReferenceRuntime : copy.generalPromptOnlyRuntime;
 }
 
 function patchConfigActiveLaunch(config: ProviderConfig, job: GenerationJob): ProviderConfig {
@@ -1984,7 +1985,12 @@ export function App() {
   const geminiParams = isGeminiImageParams(params) ? params : null;
   const generalParams = isGeneralImageParams(params) ? params : null;
   const isGeneralMode = Boolean(generalParams);
-  const generalAllowsReferences = generalParams ? generalFallbackSupportsReferenceImages(generalParams.providerKind) : false;
+  const generalEditConfirmed = generalParams
+    ? hasGeneralEditRouteEvidence(activeConfig?.openAIImageRouting, generalParams.providerKind, generalParams.model)
+    : false;
+  const generalAllowsReferences = generalParams
+    ? generalFallbackSupportsReferenceImages(generalParams.providerKind, generalEditConfirmed)
+    : false;
   const hasMask = Boolean(maskAsset || maskDataUrl);
   // 内部 WorkMode 由 UI 的 tabMode 推导：text2img→generate；img2img 有蒙版→inpaint，否则→edit。
   // General 模式仍按既有规则（支持参考图且已选图→edit，否则 generate）。
@@ -2001,8 +2007,10 @@ export function App() {
         : "edit";
   const requestWorkflow: ImageWorkflow | undefined = activeSketchAsset ? "sketch" : undefined;
   const showReferenceTools = generalParams ? generalAllowsReferences || effectiveInputAssets.length > 0 : tabMode === "img2img" || Boolean(activeSketchAsset);
-  const activeReferenceImageLimit = getReferenceImageLimit(params);
-  const generalModeNotice = generalParams ? generalRuntimeNotice(generalParams.providerKind, copy) : copy.generalRuntimeUnsupported;
+  const activeReferenceImageLimit = getReferenceImageLimit(params, generalAllowsReferences);
+  const generalModeNotice = generalParams
+    ? generalRuntimeNotice(generalParams.providerKind, copy, generalAllowsReferences)
+    : copy.generalRuntimeUnsupported;
   const activeInpaintCapability = inpaintCapabilityForParams(params);
   const usesExactMask = activeInpaintCapability === "exact-mask";
   const showMaskRouteNotice = requestMode === "inpaint" &&
@@ -2439,7 +2447,7 @@ export function App() {
     if (activeSketchAsset && generalParams) return `${copy.validation.generalPromptOnly} ${copy.sketchGeneralUnsupported}`;
     if (activeSketchAsset && hasMask) return copy.sketchMaskUnsupported;
     if (activeSketchAsset && !hasSketchMarks(sketchDocument)) return copy.sketchEmptyHint;
-    if (generalParams && !generalFallbackSupportsReferenceImages(generalParams.providerKind) && effectiveInputAssets.length > 0) {
+    if (generalParams && !generalAllowsReferences && effectiveInputAssets.length > 0) {
       return copy.validation.generalPromptOnly;
     }
     if (requestMode === "edit" && effectiveInputAssets.length === 0) return copy.validation.addReference;
@@ -2449,7 +2457,7 @@ export function App() {
     }
     if (usesExactMask && requestMode === "inpaint" && maskCheck && !maskCheck.ok) return maskCheck.message;
     return null;
-  }, [activeReferenceImageLimit, activeSketchAsset, copy, effectiveInputAssets.length, generalParams, hasMask, maskCheck, requestMode, sketchDocument, usesExactMask]);
+  }, [activeReferenceImageLimit, activeSketchAsset, copy, effectiveInputAssets.length, generalAllowsReferences, generalParams, hasMask, maskCheck, requestMode, sketchDocument, usesExactMask]);
 
   const launchRuntimeError = runtimeSelectionError(params, activeConfig, copy);
   const validationError = launchRuntimeError ?? localizeValidationMessage(getValidationError(params, effectivePrompt), copy) ?? modeError;
@@ -8149,7 +8157,7 @@ export function App() {
                       {!sketchPreflight.ready && <p role="alert">{sketchPreflight.reason}</p>}
                     </section>
                   )}
-                  {(geminiParams || (generalParams && generalFallbackSupportsReferenceImages(generalParams.providerKind))) && (
+                  {(geminiParams || (generalParams && generalAllowsReferences)) && (
                     <p className="inline-check reference-rights-reminder">
                       <AlertTriangle size={14} />
                       <span>{copy.uploadRightsReminder}</span>

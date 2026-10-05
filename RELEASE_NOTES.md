@@ -24,12 +24,14 @@
 
 ### New Scope (2026-10-05)
 
-- **General image-to-image (planned)**: OpenAI-compatible General fallback
-  (`openai` / `custom`) gains `mode: "edit"` with reference images only after
-  the endpoint's edit/reference route is explicitly confirmed. Unconfirmed
+- **General image-to-image (implemented, gate pending)**: OpenAI-compatible
+  General fallback (`openai` / `custom`) supports `mode: "edit"` with
+  reference images after the exact provider model id has edit-route evidence
+  from discovery (a validation-only `/images/edits` probe). Unconfirmed
   endpoints stay prompt-only with a diagnosable reason instead of silently
   degrading. Mask/inpaint, Sketch, and multi-turn Responses semantics remain out
-  of General scope.
+  of General scope. The `general-reference-edit` release gate stays pending
+  until the frozen candidate re-verifies both the confirmed and blocked paths.
 
 ### Release Governance
 

@@ -77,9 +77,11 @@ release-candidate validation, and agent runtime surfaces.
      indefinitely.
    - Use a provider route that supports image edit/reference requests, or use a
      Gemini-compatible image model for image-to-image workflows.
-   - v0.3.5 targets General OpenAI-compatible image-to-image (reference edit)
-     behind an explicit route capability gate. Until that gate passes, General
-     remains prompt-only.
+   - General OpenAI-compatible image-to-image (reference edit) is implemented
+     on the v0.3.5 development line behind an exact-id edit route evidence
+     gate. Routes without that evidence stay prompt-only with a diagnosable
+     reason; the `general-reference-edit` release gate remains pending until
+     the frozen candidate re-verifies it.
 
 7. **Real provider gates are operation-specific**
    - v0.3.5 release candidates must be checked by provider kind, model,

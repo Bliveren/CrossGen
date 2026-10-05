@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { GeneralImageParams, GenerationJob, JobProgressEvent, ProviderKind } from "../../shared/types";
-import { DEFAULT_GENERAL_IMAGE_PARAMS, DEFAULT_IMAGE_PARAMS, DEFAULT_GEMINI_IMAGE_PARAMS, GENERAL_PROMPT_ONLY_MESSAGE } from "../../shared/validation";
+import { DEFAULT_GENERAL_IMAGE_PARAMS, DEFAULT_IMAGE_PARAMS, DEFAULT_GEMINI_IMAGE_PARAMS } from "../../shared/validation";
 import { buildOpenAICompatibleGeneralRequestBody, generalImageAdapter, runGeneralImageJob } from "./generalImageAdapter";
 import type { StoredProviderConfig } from "./stateMigration";
 
@@ -92,9 +92,14 @@ describe("General image adapter", () => {
     });
     expect(generalImageAdapter.validateJob({ mode: "generate", prompt: "Prompt", inputPaths: [], params: job("openai", "dall-e-3").params }).ok).toBe(true);
     expect(generalImageAdapter.validateJob({ mode: "generate", prompt: "Prompt", inputPaths: [], params: job("custom", "flux-pro").params }).ok).toBe(true);
-    expect(generalImageAdapter.validateJob({ mode: "edit", prompt: "Prompt", inputPaths: ["/tmp/a.png"], params: job("openai", "dall-e-3").params })).toMatchObject({
+    expect(generalImageAdapter.validateJob({ mode: "edit", prompt: "Prompt", inputPaths: ["/tmp/a.png"], params: job("openai", "dall-e-3").params }).ok).toBe(true);
+    expect(generalImageAdapter.validateJob({ mode: "edit", prompt: "Prompt", inputPaths: [], params: job("openai", "dall-e-3").params })).toMatchObject({
       ok: false,
-      message: GENERAL_PROMPT_ONLY_MESSAGE
+      message: "基础参考图编辑至少需要一张参考图。"
+    });
+    expect(generalImageAdapter.validateJob({ mode: "generate", prompt: "Prompt", inputPaths: ["/tmp/a.png"], params: job("openai", "dall-e-3").params })).toMatchObject({
+      ok: false,
+      message: "文生图不应携带输入图片。"
     });
     expect(generalImageAdapter.validateJob({
       mode: "edit",
@@ -267,11 +272,58 @@ describe("General image adapter", () => {
     ).rejects.toThrow("请求超时");
   });
 
-  it("rejects OpenAI-compatible General reference edits before making a request", async () => {
+  it("runs OpenAI-compatible General reference edits through multipart /images/edits", async () => {
+    let requestUrl = "";
+    let requestInit: RequestInit | undefined;
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      requestUrl = String(url);
+      requestInit = init;
+      return Response.json({ data: [{ b64_json: tinyPngBase64 }] });
+    }) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+    const inputPath = path.join(runtime.imagesDir, "source.png");
+    await writeFile(inputPath, Buffer.from(tinyPngBase64, "base64"));
+
+    const result = await runGeneralImageJob(
+      job("openai", "dall-e-3", {
+        mode: "edit",
+        inputAssets: [
+          {
+            id: "input_1",
+            name: "source.png",
+            path: inputPath,
+            mimeType: "image/png",
+            sizeBytes: 1
+          }
+        ]
+      }),
+      "sk-test-key",
+      config("openai", "dall-e-3"),
+      runtime
+    );
+
+    expect(requestUrl).toBe("https://api.test/v1/images/edits");
+    expect(requestInit?.body).toBeInstanceOf(FormData);
+    const form = requestInit?.body as FormData;
+    expect(form.get("model")).toBe("dall-e-3");
+    expect(form.get("prompt")).toBe("Make a clean product render");
+    expect(form.getAll("image")).toHaveLength(1);
+    expect(result.status).toBe("succeeded");
+    expect(result.providerMetadata).toMatchObject({
+      generalFallbackContract: "openai-compatible-minimal-edit",
+      generalFallbackProvider: "openai",
+      generalFallbackModel: "dall-e-3"
+    });
+    await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
+  });
+
+  it("rejects General masks before making a reference edit request", async () => {
     const fetchImpl = (async () => {
       throw new Error("fetch should not be called");
     }) as typeof fetch;
     const { runtime } = await createRuntime(fetchImpl);
+    const inputPath = path.join(runtime.imagesDir, "source.png");
+    await writeFile(inputPath, Buffer.from(tinyPngBase64, "base64"));
 
     await expect(
       runGeneralImageJob(
@@ -281,16 +333,23 @@ describe("General image adapter", () => {
             {
               id: "input_1",
               name: "source.png",
-              path: "/tmp/source.png",
+              path: inputPath,
               mimeType: "image/png",
               sizeBytes: 1
             }
-          ]
+          ],
+          maskAsset: {
+            id: "mask_1",
+            name: "mask.png",
+            path: inputPath,
+            mimeType: "image/png",
+            sizeBytes: 1
+          }
         }),
         "sk-test-key",
         config("openai", "dall-e-3"),
         runtime
       )
-    ).rejects.toThrow(GENERAL_PROMPT_ONLY_MESSAGE);
+    ).rejects.toThrow("General 首期不支持 mask 参数。");
   });
 });
