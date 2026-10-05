@@ -1,6 +1,6 @@
 # CrossGen Known Limitations
 
-Last updated: 2026-09-04 for the v0.3.4 candidate.
+Last updated: 2026-09-30 for the v0.3.5 development line; v0.3.4 remains the latest released version.
 
 This document tracks the current user-facing limits for the released app,
 release-candidate validation, and agent runtime surfaces.
@@ -48,7 +48,7 @@ release-candidate validation, and agent runtime surfaces.
    - macOS arm64 release assets are Developer ID signed and notarized.
 
 5. **Media-aware foundation, image generation only**
-   - v0.3.4 can import, inspect, organize, and preview GIF/video assets when
+   - v0.3.4 (latest release) can import, inspect, organize, and preview GIF/video assets when
      the host supports the format. History/Gallery and CLI/MCP expose a
      normalized media kind plus non-path metadata.
    - GIFs are read-only previews. Video and GIF assets cannot be used as
@@ -56,6 +56,7 @@ release-candidate validation, and agent runtime surfaces.
    - v0.3.4 does not generate video, extract posters, transcode with ffmpeg,
      or register video MCP tools. Real video work is deferred to the
      v0.3.5 technology preview.
+   - v0.3.5 adds the Sketch input workspace and the strict model-discovery evidence contract; it does not change the image-only generation boundary.
    - Video playback depends on Electron/OS codec support. If playback fails,
      the viewer offers download and open-folder recovery actions.
    - The configurable managed media root uses a copy-first staging migration;
@@ -76,16 +77,19 @@ release-candidate validation, and agent runtime surfaces.
      indefinitely.
    - Use a provider route that supports image edit/reference requests, or use a
      Gemini-compatible image model for image-to-image workflows.
+   - v0.3.5 targets General OpenAI-compatible image-to-image (reference edit)
+     behind an explicit route capability gate. Until that gate passes, General
+     remains prompt-only.
 
 7. **Real provider gates are operation-specific**
-   - v0.3.4 release candidates must be checked by provider kind, model,
+   - v0.3.5 release candidates must be checked by provider kind, model,
      operation, route, timeout, input image count, mask usage, and output.
    - A provider-limited operation may be accepted only when the product surface
      shows a clear diagnostic and a usable next action.
    - A text-to-image success alone is not enough evidence for release approval.
 
 8. **Reference-image preflight is non-destructive**
-   - v0.3.4 can create smaller temporary request copies for oversized
+   - CrossGen can create smaller temporary request copies for oversized
      reference images. These copies are used only for provider requests and do
      not replace the user's original Gallery, History, or local files.
    - Queue and History diagnostics may show original/request dimensions, bytes,

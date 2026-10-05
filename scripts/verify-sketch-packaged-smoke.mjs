@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Packaged Electron smoke for the v0.3.4 Sketch workspace.
+ * Packaged Electron smoke for the v0.3.5 Sketch workspace.
  *
  * The smoke uses a temporary user-data directory and a local /models/
  * responder. It proves the renderer/main-process interaction chain without

@@ -40,7 +40,7 @@ calls. Do not pass API keys, email addresses, or local usernames.
 
 Generation/edit calls may return an enqueue result before the provider finishes. Read the returned `queueId` or `historyJobId`, then poll `crossgen_job_status`. A successful terminal job identifies output asset ids; use Gallery inspection before export. MCP responses intentionally redact local absolute paths by default.
 
-For v0.3.4 media-aware reads, history outputs and Gallery assets may include
+For media-aware reads (v0.3.4 and later), history outputs and Gallery assets may include
 `kind`, `dimensions`, `sizeBytes`, `durationMs`, `fps`, `frameCount`, and
 `hasPoster`. They do not include `path`, `posterPath`, or preview URLs by
 default. GIF/video assets are inspectable and exportable, but cannot be passed
