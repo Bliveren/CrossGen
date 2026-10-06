@@ -28,12 +28,14 @@ Use this skill when an agent needs to create or modify images through a local Cr
 
 - Inspect capabilities before presenting controls. A disabled or missing model is unavailable for the current provider/key; do not silently substitute another model.
 - Keep provider-specific options namespaced to their adapter: OpenAI commonly uses `size`, `quality`, `background`, `outputFormat`, and `outputCompression`; Gemini commonly uses `aspectRatio` and `resolution`. Omit unsupported fields rather than guessing.
-- Keep `gpt-image-2` and GPT Image 2.5 separate. For GPT Image 2.5, the base
-  `gpt-image-2.5` id is valid when discovery reports it; choose
-  `gpt-image-2.5-sunburst` when precise editing, structure preservation, or
-  high-fidelity references matter; choose `gpt-image-2.5-flare` for fast
-  everyday generation. Dated `-YYYY-MM-DD` snapshots are valid when model
-  discovery reports them.
+- Keep `gpt-image-2` and GPT Image 2.5 separate. Only concrete provider ids
+  (`gpt-image-2.5-sunburst`, `gpt-image-2.5-flare`, or a dated snapshot that
+  discovery actually returned) prove GPT Image 2.5 support. The bare
+  `gpt-image-2.5` value is a CrossGen launch/AppLink compatibility alias, not
+  provider evidence: never treat it as proof of access, and never send it as a
+  wire model id. Choose Sunburst when precise editing, structure preservation,
+  or high-fidelity references matter; choose Flare for fast everyday
+  generation.
 - GPT Image 2.5 supports quality `auto|low|medium|high|xhigh|max`, transparent backgrounds with PNG/WebP, custom 16-multiple dimensions inside the documented 4K envelope, `n` up to 10, and Images API streaming `partialImages` from 0 to 3. Responses streaming sends `partialImages` only when it is 1 to 3; `0` means omit partial previews.
 - Use the Responses route for GPT Image 2.5 multi-turn work: pass a supported mainline `responsesModel`, `responsesAction` (`auto`, `generate`, or `edit`), and `previousResponseId` when continuing a prior response. The GPT Image 2.5 model belongs in the image-generation tool, not as the top-level Responses model.
 - In `imageRoute: "auto"`, keep batch requests (`n > 1`) on Images API. GPT Image 2.5 must never be sent through the legacy Chat Completions image route.
@@ -46,6 +48,7 @@ Use this skill when an agent needs to create or modify images through a local Cr
 - For Gemini image work, the latest model-discovery result is authoritative. Keep a focused model disabled when discovery does not return it or does not confirm the required image capability; do not silently fall back to another Gemini model.
 - Sketch is a desktop image-to-image input workflow. It uses `workflow: "sketch"` and `mode: "edit"` with a managed PNG input and provenance metadata. It is not a third top-level mode, cannot be combined with a mask, and must not be represented by an unverified provider-native `scratch` field.
 - When the user asks for multiple concepts, prefer one durable request per concept with distinct idempotency keys unless the selected model explicitly supports batching.
+- General fallback: Gemini General supports prompt and reference-image edits. The OpenAI-compatible General fallback (`openai`/`custom`) supports prompt-only generation by default; reference-image editing is available only after the exact provider model id has edit-route evidence from discovery. When `crossgen_models_list` does not report `edit`/`referenceImages` for a General model, do not attempt an edit — submit the request and CrossGen will reject it with `GENERAL_EDIT_UNCONFIRMED_MESSAGE`. Mask/inpaint, Sketch, and multi-turn Responses are never part of General.
 - For edits, verify that every input path exists and is readable before submitting. Keep the original reference unchanged and describe the requested transformation separately from preservation constraints. For mask edits, verify matching source/mask dimensions and format, alpha presence, and a mask size below 50 MB.
 
 ## GPT Image 2.5 transport notes
