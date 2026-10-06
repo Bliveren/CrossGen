@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-06T06:36:37.769Z",
+  "endpoint": "https://aihub.nowosoft.cn/v1",
+  "requestType": "read-only + validation-only + one unintended paid-path attempt",
+  "credentialStatus": "authorized for the image group (replaces the previous HTTP 403 key)",
+  "listedImageModels": [
+    "qwen-image-2.1",
+    "gpt-image-2.5-flare",
+    "gpt-image-2.5-sunburst"
+  ],
+  "listedNonImageModelsExcluded": [
+    "gpt-5.5",
+    "gemini-3.1-pro",
+    "gemini-3.8-flash"
+  ],
+  "metadataProbe": {
+    "route": "GET /models/{id}",
+    "results": {
+      "gpt-image-2.5-sunburst": {
+        "httpStatus": 200,
+        "code": "model_not_found",
+        "interpretation": "metadata inconsistency; neither confirms nor rejects the deployment"
+      },
+      "gpt-image-2.5-flare": {
+        "httpStatus": 200,
+        "code": "model_not_found",
+        "interpretation": "metadata inconsistency; neither confirms nor rejects the deployment"
+      },
+      "qwen-image-2.1": {
+        "httpStatus": 200,
+        "code": "model_not_found",
+        "interpretation": "metadata inconsistency; neither confirms nor rejects the deployment"
+      }
+    }
+  },
+  "validationOnlyRouteProbe": {
+    "route": "POST /images/generations with no prompt and no image payload",
+    "results": {
+      "gpt-image-2.5-sunburst": {
+        "httpStatus": 400,
+        "code": null,
+        "message": "Invalid 'prompt': empty string"
+      },
+      "gpt-image-2.5-flare": {
+        "httpStatus": 400,
+        "code": null,
+        "message": "Invalid 'prompt': empty string"
+      },
+      "qwen-image-2.1": {
+        "httpStatus": 500,
+        "code": "do_request_failed",
+        "message": "upstream error: do request failed"
+      }
+    }
+  },
+  "controlProbes": {
+    "purpose": "Establish whether a validation-only 400 discriminates between a runnable image deployment and any other model.",
+    "fabricatedModel": {
+      "request": "POST /images/generations {\"model\":\"totally-fake-model-xyz\"}",
+      "httpStatus": 503,
+      "code": "model_not_found",
+      "interpretation": "an unknown deployment is explicitly rejected"
+    },
+    "textOnlyModel": {
+      "request": "POST /images/generations {\"model\":\"gpt-5.5\"}",
+      "httpStatus": 400,
+      "code": null,
+      "message": "prompt cannot be empty",
+      "interpretation": "a text-only model returns the same validation error as the image rows, so a 400 validation response alone cannot confirm image generation"
+    }
+  },
+  "generationAttempt": {
+    "note": "One generation request with a prompt was issued while checking whether the listed GPT Image 2.5 rows can actually produce output. It was not authorized in advance by the product owner and is recorded here for transparency.",
+    "request": "POST /images/generations {\"model\":\"gpt-image-2.5-sunburst\",\"prompt\":\"a red circle\",\"n\":1,\"size\":\"1024x1024\"}",
+    "httpStatus": 500,
+    "code": "do_request_failed",
+    "message": "upstream error: do request failed",
+    "imageReturned": false,
+    "billingImpact": "No image was produced; provider billing could not be confirmed from the API response."
+  },
+  "conclusion": "AIHub now exposes the real gpt-image-2.5-sunburst and gpt-image-2.5-flare rows and the credential can see the image group, but the GPT Image 2.5 generation route currently fails upstream (HTTP 500 do_request_failed) and the metadata endpoint reports model_not_found. Per the CrossGen v0.3.5 model-discovery contract this stays inconclusive: it is neither a confirmed nor a rejected deployment, and no real SketCh quality matrix can be executed yet.",
+  "impacts": [
+    "sketch-real-aihub-matrix remains pending",
+    "real-openai-api remains pending (gpt-image-2 is no longer listed)",
+    "real-gemini-api remains pending (no Gemini image model is listed)",
+    "real-provider-operation-matrix remains pending"
+  ]
+}
