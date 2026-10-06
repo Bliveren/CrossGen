@@ -46,5 +46,23 @@
     "Confirm with AIHub that the image group has a working upstream channel for gpt-image-2.5-sunburst/flare",
     "Check the gateway read timeout for image generations (GPT Image 2.5 can take minutes); raise it if it is below ~300s",
     "Confirm whether AIHub supports an asynchronous job mode for these models"
-  ]
+  ],
+  "modelEndpointDeclarations": {
+    "source": "GET /v1/models",
+    "entries": {
+      "gpt-image-2.5-sunburst": [
+        "image-generation",
+        "openai"
+      ],
+      "gpt-image-2.5-flare": [
+        "image-generation",
+        "openai"
+      ],
+      "qwen-image-2.1": [
+        "image-generation",
+        "openai"
+      ]
+    },
+    "interpretation": "The catalogue explicitly declares the image-generation endpoint type for these deployments, so the /images/generations route is the intended path and the HTTP 500 failures are upstream-channel failures rather than a wrong-route problem."
+  }
 }
