@@ -1,0 +1,357 @@
+{
+  "checkedAt": "2026-10-06T05:45:46.307Z",
+  "endpoint": "https://aihub.nowosoft.cn/v1/models",
+  "requestType": "read-only",
+  "listedImageModels": [
+    "qwen-image-2.1",
+    "gpt-image-2.5-flare",
+    "gpt-image-2.5-sunburst"
+  ],
+  "availableImageModels": [
+    "qwen-image-2.1",
+    "gpt-image-2.5-flare",
+    "gpt-image-2.5-sunburst"
+  ],
+  "confirmedImageModels": [],
+  "launchableImageModels": [],
+  "targetModels": {
+    "gpt-image-2": {
+      "family": "gpt-image-2",
+      "providerModelIds": [
+        "gpt-image-2"
+      ],
+      "matchedProviderModelIds": [],
+      "exactIdMatch": false,
+      "listed": false,
+      "listedAs": null,
+      "metadataStatus": "not-listed",
+      "availability": "not-listed",
+      "eligibleForLaunch": false,
+      "probes": [
+        {
+          "providerModelId": "gpt-image-2",
+          "family": "gpt-image-2",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false
+        }
+      ],
+      "providerProbes": {
+        "gpt-image-2": {
+          "providerModelId": "gpt-image-2",
+          "family": "gpt-image-2",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2' does not exist"
+        }
+      }
+    },
+    "gpt-image-2.5": {
+      "family": "gpt-image-2.5",
+      "providerModelIds": [
+        "gpt-image-2.5-sunburst",
+        "gpt-image-2.5-flare"
+      ],
+      "matchedProviderModelIds": [
+        "gpt-image-2.5-sunburst",
+        "gpt-image-2.5-flare"
+      ],
+      "exactIdMatch": true,
+      "listed": true,
+      "listedAs": "gpt-image-2.5-sunburst",
+      "metadataStatus": "listed-but-metadata-rejected",
+      "availability": "inconclusive",
+      "eligibleForLaunch": false,
+      "probes": [
+        {
+          "providerModelId": "gpt-image-2.5-sunburst",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gpt-image-2.5-sunburst",
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false
+        },
+        {
+          "providerModelId": "gpt-image-2.5-flare",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gpt-image-2.5-flare",
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false
+        }
+      ],
+      "providerProbes": {
+        "gpt-image-2.5-sunburst": {
+          "providerModelId": "gpt-image-2.5-sunburst",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gpt-image-2.5-sunburst",
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2.5-sunburst' does not exist"
+        },
+        "gpt-image-2.5-flare": {
+          "providerModelId": "gpt-image-2.5-flare",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gpt-image-2.5-flare",
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2.5-flare' does not exist"
+        }
+      }
+    },
+    "gpt-image-2.5-sunburst": {
+      "family": "gpt-image-2.5",
+      "providerModelIds": [
+        "gpt-image-2.5-sunburst"
+      ],
+      "matchedProviderModelIds": [
+        "gpt-image-2.5-sunburst"
+      ],
+      "exactIdMatch": true,
+      "listed": true,
+      "listedAs": "gpt-image-2.5-sunburst",
+      "metadataStatus": "listed-but-metadata-rejected",
+      "availability": "inconclusive",
+      "eligibleForLaunch": false,
+      "probes": [
+        {
+          "providerModelId": "gpt-image-2.5-sunburst",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gpt-image-2.5-sunburst",
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false
+        }
+      ],
+      "providerProbes": {
+        "gpt-image-2.5-sunburst": {
+          "providerModelId": "gpt-image-2.5-sunburst",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gpt-image-2.5-sunburst",
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2.5-sunburst' does not exist"
+        }
+      }
+    },
+    "gpt-image-2.5-flare": {
+      "family": "gpt-image-2.5",
+      "providerModelIds": [
+        "gpt-image-2.5-flare"
+      ],
+      "matchedProviderModelIds": [
+        "gpt-image-2.5-flare"
+      ],
+      "exactIdMatch": true,
+      "listed": true,
+      "listedAs": "gpt-image-2.5-flare",
+      "metadataStatus": "listed-but-metadata-rejected",
+      "availability": "inconclusive",
+      "eligibleForLaunch": false,
+      "probes": [
+        {
+          "providerModelId": "gpt-image-2.5-flare",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gpt-image-2.5-flare",
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false
+        }
+      ],
+      "providerProbes": {
+        "gpt-image-2.5-flare": {
+          "providerModelId": "gpt-image-2.5-flare",
+          "family": "gpt-image-2.5",
+          "exactIdMatch": true,
+          "listed": true,
+          "listedAs": "gpt-image-2.5-flare",
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "listed-but-metadata-rejected",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gpt-image-2.5-flare' does not exist"
+        }
+      }
+    },
+    "nano-banana-3": {
+      "family": "nano-banana-3",
+      "providerModelIds": [
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
+        "gemini-3-pro-image"
+      ],
+      "matchedProviderModelIds": [],
+      "exactIdMatch": false,
+      "listed": false,
+      "listedAs": null,
+      "metadataStatus": "metadata-rejected",
+      "availability": "inconclusive",
+      "eligibleForLaunch": false,
+      "probes": [
+        {
+          "providerModelId": "gemini-3.1-flash-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "metadataMatch": "matched",
+          "errorPayload": false,
+          "metadataStatus": "metadata-confirmed-not-listed",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false
+        },
+        {
+          "providerModelId": "gemini-3.1-flash-lite-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false
+        },
+        {
+          "providerModelId": "gemini-3-pro-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "metadataMatch": "matched",
+          "errorPayload": false,
+          "metadataStatus": "metadata-confirmed-not-listed",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false
+        }
+      ],
+      "providerProbes": {
+        "gemini-3.1-flash-image": {
+          "providerModelId": "gemini-3.1-flash-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "metadataMatch": "matched",
+          "errorPayload": false,
+          "metadataStatus": "metadata-confirmed-not-listed",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true
+        },
+        "gemini-3.1-flash-lite-image": {
+          "providerModelId": "gemini-3.1-flash-lite-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "metadataMatch": "missing",
+          "errorPayload": true,
+          "metadataStatus": "not-listed",
+          "availability": "not-listed",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true,
+          "errorCode": "model_not_found",
+          "errorType": "invalid_request_error",
+          "message": "The model 'gemini-3.1-flash-lite-image' does not exist"
+        },
+        "gemini-3-pro-image": {
+          "providerModelId": "gemini-3-pro-image",
+          "family": "nano-banana-3",
+          "exactIdMatch": false,
+          "listed": false,
+          "listedAs": null,
+          "metadataMatch": "matched",
+          "errorPayload": false,
+          "metadataStatus": "metadata-confirmed-not-listed",
+          "availability": "inconclusive",
+          "eligibleForLaunch": false,
+          "status": 200,
+          "ok": true
+        }
+      }
+    }
+  },
+  "confirmedTargetModels": [],
+  "launchableTargetModels": [],
+  "listedTargetModels": [
+    "gpt-image-2.5",
+    "gpt-image-2.5-sunburst",
+    "gpt-image-2.5-flare"
+  ],
+  "rejectedTargetModels": [],
+  "inconclusiveTargetModels": [
+    "gpt-image-2.5",
+    "gpt-image-2.5-sunburst",
+    "gpt-image-2.5-flare",
+    "nano-banana-3"
+  ],
+  "notListedTargetModels": [
+    "gpt-image-2"
+  ]
+}
