@@ -94,6 +94,76 @@ describe("main config save builder", () => {
     expect(next.openAIImageRouting).toBeUndefined();
   });
 
+  it("invalidates General edit route evidence when the fallback model changes", () => {
+    const next = buildProviderConfigForSave(
+      savedConfig({
+        kind: "openai",
+        activeLaunchId: GENERAL_LAUNCH_ID,
+        activeModelId: "dall-e-3",
+        defaultModel: "dall-e-3",
+        openAIImageRouting: {
+          modelId: "dall-e-3",
+          preferredEditRoute: "image-api",
+          preferredEditRouteVerified: false,
+          probes: [{
+            route: "image-api",
+            mode: "edit",
+            modelId: "dall-e-3",
+            endpoint: "/images/edits",
+            ok: true,
+            verified: false,
+            latencyMs: 12
+          }],
+          updatedAt: "2026-06-09T01:02:03.000Z"
+        }
+      }),
+      input({
+        activeLaunchId: GENERAL_LAUNCH_ID,
+        activeModelId: "flux-pro",
+        defaultModel: "flux-pro"
+      }),
+      "2026-06-09T02:00:00.000Z"
+    );
+
+    expect(next.activeModelId).toBe("flux-pro");
+    expect(next.openAIImageRouting).toBeUndefined();
+  });
+
+  it("keeps General edit route evidence when the same fallback model is re-saved", () => {
+    const next = buildProviderConfigForSave(
+      savedConfig({
+        kind: "openai",
+        activeLaunchId: GENERAL_LAUNCH_ID,
+        activeModelId: "dall-e-3",
+        defaultModel: "dall-e-3",
+        openAIImageRouting: {
+          modelId: "dall-e-3",
+          preferredEditRoute: "image-api",
+          preferredEditRouteVerified: false,
+          probes: [{
+            route: "image-api",
+            mode: "edit",
+            modelId: "dall-e-3",
+            endpoint: "/images/edits",
+            ok: true,
+            verified: false,
+            latencyMs: 12
+          }],
+          updatedAt: "2026-06-09T01:02:03.000Z"
+        }
+      }),
+      input({
+        activeLaunchId: GENERAL_LAUNCH_ID,
+        activeModelId: "dall-e-3",
+        defaultModel: "dall-e-3"
+      }),
+      "2026-06-09T02:00:00.000Z"
+    );
+
+    expect(next.openAIImageRouting?.modelId).toBe("dall-e-3");
+    expect(next.openAIImageRouting?.preferredEditRoute).toBe("image-api");
+  });
+
   it("does not preserve legacy route evidence without a bound model id", () => {
     const next = buildProviderConfigForSave(
       savedConfig({
