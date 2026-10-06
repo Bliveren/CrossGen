@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-06T08:00:54.114Z",
+  "endpoint": "https://aihub.nowosoft.cn/v1",
+  "context": "Re-test after the product owner reported that the subscription was enabled and the models were working. Three real generation attempts were issued (explicitly requested by the owner).",
+  "generationAttempts": [
+    {
+      "model": "gpt-image-2.5-sunburst",
+      "request": "POST /images/generations {prompt:'a red circle', n:1, size:'1024x1024'}",
+      "httpStatus": 500,
+      "message": "read tcp ...: read: connection reset by peer",
+      "code": "read_response_body_failed",
+      "imageReturned": false
+    },
+    {
+      "model": "gpt-image-2.5-flare",
+      "request": "POST /images/generations {prompt:'a red circle on white background', n:1, size:'1024x1024'}",
+      "httpStatus": 500,
+      "message": "upstream error: do request failed",
+      "code": "do_request_failed",
+      "imageReturned": false
+    },
+    {
+      "model": "gpt-image-2.5-sunburst",
+      "request": "POST /images/generations {prompt:'a red circle on white background', n:1, size:'1024x1024'} with a 600s client timeout",
+      "httpStatus": null,
+      "elapsedSeconds": 600,
+      "outcome": "no response body received before the client timeout; request never completed",
+      "imageReturned": false
+    }
+  ],
+  "observedFailureModes": [
+    "gateway reads the upstream response body and the connection is reset by peer",
+    "gateway reports 'upstream error: do request failed'",
+    "the request neither completes nor errors within 600 seconds"
+  ],
+  "interpretation": "The subscription change did not make the GPT Image 2.5 generation route usable from this client. The failure pattern (reset while reading the upstream body, upstream do_request_failed, and a 600-second hang) points at the AIHub image-group upstream channel: either the upstream provider is not actually configured/reachable, or the gateway timeout is shorter than GPT Image 2.5's generation time and the response never reaches the client.",
+  "billingNote": "No image was returned by any attempt. The 600-second attempt may still have been processed upstream after the client timed out; provider billing cannot be confirmed from the API responses.",
+  "stillBlocked": [
+    "sketch-real-aihub-matrix",
+    "real-openai-api",
+    "real-gemini-api",
+    "real-provider-operation-matrix"
+  ],
+  "suggestedNextChecks": [
+    "Confirm with AIHub that the image group has a working upstream channel for gpt-image-2.5-sunburst/flare",
+    "Check the gateway read timeout for image generations (GPT Image 2.5 can take minutes); raise it if it is below ~300s",
+    "Confirm whether AIHub supports an asynchronous job mode for these models"
+  ],
+  "modelEndpointDeclarations": {
+    "source": "GET /v1/models",
+    "entries": {
+      "gpt-image-2.5-sunburst": [
+        "image-generation",
+        "openai"
+      ],
+      "gpt-image-2.5-flare": [
+        "image-generation",
+        "openai"
+      ],
+      "qwen-image-2.1": [
+        "image-generation",
+        "openai"
+      ]
+    },
+    "interpretation": "The catalogue explicitly declares the image-generation endpoint type for these deployments, so the /images/generations route is the intended path and the HTTP 500 failures are upstream-channel failures rather than a wrong-route problem."
+  }
+}
