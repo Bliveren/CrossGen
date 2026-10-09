@@ -1,0 +1,4 @@
+interface:
+  display_name: "CrossGen Artist"
+  short_description: "Generate, edit, inspect, and export images through CrossGen"
+  default_prompt: "Use $crossgen-artist to complete an image generation or editing workflow through CrossGen."

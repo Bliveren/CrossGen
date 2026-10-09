@@ -1,0 +1,65 @@
+#!/bin/sh
+set -eu
+
+# Plugin launcher for CrossGen.
+#
+# The plugin ships no runtime of its own: it locates the CrossGen desktop
+# installation and delegates to it, so the agent always talks to the same
+# queue, provider configuration, History, and Gallery as the desktop app.
+#
+# Resolution order:
+#   1. CROSSGEN_APP_EXECUTABLE        (documented CrossGen override)
+#   2. CROSSGEN_PLUGIN_APP_EXECUTABLE (plugin-specific override)
+#   3. default install locations for the current platform
+
+launcher=""   # packaged launcher: already understands --cli / --mcp
+app=""        # raw app executable: needs --cli / --mcp prefixing
+
+if [ -n "${CROSSGEN_APP_EXECUTABLE:-}" ]; then
+  app="$CROSSGEN_APP_EXECUTABLE"
+elif [ -n "${CROSSGEN_PLUGIN_APP_EXECUTABLE:-}" ]; then
+  app="$CROSSGEN_PLUGIN_APP_EXECUTABLE"
+else
+  case "$(uname -s)" in
+    Darwin)
+      for candidate in \
+        "/Applications/CrossGen.app/Contents/Resources/cli/crossgen" \
+        "$HOME/Applications/CrossGen.app/Contents/Resources/cli/crossgen"
+      do
+        if [ -x "$candidate" ]; then launcher="$candidate"; break; fi
+      done
+      if [ -z "$launcher" ]; then
+        for candidate in \
+          "/Applications/CrossGen.app/Contents/MacOS/CrossGen" \
+          "$HOME/Applications/CrossGen.app/Contents/MacOS/CrossGen"
+        do
+          if [ -x "$candidate" ]; then app="$candidate"; break; fi
+        done
+      fi
+      ;;
+    Linux)
+      for candidate in \
+        "$HOME/.local/bin/crossgen" \
+        "/usr/local/bin/crossgen" \
+        "/opt/CrossGen/resources/cli/crossgen"
+      do
+        if [ -x "$candidate" ]; then launcher="$candidate"; break; fi
+      done
+      ;;
+  esac
+fi
+
+if [ -n "$launcher" ]; then
+  # The packaged launcher handles --mcp brokering and --cli prefixing itself.
+  exec "$launcher" "$@"
+fi
+
+if [ -n "$app" ]; then
+  if [ "${1:-}" = "--mcp" ]; then
+    exec "$app" "$@"
+  fi
+  exec "$app" --cli "$@"
+fi
+
+printf '%s\n' "CrossGen was not found. Install the CrossGen desktop app, or set CROSSGEN_APP_EXECUTABLE to its executable." >&2
+exit 127

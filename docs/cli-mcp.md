@@ -391,6 +391,47 @@ Claude Code and Cursor use a JSON `mcpServers.crossgen` object. The desktop
 Agent access panel presents the same snippets and uses the current packaged
 launcher; it never assumes `/Applications/CrossGen.app`.
 
+## Codex plugin package
+
+The repository ships a Codex plugin at [`plugins/crossgen`](../plugins/crossgen/)
+and registers it in the repository marketplace at
+[`.agents/plugins/marketplace.json`](../.agents/plugins/marketplace.json).
+
+Structure:
+
+```text
+plugins/crossgen/
+├── plugin.json     # portable Agent Plugins manifest (v0.3.5)
+├── mcp.json        # stdio MCP server rooted at the bundled launcher
+├── bin/
+│   ├── crossgen     # POSIX launcher (finds the installed app)
+│   └── crossgen.cmd # Windows launcher
+└── skills/
+    └── crossgen-artist/  # bundled skill + references
+```
+
+Key properties:
+
+- The bundled MCP server is **stdio** and starts `${PLUGIN_ROOT}/bin/crossgen --mcp`,
+  so the plugin never needs a bundled runtime: the launcher locates the
+  installed CrossGen app and delegates to it.
+- `CROSSGEN_MCP_MODE` defaults to `readonly`; paid generation requires an
+  explicit mode change.
+- `CROSSGEN_APP_EXECUTABLE` (or `CROSSGEN_PLUGIN_APP_EXECUTABLE`) overrides
+  auto-detection when CrossGen lives outside the default install locations.
+- The plugin packages the same `crossgen-artist` skill that ships in
+  `skills/crossgen-artist`, so plugin and repository instructions stay aligned.
+
+Install it for local testing with the repository marketplace:
+
+```bash
+codex plugin marketplace add ./path-to-repo
+codex plugin marketplace list
+```
+
+Then restart the desktop app and install **CrossGen** from the repository
+marketplace in the Plugins Directory.
+
 ## CrossGen Artist Skill
 
 The repository includes [`skills/crossgen-artist`](../skills/crossgen-artist/), a media-aware Codex-compatible skill for model discovery, GPT Image 2.5 route and variant selection, prompt-to-image generation, reference-image editing, inpainting, durable job polling, Gallery inspection, media metadata reads, and explicit asset export. It is intentionally versioned with CrossGen because it depends on the CrossGen CLI/MCP tool names and permission contract.

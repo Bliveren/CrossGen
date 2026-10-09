@@ -77,6 +77,16 @@ crossgen mcp config --client cursor --mode generate --json
 
 Start with `readonly`, then enable `write` or `generate` only when the agent needs it. Paid generation, asset export, destructive actions, queue-control changes, and local path disclosure require explicit permission or confirmation. See the [CLI and MCP guide](./docs/cli-mcp.md) for commands, tool coverage, modes, and installed executable paths.
 
+### Codex Plugin
+
+CrossGen ships a Codex plugin at [`plugins/crossgen`](./plugins/crossgen/) and
+registers it in the repository marketplace at
+[`.agents/plugins/marketplace.json`](./.agents/plugins/marketplace.json). The
+plugin bundles the `crossgen-artist` skill together with a stdio MCP server
+that launches the installed CrossGen app, so Codex can discover models, submit
+queued jobs, and inspect Gallery assets through the same local runtime as the
+desktop app. `CROSSGEN_MCP_MODE` defaults to `readonly`.
+
 ### CrossGen Artist Skill
 
 CrossGen ships a first-class, media-aware agent workflow skill at [`skills/crossgen-artist`](./skills/crossgen-artist/). It is the recommended entry point for Codex and other compatible agents that need to discover model capabilities, choose generation/edit/inpaint operations, submit idempotent queue jobs, poll completion, inspect image/GIF/video metadata, and export results without exposing API keys or local paths by accident. The released v0.3.4 still does not expose real video generation or video editing; the planned v0.3.5 video technology preview does not promise a full video product either.

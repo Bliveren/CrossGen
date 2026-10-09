@@ -1,0 +1,31 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "crossgen",
+  "version": "0.3.5",
+  "description": "Generate, edit, and organize images through a local CrossGen installation.",
+  "author": {
+    "name": "CrossGen contributors",
+    "url": "https://github.com/Bliveren/CrossGen"
+  },
+  "homepage": "https://github.com/Bliveren/CrossGen",
+  "repository": "https://github.com/Bliveren/CrossGen",
+  "license": "MIT",
+  "keywords": ["image-generation", "image-editing", "inpainting", "gallery"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "CrossGen",
+        "shortDescription": "Local image generation, editing, and Gallery workflows.",
+        "longDescription": "CrossGen owns provider credentials, model capability checks, the durable generation queue, History, and Gallery state. The bundled MCP server exposes model discovery, generation, editing, inpainting, job monitoring, asset inspection, and export to Codex and other MCP hosts.",
+        "developerName": "CrossGen contributors",
+        "category": "Productivity",
+        "capabilities": ["Read", "Write"],
+        "websiteURL": "https://github.com/Bliveren/CrossGen",
+        "defaultPrompt": [
+          "Use CrossGen to generate an image from this prompt.",
+          "Use CrossGen to edit this reference image."
+        ]
+      }
+    }
+  }
+}
