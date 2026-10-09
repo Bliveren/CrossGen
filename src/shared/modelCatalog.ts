@@ -413,10 +413,18 @@ export function classifyDiscoveredModel(model: DiscoveredModel): DiscoveredModel
     ? GPT_IMAGE_2_5_MODEL_ID
     : undefined;
   const imageCapable = isDiscoveredImageModel(model);
+  // A provider-listed image row is selectable even when metadata/route probing
+  // stays inconclusive: gateways frequently omit or contradict the metadata
+  // endpoint while still serving the model, and blocking those rows left most
+  // models visible but unselectable. Explicit rejections stay disabled, and
+  // product-owned route candidates still require a positive confirmation
+  // because they were never listed by the provider.
+  const availability = model.availability ?? "listed";
+  const routeCandidate = model.discoverySource === "route-candidate";
   const launchable = imageCapable && (
-    launchId !== undefined
-      ? model.availability === "confirmed"
-      : model.availability !== "rejected" && model.availability !== "inconclusive"
+    routeCandidate
+      ? availability === "confirmed"
+      : availability !== "rejected"
   );
   return {
     exactModelId,

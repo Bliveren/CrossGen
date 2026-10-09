@@ -928,7 +928,7 @@ describe("model discovery", () => {
     });
   });
 
-  it("does not confirm an unlisted GPT Image 2.5 candidate from an empty 2xx envelope", async () => {
+  it("keeps a provider-listed GPT Image 2.5 row selectable when only an empty 2xx envelope is seen", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
       const target = String(url);
       if (init?.method === "GET") {
@@ -953,7 +953,9 @@ describe("model discovery", () => {
       id: GPT_IMAGE_2_5_SUNBURST_MODEL_ID,
       availability: "inconclusive"
     });
-    expect(isDiscoveredModelLaunchable(result[0]!)).toBe(false);
+    // The row was listed by the provider, so it stays selectable: an
+    // inconclusive probe must not make a listed model unusable.
+    expect(isDiscoveredModelLaunchable(result[0]!)).toBe(true);
   });
 
   it("marks an exact model_not_found response as rejected", async () => {
