@@ -965,7 +965,7 @@ describe("renderer multi-model smoke", () => {
     expect(document.body.textContent).toContain("The model 'gpt-image-2' does not exist");
   });
 
-  it("keeps a listed GPT Image 2.5 row disabled until metadata confirms the exact id", async () => {
+  it("keeps a listed GPT Image 2.5 row selectable even when metadata stays inconclusive", async () => {
     const config = providerConfig({
       apiKeySaved: true,
       activeLaunchId: GPT_IMAGE_2_5_LAUNCH_ID,
@@ -982,10 +982,8 @@ describe("renderer multi-model smoke", () => {
     await renderApp(snapshot({ providers: [config], activeProviderId: config.id }));
 
     const option = optionByLaunchText("GPT Image 2.5");
-    expect(option.disabled).toBe(true);
-    await click(launchStartButton());
-    expect(document.body.textContent).toContain("listed, but the provider could not confirm");
-    expect(document.body.textContent).toContain("model endpoint not found");
+    expect(option.disabled).toBe(false);
+    expect(option.textContent).toContain(GPT_IMAGE_2_5_SUNBURST_MODEL_ID);
   });
 
   it("keeps a focused image model available when only video=false is declared", async () => {

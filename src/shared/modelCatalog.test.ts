@@ -481,7 +481,7 @@ describe("focused model catalog", () => {
     });
   });
 
-  it("requires exact confirmation for focused launches while preserving legacy General rows", () => {
+  it("keeps provider-listed image rows selectable while disabling rejected ones", () => {
     const listed = {
       id: GPT_IMAGE_2_MODEL_ID,
       providerKind: "openai" as const,
@@ -504,14 +504,17 @@ describe("focused model catalog", () => {
     };
 
     expect(isDiscoveredImageModel(listed)).toBe(true);
-    expect(isDiscoveredModelLaunchable(listed)).toBe(false);
-    expect(isDiscoveredModelLaunchable(inconclusive)).toBe(false);
+    // A provider-listed image row is selectable even when metadata probing
+    // stays inconclusive; gateways frequently contradict that endpoint.
+    expect(isDiscoveredModelLaunchable(listed)).toBe(true);
+    expect(isDiscoveredModelLaunchable(inconclusive)).toBe(true);
+    // An explicit provider rejection stays disabled.
     expect(isDiscoveredModelLaunchable(rejected)).toBe(false);
     expect(isDiscoveredModelLaunchable(generalListed)).toBe(true);
     expect(isDiscoveredModelLaunchable({
       id: GPT_IMAGE_2_MODEL_ID,
       providerKind: "openai"
-    })).toBe(false);
+    })).toBe(true);
     expect(discoveredModelAvailability({ id: "legacy", providerKind: "custom" })).toBe("listed");
   });
 
