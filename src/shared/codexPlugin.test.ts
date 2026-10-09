@@ -65,7 +65,11 @@ describe("Codex plugin package", () => {
   it("ships an executable POSIX launcher and a Windows launcher", () => {
     const posix = path.join(pluginRoot, "bin/crossgen");
     const windows = path.join(pluginRoot, "bin/crossgen.cmd");
-    expect(statSync(posix).mode & 0o111).toBeGreaterThan(0);
+    // Windows checkouts do not carry POSIX mode bits, so only assert the
+    // executable bit on platforms that have them.
+    if (process.platform !== "win32") {
+      expect(statSync(posix).mode & 0o111).toBeGreaterThan(0);
+    }
     expect(statSync(windows).size).toBeGreaterThan(0);
 
     const posixSource = readFileSync(posix, "utf8");
