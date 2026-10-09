@@ -1988,6 +1988,9 @@ export function App() {
   const generalEditConfirmed = generalParams
     ? hasGeneralEditRouteEvidence(activeConfig?.openAIImageRouting, generalParams.providerKind, generalParams.model)
     : false;
+  // OpenAI-compatible General is allowed to attempt an edit even without route
+  // evidence: gateways vary too much to block up front, and an unsupported
+  // model reports a friendly diagnostic instead.
   const generalAllowsReferences = generalParams
     ? generalFallbackSupportsReferenceImages(generalParams.providerKind, generalEditConfirmed)
     : false;

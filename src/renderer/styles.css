@@ -759,17 +759,29 @@
     transform: translateY(0) scale(1);
   }
 
+  .sidebar-utility-left .configuration-menu[data-open="true"] .configuration-popover::before {
+    inset: auto -6px -12px -6px;
+    height: 12px;
+  }
+
   .sidebar-mini-utility .configuration-popover {
     top: auto;
     right: auto;
     bottom: calc(100% + 8px);
     left: calc(100% + 8px);
+    /* The mini rail opens to the side; bridge that gap too. */
+    --configuration-bridge-side: left;
     transform-origin: bottom left;
     transform: translateY(5px) scale(0.98);
   }
 
   .sidebar-mini-utility .configuration-menu[data-open="true"] .configuration-popover {
     transform: translateY(0) scale(1);
+  }
+
+  .sidebar-mini-utility .configuration-menu[data-open="true"] .configuration-popover::before {
+    inset: -6px -6px -6px -12px;
+    width: auto;
   }
 
   .configuration-trigger {
@@ -788,6 +800,9 @@
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
+    /* Bridge the visual gap so a pointer travelling from the trigger to the
+       menu never leaves the hover target. */
+    isolation: isolate;
     display: grid;
     width: 228px;
     gap: 3px;
@@ -807,6 +822,15 @@
     opacity: 1;
     pointer-events: auto;
     transform: translateY(0) scale(1);
+  }
+
+  /* Invisible bridge over the gap between trigger and popover. The sidebar
+     variants open upward or sideways, so both gaps are covered. */
+  .configuration-menu[data-open="true"] .configuration-popover::before {
+    content: "";
+    position: absolute;
+    inset: -10px;
+    border-radius: inherit;
   }
 
   .configuration-popover-heading {

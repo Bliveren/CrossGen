@@ -533,18 +533,47 @@ export function isOpenAICompatibleGeneralFallbackProvider(providerKind: Provider
 }
 
 /**
- * Gemini General fallback supports reference images natively. The
- * OpenAI-compatible fallback only exposes edit/reference support after the
- * main process has confirmed the exact provider model id on the image edit
- * route; callers without evidence must stay prompt-only.
+ * General fallback reference-image support.
+ *
+ * Gemini General supports reference edits natively. OpenAI-compatible
+ * providers are allowed to *attempt* an edit even without prior route
+ * evidence: capability varies wildly across gateways and models, so blocking
+ * up front would disable image-to-image for most of them. The attempt either
+ * succeeds, or the adapter surfaces a friendly "this model does not support
+ * reference-image editing" diagnostic that the UI shows in the reference
+ * area.
+ *
+ * `referenceEditConfirmed` remains available so callers can prefer a route
+ * that already has exact-id evidence; it no longer gates the capability.
  */
 export function generalFallbackSupportsReferenceImages(
   providerKind: ProviderKind,
   referenceEditConfirmed = false
 ): boolean {
-  if (providerKind === "gemini") return true;
-  if (!isOpenAICompatibleGeneralFallbackProvider(providerKind)) return false;
-  return referenceEditConfirmed;
+  void referenceEditConfirmed;
+  return isGeneralFallbackProvider(providerKind);
+}
+
+/**
+ * Classify a provider error that means "this deployment cannot edit images".
+ * Used to turn gateway-specific wording into one friendly, actionable message.
+ */
+export function isGeneralEditUnsupportedError(status: number | undefined, message: string): boolean {
+  const text = message.toLowerCase();
+  if (status === 404 || status === 405 || status === 501) return true;
+  return [
+    "model_not_found",
+    "does not exist",
+    "not found",
+    "not support",
+    "unsupported",
+    "no such model",
+    "unknown model",
+    "invalid model",
+    "cannot edit",
+    "edits are not",
+    "image edit"
+  ].some((marker) => text.includes(marker));
 }
 
 /**

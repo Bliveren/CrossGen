@@ -384,7 +384,7 @@ describe("main config save builder", () => {
     expect(canRunRequestWithConfig(request, provider)).toBe(false);
   });
 
-  it("blocks a General OpenAI-compatible edit without exact-id route evidence", () => {
+  it("allows a General OpenAI-compatible edit attempt without route evidence", () => {
     const provider = savedConfig({
       kind: "openai",
       lastModelDiscoveryError: undefined,
@@ -405,8 +405,10 @@ describe("main config save builder", () => {
       }
     };
 
-    expect(canRunRequestWithConfig(request, provider)).toBe(false);
-    expect(generalReferenceEditBlockReason(request, provider)).toContain("尚未确认参考图编辑路由");
+    // The attempt is allowed; an unsupported deployment reports a friendly
+    // diagnostic from the adapter instead of being blocked here.
+    expect(canRunRequestWithConfig(request, provider)).toBe(true);
+    expect(generalReferenceEditBlockReason(request, provider)).toBeUndefined();
   });
 
   it("allows a General OpenAI-compatible edit with exact-id edit route evidence", () => {

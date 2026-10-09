@@ -19,7 +19,11 @@ import {
   normalizeImageMimeType,
   validateGeneralRunJobRequest
 } from "../../shared/validation.js";
-import { isGeneralFallbackProvider, isOpenAICompatibleGeneralFallbackProvider } from "../../shared/modelCatalog.js";
+import {
+  isGeneralEditUnsupportedError,
+  isGeneralFallbackProvider,
+  isOpenAICompatibleGeneralFallbackProvider
+} from "../../shared/modelCatalog.js";
 import type { ImageJobRuntime, ImageProviderAdapter } from "./imageProviderAdapter.js";
 import { runGeminiImageJob } from "./geminiImageAdapter.js";
 import { assetToBlob, buildEndpoint, fetchWithTimeout } from "./openaiImageAdapter.js";
@@ -222,8 +226,9 @@ async function handleOpenAICompatibleGeneralResponse(
   deadlineMs: number,
   contract: "openai-compatible-minimal" | "openai-compatible-minimal-edit"
 ): Promise<GenerationJob> {
+  const referenceEdit = contract === "openai-compatible-minimal-edit";
   if (!response.ok) {
-    throw new Error(await readOpenAICompatibleGeneralApiError(response, apiKey));
+    throw new Error(await readOpenAICompatibleGeneralApiError(response, apiKey, { referenceEdit }));
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -358,24 +363,38 @@ function extensionForMimeType(mimeType: "image/png" | "image/jpeg" | "image/webp
   return "png";
 }
 
-async function readOpenAICompatibleGeneralApiError(response: Response, apiKey?: string): Promise<string> {
+async function readOpenAICompatibleGeneralApiError(
+  response: Response,
+  apiKey?: string,
+  options: { referenceEdit?: boolean } = {}
+): Promise<string> {
   const requestId = response.headers.get("x-request-id");
   const requestSuffix = requestId ? ` Request ID: ${requestId}` : "";
   const fallback = `OpenAI 兼容图片请求失败：HTTP ${response.status}.${requestSuffix}`;
 
-  try {
-    const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json")) {
-      const payload = (await response.json()) as OpenAICompatibleGeneralApiErrorPayload;
-      const message = payload.error?.message ?? payload.error?.code ?? payload.error?.type;
-      return message ? `OpenAI 兼容图片请求失败：${redactLikelySecrets(message, apiKey)}${requestSuffix}` : fallback;
+  const raw = await (async (): Promise<string | undefined> => {
+    try {
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        const payload = (await response.json()) as OpenAICompatibleGeneralApiErrorPayload;
+        return payload.error?.message ?? payload.error?.code ?? payload.error?.type;
+      }
+      const text = (await response.text()).trim();
+      return text || undefined;
+    } catch {
+      return undefined;
     }
+  })();
 
-    const text = (await response.text()).trim();
-    return text ? `OpenAI 兼容图片请求失败：${redactLikelySecrets(text, apiKey)}${requestSuffix}` : fallback;
-  } catch {
-    return fallback;
+  if (!raw) return fallback;
+
+  const redacted = redactLikelySecrets(raw, apiKey);
+  // A reference edit that fails because the deployment cannot edit images gets
+  // one friendly, actionable message instead of a raw gateway error.
+  if (options.referenceEdit && isGeneralEditUnsupportedError(response.status, raw)) {
+    return "当前模型不支持参考图编辑（图生图）。请在「参考图」区域移除参考图后使用文生图，或改用支持图生图的模型。";
   }
+  return `OpenAI 兼容图片请求失败：${redacted}${requestSuffix}`;
 }
 
 async function readUnexpectedOpenAICompatibleGeneralResponse(response: Response, apiKey?: string): Promise<string> {
