@@ -1,0 +1,20 @@
+{
+  "name": "crossgen-repo",
+  "interface": {
+    "displayName": "CrossGen (repository)"
+  },
+  "plugins": [
+    {
+      "name": "crossgen",
+      "source": {
+        "source": "local",
+        "path": "./plugins/crossgen"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

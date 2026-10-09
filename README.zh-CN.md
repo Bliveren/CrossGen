@@ -76,6 +76,14 @@ crossgen mcp config --client cursor --mode generate --json
 
 建议先使用 `readonly`，只有 Agent 确实需要时才开启 `write` 或 `generate`。付费生图、资产导出、破坏性操作、队列控制修改和本地路径披露都要求明确权限或确认。完整命令、工具覆盖、权限模式和安装路径见 [CLI 与 MCP 指南](./docs/cli-mcp.md)。
 
+### Codex 插件
+
+CrossGen 在 [`plugins/crossgen`](./plugins/crossgen/) 提供 Codex 插件，并注册到仓库
+marketplace [`.agents/plugins/marketplace.json`](./.agents/plugins/marketplace.json)。
+插件同时打包 `crossgen-artist` skill 与一个 stdio MCP server，该 server 会启动已安装的
+CrossGen 应用，因此 Codex 可以通过与桌面端相同的本地运行时发现模型、提交队列任务、检查图库
+资产。`CROSSGEN_MCP_MODE` 默认为 `readonly`。
+
 ### CrossGen Artist Skill
 
 CrossGen 仓库内置一套媒体感知的首选 Agent 工作流技能 [`skills/crossgen-artist`](./skills/crossgen-artist/)。它会指导 Codex 等兼容 Agent 自动发现模型能力，选择生成、编辑或局部重绘，提交带幂等键的队列任务，轮询完成状态，读取图片/GIF/视频元数据，检查图库资产，并在不意外泄露 API Key 或本地路径的前提下导出结果。已发布的 0.3.4 仍不开放真实视频生成和视频编辑；0.3.5 只计划视频技术预览，同样不承诺完整视频产品。
