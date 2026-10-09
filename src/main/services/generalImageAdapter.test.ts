@@ -317,6 +317,68 @@ describe("General image adapter", () => {
     await expect(readFile(result.outputs[0].path)).resolves.toEqual(Buffer.from(tinyPngBase64, "base64"));
   });
 
+  it("surfaces a friendly diagnostic when the model cannot edit images", async () => {
+    const fetchImpl = (async () =>
+      new Response(
+        JSON.stringify({ error: { message: "The model 'dall-e-3' does not support image edits", type: "invalid_request_error" } }),
+        { status: 400, headers: { "content-type": "application/json" } }
+      )) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+    const inputPath = path.join(runtime.imagesDir, "source.png");
+    await writeFile(inputPath, Buffer.from(tinyPngBase64, "base64"));
+
+    await expect(
+      runGeneralImageJob(
+        job("openai", "dall-e-3", {
+          mode: "edit",
+          inputAssets: [
+            {
+              id: "input_1",
+              name: "source.png",
+              path: inputPath,
+              mimeType: "image/png",
+              sizeBytes: 1
+            }
+          ]
+        }),
+        "sk-test-key",
+        config("openai", "dall-e-3"),
+        runtime
+      )
+    ).rejects.toThrow("当前模型不支持参考图编辑（图生图）");
+  });
+
+  it("keeps the raw provider error for unrelated edit failures", async () => {
+    const fetchImpl = (async () =>
+      new Response(JSON.stringify({ error: { message: "quota exceeded" } }), {
+        status: 429,
+        headers: { "content-type": "application/json" }
+      })) as typeof fetch;
+    const { runtime } = await createRuntime(fetchImpl);
+    const inputPath = path.join(runtime.imagesDir, "source.png");
+    await writeFile(inputPath, Buffer.from(tinyPngBase64, "base64"));
+
+    await expect(
+      runGeneralImageJob(
+        job("openai", "dall-e-3", {
+          mode: "edit",
+          inputAssets: [
+            {
+              id: "input_1",
+              name: "source.png",
+              path: inputPath,
+              mimeType: "image/png",
+              sizeBytes: 1
+            }
+          ]
+        }),
+        "sk-test-key",
+        config("openai", "dall-e-3"),
+        runtime
+      )
+    ).rejects.toThrow("quota exceeded");
+  });
+
   it("rejects General masks before making a reference edit request", async () => {
     const fetchImpl = (async () => {
       throw new Error("fetch should not be called");

@@ -3,10 +3,8 @@ import {
   findDiscoveredImageModel,
   focusedLaunchIdForModel,
   hasCompletedModelDiscovery,
-  hasGeneralEditRouteEvidence,
   isOpenAICompatibleGeneralFallbackProvider
 } from "../../shared/modelCatalog.js";
-import { GENERAL_EDIT_UNCONFIRMED_MESSAGE } from "../../shared/validation.js";
 import type { RunJobRequest } from "../../shared/types.js";
 import type { StoredProviderConfig } from "./stateMigration.js";
 
@@ -42,21 +40,17 @@ export function canRunRequestWithConfig(request: RunJobRequest, config: StoredPr
     focusedLaunchIdForModel(discoveredModel.providerKind, discoveredModel.id) ?? GENERAL_LAUNCH_ID;
   if (request.params.launchId !== expectedLaunchId) return false;
 
-  // General OpenAI-compatible editing is only valid with exact-id edit route
-  // evidence. Gemini General fallback keeps its native reference support.
+  // General OpenAI-compatible editing is allowed to attempt an edit even
+  // without prior route evidence: gateways vary too much, and blocking up
+  // front disabled image-to-image for most models. Unsupported deployments are
+  // reported back as a friendly diagnostic instead. The kill switch still
+  // forces prompt-only when an operator needs it.
   if (
     request.params.launchId === GENERAL_LAUNCH_ID &&
     isOpenAICompatibleGeneralFallbackProvider(request.params.providerKind) &&
     request.mode !== "generate"
   ) {
-    return (
-      isGeneralReferenceEditEnabled() &&
-      hasGeneralEditRouteEvidence(
-        config.openAIImageRouting,
-        request.params.providerKind,
-        discoveredModel.id
-      )
-    );
+    return isGeneralReferenceEditEnabled();
   }
   return true;
 }
@@ -73,8 +67,5 @@ export function generalReferenceEditBlockReason(
   if (!isOpenAICompatibleGeneralFallbackProvider(request.params.providerKind)) return undefined;
   if (request.mode === "generate") return undefined;
   if (!isGeneralReferenceEditEnabled()) return GENERAL_EDIT_DISABLED_MESSAGE;
-  if (hasGeneralEditRouteEvidence(config.openAIImageRouting, request.params.providerKind, request.params.model)) {
-    return undefined;
-  }
-  return GENERAL_EDIT_UNCONFIRMED_MESSAGE;
+  return undefined;
 }

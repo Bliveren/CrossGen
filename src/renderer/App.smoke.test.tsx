@@ -561,7 +561,7 @@ describe("renderer multi-model smoke", () => {
     }));
 
     expect(document.body.textContent).not.toContain("Select GPT Image 2 before running.");
-    expect(document.body.textContent).toContain("General OpenAI-compatible fallback only supports prompt-only generation.");
+    expect(document.body.textContent).toContain("General uses a minimal fallback");
     expect(document.body.textContent).toContain("Keep the prompt while switching providers");
   });
 
@@ -1582,7 +1582,7 @@ describe("renderer multi-model smoke", () => {
     await selectAndLaunchModel("dall-e-3");
     await click(buttonByText("Generate", ".primary-run"));
 
-    expect(document.body.textContent).toContain("prompt-only generation");
+    expect(document.body.textContent).toContain("reference images only");
     expect(bridge.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ activeLaunchId: "general", activeModelId: "dall-e-3" }));
     expect(bridge.runJob).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3171,8 +3171,10 @@ describe("renderer multi-model smoke", () => {
     expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(originalPrompt);
     expect(document.body.textContent).toContain("general-reference.png");
     expect(document.querySelector<HTMLImageElement>(".asset-tile img")?.src).toBe(`image2tools-asset://image?gallery=${referenceAsset.fileName}`);
-    expect(buttonByText("Generate", ".primary-run").disabled).toBe(true);
-    expect(document.body.textContent).toContain("prompt-only generation");
+    // General OpenAI-compatible now allows the edit attempt with a reference
+    // image instead of being blocked in the UI.
+    expect(document.querySelector<HTMLButtonElement>(".primary-run")?.disabled).toBe(false);
+    expect(document.body.textContent).toContain("reference images only");
     expect(bridge.saveConfig).toHaveBeenLastCalledWith(
       expect.objectContaining({
         activeLaunchId: "general",
@@ -3228,7 +3230,6 @@ describe("renderer multi-model smoke", () => {
     await selectAndLaunchModel("dall-e-3");
     await new Promise((resolve) => setTimeout(resolve, 750));
 
-    expect(document.body.textContent).toContain("General OpenAI-compatible fallback only supports prompt-only generation.");
     expect(document.body.textContent).not.toContain("Sketch 草稿必须使用 edit 模式。");
     expect(bridge.saveDraft).not.toHaveBeenCalled();
   });

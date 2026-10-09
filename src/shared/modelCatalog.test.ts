@@ -746,8 +746,10 @@ describe("focused model catalog", () => {
     expect(isGeneralFallbackProvider("gemini")).toBe(true);
     expect(isGeneralFallbackProvider("custom")).toBe(true);
     expect(generalFallbackSupportsReferenceImages("gemini")).toBe(true);
-    expect(generalFallbackSupportsReferenceImages("openai")).toBe(false);
-    expect(generalFallbackSupportsReferenceImages("custom")).toBe(false);
+    // OpenAI-compatible General may attempt an edit; unsupported deployments
+    // report a friendly diagnostic instead of being blocked up front.
+    expect(generalFallbackSupportsReferenceImages("openai")).toBe(true);
+    expect(generalFallbackSupportsReferenceImages("custom")).toBe(true);
     expect(generalFallbackSupportsReferenceImages("openai", true)).toBe(true);
     expect(generalFallbackSupportsReferenceImages("custom", true)).toBe(true);
     expect(generalFallbackSupportsReferenceImages("gemini", false)).toBe(true);

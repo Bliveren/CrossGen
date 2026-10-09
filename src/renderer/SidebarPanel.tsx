@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, ChevronRight, FolderCog, KeyRound, RefreshCw, Settings2, SlidersHorizontal } from "lucide-react";
 import type { AgentRuntimeStatus, ProviderConfig } from "../shared/types";
 import type { UiCopy } from "./i18n";
@@ -19,6 +19,31 @@ export function ConfigurationMenu({ copy, compact = false, onApi, onAgents, onPa
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  // Hovering from the trigger to the popover crosses a small gap. Keep the
+  // menu open for a short grace period instead of closing on the first
+  // mouseleave so the pointer can travel across it.
+  const cancelScheduledClose = useCallback(() => {
+    if (closeTimerRef.current === null) return;
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+  }, []);
+
+  const scheduleHoverClose = useCallback(() => {
+    cancelScheduledClose();
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      setMenuOpen(false);
+    }, 260);
+  }, [cancelScheduledClose]);
+
+  const openHoverMenu = useCallback(() => {
+    cancelScheduledClose();
+    setMenuOpen(true);
+  }, [cancelScheduledClose]);
+
+  useEffect(() => () => cancelScheduledClose(), [cancelScheduledClose]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -50,8 +75,8 @@ export function ConfigurationMenu({ copy, compact = false, onApi, onAgents, onPa
       ref={menuRef}
       className={`configuration-menu ${compact ? "compact" : ""}`}
       data-open={menuOpen}
-      onMouseEnter={() => setMenuOpen(true)}
-      onMouseLeave={() => setMenuOpen(false)}
+      onMouseEnter={openHoverMenu}
+      onMouseLeave={scheduleHoverClose}
       onFocusCapture={() => setMenuOpen(true)}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setMenuOpen(false);
